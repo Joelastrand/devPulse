@@ -5,12 +5,16 @@
 - **Phase 1 — Pulse Survey MVP** *(complete)*: anonymous survey submission
   and storage, application-level encryption of sensitive fields. See
   `docs/features/pulse-survey/SPEC.md`.
-- **Phase 2 — Authentication, Teams and Dashboard**: Firebase Auth, team
-  membership, server-side authorized team dashboard with aggregates.
-- **Phase 3 — Historical Trends and Anonymous Challenges**: trend views
-  over time, anonymous free-text challenge submission.
+- **Phase 2 — Authentication, Teams, Dashboard and Trends** *(complete)*:
+  Firebase Auth, team membership, server-side authorized team dashboard
+  showing only closed-period aggregates (the open/current period is never
+  exposed) plus historical trends over a rolling 12-closed-period window.
+  Trend scope was folded in from the original Phase 3 split; see
+  `docs/features/results-dashboard/SPEC.md`.
+- **Phase 3 — Anonymous Challenges**: anonymous free-text challenge
+  submission.
 - **Phase 4 — Developer Forum capabilities**.
 - **Phase 5 — Skill / Capability Trees**.
 
-Phase 1 is complete; Phase 2 has not started. See `docs/PRODUCT.md` for the
-underlying vision and non-goals.
+Phase 1 and Phase 2 are complete; Phase 3 has not started. See
+`docs/PRODUCT.md` for the underlying vision and non-goals.

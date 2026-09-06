@@ -28,14 +28,22 @@ until attrition, burnout, or delivery failure makes them obvious.
   - Stress / sustainable workload
   - Fun / motivation
 - Individual responses are anonymous; only team-level aggregates (above a
-  minimum response threshold) are visible to leads/admins.
+  minimum response threshold) are visible, scoped to a signed-in user's own
+  team (Phase 2; see `docs/features/results-dashboard/SPEC.md`). No admin
+  role exists yet.
+
+## Delivered: authenticated team dashboard and trends (Phase 2)
+
+- Team-based access: an authenticated, verified, team-assigned developer
+  can view their own team's most recently closed period's aggregate plus a
+  12-closed-period trend — never another team's data, and never the
+  current/open period's data. See
+  `docs/features/results-dashboard/SPEC.md`.
 
 ## Future capabilities (not implemented yet)
 
 - Anonymous challenges/problems: free-text reporting of issues, treated as
   highly sensitive.
-- Team-based access: visibility scoped to a user's own team(s).
-- Historical trends: aggregate trends over time, not individual tracking.
 - Developer forums/communities.
 - Skill/capability trees for teams and sections, e.g.:
   Container fundamentals → Evaluate alternatives → Build competence →

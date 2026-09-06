@@ -38,11 +38,15 @@ export function encrypt(plaintext: string): EncryptedPayload {
 }
 
 /**
- * Reverses `encrypt`. Not part of the production API — kept private and
- * exposed only via `decryptForTests` below to prove the round-trip contract.
- * Reporting/dashboards are a separate, future, authorized read flow.
+ * Reverses `encrypt`. This is the first authorized decryption path in the
+ * codebase (`docs/features/results-dashboard/SPEC.md`) — callers must be
+ * server-side, authorized aggregation code (`src/features/results/`), never
+ * a route handler returning decrypted content directly to a client
+ * (`docs/SECURITY.md` invariant 10). Throws on a missing/invalid key or a
+ * tampered/corrupt payload; callers must not log the thrown error, since it
+ * may echo ciphertext/IV bytes.
  */
-function decrypt(payload: EncryptedPayload): string {
+export function decrypt(payload: EncryptedPayload): string {
   const key = readEncryptionKey();
   const iv = Buffer.from(payload.iv, "base64");
   const authTag = Buffer.from(payload.authTag, "base64");
@@ -58,12 +62,6 @@ function decrypt(payload: EncryptedPayload): string {
 
   return plaintext.toString("utf8");
 }
-
-/**
- * Test-only round-trip verification of `encrypt`'s output. Not a production
- * decryption API — see TASK-002.
- */
-export const decryptForTests = decrypt;
 
 function readEncryptionKey(): Buffer {
   const raw = process.env.ENCRYPTION_KEY;

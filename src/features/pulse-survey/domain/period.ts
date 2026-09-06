@@ -31,3 +31,37 @@ function diffInDays(a: Date, b: Date): number {
   const millisecondsPerDay = 86_400_000;
   return (a.getTime() - b.getTime()) / millisecondsPerDay;
 }
+
+/**
+ * A period is closed iff it is strictly earlier than the current period.
+ * Period strings ("YYYY-Www", zero-padded) compare correctly with `<`
+ * because the year prefix dominates and the week is zero-padded to two
+ * digits within a year.
+ */
+export function isPeriodClosed(period: string, currentPeriod: string): boolean {
+  return period < currentPeriod;
+}
+
+/**
+ * Enumerates the `count` closed periods immediately preceding the current
+ * one, oldest first, never including the current (open) period.
+ *
+ * Each preceding period is derived by stepping back N full ISO weeks (7*i
+ * days) from `now` and recomputing the ISO week for that instant — never by
+ * decrementing the current period *string*, which would require re-deriving
+ * ISO week/year rollover rules a second time.
+ */
+export function listPrecedingClosedPeriods(
+  count: number,
+  now: Date = new Date(),
+): string[] {
+  const millisecondsPerDay = 86_400_000;
+  const periods: string[] = [];
+
+  for (let i = count; i >= 1; i--) {
+    const instant = new Date(now.getTime() - i * 7 * millisecondsPerDay);
+    periods.push(getCurrentSurveyPeriod(instant));
+  }
+
+  return periods;
+}

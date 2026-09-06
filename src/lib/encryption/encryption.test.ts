@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { decryptForTests, encrypt } from "./encryption";
+import { decrypt, encrypt } from "./encryption";
 
 function generateValidKey(): string {
   return randomBytes(32).toString("base64");
@@ -36,8 +36,8 @@ describe("encryption", () => {
     const plaintextA = "flow=4;stress=2;fun=5";
     const plaintextB = "flow=1;stress=5;fun=1";
 
-    expect(decryptForTests(encrypt(plaintextA))).toBe(plaintextA);
-    expect(decryptForTests(encrypt(plaintextB))).toBe(plaintextB);
+    expect(decrypt(encrypt(plaintextA))).toBe(plaintextA);
+    expect(decrypt(encrypt(plaintextB))).toBe(plaintextB);
   });
 
   it("fails authentication when the ciphertext has been tampered with", () => {
@@ -47,7 +47,7 @@ describe("encryption", () => {
 
     const tampered = { ...payload, ciphertext: tamperedBytes.toString("base64") };
 
-    expect(() => decryptForTests(tampered)).toThrow();
+    expect(() => decrypt(tampered)).toThrow();
   });
 
   it("fails authentication when the auth tag has been tampered with", () => {
@@ -57,7 +57,7 @@ describe("encryption", () => {
 
     const tampered = { ...payload, authTag: tamperedBytes.toString("base64") };
 
-    expect(() => decryptForTests(tampered)).toThrow();
+    expect(() => decrypt(tampered)).toThrow();
   });
 
   it("includes the required IV and key/algorithm version metadata", () => {
