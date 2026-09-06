@@ -21,7 +21,14 @@ export function SignInForm() {
   if (status === "success") {
     return (
       <p role="status" className="mt-6 text-zinc-900 dark:text-zinc-50">
-        Signed in.
+        Signed in.{" "}
+        <a
+          href="/results"
+          className="font-medium underline dark:text-zinc-50"
+        >
+          Continue to your results
+        </a>
+        .
       </p>
     );
   }

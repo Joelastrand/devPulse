@@ -403,6 +403,12 @@ Small, obvious, low-risk corrections may use a lighter path when repository inst
 
 Do not use the lightweight path to bypass authorization, sensitive-data handling, anonymity, encryption, aggregation privacy, or meaningful product decisions.
 
+Example: static app-shell/navigation/copy changes (e.g. the shared site
+header, homepage copy, or a sign-in/sign-up cross-link) that touch no
+authorization, encryption, aggregation, or persisted data are a low-risk
+exception — reviewed directly via `review-change` without a retroactive
+`SPEC.md`/`TASKS.md` entry.
+
 ## Workflow principles
 
 - Repository state outlives conversation state.

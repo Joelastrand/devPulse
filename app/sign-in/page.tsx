@@ -8,6 +8,15 @@ export default function SignInPage() {
           Sign in
         </h1>
         <SignInForm />
+        <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
+          Don&apos;t have an account?{" "}
+          <a
+            href="/sign-up"
+            className="font-medium text-zinc-900 underline dark:text-zinc-50"
+          >
+            Create one
+          </a>
+        </p>
       </main>
     </div>
   );

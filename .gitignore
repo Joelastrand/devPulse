@@ -32,6 +32,13 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.local.example
+
+# firebase
+# Not a secret (the project id isn't confidential), but committing it would
+# make it every developer's default `firebase deploy` target — see
+# docs/DEVELOPMENT.md ("Local Firebase setup").
+.firebaserc
 
 # vercel
 .vercel

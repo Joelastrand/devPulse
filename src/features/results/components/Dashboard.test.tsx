@@ -50,6 +50,18 @@ describe("Dashboard", () => {
     expect(screen.queryByText(/responses/i)).toBeNull();
   });
 
+  it("does not reveal team names, allowed emails, or authorization internals in the no-team state", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchDashboardMock.mockResolvedValue({ status: "no_team" });
+
+    render(<Dashboard />);
+
+    const status = await screen.findByRole("status");
+    expect(status.textContent).not.toMatch(
+      /platform|@|allowed|assignment|admin/i,
+    );
+  });
+
   it("shows an insufficient-responses state without revealing a count", async () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchDashboardMock.mockResolvedValue({

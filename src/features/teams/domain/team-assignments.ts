@@ -12,6 +12,11 @@ import { isAllowedTeamId, type TeamId } from "../../pulse-survey/domain/teams";
  * Values are intentionally untyped strings (not `TeamId`) so a `teamId`
  * that has since been removed from `ALLOWED_TEAM_IDS` is caught by the
  * runtime `isAllowedTeamId` check below rather than assumed valid.
+ *
+ * Ships empty. Add a real verified-email → `teamId` entry here before any
+ * live dashboard end-to-end test against a real Firestore project —
+ * without one, `resolveTeamForUser` resolves every user as "unassigned"
+ * (see docs/DEVELOPMENT.md — "Local Firebase setup").
  */
 const TEAM_ASSIGNMENTS: Readonly<Record<string, string>> = {};
 

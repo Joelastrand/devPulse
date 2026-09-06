@@ -43,6 +43,8 @@ describe("SignInForm", () => {
 
     const status = await screen.findByRole("status");
     expect(status.textContent).toMatch(/signed in/i);
+    const link = screen.getByRole("link", { name: /continue to your results/i });
+    expect(link.getAttribute("href")).toBe("/results");
   });
 
   it("shows an error message for invalid credentials", async () => {
