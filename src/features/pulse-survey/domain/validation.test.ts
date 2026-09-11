@@ -57,11 +57,24 @@ describe("validateSubmission", () => {
     expect(result).toEqual({ ok: false, error: "invalid_submission" });
   });
 
-  it("rejects a teamId not in the allowed set", () => {
+  it("accepts any structurally valid (non-empty string) teamId — active-team membership is validated separately, server-side against Firestore", () => {
     const result = validateSubmission({
       answers: [1, 5, 3],
-      teamId: "not-a-real-team",
+      teamId: "some-opaque-firestore-id",
     });
+    expect(result).toEqual({
+      ok: true,
+      data: { answers: [1, 5, 3], teamId: "some-opaque-firestore-id" },
+    });
+  });
+
+  it("rejects a non-string teamId", () => {
+    const result = validateSubmission({ answers: [1, 5, 3], teamId: 42 });
+    expect(result).toEqual({ ok: false, error: "invalid_submission" });
+  });
+
+  it("rejects a blank teamId", () => {
+    const result = validateSubmission({ answers: [1, 5, 3], teamId: "   " });
     expect(result).toEqual({ ok: false, error: "invalid_submission" });
   });
 
@@ -76,10 +89,10 @@ describe("validateSubmission", () => {
       answers: [1, 5],
       teamId: "platform",
     });
-    const badTeam = validateSubmission({
+    const blankTeam = validateSubmission({
       answers: [1, 5, 3],
-      teamId: "nope",
+      teamId: "",
     });
-    expect(missingAnswer).toEqual(badTeam);
+    expect(missingAnswer).toEqual(blankTeam);
   });
 });

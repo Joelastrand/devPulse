@@ -5,6 +5,19 @@ Approved — Phase 2 implemented (TASK-001 through TASK-005 Done; see
 [TASKS.md](./TASKS.md)). Not yet deployment-ready: see "Deployment
 readiness" below.
 
+**Superseded (as of `docs/features/team-management/SPEC.md` TASK-011):**
+the static single-team authorization path this document describes
+(`TEAM_ASSIGNMENTS`, `resolveTeamForUser`, `get-dashboard.ts`, the `GET
+/api/results` route) has been retired from the codebase. `/results` is now
+a thin client-side compatibility redirect to `/teams`/`/teams/[teamId]`
+rather than a page that renders results itself, and all team-scoped
+authorization now goes through `authorizeTeamAccess` against Firestore
+`teamMemberships`. This document is preserved as a historical record of
+what Phase 2 implemented and why — it is not rewritten to describe the
+current model. See `docs/features/team-management/SPEC.md` for the
+current, Firestore-backed authorization model and its successor endpoint
+(`GET /api/teams/[teamId]/results`).
+
 ## Problem
 DevPulse can currently only accept anonymous pulse survey responses (Phase
 1) — nobody can see the resulting signal yet. Teams and organizations have

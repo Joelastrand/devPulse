@@ -1,12 +1,16 @@
-import { isAllowedTeamId, type TeamId } from "./teams";
-
 const ANSWER_COUNT = 3;
 const MIN_ANSWER = 1;
 const MAX_ANSWER = 5;
 
 export interface ValidatedSubmission {
   answers: [number, number, number];
-  teamId: TeamId;
+  /**
+   * A structurally valid (non-empty string) team identifier — a Firestore
+   * `teams` document ID as of TASK-006. Whether it is an actual, currently
+   * `active` team is validated separately, server-side, against Firestore
+   * (`submitPulseSurvey`) — this domain layer only validates shape.
+   */
+  teamId: string;
 }
 
 export type SubmissionValidationResult =
@@ -40,7 +44,7 @@ export function validateSubmission(input: unknown): SubmissionValidationResult {
     return INVALID_RESULT;
   }
 
-  if (!isAllowedTeamId(teamId)) {
+  if (!isValidTeamIdShape(teamId)) {
     return INVALID_RESULT;
   }
 
@@ -51,6 +55,10 @@ export function validateSubmission(input: unknown): SubmissionValidationResult {
       teamId,
     },
   };
+}
+
+function isValidTeamIdShape(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function isValidAnswer(value: unknown): value is number {

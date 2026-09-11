@@ -2,7 +2,7 @@ import type { PeriodAggregateResult } from "../domain/aggregation";
 
 /**
  * Renders the most recently closed period's aggregate. `not_available`
- * should never actually reach the client for this slot (`getDashboard`
+ * should never actually reach the client for this slot (`getTeamResults`
  * only ever passes closed periods here) but is handled the same as
  * `insufficient` — a generic, non-revealing message — as defense in depth
  * against ever implying open-period data exists (BR-6).

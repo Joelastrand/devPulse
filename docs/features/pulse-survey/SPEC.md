@@ -42,8 +42,12 @@ No results/dashboard are shown yet — that is Phase 2.
 - Free-text/comment fields (Phase 3 `AnonymousChallenge`).
 - Duplicate-submission detection/prevention (impossible without identity;
   see Edge cases).
-- Firestore-backed `Team` management (teams are a static, server-side list
-  for this feature; see Architecture decisions).
+- Firestore-backed `Team` *management* (admin create/disable, membership,
+  invitations, access requests) — out of scope for this feature. The team
+  list *itself* became Firestore-backed as of
+  `docs/features/team-management/SPEC.md` TASK-006 (see Architecture
+  decisions); this feature still has no authenticated identity or
+  membership concept of its own.
 - Real KMS-based key management (ARCHITECTURE.md open question; this
   feature uses a server-only environment variable instead).
 
@@ -55,12 +59,16 @@ No results/dashboard are shown yet — that is Phase 2.
   1. Flow / delivery satisfaction
   2. Stress / sustainable workload
   3. Fun / motivation
-- **Team list**: a small, application-defined predefined set of team
-  identifiers. It may be exposed to the survey UI (e.g. to populate a
-  selection control), but any submitted `teamId` is always validated
-  server-side against the authoritative allowed set before a response is
-  accepted. Not a managed/authorized-access concept yet (see Security and
-  privacy).
+- **Team list**: as of `docs/features/team-management/SPEC.md` TASK-006,
+  the currently `active` teams in the Firestore `teams` collection
+  (`src/features/teams/server/list-active-teams.ts`), superseding the
+  original static, application-defined array described below. It is
+  exposed to the survey UI to populate the selection control, but any
+  submitted `teamId` is always re-validated server-side against that same
+  authoritative active-team source, read fresh at submission time, before
+  a response is accepted. Not a managed/authorized-access concept yet (see
+  Security and privacy) — the survey still has no per-user identity or
+  membership check.
 
 ## Actors and access
 - **Anonymous respondent**: any visitor, no authentication. Can view the
@@ -92,8 +100,10 @@ No results/dashboard are shown yet — that is Phase 2.
   period value.
 - **BR-5**: On submission, the server validates: all three answers present
   and within 1-5, and the `teamId` is a member of the authoritative,
-  server-side allowed team set. If any check fails, the server rejects the
-  request and persists nothing.
+  server-side allowed team set (as of TASK-006, the Firestore `active`
+  teams, re-read fresh at submission time — never the page-load-time
+  selector snapshot). If any check fails, the server rejects the request
+  and persists nothing.
 - **BR-6**: On a valid submission, the server encrypts the three answer
   values server-side using authenticated encryption, with a fresh
   cryptographically random nonce/IV generated per encryption operation,
@@ -199,13 +209,20 @@ No results/dashboard are shown yet — that is Phase 2.
 - A server-only encryption helper lives under `src/lib/encryption/`
   (shared infrastructure, per `.claude/rules/architecture.md`), used by the
   pulse-survey server operation.
-- The team list is a small, application-defined static configuration (not a
-  Firestore-backed, admin-managed collection) for this feature. It may be
-  exposed to the client to render the selection control, but the
-  authoritative allowed set used for validation lives and is checked
-  server-side. **Open**: whether/how this migrates to a real `Team`
-  Firestore concept is a Phase 2 decision (`docs/DATA-MODEL.md` already
-  anticipates a `Team` concept).
+- **Superseded by `docs/features/team-management/SPEC.md` TASK-006 and
+  TASK-011**: the team list was originally a small, application-defined
+  static configuration (`ALLOWED_TEAM_IDS`/`isAllowedTeamId`/`TeamId`,
+  formerly `src/features/pulse-survey/domain/teams.ts`). As of TASK-006,
+  the runtime source for both the selector and submission-time validation
+  is the Firestore `teams` collection's `active` set
+  (`src/features/teams/server/list-active-teams.ts`), read server-side via
+  the Firebase Admin SDK and never exposing membership/admin/invitation
+  data. TASK-011 deleted `ALLOWED_TEAM_IDS`/`isAllowedTeamId`/`TeamId` and
+  their module entirely — the four legacy team identifiers now live as a
+  private, inlined literal list in
+  `src/features/teams/domain/legacy-team-seed.ts`, used only by the
+  one-time legacy seed migration that gives them stable Firestore document
+  IDs. Nothing outside that seed migration reads them.
 - Survey period uses ISO week (UTC), computed server-side; exact string
   format is an implementation detail for task planning.
 - **Encryption contract** (architecture-level; implementation choices below

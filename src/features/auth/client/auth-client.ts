@@ -103,9 +103,9 @@ export async function signIn(
  * including token refreshes. Returns an unsubscribe function.
  *
  * This is the only client-side seam that produces the ID token protected
- * requests (e.g. `GET /api/results`) must send — the token itself is never
- * treated as authorization by the client, only forwarded for the server to
- * verify (`.claude/rules/security.md`).
+ * requests (e.g. `GET /api/teams/[teamId]/results`) must send — the token
+ * itself is never treated as authorization by the client, only forwarded
+ * for the server to verify (`.claude/rules/security.md`).
  */
 export function observeIdToken(
   callback: (token: string | null) => void,

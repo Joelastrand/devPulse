@@ -1,0 +1,541 @@
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+
+const observeIdTokenMock = vi.fn();
+const fetchAdminTeamsMock = vi.fn();
+const createAdminTeamMock = vi.fn();
+const setAdminTeamStatusMock = vi.fn();
+
+vi.mock("../../auth/client/auth-client", () => ({
+  observeIdToken: observeIdTokenMock,
+}));
+
+vi.mock("../client/admin-teams-gateway", () => ({
+  fetchAdminTeams: fetchAdminTeamsMock,
+  createAdminTeam: createAdminTeamMock,
+  setAdminTeamStatus: setAdminTeamStatusMock,
+}));
+
+const { AdminTeams } = await import("./AdminTeams");
+
+/** Simulates the auth subscription immediately emitting one token value. */
+function subscribingWith(token: string | null) {
+  return (callback: (token: string | null) => void) => {
+    callback(token);
+    return () => {};
+  };
+}
+
+/**
+ * Captures the `observeIdToken` callback so a test can fire multiple auth
+ * events (sign-out, account switch) at will.
+ */
+function capturingObserver() {
+  let callback: ((token: string | null) => void) | null = null;
+  observeIdTokenMock.mockImplementation((cb: (token: string | null) => void) => {
+    callback = cb;
+    return () => {};
+  });
+  return {
+    emit(token: string | null) {
+      callback?.(token);
+    },
+  };
+}
+
+function flushMicrotasks() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+describe("AdminTeams", () => {
+  afterEach(() => {
+    cleanup();
+    observeIdTokenMock.mockReset();
+    fetchAdminTeamsMock.mockReset();
+    createAdminTeamMock.mockReset();
+    setAdminTeamStatusMock.mockReset();
+  });
+
+  it("shows a loading state before auth resolves", () => {
+    observeIdTokenMock.mockImplementation(() => () => {});
+
+    render(<AdminTeams />);
+
+    expect(screen.getByRole("status").textContent).toMatch(/loading/i);
+  });
+
+  it("prompts sign-in when the visitor is signed out, and never fetches", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith(null));
+
+    render(<AdminTeams />);
+
+    await screen.findByRole("link", { name: /sign in/i });
+    expect(fetchAdminTeamsMock).not.toHaveBeenCalled();
+  });
+
+  it("prompts sign-in when the server reports the list call as unauthenticated", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchAdminTeamsMock.mockResolvedValue({ status: "unauthenticated" });
+
+    render(<AdminTeams />);
+
+    await screen.findByRole("link", { name: /sign in/i });
+  });
+
+  it("shows a generic forbidden message for an authenticated non-admin, never revealing allow-list membership", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchAdminTeamsMock.mockResolvedValue({ status: "forbidden" });
+
+    render(<AdminTeams />);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/don't have permission/i);
+    expect(alert.textContent).not.toMatch(/admin_emails|allow-?list|@/i);
+  });
+
+  it("shows a generic error state on a read failure, never a fabricated list", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchAdminTeamsMock.mockResolvedValue({ status: "read_failed" });
+
+    render(<AdminTeams />);
+
+    await screen.findByRole("alert");
+  });
+
+  it("shows a zero-teams state for an admin with no teams yet, while still offering create", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchAdminTeamsMock.mockResolvedValue({ status: "ok", teams: [] });
+
+    render(<AdminTeams />);
+
+    const status = await screen.findByText(/no teams/i);
+    expect(status).toBeTruthy();
+    expect(screen.getByRole("button", { name: /create team/i })).toBeTruthy();
+  });
+
+  it("shows both active and disabled teams for an admin", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchAdminTeamsMock.mockResolvedValue({
+      status: "ok",
+      teams: [
+        { teamId: "team-1", name: "Platform", status: "active" },
+        { teamId: "team-2", name: "Legacy", status: "disabled" },
+      ],
+    });
+
+    render(<AdminTeams />);
+
+    await screen.findByText("Platform");
+    expect(screen.getByText("Legacy")).toBeTruthy();
+    expect(screen.getByText(/^Active/)).toBeTruthy();
+    expect(screen.getByText(/^Disabled/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /disable team/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /enable team/i })).toBeTruthy();
+  });
+
+  it("never renders survey/aggregate data, member/invitation identities, or internal Firebase metadata", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchAdminTeamsMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Platform", status: "active" }],
+    });
+
+    const { container } = render(<AdminTeams />);
+    await screen.findByText("Platform");
+
+    expect(container.textContent).not.toMatch(/@|invited|ciphertext|mean|responses|createdBy/i);
+  });
+
+  it("creates a team using the server-generated teamId, never a client-fabricated one, and refreshes the authoritative list", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchAdminTeamsMock
+      .mockResolvedValueOnce({ status: "ok", teams: [] })
+      .mockResolvedValueOnce({
+        status: "ok",
+        teams: [{ teamId: "server-generated-id", name: "Mobile", status: "active" }],
+      });
+    createAdminTeamMock.mockResolvedValue({ ok: true, teamId: "server-generated-id" });
+
+    render(<AdminTeams />);
+    await screen.findByText(/no teams/i);
+
+    await user.type(screen.getByLabelText(/new team name/i), "Mobile");
+    await user.click(screen.getByRole("button", { name: /create team/i }));
+
+    expect(createAdminTeamMock).toHaveBeenCalledWith("a-token", "Mobile");
+    await screen.findByText("Mobile");
+    expect(screen.getByText(/server-generated-id/)).toBeTruthy();
+    expect(fetchAdminTeamsMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows a controlled error and does not fabricate a team when create fails", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchAdminTeamsMock.mockResolvedValue({ status: "ok", teams: [] });
+    createAdminTeamMock.mockResolvedValue({ ok: false, error: "invalid_name" });
+
+    render(<AdminTeams />);
+    await screen.findByText(/no teams/i);
+
+    await user.click(screen.getByRole("button", { name: /create team/i }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/enter a team name/i);
+    expect(screen.getByText(/no teams/i)).toBeTruthy();
+  });
+
+  it("does not fire a second create request from repeated clicks while one is already in flight", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchAdminTeamsMock.mockResolvedValue({ status: "ok", teams: [] });
+    let resolveCreate: (value: unknown) => void = () => {};
+    createAdminTeamMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveCreate = resolve;
+        }),
+    );
+
+    render(<AdminTeams />);
+    await screen.findByText(/no teams/i);
+
+    const button = screen.getByRole("button", { name: /create team/i });
+    await user.click(button);
+    expect(button.hasAttribute("disabled")).toBe(true);
+
+    // The disabled button rejects further real clicks (userEvent respects
+    // the `disabled` attribute), proving the in-flight guard holds.
+    await user.click(button);
+    await user.click(button);
+
+    expect(createAdminTeamMock).toHaveBeenCalledTimes(1);
+
+    resolveCreate({ ok: true, teamId: "team-x" });
+    await flushMicrotasks();
+  });
+
+  it("disables an active team and refreshes the authoritative list", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchAdminTeamsMock
+      .mockResolvedValueOnce({
+        status: "ok",
+        teams: [{ teamId: "team-1", name: "Platform", status: "active" }],
+      })
+      .mockResolvedValueOnce({
+        status: "ok",
+        teams: [{ teamId: "team-1", name: "Platform", status: "disabled" }],
+      });
+    setAdminTeamStatusMock.mockResolvedValue({ ok: true });
+
+    render(<AdminTeams />);
+    await screen.findByText("Platform");
+
+    await user.click(screen.getByRole("button", { name: /disable team/i }));
+
+    expect(setAdminTeamStatusMock).toHaveBeenCalledWith("a-token", "team-1", "disabled");
+    await screen.findByRole("button", { name: /enable team/i });
+    expect(fetchAdminTeamsMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("re-enables a disabled team and refreshes the authoritative list", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchAdminTeamsMock
+      .mockResolvedValueOnce({
+        status: "ok",
+        teams: [{ teamId: "team-1", name: "Legacy", status: "disabled" }],
+      })
+      .mockResolvedValueOnce({
+        status: "ok",
+        teams: [{ teamId: "team-1", name: "Legacy", status: "active" }],
+      });
+    setAdminTeamStatusMock.mockResolvedValue({ ok: true });
+
+    render(<AdminTeams />);
+    await screen.findByText("Legacy");
+
+    await user.click(screen.getByRole("button", { name: /enable team/i }));
+
+    expect(setAdminTeamStatusMock).toHaveBeenCalledWith("a-token", "team-1", "active");
+    await screen.findByRole("button", { name: /disable team/i });
+    expect(fetchAdminTeamsMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows a controlled error and does not silently flip the row when a status update fails", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchAdminTeamsMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Platform", status: "active" }],
+    });
+    setAdminTeamStatusMock.mockResolvedValue({ ok: false, error: "forbidden" });
+
+    render(<AdminTeams />);
+    await screen.findByText("Platform");
+
+    await user.click(screen.getByRole("button", { name: /disable team/i }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/went wrong/i);
+    // Still shows the original state and action, not a fabricated flip.
+    expect(screen.getByRole("button", { name: /disable team/i })).toBeTruthy();
+    expect(fetchAdminTeamsMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not fire a second disable request from repeated clicks while one is already in flight", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchAdminTeamsMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Platform", status: "active" }],
+    });
+    let resolveStatus: (value: unknown) => void = () => {};
+    setAdminTeamStatusMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveStatus = resolve;
+        }),
+    );
+
+    render(<AdminTeams />);
+    await screen.findByText("Platform");
+
+    const button = screen.getByRole("button", { name: /disable team/i });
+    await user.click(button);
+    expect(button.hasAttribute("disabled")).toBe(true);
+
+    // The disabled button rejects further real clicks; the handler's own
+    // per-team guard is what's actually proven here.
+    await user.click(button);
+    await user.click(button);
+
+    expect(setAdminTeamStatusMock).toHaveBeenCalledTimes(1);
+
+    resolveStatus({ ok: true });
+    await flushMicrotasks();
+  });
+
+  it("does not fire a second enable request from repeated clicks while one is already in flight", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchAdminTeamsMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Legacy", status: "disabled" }],
+    });
+    let resolveStatus: (value: unknown) => void = () => {};
+    setAdminTeamStatusMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveStatus = resolve;
+        }),
+    );
+
+    render(<AdminTeams />);
+    await screen.findByText("Legacy");
+
+    const button = screen.getByRole("button", { name: /enable team/i });
+    await user.click(button);
+    expect(button.hasAttribute("disabled")).toBe(true);
+
+    await user.click(button);
+    await user.click(button);
+
+    expect(setAdminTeamStatusMock).toHaveBeenCalledTimes(1);
+
+    resolveStatus({ ok: true });
+    await flushMicrotasks();
+  });
+
+  it("allows a different team's status action to proceed independently while another team's action is pending", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchAdminTeamsMock.mockResolvedValue({
+      status: "ok",
+      teams: [
+        { teamId: "team-1", name: "Platform", status: "active" },
+        { teamId: "team-2", name: "Mobile", status: "active" },
+      ],
+    });
+    let resolveTeam1: (value: unknown) => void = () => {};
+    setAdminTeamStatusMock.mockImplementation((_token: string, teamId: string) => {
+      if (teamId === "team-1") {
+        return new Promise((resolve) => {
+          resolveTeam1 = resolve;
+        });
+      }
+      return Promise.resolve({ ok: true });
+    });
+
+    render(<AdminTeams />);
+    await screen.findByText("Platform");
+
+    const [team1Button, team2Button] = screen.getAllByRole("button", { name: /disable team/i });
+    await user.click(team1Button);
+    expect(team1Button.hasAttribute("disabled")).toBe(true);
+
+    // team-2's action is untouched by team-1's still-pending mutation.
+    expect(team2Button.hasAttribute("disabled")).toBe(false);
+    await user.click(team2Button);
+
+    expect(setAdminTeamStatusMock).toHaveBeenCalledWith("a-token", "team-1", "disabled");
+    expect(setAdminTeamStatusMock).toHaveBeenCalledWith("a-token", "team-2", "disabled");
+    expect(setAdminTeamStatusMock).toHaveBeenCalledTimes(2);
+
+    resolveTeam1({ ok: true });
+    await flushMicrotasks();
+  });
+
+  it("unsubscribes from id token updates on unmount", () => {
+    const unsubscribe = vi.fn();
+    observeIdTokenMock.mockImplementation(() => unsubscribe);
+
+    const { unmount } = render(<AdminTeams />);
+    unmount();
+
+    expect(unsubscribe).toHaveBeenCalled();
+  });
+});
+
+describe("AdminTeams auth races", () => {
+  afterEach(() => {
+    cleanup();
+    observeIdTokenMock.mockReset();
+    fetchAdminTeamsMock.mockReset();
+    createAdminTeamMock.mockReset();
+    setAdminTeamStatusMock.mockReset();
+  });
+
+  it("ignores a stale create result if the user signs out before it resolves", async () => {
+    const observer = capturingObserver();
+    const user = userEvent.setup();
+    fetchAdminTeamsMock.mockResolvedValue({ status: "ok", teams: [] });
+    let resolveCreate: (value: unknown) => void = () => {};
+    createAdminTeamMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveCreate = resolve;
+        }),
+    );
+
+    render(<AdminTeams />);
+    observer.emit("token-a");
+    await screen.findByText(/no teams/i);
+
+    await user.type(screen.getByLabelText(/new team name/i), "Mobile");
+    await user.click(screen.getByRole("button", { name: /create team/i }));
+
+    observer.emit(null);
+    await screen.findByRole("link", { name: /sign in/i });
+
+    resolveCreate({ ok: true, teamId: "team-x" });
+    await flushMicrotasks();
+
+    expect(screen.getByRole("link", { name: /sign in/i })).toBeTruthy();
+    expect(screen.queryByText("Mobile")).toBeNull();
+  });
+
+  it("ignores a stale create result if the account switches before it resolves", async () => {
+    const observer = capturingObserver();
+    const user = userEvent.setup();
+    fetchAdminTeamsMock
+      .mockResolvedValueOnce({ status: "ok", teams: [] })
+      .mockResolvedValueOnce({ status: "ok", teams: [] });
+    let resolveCreate: (value: unknown) => void = () => {};
+    createAdminTeamMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveCreate = resolve;
+        }),
+    );
+
+    render(<AdminTeams />);
+    observer.emit("token-a");
+    await waitFor(() => expect(fetchAdminTeamsMock).toHaveBeenCalledTimes(1));
+
+    await user.type(screen.getByLabelText(/new team name/i), "Mobile");
+    await user.click(screen.getByRole("button", { name: /create team/i }));
+
+    observer.emit("token-b");
+    await waitFor(() => expect(fetchAdminTeamsMock).toHaveBeenCalledTimes(2));
+
+    resolveCreate({ ok: true, teamId: "team-x" });
+    await flushMicrotasks();
+
+    // Account B's own (empty) list load must not be clobbered by account
+    // A's stale, now-superseded create result.
+    expect(screen.getByRole("status").textContent).toMatch(/no teams/i);
+    expect(fetchAdminTeamsMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores a stale status-update result if the account switches before it resolves", async () => {
+    const observer = capturingObserver();
+    const user = userEvent.setup();
+    fetchAdminTeamsMock
+      .mockResolvedValueOnce({
+        status: "ok",
+        teams: [{ teamId: "team-1", name: "Platform", status: "active" }],
+      })
+      .mockResolvedValueOnce({
+        status: "ok",
+        teams: [{ teamId: "team-2", name: "Mobile", status: "active" }],
+      });
+    let resolveStatus: (value: unknown) => void = () => {};
+    setAdminTeamStatusMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveStatus = resolve;
+        }),
+    );
+
+    render(<AdminTeams />);
+    observer.emit("token-a");
+    await screen.findByText("Platform");
+
+    await user.click(screen.getByRole("button", { name: /disable team/i }));
+
+    observer.emit("token-b");
+    await screen.findByText("Mobile");
+
+    resolveStatus({ ok: true });
+    await flushMicrotasks();
+
+    // Account B's own list must be the only thing rendered — account A's
+    // stale status-update refresh must never run against B's view.
+    expect(screen.queryByText("Platform")).toBeNull();
+    expect(screen.getByText("Mobile")).toBeTruthy();
+    expect(fetchAdminTeamsMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not update state after unmount even if a pending list fetch resolves later", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const observer = capturingObserver();
+    let resolveList: (value: unknown) => void = () => {};
+    fetchAdminTeamsMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveList = resolve;
+        }),
+    );
+
+    const { unmount } = render(<AdminTeams />);
+    observer.emit("token-a");
+    await waitFor(() => expect(fetchAdminTeamsMock).toHaveBeenCalledTimes(1));
+
+    unmount();
+
+    expect(() =>
+      resolveList({
+        status: "ok",
+        teams: [{ teamId: "team-1", name: "Platform", status: "active" }],
+      }),
+    ).not.toThrow();
+    await flushMicrotasks();
+
+    expect(errorSpy).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+});

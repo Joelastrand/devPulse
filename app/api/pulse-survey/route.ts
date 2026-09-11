@@ -19,7 +19,8 @@ export async function POST(request: Request) {
   if (!result.ok) {
     const status =
       result.error === "persistence_failed" ||
-      result.error === "encryption_failed"
+      result.error === "encryption_failed" ||
+      result.error === "team_validation_failed"
         ? 500
         : 400;
     return NextResponse.json({ error: result.error }, { status });

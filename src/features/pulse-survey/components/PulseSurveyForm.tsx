@@ -1,7 +1,18 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { ALLOWED_TEAM_IDS, type TeamId } from "../domain/teams";
+
+export interface PulseSurveyTeamOption {
+  teamId: string;
+  name: string;
+}
+
+export interface PulseSurveyFormProps {
+  /** The currently active teams, server-fetched from Firestore (BR-31). */
+  teams: PulseSurveyTeamOption[];
+  /** True when the active-team read failed closed; never falls back to a static list. */
+  teamsUnavailable?: boolean;
+}
 
 const QUESTIONS = [
   { id: "flow", label: "Flow / delivery satisfaction" },
@@ -19,16 +30,17 @@ type Status = "idle" | "submitting" | "success" | "error";
  * Client-side completeness is a UX convenience only; TASK-003's server-side
  * validation is authoritative regardless of what this component allows.
  */
-export function PulseSurveyForm() {
+export function PulseSurveyForm({ teams, teamsUnavailable = false }: PulseSurveyFormProps) {
   const [answers, setAnswers] = useState<Record<QuestionId, number | null>>({
     flow: null,
     stress: null,
     fun: null,
   });
-  const [teamId, setTeamId] = useState<TeamId | "">("");
+  const [teamId, setTeamId] = useState<string>("");
   const [status, setStatus] = useState<Status>("idle");
 
   const isComplete =
+    !teamsUnavailable &&
     QUESTIONS.every((question) => answers[question.id] !== null) &&
     teamId !== "";
 
@@ -112,18 +124,24 @@ export function PulseSurveyForm() {
           id="pulse-survey-team"
           name="teamId"
           value={teamId}
-          onChange={(event) => setTeamId(event.target.value as TeamId)}
+          onChange={(event) => setTeamId(event.target.value)}
+          disabled={teamsUnavailable}
           className="rounded border border-zinc-300 px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:bg-zinc-900"
         >
           <option value="" disabled>
             Select your team
           </option>
-          {ALLOWED_TEAM_IDS.map((id) => (
-            <option key={id} value={id}>
-              {id}
+          {teams.map((team) => (
+            <option key={team.teamId} value={team.teamId}>
+              {team.name}
             </option>
           ))}
         </select>
+        {teamsUnavailable && (
+          <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+            The team list is currently unavailable. Please try again later.
+          </p>
+        )}
       </div>
 
       <button

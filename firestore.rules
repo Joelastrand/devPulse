@@ -14,6 +14,45 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // teams holds admin-managed team metadata (name, active/disabled
+    // status). All access happens server-side via the Firebase Admin SDK
+    // (src/features/teams/server/), which bypasses these rules entirely —
+    // this rule exists solely to deny the separate client-SDK path
+    // unconditionally, regardless of authentication state (including an
+    // app admin's), for the same documentation/defense-in-depth reason as
+    // pulseSurveyResponses above. See docs/features/team-management/SPEC.md
+    // (BR-35).
+    match /teams/{document=**} {
+      allow read, write: if false;
+    }
+
+    // teamMemberships links a Firebase uid to a teamId, for authorization.
+    // Same server-only-access rationale as teams above — all access
+    // happens via src/features/teams/server/ using the Admin SDK. See
+    // docs/features/team-management/SPEC.md (BR-35).
+    match /teamMemberships/{document=**} {
+      allow read, write: if false;
+    }
+
+    // teamInvitations holds pending, admin-issued, email-addressed
+    // invitations, resolved server-side into a teamMemberships document.
+    // Same server-only-access rationale as teams/teamMemberships above —
+    // all access happens via src/features/teams/server/ using the Admin
+    // SDK. See docs/features/team-management/SPEC.md (BR-35).
+    match /teamInvitations/{document=**} {
+      allow read, write: if false;
+    }
+
+    // teamAccessRequests holds a non-member's in-app request to join a
+    // team, resolved server-side (approve creates a teamMemberships
+    // document; reject creates none). Same server-only-access rationale
+    // as teams/teamMemberships/teamInvitations above — all access happens
+    // via src/features/teams/server/ using the Admin SDK. See
+    // docs/features/team-management/SPEC.md (BR-35).
+    match /teamAccessRequests/{document=**} {
+      allow read, write: if false;
+    }
+
     // Deny everything else by default; no collection is currently intended
     // to be reached directly by the Firebase client SDK.
     match /{document=**} {

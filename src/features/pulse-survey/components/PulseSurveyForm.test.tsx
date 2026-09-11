@@ -4,6 +4,11 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PulseSurveyForm } from "./PulseSurveyForm";
 
+const TEAMS = [
+  { teamId: "platform", name: "Platform" },
+  { teamId: "web-app", name: "Web App" },
+];
+
 function submitButton() {
   return screen.getByRole("button", { name: /submit/i });
 }
@@ -25,7 +30,7 @@ describe("PulseSurveyForm", () => {
   });
 
   it("renders exactly three questions and a team select", () => {
-    render(<PulseSurveyForm />);
+    render(<PulseSurveyForm teams={TEAMS} />);
 
     expect(
       screen.getByRole("group", { name: "Flow / delivery satisfaction" }),
@@ -41,7 +46,7 @@ describe("PulseSurveyForm", () => {
 
   it("disables submission until all three answers and a team are selected", async () => {
     const user = userEvent.setup();
-    render(<PulseSurveyForm />);
+    render(<PulseSurveyForm teams={TEAMS} />);
 
     expect(submitButton().hasAttribute("disabled")).toBe(true);
 
@@ -65,7 +70,7 @@ describe("PulseSurveyForm", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const user = userEvent.setup();
-    render(<PulseSurveyForm />);
+    render(<PulseSurveyForm teams={TEAMS} />);
     await fillAllFields(user);
     await user.click(submitButton());
 
@@ -88,11 +93,19 @@ describe("PulseSurveyForm", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const user = userEvent.setup();
-    render(<PulseSurveyForm />);
+    render(<PulseSurveyForm teams={TEAMS} />);
     await fillAllFields(user);
     await user.click(submitButton());
 
     expect(await screen.findByRole("alert")).toBeTruthy();
     expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("disables the team selector and submission, and shows an unavailable notice, when the active-team read failed", () => {
+    render(<PulseSurveyForm teams={[]} teamsUnavailable />);
+
+    expect(screen.getByLabelText("Team").hasAttribute("disabled")).toBe(true);
+    expect(submitButton().hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("alert").textContent).toMatch(/unavailable/i);
   });
 });

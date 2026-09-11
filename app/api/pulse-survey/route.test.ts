@@ -89,6 +89,34 @@ describe("POST /api/pulse-survey", () => {
     expect(payload).toEqual({ error: "encryption_failed" });
   });
 
+  it("returns a generic 500 failure response, not error internals, when active-team validation fails closed (e.g. a Firestore read failure)", async () => {
+    submitPulseSurveyMock.mockResolvedValue({
+      ok: false,
+      error: "team_validation_failed",
+    });
+
+    const response = await POST(
+      jsonRequest({ answers: [1, 5, 3], teamId: "platform" }),
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(payload).toEqual({ error: "team_validation_failed" });
+  });
+
+  it("returns a generic 400, indistinguishable from any other invalid submission, when the teamId is disabled or unknown", async () => {
+    submitPulseSurveyMock.mockResolvedValue({
+      ok: false,
+      error: "invalid_submission",
+    });
+
+    const response = await POST(
+      jsonRequest({ answers: [1, 5, 3], teamId: "disabled-or-unknown-team" }),
+    );
+
+    expect(response.status).toBe(400);
+  });
+
   it("allows two valid submissions for the same period to both succeed", async () => {
     submitPulseSurveyMock.mockResolvedValue({ ok: true });
 

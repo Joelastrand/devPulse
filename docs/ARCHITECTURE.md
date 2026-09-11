@@ -29,13 +29,36 @@ flowchart TD
 - Team authorization is enforced **server-side**: a request must prove
   membership in a team before that team's protected data is returned.
   A user authorized for Team A must not thereby gain access to Team B's
-  private results — **decided invariant, implemented** in Phase 2 via a
-  static, server-only, verified-email-to-`teamId` mapping (no self-service
-  team selection, no Firestore `TeamMembership` collection).
+  private results — **decided invariant**.
+- **Current model, implemented (`docs/features/team-management/SPEC.md`)**:
+  a Firestore-backed, Firebase-**uid**-keyed `teamMemberships` collection
+  supporting zero/one/many teams per user, and a global app-admin role
+  determined server-side from a server-only email allow-list
+  (`APP_ADMIN_EMAILS`) matched against a Firebase-**verified**,
+  revocation-checked identity — never a client-supplied role. The single
+  authorization boundary every protected team-scoped operation must go
+  through is `authorizeTeamAccess(identity, teamId)`
+  (`src/features/teams/server/authorize-team-access.ts`), returning
+  `"admin" | "member" | "denied"`; it re-derives the decision from
+  server-side Firestore state on every call — no cached/session-based
+  authorization state exists.
+- **Retired model (historical, Phase 2)**: a static, server-only,
+  verified-email-to-`teamId` mapping (`TEAM_ASSIGNMENTS`,
+  `resolveTeamForUser`), with a single static `teamId` list
+  (`ALLOWED_TEAM_IDS`) — no self-service team selection, no Firestore
+  `TeamMembership` collection, at most one team per user. Fully removed in
+  TASK-011 once the team-management model above was proven working
+  (`get-dashboard.ts`, the old `GET /api/results` route, and
+  `team-assignments.ts` no longer exist); `/results` is now a thin
+  client-side compatibility redirect to `/teams`/`/teams/[teamId]`
+  (`src/features/results/components/ResultsRedirect.tsx`) rather than a
+  page that renders results itself. See
+  `docs/features/results-dashboard/SPEC.md` for what this model
+  originally implemented.
 - Admin access does not automatically imply access to raw individual
-  responses (see `docs/SECURITY.md`). No admin role exists yet — team
-  assignment is static config edited via deploy, not a runtime admin
-  capability.
+  responses (see `docs/SECURITY.md`) — the app-admin role introduced by
+  team-management extends *which teams'* aggregates an identity may view
+  and team/membership management, not raw-response access.
 
 ## Submission and dashboard boundaries (decided, implemented)
 
