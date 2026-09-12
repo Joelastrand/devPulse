@@ -81,7 +81,7 @@ describe("TeamsOverview", () => {
 
     render(<TeamsOverview />);
 
-    await screen.findByRole("link", { name: /sign in/i });
+    await screen.findByRole("link", { name: /logg inn/i });
     expect(fetchTeamsOverviewMock).not.toHaveBeenCalled();
   });
 
@@ -91,29 +91,30 @@ describe("TeamsOverview", () => {
 
     render(<TeamsOverview />);
 
-    await screen.findByRole("link", { name: /sign in/i });
+    await screen.findByRole("link", { name: /logg inn/i });
   });
 
-  it("shows a generic error state on a read failure, never a fabricated list", async () => {
+  it("shows a Norwegian generic error state on a read failure, never a fabricated list", async () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({ status: "read_failed" });
 
     render(<TeamsOverview />);
 
-    await screen.findByRole("alert");
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/noe gikk galt/i);
   });
 
-  it("shows a no-teams state when the caller has no teams to see", async () => {
+  it("shows a Norwegian no-teams state when the caller has no teams to see", async () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({ status: "ok", teams: [] });
 
     render(<TeamsOverview />);
 
-    const status = await screen.findByRole("status");
-    expect(status.textContent).toMatch(/no teams/i);
+    const status = await screen.findByText(/ingen team/i);
+    expect(status.getAttribute("role")).toBe("status");
   });
 
-  it("shows each team's name and relationship for a verified user with multiple teams", async () => {
+  it("shows each team's name and Norwegian relationship label for a verified user with multiple teams", async () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
@@ -129,9 +130,9 @@ describe("TeamsOverview", () => {
     await screen.findByText("Platform");
     expect(screen.getByText("Mobile")).toBeTruthy();
     expect(screen.getByText("Data")).toBeTruthy();
-    expect(screen.getByText("Member")).toBeTruthy();
+    expect(screen.getByText("Medlem")).toBeTruthy();
     expect(screen.getByText("Admin")).toBeTruthy();
-    expect(screen.getByText("Not a member")).toBeTruthy();
+    expect(screen.getByText("Ikke medlem")).toBeTruthy();
   });
 
   it("links a member's or admin's team name to its detail page, but not a non-member's", async () => {
@@ -154,7 +155,7 @@ describe("TeamsOverview", () => {
     expect(screen.queryByRole("link", { name: "Data" })).toBeNull();
   });
 
-  it("shows a 'request pending' state without a request-access action", async () => {
+  it("shows a Norwegian 'request pending' state without a request-access action", async () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
@@ -163,11 +164,11 @@ describe("TeamsOverview", () => {
 
     render(<TeamsOverview />);
 
-    await screen.findByText(/request pending/i);
-    expect(screen.queryByRole("button", { name: /request access/i })).toBeNull();
+    await screen.findByText(/forespørsel venter/i);
+    expect(screen.queryByRole("button", { name: /be om tilgang/i })).toBeNull();
   });
 
-  it("offers a request-access action for a 'none' relationship", async () => {
+  it("offers a Norwegian request-access action for a 'none' relationship", async () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
@@ -176,7 +177,7 @@ describe("TeamsOverview", () => {
 
     render(<TeamsOverview />);
 
-    await screen.findByRole("button", { name: /request access/i });
+    await screen.findByRole("button", { name: /be om tilgang/i });
   });
 
   it("offers a request-access action for a rejected request", async () => {
@@ -188,7 +189,7 @@ describe("TeamsOverview", () => {
 
     render(<TeamsOverview />);
 
-    await screen.findByRole("button", { name: /request access/i });
+    await screen.findByRole("button", { name: /be om tilgang/i });
   });
 
   it("submits a request-access action via the TASK-005 gateway and refreshes to the resulting state", async () => {
@@ -207,15 +208,42 @@ describe("TeamsOverview", () => {
 
     render(<TeamsOverview />);
 
-    const button = await screen.findByRole("button", { name: /request access/i });
+    const button = await screen.findByRole("button", { name: /be om tilgang/i });
     await user.click(button);
 
     expect(requestTeamAccessMock).toHaveBeenCalledWith("a-token", "team-1");
-    await screen.findByText(/request pending/i);
+    await screen.findByText(/forespørsel venter/i);
     expect(fetchTeamsOverviewMock).toHaveBeenCalledTimes(2);
   });
 
-  it("shows an inline error and leaves the row actionable when the request-access action fails", async () => {
+  it("marks the request-access button pending and aria-busy while the action is in flight", async () => {
+    let resolveRequest: (value: { ok: true; outcome: "created" }) => void = () => {};
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "none" }],
+    });
+    requestTeamAccessMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRequest = resolve;
+        }),
+    );
+
+    render(<TeamsOverview />);
+
+    const button = await screen.findByRole("button", { name: /be om tilgang/i });
+    await user.click(button);
+
+    const pendingButton = screen.getByRole("button", { name: /sender forespørsel/i });
+    expect(pendingButton.getAttribute("aria-busy")).toBe("true");
+
+    resolveRequest({ ok: true, outcome: "created" });
+    await screen.findByRole("button", { name: /be om tilgang/i });
+  });
+
+  it("shows a Norwegian inline error and leaves the row actionable when the request-access action fails", async () => {
     const user = userEvent.setup();
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({
@@ -226,11 +254,11 @@ describe("TeamsOverview", () => {
 
     render(<TeamsOverview />);
 
-    const button = await screen.findByRole("button", { name: /request access/i });
+    const button = await screen.findByRole("button", { name: /be om tilgang/i });
     await user.click(button);
 
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toMatch(/disabled/i);
+    expect(alert.textContent).toMatch(/deaktivert/i);
   });
 
   it("never renders member/invitation/access-request identity data", async () => {
@@ -256,12 +284,12 @@ describe("TeamsOverview", () => {
     expect(unsubscribe).toHaveBeenCalled();
   });
 
-  it("shows a loading state before auth resolves", () => {
+  it("shows a Norwegian loading state before auth resolves", () => {
     observeIdTokenMock.mockImplementation(() => () => {});
 
     render(<TeamsOverview />);
 
-    expect(screen.getByRole("status").textContent).toMatch(/loading/i);
+    expect(screen.getByRole("status").textContent).toMatch(/laster/i);
   });
 
   it("waits for the auth callback before rendering a final state", async () => {
@@ -271,6 +299,21 @@ describe("TeamsOverview", () => {
     render(<TeamsOverview />);
 
     await waitFor(() => expect(fetchTeamsOverviewMock).toHaveBeenCalledWith("a-token"));
+  });
+
+  it("contains no leftover English copy", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "none" }],
+    });
+
+    render(<TeamsOverview />);
+    await screen.findByRole("button", { name: /be om tilgang/i });
+
+    expect(screen.queryByText(/^sign in$/i)).toBeNull();
+    expect(screen.queryByText(/^request access$/i)).toBeNull();
+    expect(screen.queryByText(/not a member/i)).toBeNull();
   });
 });
 
@@ -291,7 +334,7 @@ describe("TeamsOverview auth-state races", () => {
     await waitFor(() => expect(fetchTeamsOverviewMock).toHaveBeenCalledTimes(1));
 
     observer.emit(null);
-    await screen.findByRole("link", { name: /sign in/i });
+    await screen.findByRole("link", { name: /logg inn/i });
 
     calls.resolve(0, {
       status: "ok",
@@ -300,7 +343,7 @@ describe("TeamsOverview auth-state races", () => {
     await flushMicrotasks();
 
     expect(screen.queryByText("Team A")).toBeNull();
-    expect(screen.getByRole("link", { name: /sign in/i })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /logg inn/i })).toBeTruthy();
   });
 
   it("shows only account B's teams when B's request resolves after A's request started (account switch)", async () => {
@@ -348,7 +391,7 @@ describe("TeamsOverview auth-state races", () => {
     await flushMicrotasks();
 
     expect(screen.queryByText("Team A")).toBeNull();
-    expect(screen.getByRole("status").textContent).toMatch(/loading/i);
+    expect(screen.getByRole("status").textContent).toMatch(/laster/i);
 
     calls.resolve(1, {
       status: "ok",
@@ -372,7 +415,7 @@ describe("TeamsOverview auth-state races", () => {
       status: "ok",
       teams: [{ teamId: "team-1", name: "Platform", relationship: "member" }],
     });
-    await screen.findByText("Member");
+    await screen.findByText("Medlem");
 
     calls.resolve(0, {
       status: "ok",
@@ -381,7 +424,7 @@ describe("TeamsOverview auth-state races", () => {
     await flushMicrotasks();
 
     expect(screen.queryByText("Platform (stale)")).toBeNull();
-    expect(screen.getByText("Member")).toBeTruthy();
+    expect(screen.getByText("Medlem")).toBeTruthy();
   });
 
   it("ignores a post-request-access refresh result if the user signs out before it resolves", async () => {
@@ -398,7 +441,7 @@ describe("TeamsOverview auth-state races", () => {
       status: "ok",
       teams: [{ teamId: "team-1", name: "Platform", relationship: "none" }],
     });
-    const button = await screen.findByRole("button", { name: /request access/i });
+    const button = await screen.findByRole("button", { name: /be om tilgang/i });
     await user.click(button);
 
     // requestTeamAccess resolved; the post-action refresh (second
@@ -406,7 +449,7 @@ describe("TeamsOverview auth-state races", () => {
     await waitFor(() => expect(fetchTeamsOverviewMock).toHaveBeenCalledTimes(2));
 
     observer.emit(null);
-    await screen.findByRole("link", { name: /sign in/i });
+    await screen.findByRole("link", { name: /logg inn/i });
 
     calls.resolve(1, {
       status: "ok",
@@ -414,8 +457,8 @@ describe("TeamsOverview auth-state races", () => {
     });
     await flushMicrotasks();
 
-    expect(screen.getByRole("link", { name: /sign in/i })).toBeTruthy();
-    expect(screen.queryByText(/request pending/i)).toBeNull();
+    expect(screen.getByRole("link", { name: /logg inn/i })).toBeTruthy();
+    expect(screen.queryByText(/forespørsel venter/i)).toBeNull();
   });
 
   it("ignores a post-request-access refresh result if the account switches before it resolves", async () => {
@@ -432,7 +475,7 @@ describe("TeamsOverview auth-state races", () => {
       status: "ok",
       teams: [{ teamId: "team-1", name: "Platform", relationship: "none" }],
     });
-    const button = await screen.findByRole("button", { name: /request access/i });
+    const button = await screen.findByRole("button", { name: /be om tilgang/i });
     await user.click(button);
     await waitFor(() => expect(fetchTeamsOverviewMock).toHaveBeenCalledTimes(2));
 

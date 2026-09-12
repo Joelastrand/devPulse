@@ -5,7 +5,9 @@ description: |
   when the user asks to review, inspect, validate, or code-review an
   implemented task or change, or says "review change", "review task",
   "code review", or similar. Produces prioritized findings and verifies
-  requirement coverage without starting new feature work. DO NOT use to
+  requirement coverage without starting new feature work. When the
+  reviewed task is a feature's last remaining task, also performs a
+  documentation-synchronization pass before closeout. DO NOT use to
   define requirements; use `plan-feature`. DO NOT use to split work into
   tasks; use `split-tasks`. DO NOT use as the normal implementation
   workflow; use `implement-task`. DO NOT use to investigate an unrelated
@@ -142,6 +144,42 @@ Remediation: <smallest reasonable fix>
 
 then **Verification** (commands actually run and results) and
 **Coverage** (task and behavioral requirements reviewed).
+
+## Step 7 — Feature closeout: documentation synchronization
+
+Perform this step only when the task under review is a feature's last
+remaining task — every other task in that feature's `TASKS.md` is already
+`Done` — and the outcome from Step 6 is `PASS` or `PASS WITH SUGGESTIONS`.
+Otherwise skip this step entirely.
+
+Before the feature is considered closed out:
+
+- Compare the implemented/current state (the actual code and the feature's
+  own `SPEC.md`/`TASKS.md`) against the project's durable documentation
+  (whatever the project's own instructions designate as durable project
+  truth — e.g. a documentation map or index referenced from the project's
+  root instructions).
+- Correct stale current-state wording and contradictions that this feature
+  caused — statements describing a superseded model as if it were still
+  current, or omitting a capability the feature just added.
+- Preserve historical descriptions as historical; do not rewrite history to
+  read as if the current model had always been true.
+- Distinguish implemented behavior from future/conceptual behavior; never
+  describe a not-yet-built concept as implemented.
+- Re-check terminology and references to any model/mechanism this feature
+  retired or superseded.
+- Do not introduce a new product, architecture, security, or data-model
+  decision while doing this — if a documentation gap can only be closed by
+  making such a decision, stop and report it as a finding instead of
+  inventing one.
+- Report, alongside the review outcome: which documents changed, which
+  historical references were intentionally left unchanged, and any
+  remaining ambiguous documentation that needs a product/architecture/
+  security decision before it can be resolved.
+
+This step's scope is the whole feature just completed, not just the final
+task's own diff — it is broader than, and in addition to, Step 5's
+per-task documentation check.
 
 ## Fix policy
 

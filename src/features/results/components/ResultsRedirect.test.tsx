@@ -161,11 +161,12 @@ describe("ResultsRedirect", () => {
     expect(replaceMock).not.toHaveBeenCalledWith("/teams/team-a");
   });
 
-  it("renders a non-sensitive status message while redirecting", () => {
+  it("renders a non-sensitive Norwegian status message while redirecting", () => {
     observeIdTokenMock.mockImplementation(() => () => {});
 
     render(<ResultsRedirect />);
 
-    expect(screen.getByRole("status")).toBeTruthy();
+    const status = screen.getByRole("status");
+    expect(status.textContent).toMatch(/omdirigerer/i);
   });
 });

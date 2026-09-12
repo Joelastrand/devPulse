@@ -28,9 +28,14 @@ until attrition, burnout, or delivery failure makes them obvious.
   - Stress / sustainable workload
   - Fun / motivation
 - Individual responses are anonymous; only team-level aggregates (above a
-  minimum response threshold) are visible, scoped to a signed-in user's own
-  team (Phase 2; see `docs/features/results-dashboard/SPEC.md`). No admin
-  role exists yet.
+  minimum response threshold) are visible to an authorized team member or
+  app admin, scoped per-team (Phase 2; see
+  `docs/features/results-dashboard/SPEC.md`). A global app-admin role now
+  exists and manages teams and memberships (see "Delivered: multi-team
+  membership and admin (Team Management)" below); admin access does not
+  imply access to raw individual survey responses, and protected result
+  access remains team-scoped and privacy-constrained — see
+  `docs/SECURITY.md`.
 
 ## Delivered: authenticated team dashboard and trends (Phase 2, historical)
 
@@ -68,6 +73,37 @@ until attrition, burnout, or delivery failure makes them obvious.
   user with exactly one team membership lands on that team's
   `/teams/[teamId]`; every other state (signed out, zero or multiple
   memberships) lands on `/teams`. It no longer renders results itself.
+
+## Delivered: product UX, localization and application shell (Phase 3)
+
+- The entire user-facing application renders in Norwegian, sourced from
+  per-feature/shared-area copy modules — English remains the language of
+  code, docs, API contracts, and logs. See
+  `docs/features/product-ux-shell/SPEC.md`.
+- The site header/navigation is auth-aware and admin-aware: it shows Hjem/
+  Pulsundersøkelse/Logg inn/Opprett konto when signed out; the same set
+  minus sign-in/up plus Team/Logg ut when signed in; and additionally
+  Admin for an app admin. Admin visibility is derived only from a new,
+  minimal server-side own-admin-status read (`GET /api/me`) — never a
+  client-side check against `APP_ADMIN_EMAILS` or any other allow-list.
+- Every existing screen (home, pulse survey, sign-in/up, `/teams`,
+  `/teams/[teamId]`, `/admin/teams`, `/admin/teams/[teamId]`, `/results`)
+  shares one application shell and a small set of reusable UI primitives
+  (`src/components/ui/`), with consistent loading/empty/success/
+  validation-error/authorization-failure/infrastructure-failure states.
+- After a successful sign-in, the confirmation state continues to `/teams`
+  (previously `/results`).
+- A team's results view gained a Recharts-based 12-period trend chart,
+  additive to the existing accessible `TrendTable` (unchanged). A
+  suppressed (`insufficient`/`not_available`) period is never rendered as
+  zero or visually indistinguishable from a real published value.
+- Every screen in scope is responsive at common phone widths and passes an
+  accessibility pass (labels, heading order, keyboard operability, visible
+  focus, no color-only signaling).
+- This phase changed no authentication, authorization, anonymity,
+  aggregation, or privacy behavior — every guarantee described in
+  `docs/features/pulse-survey/SPEC.md`, `docs/features/results-dashboard/
+  SPEC.md`, and `docs/features/team-management/SPEC.md` holds unchanged.
 
 ## Future capabilities (not implemented yet)
 

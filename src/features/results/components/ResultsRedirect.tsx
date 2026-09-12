@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { observeIdToken } from "../../auth/client/auth-client";
+import { LoadingState } from "../../../components/ui/LoadingState";
+import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import { fetchTeamsOverview } from "../../teams/client/teams-overview-gateway";
+import { resultsCopy } from "../copy";
 
 /**
  * `/results` compatibility redirect (docs/features/team-management/SPEC.md
@@ -17,51 +18,36 @@ import { fetchTeamsOverview } from "../../teams/client/teams-overview-gateway";
  * membership, an app admin with no plain membership, or a read failure)
  * redirects to the general `/teams` overview.
  *
- * `generationRef` mirrors this feature's established stale-result guard
- * (`TeamsOverview`/`TeamDetail`/`AdminTeamDetail`): a slow overview response
- * for a superseded identity (e.g. a fast account switch right after page
- * load) can never fire a redirect meant for the previous account.
+ * Uses the shared `useAuthGatedResource` generation guard: a slow overview
+ * response for a superseded identity (e.g. a fast account switch right
+ * after page load) can never fire a redirect meant for the previous
+ * account.
  */
 export function ResultsRedirect() {
   const router = useRouter();
-  const generationRef = useRef(0);
 
-  useEffect(() => {
-    const unsubscribe = observeIdToken((token) => {
-      generationRef.current += 1;
-      const generation = generationRef.current;
+  useAuthGatedResource((token, generation, isCurrentGeneration) => {
+    if (!token) {
+      router.replace("/teams");
+      return;
+    }
 
-      if (!token) {
-        router.replace("/teams");
+    fetchTeamsOverview(token).then((result) => {
+      if (!isCurrentGeneration(generation)) {
         return;
       }
 
-      fetchTeamsOverview(token).then((result) => {
-        if (generationRef.current !== generation) {
+      if (result.status === "ok") {
+        const memberships = result.teams.filter((team) => team.relationship === "member");
+        if (memberships.length === 1) {
+          router.replace(`/teams/${encodeURIComponent(memberships[0].teamId)}`);
           return;
         }
+      }
 
-        if (result.status === "ok") {
-          const memberships = result.teams.filter((team) => team.relationship === "member");
-          if (memberships.length === 1) {
-            router.replace(`/teams/${encodeURIComponent(memberships[0].teamId)}`);
-            return;
-          }
-        }
-
-        router.replace("/teams");
-      });
+      router.replace("/teams");
     });
+  });
 
-    return () => {
-      generationRef.current += 1;
-      unsubscribe();
-    };
-  }, [router]);
-
-  return (
-    <p role="status" className="text-zinc-600 dark:text-zinc-400">
-      Redirecting…
-    </p>
-  );
+  return <LoadingState label={resultsCopy.redirect.redirecting} />;
 }

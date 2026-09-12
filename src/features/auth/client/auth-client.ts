@@ -3,6 +3,7 @@ import {
   onIdTokenChanged,
   sendEmailVerification,
   signInWithEmailAndPassword,
+  signOut as firebaseSignOut,
 } from "firebase/auth";
 import { getFirebaseAuth } from "../../../lib/firebase/client";
 
@@ -15,6 +16,7 @@ export interface AuthGateway {
   createUser(email: string, password: string): Promise<void>;
   sendEmailVerification(): Promise<void>;
   signIn(email: string, password: string): Promise<void>;
+  signOut(): Promise<void>;
   subscribeToIdToken(callback: (token: string | null) => void): () => void;
 }
 
@@ -32,6 +34,9 @@ function getDefaultGateway(): AuthGateway {
     },
     async signIn(email, password) {
       await signInWithEmailAndPassword(auth, email, password);
+    },
+    async signOut() {
+      await firebaseSignOut(auth);
     },
     subscribeToIdToken(callback) {
       return onIdTokenChanged(auth, async (user) => {
@@ -94,6 +99,25 @@ export async function signIn(
     return { ok: true };
   } catch {
     return { ok: false, error: "invalid_credentials" };
+  }
+}
+
+export type SignOutResult = { ok: true } | { ok: false; error: "sign_out_failed" };
+
+/**
+ * Signs the current user out via the Firebase client SDK. `observeIdToken`
+ * subscribers are notified of the resulting `null` token on their own —
+ * this function does not (and must not) update any UI state directly
+ * (docs/features/product-ux-shell/SPEC.md — TASK-005).
+ */
+export async function signOut(deps: AuthActionDeps = {}): Promise<SignOutResult> {
+  const gateway = deps.gateway ?? getDefaultGateway();
+
+  try {
+    await gateway.signOut();
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "sign_out_failed" };
   }
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AuthGateway } from "./auth-client";
-import { observeIdToken, signIn, signUp } from "./auth-client";
+import { observeIdToken, signIn, signOut, signUp } from "./auth-client";
 
 function fakeGateway(overrides: Partial<AuthGateway> = {}): AuthGateway & {
   calls: string[];
@@ -16,6 +16,9 @@ function fakeGateway(overrides: Partial<AuthGateway> = {}): AuthGateway & {
     }),
     signIn: vi.fn(async () => {
       calls.push("signIn");
+    }),
+    signOut: vi.fn(async () => {
+      calls.push("signOut");
     }),
     subscribeToIdToken: vi.fn(() => () => {
       calls.push("unsubscribe");
@@ -82,6 +85,29 @@ describe("signIn", () => {
     });
 
     expect(result).toEqual({ ok: false, error: "invalid_credentials" });
+  });
+});
+
+describe("signOut", () => {
+  it("delegates to the gateway's sign-out call", async () => {
+    const gateway = fakeGateway();
+
+    const result = await signOut({ gateway });
+
+    expect(result).toEqual({ ok: true });
+    expect(gateway.signOut).toHaveBeenCalled();
+  });
+
+  it("reports failure without throwing when the gateway's sign-out call rejects", async () => {
+    const gateway = fakeGateway({
+      signOut: vi.fn(async () => {
+        throw new Error("network error");
+      }),
+    });
+
+    const result = await signOut({ gateway });
+
+    expect(result).toEqual({ ok: false, error: "sign_out_failed" });
   });
 });
 

@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { Alert } from "../../../components/ui/Alert";
+import { Button } from "../../../components/ui/Button";
+import { pulseSurveyCopy } from "../copy";
 
 export interface PulseSurveyTeamOption {
   teamId: string;
@@ -15,9 +18,9 @@ export interface PulseSurveyFormProps {
 }
 
 const QUESTIONS = [
-  { id: "flow", label: "Flow / delivery satisfaction" },
-  { id: "stress", label: "Stress / sustainable workload" },
-  { id: "fun", label: "Fun / motivation" },
+  { id: "flow", label: pulseSurveyCopy.questions.flow },
+  { id: "stress", label: pulseSurveyCopy.questions.stress },
+  { id: "fun", label: pulseSurveyCopy.questions.fun },
 ] as const;
 
 type QuestionId = (typeof QUESTIONS)[number]["id"];
@@ -69,9 +72,9 @@ export function PulseSurveyForm({ teams, teamsUnavailable = false }: PulseSurvey
 
   if (status === "success") {
     return (
-      <p role="status" className="mt-6 text-zinc-900 dark:text-zinc-50">
-        Thanks — your response was recorded.
-      </p>
+      <Alert variant="success" className="mt-6">
+        {pulseSurveyCopy.success}
+      </Alert>
     );
   }
 
@@ -118,7 +121,7 @@ export function PulseSurveyForm({ teams, teamsUnavailable = false }: PulseSurvey
           htmlFor="pulse-survey-team"
           className="text-sm font-medium text-zinc-900 dark:text-zinc-50"
         >
-          Team
+          {pulseSurveyCopy.teamLabel}
         </label>
         <select
           id="pulse-survey-team"
@@ -129,7 +132,7 @@ export function PulseSurveyForm({ teams, teamsUnavailable = false }: PulseSurvey
           className="rounded border border-zinc-300 px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:bg-zinc-900"
         >
           <option value="" disabled>
-            Select your team
+            {pulseSurveyCopy.teamPlaceholder}
           </option>
           {teams.map((team) => (
             <option key={team.teamId} value={team.teamId}>
@@ -138,24 +141,20 @@ export function PulseSurveyForm({ teams, teamsUnavailable = false }: PulseSurvey
           ))}
         </select>
         {teamsUnavailable && (
-          <p role="alert" className="text-sm text-red-700 dark:text-red-400">
-            The team list is currently unavailable. Please try again later.
-          </p>
+          <Alert variant="error" className="text-sm">
+            {pulseSurveyCopy.teamsUnavailable}
+          </Alert>
         )}
       </div>
 
-      <button
-        type="submit"
-        disabled={!isComplete || status === "submitting"}
-        className="rounded-full bg-foreground px-5 py-2.5 text-background transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {status === "submitting" ? "Submitting…" : "Submit"}
-      </button>
+      <Button type="submit" disabled={!isComplete} pending={status === "submitting"}>
+        {status === "submitting" ? pulseSurveyCopy.submitting : pulseSurveyCopy.submit}
+      </Button>
 
       {status === "error" && (
-        <p role="alert" className="text-sm text-red-700 dark:text-red-400">
-          Something went wrong. Please try again.
-        </p>
+        <Alert variant="error" className="text-sm">
+          {pulseSurveyCopy.error}
+        </Alert>
       )}
     </form>
   );

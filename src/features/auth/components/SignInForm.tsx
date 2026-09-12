@@ -1,7 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type FormEvent } from "react";
+import { Alert } from "../../../components/ui/Alert";
+import { Button } from "../../../components/ui/Button";
 import { signIn } from "../client/auth-client";
+import { authCopy } from "../copy";
 
 type Status = "idle" | "submitting" | "success" | "error";
 
@@ -20,16 +24,13 @@ export function SignInForm() {
 
   if (status === "success") {
     return (
-      <p role="status" className="mt-6 text-zinc-900 dark:text-zinc-50">
-        Signed in.{" "}
-        <a
-          href="/results"
-          className="font-medium underline dark:text-zinc-50"
-        >
-          Continue to your results
-        </a>
+      <Alert variant="success" className="mt-6">
+        {authCopy.signIn.success}{" "}
+        <Link href="/teams" className="font-medium underline dark:text-zinc-50">
+          {authCopy.signIn.continueLabel}
+        </Link>
         .
-      </p>
+      </Alert>
     );
   }
 
@@ -40,7 +41,7 @@ export function SignInForm() {
           htmlFor="sign-in-email"
           className="text-sm font-medium text-zinc-900 dark:text-zinc-50"
         >
-          Email
+          {authCopy.signIn.emailLabel}
         </label>
         <input
           id="sign-in-email"
@@ -58,7 +59,7 @@ export function SignInForm() {
           htmlFor="sign-in-password"
           className="text-sm font-medium text-zinc-900 dark:text-zinc-50"
         >
-          Password
+          {authCopy.signIn.passwordLabel}
         </label>
         <input
           id="sign-in-password"
@@ -71,18 +72,14 @@ export function SignInForm() {
         />
       </div>
 
-      <button
-        type="submit"
-        disabled={status === "submitting"}
-        className="rounded-full bg-foreground px-5 py-2.5 text-background transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {status === "submitting" ? "Signing in…" : "Sign in"}
-      </button>
+      <Button type="submit" pending={status === "submitting"}>
+        {status === "submitting" ? authCopy.signIn.submitting : authCopy.signIn.submit}
+      </Button>
 
       {status === "error" && (
-        <p role="alert" className="text-sm text-red-700 dark:text-red-400">
-          Invalid email or password.
-        </p>
+        <Alert variant="error" className="text-sm">
+          {authCopy.signIn.error}
+        </Alert>
       )}
     </form>
   );

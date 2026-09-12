@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { SiteHeader } from "../src/components/nav/SiteHeader";
+import { homeCopy } from "./page.copy";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,16 +14,19 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// The application's only user-facing language is Norwegian
+// (docs/UI-UX.md — Language; docs/features/product-ux-shell/SPEC.md —
+// BR-1). Reuses the existing Home copy rather than introducing a second,
+// slightly different Norwegian phrasing for the same product description.
 export const metadata: Metadata = {
-  title: "DevPulse",
-  description:
-    "Short recurring developer pulse surveys and team-level wellbeing trends.",
+  title: homeCopy.title,
+  description: homeCopy.description,
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
-      lang="en"
+      lang="no"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">

@@ -1,0 +1,130 @@
+/**
+ * Norwegian user-facing copy for the authenticated teams screens
+ * (`app/teams/page.tsx`, `app/teams/[teamId]/page.tsx`, `TeamsOverview`,
+ * `TeamDetail`), per the copy-module convention established in TASK-001
+ * (docs/features/product-ux-shell/SPEC.md — BR-2).
+ *
+ * `requestAccessError` is shared by both `TeamsOverview` and `TeamDetail`
+ * (via `request-access-messages.ts`) so the request-access affordance reads
+ * identically wherever it appears — same non-sensitive wording as before
+ * this task, only translated (BR-16 is unaffected: no new information is
+ * disclosed).
+ */
+export const teamsCopy = {
+  overview: {
+    pageTitle: "Team",
+    pageDescription: "Alle aktive team og din egen relasjon til dem.",
+    loading: "Laster oversikt over team…",
+    signInPrompt: "for å se oversikten over team.",
+    signInLink: "Logg inn",
+    error: "Noe gikk galt under lasting av team. Prøv igjen senere.",
+    empty: "Ingen team er tilgjengelige ennå.",
+  },
+  detail: {
+    loading: "Laster team…",
+    signInPrompt: "for å se dette teamet.",
+    signInLink: "Logg inn",
+    error: "Noe gikk galt under lasting av dette teamet. Prøv igjen senere.",
+    resultsUnavailable:
+      "Noe gikk galt under lasting av teamets resultater. Prøv igjen senere.",
+    fallbackName: "Team",
+    relationshipMessages: {
+      none: "Du har ikke tilgang til dette teamets resultater ennå.",
+      request_pending:
+        "Forespørselen din om å bli med i dette teamet venter på godkjenning.",
+      request_rejected:
+        "Den forrige forespørselen din om å bli med i dette teamet ble ikke godkjent.",
+    },
+  },
+  relationshipLabels: {
+    admin: "Admin",
+    member: "Medlem",
+    request_pending: "Forespørsel venter",
+    request_rejected: "Forespørsel avvist",
+    none: "Ikke medlem",
+  },
+  requestAccess: "Be om tilgang",
+  requestingAccess: "Sender forespørsel…",
+  requestAccessError: {
+    teamDisabled: "Dette teamet er for øyeblikket deaktivert.",
+    unverified: "Bekreft e-posten din for å be om tilgang.",
+    generic: "Noe gikk galt. Prøv igjen.",
+  },
+} as const;
+
+/**
+ * Norwegian user-facing copy for the admin screens
+ * (`app/admin/teams/page.tsx`, `app/admin/teams/[teamId]/page.tsx`,
+ * `AdminTeams`, `AdminTeamDetail`), per the copy-module convention
+ * established in TASK-001 (docs/features/product-ux-shell/SPEC.md — BR-2).
+ *
+ * `forbidden` is deliberately generic on both screens — it must never
+ * confirm or deny whether the caller's email is on the server-only
+ * `APP_ADMIN_EMAILS` allow-list (docs/features/team-management/SPEC.md —
+ * BR-15/BR-16), so localizing it must not make it any more specific than
+ * the English wording it replaces.
+ */
+export const adminCopy = {
+  teams: {
+    pageTitle: "Admin: Team",
+    pageDescription: "Opprett team, og aktiver eller deaktiver eksisterende.",
+    loading: "Laster team…",
+    signInPrompt: "for å administrere team.",
+    signInLink: "Logg inn",
+    forbidden: "Du har ikke tilgang til denne siden.",
+    error: "Noe gikk galt under lasting av team. Prøv igjen senere.",
+    empty: "Ingen team ennå.",
+    newTeamNameLabel: "Nytt teamnavn",
+    createButton: "Opprett team",
+    creatingButton: "Oppretter…",
+    createError: {
+      invalidName: "Skriv inn et teamnavn.",
+      generic: "Noe gikk galt under opprettelsen av teamet. Prøv igjen.",
+    },
+    statusActive: "Aktivt",
+    statusDisabled: "Deaktivert",
+    /**
+     * Labels the opaque Firestore-generated `teamId` shown next to a team's
+     * status in admin screens (AdminTeams, AdminTeamDetail) — kept for
+     * admin/debugging usefulness, but unlabeled it read as accidental/
+     * garbled UI (review-change finding, product-ux-shell user-review).
+     */
+    teamIdLabel: "Team-ID:",
+    disableButton: "Deaktiver team",
+    enableButton: "Aktiver team",
+    updatingButton: "Oppdaterer…",
+    statusUpdateError: "Noe gikk galt under oppdatering av dette teamet. Prøv igjen.",
+  },
+  detail: {
+    loading: "Laster team…",
+    signInPrompt: "for å administrere dette teamet.",
+    signInLink: "Logg inn",
+    forbidden: "Du har ikke tilgang til denne siden.",
+    error: "Noe gikk galt under lasting av dette teamet. Prøv igjen senere.",
+    notFound: "Dette teamet ble ikke funnet.",
+    inviteSectionTitle: "Inviter et medlem",
+    emailLabel: "E-postadresse",
+    inviteButton: "Inviter",
+    invitingButton: "Inviterer…",
+    inviteError: {
+      invalidEmail: "Skriv inn en gyldig e-postadresse.",
+      teamDisabled: "Dette teamet er deaktivert. Aktiver det på nytt før du inviterer medlemmer.",
+      generic: "Noe gikk galt under sending av invitasjonen. Prøv igjen.",
+    },
+    membersSectionTitle: "Medlemmer",
+    noMembers: "Ingen medlemmer ennå.",
+    removeButton: "Fjern",
+    removingButton: "Fjerner…",
+    invitationsSectionTitle: "Ventende invitasjoner",
+    noInvitations: "Ingen ventende invitasjoner.",
+    cancelInvitationButton: "Avbryt invitasjon",
+    cancelingButton: "Avbryter…",
+    requestsSectionTitle: "Ventende tilgangsforespørsler",
+    noRequests: "Ingen ventende tilgangsforespørsler.",
+    approveButton: "Godkjenn",
+    approvingButton: "Godkjenner…",
+    rejectButton: "Avvis",
+    rejectingButton: "Avviser…",
+    rowError: "Noe gikk galt. Prøv igjen.",
+  },
+} as const;

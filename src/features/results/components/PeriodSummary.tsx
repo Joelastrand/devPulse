@@ -1,4 +1,7 @@
+import { Alert } from "../../../components/ui/Alert";
+import { Card } from "../../../components/ui/Card";
 import type { PeriodAggregateResult } from "../domain/aggregation";
+import { resultsCopy } from "../copy";
 
 /**
  * Renders the most recently closed period's aggregate. `not_available`
@@ -9,15 +12,17 @@ import type { PeriodAggregateResult } from "../domain/aggregation";
  */
 export function PeriodSummary({ result }: { result: PeriodAggregateResult }) {
   return (
-    <section
+    <Card
+      as="section"
+      variant="bordered"
+      padding="md"
       aria-labelledby="current-period-heading"
-      className="rounded-lg border border-zinc-200 p-6 dark:border-zinc-800"
     >
       <h2
         id="current-period-heading"
         className="text-lg font-semibold text-zinc-900 dark:text-zinc-50"
       >
-        Most recently completed period
+        {resultsCopy.periodSummary.heading}
       </h2>
       <p className="text-sm text-zinc-500 dark:text-zinc-400">{result.period}</p>
 
@@ -25,35 +30,41 @@ export function PeriodSummary({ result }: { result: PeriodAggregateResult }) {
         <>
           <dl className="mt-4 grid grid-cols-3 gap-4">
             <div>
-              <dt className="text-sm text-zinc-500 dark:text-zinc-400">Flow</dt>
+              <dt className="text-sm text-zinc-500 dark:text-zinc-400">
+                {resultsCopy.periodSummary.dimensions.flow}
+              </dt>
               <dd className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
                 {result.mean.flow.toFixed(1)}
               </dd>
             </div>
             <div>
-              <dt className="text-sm text-zinc-500 dark:text-zinc-400">Stress</dt>
+              <dt className="text-sm text-zinc-500 dark:text-zinc-400">
+                {resultsCopy.periodSummary.dimensions.stress}
+              </dt>
               <dd className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
                 {result.mean.stress.toFixed(1)}
               </dd>
             </div>
             <div>
-              <dt className="text-sm text-zinc-500 dark:text-zinc-400">Fun</dt>
+              <dt className="text-sm text-zinc-500 dark:text-zinc-400">
+                {resultsCopy.periodSummary.dimensions.fun}
+              </dt>
               <dd className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
                 {result.mean.fun.toFixed(1)}
               </dd>
             </div>
           </dl>
           <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-            {result.count} responses
+            {resultsCopy.periodSummary.responses(result.count)}
           </p>
         </>
       ) : (
-        <p role="status" className="mt-4 text-zinc-600 dark:text-zinc-400">
+        <Alert variant="info" className="mt-4">
           {result.status === "insufficient"
-            ? "Not enough responses yet for this period."
-            : "Not available."}
-        </p>
+            ? resultsCopy.periodSummary.insufficient
+            : resultsCopy.periodSummary.notAvailable}
+        </Alert>
       )}
-    </section>
+    </Card>
   );
 }

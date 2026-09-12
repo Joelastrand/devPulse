@@ -1,4 +1,5 @@
 import type { PeriodAggregateResult } from "../domain/aggregation";
+import { resultsCopy } from "../copy";
 
 /**
  * Renders the closed-period trend, each period independently in its own
@@ -16,45 +17,42 @@ export function TrendTable({
         id="trend-heading"
         className="text-lg font-semibold text-zinc-900 dark:text-zinc-50"
       >
-        Trend (last {results.length} completed periods)
+        {resultsCopy.trendTable.heading(results.length)}
       </h2>
       <div className="mt-4 overflow-x-auto">
         <table className="w-full text-left text-sm">
-          <caption className="sr-only">
-            Per-dimension pulse averages for the most recent completed
-            periods
-          </caption>
+          <caption className="sr-only">{resultsCopy.trendTable.caption}</caption>
           <thead>
             <tr className="border-b border-zinc-200 dark:border-zinc-800">
               <th
                 scope="col"
                 className="py-2 pr-4 font-medium text-zinc-500 dark:text-zinc-400"
               >
-                Period
+                {resultsCopy.trendTable.columns.period}
               </th>
               <th
                 scope="col"
                 className="py-2 pr-4 font-medium text-zinc-500 dark:text-zinc-400"
               >
-                Flow
+                {resultsCopy.trendTable.columns.flow}
               </th>
               <th
                 scope="col"
                 className="py-2 pr-4 font-medium text-zinc-500 dark:text-zinc-400"
               >
-                Stress
+                {resultsCopy.trendTable.columns.stress}
               </th>
               <th
                 scope="col"
                 className="py-2 pr-4 font-medium text-zinc-500 dark:text-zinc-400"
               >
-                Fun
+                {resultsCopy.trendTable.columns.fun}
               </th>
               <th
                 scope="col"
                 className="py-2 font-medium text-zinc-500 dark:text-zinc-400"
               >
-                Responses
+                {resultsCopy.trendTable.columns.responses}
               </th>
             </tr>
           </thead>
@@ -83,8 +81,8 @@ export function TrendTable({
                     className="py-2 text-zinc-500 dark:text-zinc-400"
                   >
                     {result.status === "insufficient"
-                      ? "Not enough responses yet"
-                      : "Not available"}
+                      ? resultsCopy.trendTable.insufficient
+                      : resultsCopy.trendTable.notAvailable}
                   </td>
                 )}
               </tr>

@@ -22,9 +22,9 @@ describe("SignUpForm", () => {
     const user = userEvent.setup();
     render(<SignUpForm />);
 
-    await user.type(screen.getByLabelText("Email"), "dev@example.com");
-    await user.type(screen.getByLabelText("Password"), "correct horse battery");
-    await user.click(screen.getByRole("button", { name: /sign up/i }));
+    await user.type(screen.getByLabelText("E-post"), "dev@example.com");
+    await user.type(screen.getByLabelText("Passord"), "correct horse battery");
+    await user.click(screen.getByRole("button", { name: /opprett konto/i }));
 
     expect(signUpMock).toHaveBeenCalledWith(
       "dev@example.com",
@@ -32,28 +32,59 @@ describe("SignUpForm", () => {
     );
   });
 
-  it("shows a verification-email message on success", async () => {
+  it("shows a Norwegian verification-email message on success", async () => {
     signUpMock.mockResolvedValue({ ok: true });
     const user = userEvent.setup();
     render(<SignUpForm />);
 
-    await user.type(screen.getByLabelText("Email"), "dev@example.com");
-    await user.type(screen.getByLabelText("Password"), "correct horse battery");
-    await user.click(screen.getByRole("button", { name: /sign up/i }));
+    await user.type(screen.getByLabelText("E-post"), "dev@example.com");
+    await user.type(screen.getByLabelText("Passord"), "correct horse battery");
+    await user.click(screen.getByRole("button", { name: /opprett konto/i }));
 
     const status = await screen.findByRole("status");
-    expect(status.textContent).toMatch(/verification link/i);
+    expect(status.textContent).toMatch(/bekreftelseslenke/i);
   });
 
-  it("shows an error message when sign-up fails", async () => {
+  it("shows a Norwegian error message when sign-up fails", async () => {
     signUpMock.mockResolvedValue({ ok: false, error: "sign_up_failed" });
     const user = userEvent.setup();
     render(<SignUpForm />);
 
-    await user.type(screen.getByLabelText("Email"), "dev@example.com");
-    await user.type(screen.getByLabelText("Password"), "correct horse battery");
-    await user.click(screen.getByRole("button", { name: /sign up/i }));
+    await user.type(screen.getByLabelText("E-post"), "dev@example.com");
+    await user.type(screen.getByLabelText("Passord"), "correct horse battery");
+    await user.click(screen.getByRole("button", { name: /opprett konto/i }));
 
-    expect(await screen.findByRole("alert")).toBeTruthy();
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/noe gikk galt/i);
+  });
+
+  it("shows a pending label and marks the button aria-busy while submitting", async () => {
+    let resolveSignUp: (value: { ok: true }) => void = () => {};
+    signUpMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveSignUp = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    render(<SignUpForm />);
+
+    await user.type(screen.getByLabelText("E-post"), "dev@example.com");
+    await user.type(screen.getByLabelText("Passord"), "correct horse battery");
+    await user.click(screen.getByRole("button", { name: /opprett konto/i }));
+
+    const pendingButton = screen.getByRole("button", { name: /oppretter konto/i });
+    expect(pendingButton.getAttribute("aria-busy")).toBe("true");
+
+    resolveSignUp({ ok: true });
+    await screen.findByRole("status");
+  });
+
+  it("contains no leftover English copy", () => {
+    render(<SignUpForm />);
+
+    expect(screen.queryByText(/^email$/i)).toBeNull();
+    expect(screen.queryByText(/^password$/i)).toBeNull();
+    expect(screen.queryByText(/^sign up$/i)).toBeNull();
   });
 });

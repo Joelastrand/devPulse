@@ -22,9 +22,9 @@ describe("SignInForm", () => {
     const user = userEvent.setup();
     render(<SignInForm />);
 
-    await user.type(screen.getByLabelText("Email"), "dev@example.com");
-    await user.type(screen.getByLabelText("Password"), "correct horse battery");
-    await user.click(screen.getByRole("button", { name: /sign in/i }));
+    await user.type(screen.getByLabelText("E-post"), "dev@example.com");
+    await user.type(screen.getByLabelText("Passord"), "correct horse battery");
+    await user.click(screen.getByRole("button", { name: /logg inn/i }));
 
     expect(signInMock).toHaveBeenCalledWith(
       "dev@example.com",
@@ -32,31 +32,61 @@ describe("SignInForm", () => {
     );
   });
 
-  it("shows a success message on success", async () => {
+  it("shows a Norwegian success message linking to /teams on success", async () => {
     signInMock.mockResolvedValue({ ok: true });
     const user = userEvent.setup();
     render(<SignInForm />);
 
-    await user.type(screen.getByLabelText("Email"), "dev@example.com");
-    await user.type(screen.getByLabelText("Password"), "correct horse battery");
-    await user.click(screen.getByRole("button", { name: /sign in/i }));
+    await user.type(screen.getByLabelText("E-post"), "dev@example.com");
+    await user.type(screen.getByLabelText("Passord"), "correct horse battery");
+    await user.click(screen.getByRole("button", { name: /logg inn/i }));
 
     const status = await screen.findByRole("status");
-    expect(status.textContent).toMatch(/signed in/i);
-    const link = screen.getByRole("link", { name: /continue to your results/i });
-    expect(link.getAttribute("href")).toBe("/results");
+    expect(status.textContent).toMatch(/du er logget inn/i);
+    const link = screen.getByRole("link", { name: /fortsett til team/i });
+    expect(link.getAttribute("href")).toBe("/teams");
   });
 
-  it("shows an error message for invalid credentials", async () => {
+  it("shows a Norwegian error message for invalid credentials", async () => {
     signInMock.mockResolvedValue({ ok: false, error: "invalid_credentials" });
     const user = userEvent.setup();
     render(<SignInForm />);
 
-    await user.type(screen.getByLabelText("Email"), "dev@example.com");
-    await user.type(screen.getByLabelText("Password"), "wrong-password");
-    await user.click(screen.getByRole("button", { name: /sign in/i }));
+    await user.type(screen.getByLabelText("E-post"), "dev@example.com");
+    await user.type(screen.getByLabelText("Passord"), "wrong-password");
+    await user.click(screen.getByRole("button", { name: /logg inn/i }));
 
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toMatch(/invalid email or password/i);
+    expect(alert.textContent).toMatch(/ugyldig e-post eller passord/i);
+  });
+
+  it("shows a pending label and marks the button aria-busy while submitting", async () => {
+    let resolveSignIn: (value: { ok: true }) => void = () => {};
+    signInMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveSignIn = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    render(<SignInForm />);
+
+    await user.type(screen.getByLabelText("E-post"), "dev@example.com");
+    await user.type(screen.getByLabelText("Passord"), "correct horse battery");
+    await user.click(screen.getByRole("button", { name: /logg inn/i }));
+
+    const pendingButton = screen.getByRole("button", { name: /logger inn/i });
+    expect(pendingButton.getAttribute("aria-busy")).toBe("true");
+
+    resolveSignIn({ ok: true });
+    await screen.findByRole("status");
+  });
+
+  it("contains no leftover English copy", () => {
+    render(<SignInForm />);
+
+    expect(screen.queryByText(/^email$/i)).toBeNull();
+    expect(screen.queryByText(/^password$/i)).toBeNull();
+    expect(screen.queryByText(/^sign in$/i)).toBeNull();
   });
 });

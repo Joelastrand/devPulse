@@ -58,12 +58,12 @@ describe("AdminTeams", () => {
     setAdminTeamStatusMock.mockReset();
   });
 
-  it("shows a loading state before auth resolves", () => {
+  it("shows a Norwegian loading state before auth resolves", () => {
     observeIdTokenMock.mockImplementation(() => () => {});
 
     render(<AdminTeams />);
 
-    expect(screen.getByRole("status").textContent).toMatch(/loading/i);
+    expect(screen.getByRole("status").textContent).toMatch(/laster/i);
   });
 
   it("prompts sign-in when the visitor is signed out, and never fetches", async () => {
@@ -71,7 +71,7 @@ describe("AdminTeams", () => {
 
     render(<AdminTeams />);
 
-    await screen.findByRole("link", { name: /sign in/i });
+    await screen.findByRole("link", { name: /logg inn/i });
     expect(fetchAdminTeamsMock).not.toHaveBeenCalled();
   });
 
@@ -81,17 +81,17 @@ describe("AdminTeams", () => {
 
     render(<AdminTeams />);
 
-    await screen.findByRole("link", { name: /sign in/i });
+    await screen.findByRole("link", { name: /logg inn/i });
   });
 
-  it("shows a generic forbidden message for an authenticated non-admin, never revealing allow-list membership", async () => {
+  it("shows a generic Norwegian forbidden message for an authenticated non-admin, never revealing allow-list membership", async () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchAdminTeamsMock.mockResolvedValue({ status: "forbidden" });
 
     render(<AdminTeams />);
 
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toMatch(/don't have permission/i);
+    expect(alert.textContent).toMatch(/ikke tilgang/i);
     expect(alert.textContent).not.toMatch(/admin_emails|allow-?list|@/i);
   });
 
@@ -101,7 +101,8 @@ describe("AdminTeams", () => {
 
     render(<AdminTeams />);
 
-    await screen.findByRole("alert");
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/noe gikk galt/i);
   });
 
   it("shows a zero-teams state for an admin with no teams yet, while still offering create", async () => {
@@ -110,9 +111,9 @@ describe("AdminTeams", () => {
 
     render(<AdminTeams />);
 
-    const status = await screen.findByText(/no teams/i);
+    const status = await screen.findByText(/ingen team/i);
     expect(status).toBeTruthy();
-    expect(screen.getByRole("button", { name: /create team/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /opprett team/i })).toBeTruthy();
   });
 
   it("shows both active and disabled teams for an admin", async () => {
@@ -129,10 +130,23 @@ describe("AdminTeams", () => {
 
     await screen.findByText("Platform");
     expect(screen.getByText("Legacy")).toBeTruthy();
-    expect(screen.getByText(/^Active/)).toBeTruthy();
-    expect(screen.getByText(/^Disabled/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: /disable team/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /enable team/i })).toBeTruthy();
+    expect(screen.getByText(/^Aktivt/)).toBeTruthy();
+    expect(screen.getByText(/^Deaktivert/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /deaktiver team/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^aktiver team/i })).toBeTruthy();
+  });
+
+  it("labels each team's opaque Firestore ID clearly instead of showing it bare", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchAdminTeamsMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Platform", status: "active" }],
+    });
+
+    render(<AdminTeams />);
+
+    await screen.findByText("Platform");
+    expect(screen.getByText("Aktivt · Team-ID: team-1")).toBeTruthy();
   });
 
   it("never renders survey/aggregate data, member/invitation identities, or internal Firebase metadata", async () => {
@@ -160,10 +174,10 @@ describe("AdminTeams", () => {
     createAdminTeamMock.mockResolvedValue({ ok: true, teamId: "server-generated-id" });
 
     render(<AdminTeams />);
-    await screen.findByText(/no teams/i);
+    await screen.findByText(/ingen team/i);
 
-    await user.type(screen.getByLabelText(/new team name/i), "Mobile");
-    await user.click(screen.getByRole("button", { name: /create team/i }));
+    await user.type(screen.getByLabelText(/nytt teamnavn/i), "Mobile");
+    await user.click(screen.getByRole("button", { name: /opprett team/i }));
 
     expect(createAdminTeamMock).toHaveBeenCalledWith("a-token", "Mobile");
     await screen.findByText("Mobile");
@@ -171,20 +185,20 @@ describe("AdminTeams", () => {
     expect(fetchAdminTeamsMock).toHaveBeenCalledTimes(2);
   });
 
-  it("shows a controlled error and does not fabricate a team when create fails", async () => {
+  it("shows a controlled Norwegian error and does not fabricate a team when create fails", async () => {
     const user = userEvent.setup();
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchAdminTeamsMock.mockResolvedValue({ status: "ok", teams: [] });
     createAdminTeamMock.mockResolvedValue({ ok: false, error: "invalid_name" });
 
     render(<AdminTeams />);
-    await screen.findByText(/no teams/i);
+    await screen.findByText(/ingen team/i);
 
-    await user.click(screen.getByRole("button", { name: /create team/i }));
+    await user.click(screen.getByRole("button", { name: /opprett team/i }));
 
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toMatch(/enter a team name/i);
-    expect(screen.getByText(/no teams/i)).toBeTruthy();
+    expect(alert.textContent).toMatch(/skriv inn et teamnavn/i);
+    expect(screen.getByText(/ingen team/i)).toBeTruthy();
   });
 
   it("does not fire a second create request from repeated clicks while one is already in flight", async () => {
@@ -200,9 +214,9 @@ describe("AdminTeams", () => {
     );
 
     render(<AdminTeams />);
-    await screen.findByText(/no teams/i);
+    await screen.findByText(/ingen team/i);
 
-    const button = screen.getByRole("button", { name: /create team/i });
+    const button = screen.getByRole("button", { name: /opprett team/i });
     await user.click(button);
     expect(button.hasAttribute("disabled")).toBe(true);
 
@@ -234,10 +248,10 @@ describe("AdminTeams", () => {
     render(<AdminTeams />);
     await screen.findByText("Platform");
 
-    await user.click(screen.getByRole("button", { name: /disable team/i }));
+    await user.click(screen.getByRole("button", { name: /deaktiver team/i }));
 
     expect(setAdminTeamStatusMock).toHaveBeenCalledWith("a-token", "team-1", "disabled");
-    await screen.findByRole("button", { name: /enable team/i });
+    await screen.findByRole("button", { name: /^aktiver team/i });
     expect(fetchAdminTeamsMock).toHaveBeenCalledTimes(2);
   });
 
@@ -258,14 +272,14 @@ describe("AdminTeams", () => {
     render(<AdminTeams />);
     await screen.findByText("Legacy");
 
-    await user.click(screen.getByRole("button", { name: /enable team/i }));
+    await user.click(screen.getByRole("button", { name: /^aktiver team/i }));
 
     expect(setAdminTeamStatusMock).toHaveBeenCalledWith("a-token", "team-1", "active");
-    await screen.findByRole("button", { name: /disable team/i });
+    await screen.findByRole("button", { name: /deaktiver team/i });
     expect(fetchAdminTeamsMock).toHaveBeenCalledTimes(2);
   });
 
-  it("shows a controlled error and does not silently flip the row when a status update fails", async () => {
+  it("shows a controlled Norwegian error and does not silently flip the row when a status update fails", async () => {
     const user = userEvent.setup();
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchAdminTeamsMock.mockResolvedValue({
@@ -277,12 +291,12 @@ describe("AdminTeams", () => {
     render(<AdminTeams />);
     await screen.findByText("Platform");
 
-    await user.click(screen.getByRole("button", { name: /disable team/i }));
+    await user.click(screen.getByRole("button", { name: /deaktiver team/i }));
 
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toMatch(/went wrong/i);
+    expect(alert.textContent).toMatch(/noe gikk galt/i);
     // Still shows the original state and action, not a fabricated flip.
-    expect(screen.getByRole("button", { name: /disable team/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /deaktiver team/i })).toBeTruthy();
     expect(fetchAdminTeamsMock).toHaveBeenCalledTimes(1);
   });
 
@@ -304,7 +318,7 @@ describe("AdminTeams", () => {
     render(<AdminTeams />);
     await screen.findByText("Platform");
 
-    const button = screen.getByRole("button", { name: /disable team/i });
+    const button = screen.getByRole("button", { name: /deaktiver team/i });
     await user.click(button);
     expect(button.hasAttribute("disabled")).toBe(true);
 
@@ -337,7 +351,7 @@ describe("AdminTeams", () => {
     render(<AdminTeams />);
     await screen.findByText("Legacy");
 
-    const button = screen.getByRole("button", { name: /enable team/i });
+    const button = screen.getByRole("button", { name: /^aktiver team/i });
     await user.click(button);
     expect(button.hasAttribute("disabled")).toBe(true);
 
@@ -373,7 +387,7 @@ describe("AdminTeams", () => {
     render(<AdminTeams />);
     await screen.findByText("Platform");
 
-    const [team1Button, team2Button] = screen.getAllByRole("button", { name: /disable team/i });
+    const [team1Button, team2Button] = screen.getAllByRole("button", { name: /deaktiver team/i });
     await user.click(team1Button);
     expect(team1Button.hasAttribute("disabled")).toBe(true);
 
@@ -397,6 +411,23 @@ describe("AdminTeams", () => {
     unmount();
 
     expect(unsubscribe).toHaveBeenCalled();
+  });
+
+  it("contains no leftover English copy", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchAdminTeamsMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Platform", status: "active" }],
+    });
+
+    render(<AdminTeams />);
+    await screen.findByText("Platform");
+
+    expect(screen.queryByText(/^sign in$/i)).toBeNull();
+    expect(screen.queryByText(/^create team$/i)).toBeNull();
+    expect(screen.queryByText(/^disable team$/i)).toBeNull();
+    expect(screen.queryByText(/^loading teams/i)).toBeNull();
+    expect(screen.queryByText(/^active$/i)).toBeNull();
   });
 });
 
@@ -423,18 +454,18 @@ describe("AdminTeams auth races", () => {
 
     render(<AdminTeams />);
     observer.emit("token-a");
-    await screen.findByText(/no teams/i);
+    await screen.findByText(/ingen team/i);
 
-    await user.type(screen.getByLabelText(/new team name/i), "Mobile");
-    await user.click(screen.getByRole("button", { name: /create team/i }));
+    await user.type(screen.getByLabelText(/nytt teamnavn/i), "Mobile");
+    await user.click(screen.getByRole("button", { name: /opprett team/i }));
 
     observer.emit(null);
-    await screen.findByRole("link", { name: /sign in/i });
+    await screen.findByRole("link", { name: /logg inn/i });
 
     resolveCreate({ ok: true, teamId: "team-x" });
     await flushMicrotasks();
 
-    expect(screen.getByRole("link", { name: /sign in/i })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /logg inn/i })).toBeTruthy();
     expect(screen.queryByText("Mobile")).toBeNull();
   });
 
@@ -456,8 +487,8 @@ describe("AdminTeams auth races", () => {
     observer.emit("token-a");
     await waitFor(() => expect(fetchAdminTeamsMock).toHaveBeenCalledTimes(1));
 
-    await user.type(screen.getByLabelText(/new team name/i), "Mobile");
-    await user.click(screen.getByRole("button", { name: /create team/i }));
+    await user.type(screen.getByLabelText(/nytt teamnavn/i), "Mobile");
+    await user.click(screen.getByRole("button", { name: /opprett team/i }));
 
     observer.emit("token-b");
     await waitFor(() => expect(fetchAdminTeamsMock).toHaveBeenCalledTimes(2));
@@ -467,7 +498,7 @@ describe("AdminTeams auth races", () => {
 
     // Account B's own (empty) list load must not be clobbered by account
     // A's stale, now-superseded create result.
-    expect(screen.getByRole("status").textContent).toMatch(/no teams/i);
+    expect(screen.getByRole("status").textContent).toMatch(/ingen team/i);
     expect(fetchAdminTeamsMock).toHaveBeenCalledTimes(2);
   });
 
@@ -495,7 +526,7 @@ describe("AdminTeams auth races", () => {
     observer.emit("token-a");
     await screen.findByText("Platform");
 
-    await user.click(screen.getByRole("button", { name: /disable team/i }));
+    await user.click(screen.getByRole("button", { name: /deaktiver team/i }));
 
     observer.emit("token-b");
     await screen.findByText("Mobile");

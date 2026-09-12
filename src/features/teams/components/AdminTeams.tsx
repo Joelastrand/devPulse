@@ -1,7 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { observeIdToken } from "../../auth/client/auth-client";
+import Link from "next/link";
+import { useState, type FormEvent } from "react";
+import { Alert } from "../../../components/ui/Alert";
+import { Button } from "../../../components/ui/Button";
+import { Card } from "../../../components/ui/Card";
+import { EmptyState } from "../../../components/ui/EmptyState";
+import { LoadingState } from "../../../components/ui/LoadingState";
+import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
+import { adminCopy } from "../copy";
 import {
   createAdminTeam,
   fetchAdminTeams,
@@ -27,82 +34,66 @@ type StatusActionState =
 
 function createErrorMessage(error: string): string {
   if (error === "invalid_name") {
-    return "Enter a team name.";
+    return adminCopy.teams.createError.invalidName;
   }
-  return "Something went wrong creating the team. Please try again.";
+  return adminCopy.teams.createError.generic;
 }
 
 /**
  * Admin-only `/admin/teams` page (docs/features/team-management/SPEC.md —
  * BR-1, BR-2, BR-3 UI). Mirrors `TeamsOverview`/`TeamDetail`'s client-side
- * auth-state and generation-guard pattern exactly: the client holds the
- * Firebase ID token (no server session) and every admin operation
- * (`listTeams`, `createTeam`, `setTeamStatus`) is re-authorized server-side
- * on every call via the existing, unchanged TASK-001 `requireAppAdmin`
- * boundary — this component never decides admin status itself, and
- * `APP_ADMIN_EMAILS` never reaches the client in any form.
+ * auth-state and generation-guard pattern via the shared
+ * `useAuthGatedResource` hook: the client holds the Firebase ID token (no
+ * server session) and every admin operation (`listTeams`, `createTeam`,
+ * `setTeamStatus`) is re-authorized server-side on every call via the
+ * existing, unchanged TASK-001 `requireAppAdmin` boundary — this component
+ * never decides admin status itself, and `APP_ADMIN_EMAILS` never reaches
+ * the client in any form.
  *
- * `generationRef` bumps on every auth-state change (sign-out, account
- * switch, token refresh) and on unmount; the initial list load, the
- * post-create refresh, and the post-status-change refresh are all applied
- * only if `generationRef` still matches the generation the async call
- * started under — a slow response for a superseded identity can never
- * overwrite what's currently shown, and a caller whose auth changes
- * mid-operation fails closed (the stale result is simply discarded, not
- * rendered as if it belonged to the new identity).
+ * The shared hook's generation guard invalidates the initial list load, the
+ * post-create refresh, and the post-status-change refresh alike on every
+ * auth-state change (sign-out, account switch, token refresh) and on
+ * unmount — a slow response for a superseded identity can never overwrite
+ * what's currently shown, and a caller whose auth changes mid-operation
+ * fails closed (the stale result is simply discarded, not rendered as if
+ * it belonged to the new identity).
  */
 export function AdminTeams() {
   const [state, setState] = useState<ViewState>({ phase: "loading" });
   const [createState, setCreateState] = useState<CreateState>({ status: "idle" });
   const [name, setName] = useState("");
   const [statusActions, setStatusActions] = useState<Record<string, StatusActionState>>({});
-  const generationRef = useRef(0);
 
-  const isCurrentGeneration = useCallback((generation: number): boolean => {
-    return generationRef.current === generation;
-  }, []);
+  const { isCurrentGeneration } = useAuthGatedResource((token, generation) => {
+    // A new auth state starts clean: no stale create/status-action
+    // indicator from a previous identity can carry over.
+    setCreateState({ status: "idle" });
+    setStatusActions({});
+    setName("");
+
+    if (!token) {
+      setState({ phase: "signed_out" });
+      return;
+    }
+
+    setState({ phase: "loading" });
+    loadForGeneration(token, generation);
+  });
 
   /**
    * The one shared guarded-fetch mechanism every async list load goes
    * through (initial load, post-create refresh, post-status-change
    * refresh alike) — mirrors `TeamsOverview`'s `loadOverviewForGeneration`.
+   * A hoisted function declaration (not `useCallback`) so it can be
+   * referenced above, in the auth-change callback, without an
+   * evaluation-order issue.
    */
-  const loadForGeneration = useCallback(
-    async (token: string, generation: number) => {
-      const result = await fetchAdminTeams(token);
-      if (isCurrentGeneration(generation)) {
-        setState({ phase: "loaded", token, generation, result });
-      }
-    },
-    [isCurrentGeneration],
-  );
-
-  useEffect(() => {
-    const unsubscribe = observeIdToken((token) => {
-      generationRef.current += 1;
-      const generation = generationRef.current;
-      // A new auth state starts clean: no stale create/status-action
-      // indicator from a previous identity can carry over.
-      setCreateState({ status: "idle" });
-      setStatusActions({});
-      setName("");
-
-      if (!token) {
-        setState({ phase: "signed_out" });
-        return;
-      }
-
-      setState({ phase: "loading" });
-      loadForGeneration(token, generation);
-    });
-
-    return () => {
-      // Invalidates any request still in flight for this component
-      // instance, exactly like an auth change would.
-      generationRef.current += 1;
-      unsubscribe();
-    };
-  }, [loadForGeneration]);
+  async function loadForGeneration(token: string, generation: number) {
+    const result = await fetchAdminTeams(token);
+    if (isCurrentGeneration(generation)) {
+      setState({ phase: "loaded", token, generation, result });
+    }
+  }
 
   async function handleCreate(
     event: FormEvent<HTMLFormElement>,
@@ -166,7 +157,7 @@ export function AdminTeams() {
         ...prev,
         [teamId]: {
           status: "error",
-          message: "Something went wrong updating this team. Please try again.",
+          message: adminCopy.teams.statusUpdateError,
         },
       }));
       return;
@@ -180,11 +171,7 @@ export function AdminTeams() {
   }
 
   if (state.phase === "loading") {
-    return (
-      <p role="status" className="text-zinc-600 dark:text-zinc-400">
-        Loading teams…
-      </p>
-    );
+    return <LoadingState label={adminCopy.teams.loading} />;
   }
 
   if (state.phase === "signed_out") {
@@ -200,19 +187,11 @@ export function AdminTeams() {
   if (result.status === "forbidden") {
     // Deliberately generic — never confirms or denies whether the caller's
     // email is on the server-only `APP_ADMIN_EMAILS` allow-list.
-    return (
-      <p role="alert" className="text-red-700 dark:text-red-400">
-        You don&apos;t have permission to view this page.
-      </p>
-    );
+    return <Alert variant="error">{adminCopy.teams.forbidden}</Alert>;
   }
 
   if (result.status === "read_failed") {
-    return (
-      <p role="alert" className="text-red-700 dark:text-red-400">
-        Something went wrong loading teams. Please try again later.
-      </p>
-    );
+    return <Alert variant="error">{adminCopy.teams.error}</Alert>;
   }
 
   const { teams } = result;
@@ -227,7 +206,7 @@ export function AdminTeams() {
           htmlFor="admin-new-team-name"
           className="text-sm font-medium text-zinc-900 dark:text-zinc-50"
         >
-          New team name
+          {adminCopy.teams.newTeamNameLabel}
         </label>
         <div className="flex gap-2">
           <input
@@ -237,25 +216,19 @@ export function AdminTeams() {
             onChange={(event) => setName(event.target.value)}
             className="flex-1 rounded border border-zinc-300 px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:bg-zinc-900"
           />
-          <button
-            type="submit"
-            disabled={createState.status === "pending"}
-            className="shrink-0 rounded-full bg-foreground px-5 py-2 text-background transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {createState.status === "pending" ? "Creating…" : "Create team"}
-          </button>
+          <Button type="submit" className="shrink-0" pending={createState.status === "pending"}>
+            {createState.status === "pending" ? adminCopy.teams.creatingButton : adminCopy.teams.createButton}
+          </Button>
         </div>
         {createState.status === "error" && (
-          <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+          <Alert variant="error" className="text-sm">
             {createState.message}
-          </p>
+          </Alert>
         )}
       </form>
 
       {teams.length === 0 ? (
-        <p role="status" className="text-zinc-600 dark:text-zinc-400">
-          No teams yet.
-        </p>
+        <EmptyState>{adminCopy.teams.empty}</EmptyState>
       ) : (
         <ul className="flex flex-col gap-3">
           {teams.map((team) => {
@@ -264,43 +237,44 @@ export function AdminTeams() {
             const isDisabling = team.status === "active";
 
             return (
-              <li
+              <Card
+                as="li"
                 key={team.teamId}
-                className="flex items-center justify-between gap-4 rounded-lg border border-zinc-200 px-4 py-3 dark:border-zinc-800"
+                variant="bordered"
+                padding="sm"
+                className="flex items-center justify-between gap-4"
               >
-                <div>
-                  <a
+                <div className="min-w-0">
+                  <Link
                     href={`/admin/teams/${encodeURIComponent(team.teamId)}`}
-                    className="font-medium text-zinc-900 underline dark:text-zinc-50"
+                    className="break-words font-medium text-zinc-900 underline dark:text-zinc-50"
                   >
                     {team.name}
-                  </a>
+                  </Link>
                   <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                    {team.status === "active" ? "Active" : "Disabled"} · {team.teamId}
+                    {team.status === "active" ? adminCopy.teams.statusActive : adminCopy.teams.statusDisabled}{" "}
+                    · {adminCopy.teams.teamIdLabel} {team.teamId}
                   </p>
                   {action.status === "error" && (
-                    <p role="alert" className="mt-1 text-sm text-red-700 dark:text-red-400">
+                    <Alert variant="error" className="mt-1 text-sm">
                       {action.message}
-                    </p>
+                    </Alert>
                   )}
                 </div>
-                <button
-                  type="button"
+                <Button
+                  variant={isDisabling ? "destructive" : "secondary"}
+                  size="sm"
+                  className="shrink-0"
+                  pending={action.status === "pending"}
                   onClick={() => handleSetStatus(token, generation, team.teamId, nextStatus)}
-                  disabled={action.status === "pending"}
-                  className={
-                    isDisabling
-                      ? "shrink-0 rounded-full border border-red-300 px-4 py-1.5 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
-                      : "shrink-0 rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
-                  }
                 >
                   {action.status === "pending"
-                    ? "Updating…"
+                    ? adminCopy.teams.updatingButton
                     : isDisabling
-                      ? "Disable team"
-                      : "Enable team"}
-                </button>
-              </li>
+                      ? adminCopy.teams.disableButton
+                      : adminCopy.teams.enableButton}
+                </Button>
+              </Card>
             );
           })}
         </ul>
@@ -312,10 +286,10 @@ export function AdminTeams() {
 function SignInPrompt() {
   return (
     <p className="text-zinc-600 dark:text-zinc-400">
-      <a href="/sign-in" className="font-medium text-zinc-900 underline dark:text-zinc-50">
-        Sign in
-      </a>{" "}
-      to manage teams.
+      <Link href="/sign-in" className="font-medium text-zinc-900 underline dark:text-zinc-50">
+        {adminCopy.teams.signInLink}
+      </Link>{" "}
+      {adminCopy.teams.signInPrompt}
     </p>
   );
 }

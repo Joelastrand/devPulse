@@ -59,6 +59,12 @@ flowchart TD
   responses (see `docs/SECURITY.md`) — the app-admin role introduced by
   team-management extends *which teams'* aggregates an identity may view
   and team/membership management, not raw-response access.
+- **Own-admin-status read, implemented (`docs/features/product-ux-shell/
+  SPEC.md`)**: a minimal `GET /api/me` route reuses `verifyIdToken` +
+  `isAppAdmin` exactly as above and returns only the caller's own
+  `{isAdmin: boolean}` (no Firestore read), so the UI can show/hide the
+  Admin navigation link from server-derived state only — the UI never
+  evaluates `APP_ADMIN_EMAILS` or any allow-list itself.
 
 ## Submission and dashboard boundaries (decided, implemented)
 
@@ -81,11 +87,23 @@ flowchart LR
   response payload.
 - **Protected dashboard boundary**: requires authentication + team
   authorization; only serves aggregated results (see minimum threshold in
-  `docs/SECURITY.md`), never raw individual responses, to a signed-in,
-  team-assigned developer.
-- Participation (who has submitted, for reminder/completion purposes) is
-  stored separately from the anonymous response content itself — **decided
-  invariant**, storage design is an **open question**.
+  `docs/SECURITY.md`), never raw individual responses, to an authorized
+  team member or app admin (`authorizeTeamAccess`, enforced server-side —
+  see "Authentication and authorization" above). App-admin status does not
+  imply raw-response access (see invariant 17, `docs/SECURITY.md`).
+- **`SurveyParticipation` (future/not implemented)**: tracking who has
+  submitted a survey (for reminder/completion purposes), stored separately
+  from the anonymous response content itself, is a **decided invariant**
+  for if/when such tracking is ever introduced — but no participation-
+  tracking mechanism, collection, or field exists in the current
+  implementation. The current implementation has anonymous survey
+  responses only: no participant identity linkage and no
+  deduplication/participation tracking of any kind (see
+  `docs/features/pulse-survey/SPEC.md` and
+  `docs/features/results-dashboard/SPEC.md` → "Residual risk", which
+  documents this as an accepted limitation, not a gap to be silently
+  closed). Storage design for a future `SurveyParticipation` concept
+  remains an **open question** (see "Open questions" below).
 
 ## Application-level encryption boundary (decided invariant, provisional implementation)
 

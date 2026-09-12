@@ -1,3 +1,5 @@
+import { teamsCopy } from "../copy";
+
 /**
  * Shared, non-sensitive UI copy for a `requestTeamAccess` failure
  * (`src/features/teams/client/teams-overview-gateway.ts`), used by both
@@ -7,10 +9,10 @@
  */
 export function requestAccessErrorMessage(error: string): string {
   if (error === "team_disabled") {
-    return "This team is currently disabled.";
+    return teamsCopy.requestAccessError.teamDisabled;
   }
   if (error === "unverified") {
-    return "Verify your email to request access.";
+    return teamsCopy.requestAccessError.unverified;
   }
-  return "Something went wrong. Please try again.";
+  return teamsCopy.requestAccessError.generic;
 }

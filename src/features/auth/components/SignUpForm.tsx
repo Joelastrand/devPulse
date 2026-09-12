@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { Alert } from "../../../components/ui/Alert";
+import { Button } from "../../../components/ui/Button";
 import { signUp } from "../client/auth-client";
+import { authCopy } from "../copy";
 
 type Status = "idle" | "submitting" | "success" | "error";
 
@@ -20,11 +23,9 @@ export function SignUpForm() {
 
   if (status === "success") {
     return (
-      <p role="status" className="mt-6 text-zinc-900 dark:text-zinc-50">
-        Account created. Check your email for a verification link — you must
-        verify your email before your team&apos;s dashboard becomes
-        available.
-      </p>
+      <Alert variant="success" className="mt-6">
+        {authCopy.signUp.success}
+      </Alert>
     );
   }
 
@@ -35,7 +36,7 @@ export function SignUpForm() {
           htmlFor="sign-up-email"
           className="text-sm font-medium text-zinc-900 dark:text-zinc-50"
         >
-          Email
+          {authCopy.signUp.emailLabel}
         </label>
         <input
           id="sign-up-email"
@@ -53,7 +54,7 @@ export function SignUpForm() {
           htmlFor="sign-up-password"
           className="text-sm font-medium text-zinc-900 dark:text-zinc-50"
         >
-          Password
+          {authCopy.signUp.passwordLabel}
         </label>
         <input
           id="sign-up-password"
@@ -66,18 +67,14 @@ export function SignUpForm() {
         />
       </div>
 
-      <button
-        type="submit"
-        disabled={status === "submitting"}
-        className="rounded-full bg-foreground px-5 py-2.5 text-background transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {status === "submitting" ? "Creating account…" : "Sign up"}
-      </button>
+      <Button type="submit" pending={status === "submitting"}>
+        {status === "submitting" ? authCopy.signUp.submitting : authCopy.signUp.submit}
+      </Button>
 
       {status === "error" && (
-        <p role="alert" className="text-sm text-red-700 dark:text-red-400">
-          Something went wrong. Please try again.
-        </p>
+        <Alert variant="error" className="text-sm">
+          {authCopy.signUp.error}
+        </Alert>
       )}
     </form>
   );

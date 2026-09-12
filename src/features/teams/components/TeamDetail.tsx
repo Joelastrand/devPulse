@@ -1,11 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { observeIdToken } from "../../auth/client/auth-client";
+import Link from "next/link";
+import { useState } from "react";
+import { Alert } from "../../../components/ui/Alert";
+import { Button } from "../../../components/ui/Button";
+import { LoadingState } from "../../../components/ui/LoadingState";
+import { PageHeader } from "../../../components/ui/PageHeader";
+import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import { fetchTeamResults } from "../../results/client/team-results-gateway";
 import type { PeriodAggregateResult } from "../../results/domain/aggregation";
 import { PeriodSummary } from "../../results/components/PeriodSummary";
+import { TrendChart } from "../../results/components/TrendChart";
 import { TrendTable } from "../../results/components/TrendTable";
+import { teamsCopy } from "../copy";
 import {
   fetchTeamsOverview,
   requestTeamAccess,
@@ -116,46 +123,27 @@ type RequestActionState =
   | { status: "pending" }
   | { status: "error"; message: string };
 
-const RELATIONSHIP_MESSAGES: Record<DeniedRelationship, string> = {
-  none: "You don't have access to this team's results yet.",
-  request_pending: "Your request to join this team is pending approval.",
-  request_rejected: "Your previous request to join this team was not approved.",
-};
+const RELATIONSHIP_MESSAGES: Record<DeniedRelationship, string> =
+  teamsCopy.detail.relationshipMessages;
 
 /**
  * Authenticated `/teams/[teamId]` detail page
  * (docs/features/team-management/SPEC.md — BR-12, BR-14 through BR-16).
  * Mirrors `TeamsOverview`'s client-side auth-state and generation-guard
- * pattern exactly, extended to also guard against a *route* change: `teamId`
- * is in the effect's dependency array, so navigating from one team to
- * another tears down the previous subscription (bumping the generation,
- * exactly like an auth change) before starting a fresh load for the new
- * team — a slow response for team A can never render on team B's page, and
- * Next.js route-instance reuse is not relied on for this guarantee.
+ * pattern via the shared `useAuthGatedResource` hook, extended to also
+ * guard against a *route* change: `teamId` is passed as an extra reset
+ * dependency, so navigating from one team to another tears down the
+ * previous subscription (bumping the generation, exactly like an auth
+ * change) before starting a fresh load for the new team — a slow response
+ * for team A can never render on team B's page, and Next.js route-instance
+ * reuse is not relied on for this guarantee.
  */
 export function TeamDetail({ teamId }: { teamId: string }) {
   const [state, setState] = useState<ViewState>({ phase: "loading" });
   const [actionState, setActionState] = useState<RequestActionState>({ status: "idle" });
-  const generationRef = useRef(0);
 
-  const isCurrentGeneration = useCallback((generation: number): boolean => {
-    return generationRef.current === generation;
-  }, []);
-
-  const loadForGeneration = useCallback(
-    async (token: string, generation: number) => {
-      const result = await loadTeamDetail(token, teamId);
-      if (isCurrentGeneration(generation)) {
-        setState({ phase: "loaded", token, generation, result });
-      }
-    },
-    [isCurrentGeneration, teamId],
-  );
-
-  useEffect(() => {
-    const unsubscribe = observeIdToken((token) => {
-      generationRef.current += 1;
-      const generation = generationRef.current;
+  const { isCurrentGeneration } = useAuthGatedResource(
+    (token, generation) => {
       setActionState({ status: "idle" });
 
       if (!token) {
@@ -165,16 +153,23 @@ export function TeamDetail({ teamId }: { teamId: string }) {
 
       setState({ phase: "loading" });
       loadForGeneration(token, generation);
-    });
+    },
+    [teamId],
+  );
 
-    return () => {
-      // Invalidates any in-flight request for this auth state/teamId pair —
-      // fires on unmount and, because `teamId` is a dependency below, on
-      // every route change between teams too.
-      generationRef.current += 1;
-      unsubscribe();
-    };
-  }, [teamId, loadForGeneration]);
+  /**
+   * A hoisted function declaration (not `useCallback`) so it can be
+   * referenced above, in the auth-change callback, without an
+   * evaluation-order issue — it no longer needs to be memoized for an
+   * effect's dependency array now that the subscription (and the `teamId`
+   * route-change guard) lives inside `useAuthGatedResource`.
+   */
+  async function loadForGeneration(token: string, generation: number) {
+    const result = await loadTeamDetail(token, teamId);
+    if (isCurrentGeneration(generation)) {
+      setState({ phase: "loaded", token, generation, result });
+    }
+  }
 
   async function handleRequestAccess(token: string, generation: number) {
     setActionState({ status: "pending" });
@@ -195,11 +190,7 @@ export function TeamDetail({ teamId }: { teamId: string }) {
   }
 
   if (state.phase === "loading") {
-    return (
-      <p role="status" className="text-zinc-600 dark:text-zinc-400">
-        Loading team…
-      </p>
-    );
+    return <LoadingState label={teamsCopy.detail.loading} />;
   }
 
   if (state.phase === "signed_out") {
@@ -213,20 +204,14 @@ export function TeamDetail({ teamId }: { teamId: string }) {
   }
 
   if (result.status === "read_failed") {
-    return (
-      <p role="alert" className="text-red-700 dark:text-red-400">
-        Something went wrong loading this team. Please try again later.
-      </p>
-    );
+    return <Alert variant="error">{teamsCopy.detail.error}</Alert>;
   }
 
   if (result.status === "results_unavailable") {
     return (
       <div className="flex flex-col gap-4">
         <TeamHeading name={result.name} />
-        <p role="alert" className="text-red-700 dark:text-red-400">
-          Something went wrong loading this team&apos;s results. Please try again later.
-        </p>
+        <Alert variant="error">{teamsCopy.detail.resultsUnavailable}</Alert>
       </div>
     );
   }
@@ -236,6 +221,7 @@ export function TeamDetail({ teamId }: { teamId: string }) {
       <div className="flex flex-col gap-8">
         <TeamHeading name={result.name} />
         <PeriodSummary result={result.current} />
+        <TrendChart results={result.trend} />
         <TrendTable results={result.trend} />
       </div>
     );
@@ -246,43 +232,36 @@ export function TeamDetail({ teamId }: { teamId: string }) {
   return (
     <div className="flex flex-col gap-4">
       <TeamHeading name={result.name} />
-      <p role="status" className="text-zinc-600 dark:text-zinc-400">
-        {RELATIONSHIP_MESSAGES[result.relationship]}
-      </p>
+      <Alert variant="info">{RELATIONSHIP_MESSAGES[result.relationship]}</Alert>
       {actionState.status === "error" && (
-        <p role="alert" className="text-red-700 dark:text-red-400">
-          {actionState.message}
-        </p>
+        <Alert variant="error">{actionState.message}</Alert>
       )}
       {canRequestAccess && (
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="sm"
+          className="w-fit"
+          pending={actionState.status === "pending"}
           onClick={() => handleRequestAccess(token, generation)}
-          disabled={actionState.status === "pending"}
-          className="w-fit rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900"
         >
-          {actionState.status === "pending" ? "Requesting…" : "Request access"}
-        </button>
+          {actionState.status === "pending" ? teamsCopy.requestingAccess : teamsCopy.requestAccess}
+        </Button>
       )}
     </div>
   );
 }
 
 function TeamHeading({ name }: { name?: string }) {
-  return (
-    <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-      {name ?? "Team"}
-    </h1>
-  );
+  return <PageHeader title={name ?? teamsCopy.detail.fallbackName} />;
 }
 
 function SignInPrompt() {
   return (
     <p className="text-zinc-600 dark:text-zinc-400">
-      <a href="/sign-in" className="font-medium text-zinc-900 underline dark:text-zinc-50">
-        Sign in
-      </a>{" "}
-      to see this team.
+      <Link href="/sign-in" className="font-medium text-zinc-900 underline dark:text-zinc-50">
+        {teamsCopy.detail.signInLink}
+      </Link>{" "}
+      {teamsCopy.detail.signInPrompt}
     </p>
   );
 }

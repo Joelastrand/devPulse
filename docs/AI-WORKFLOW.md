@@ -84,7 +84,7 @@ Prefer path-scoped rules. Avoid duplicating information between `CLAUDE.md`, rul
 | Define/clarify a meaningful feature | `plan-feature` | `SPEC.md` |
 | Split an approved spec into work | `split-tasks` | `TASKS.md` |
 | Implement one planned task | `implement-task` | One completed task |
-| Independently review a change | `review-change` | Review outcome/findings |
+| Independently review a change | `review-change` | Review outcome/findings (plus a documentation-sync pass at a feature's final task) |
 | Investigate a concrete defect | `debug` | Root-cause fix + regression protection |
 | Focused/milestone security review | `security-review` | Security/privacy findings |
 
@@ -122,7 +122,30 @@ PASS / PASS WITH SUGGESTIONS / CHANGES REQUIRED
 END SESSION
 
 Repeat implement → review for the next task
+    ↓
+Once the feature's last task passes review:
+review-change also performs a documentation-synchronization pass
+    ↓
+Feature closeout
 ```
+
+Conceptually, a feature moves through:
+
+```text
+plan/spec
+  → task breakdown
+  → implementation
+  → review/fixes
+  → verification
+  → documentation synchronization
+  → final closeout
+```
+
+`documentation synchronization` is not a separate skill: `review-change`
+performs it as part of reviewing a feature's last remaining task (see "4.
+Independently review the task" and that skill's own procedure). It exists
+so that stale current-state wording and contradictions left behind by a
+completed feature don't silently accumulate in `docs/` between features.
 
 The feature progresses through repository state, not one continuously growing conversation.
 
@@ -252,6 +275,17 @@ PASS
 PASS WITH SUGGESTIONS
 CHANGES REQUIRED
 ```
+
+If this review covers a feature's last remaining task (every other task in
+`TASKS.md` is already `Done`) and the outcome is `PASS` or `PASS WITH
+SUGGESTIONS`, `review-change` also performs a documentation-synchronization
+pass before the feature is considered closed out: compare the
+implemented/current state against durable project documentation, correct
+stale current-state wording and contradictions the feature caused, and
+report which documents changed. See that skill's own procedure for exactly
+what this pass does and does not do (it never invents a new product,
+architecture, security, or data-model decision — it stops and reports
+instead).
 
 If changes are required:
 
