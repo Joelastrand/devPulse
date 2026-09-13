@@ -105,6 +105,41 @@ until attrition, burnout, or delivery failure makes them obvious.
   `docs/features/pulse-survey/SPEC.md`, `docs/features/results-dashboard/
   SPEC.md`, and `docs/features/team-management/SPEC.md` holds unchanged.
 
+## Delivered: managed surveys and survey-based insights (Phase 4)
+
+- Replaced the implicit, always-on, calendar-week-driven survey model with
+  explicit, admin-managed survey instances: an app admin creates a survey
+  for one team, choosing an access mode (`public`, anonymous/link-only, or
+  `authenticated`, requiring a signed-in, server-verified team member) and
+  optionally a title and availability window, then explicitly opens and
+  closes it. See `docs/features/managed-surveys/SPEC.md`.
+- Every survey, of either access mode, is reachable at one opaque,
+  server-generated URL, `/survey/{surveyId}` — there is no longer a single
+  static public survey page, and public survey discovery happens only
+  through a generated link (a team's own page, or shared externally), never
+  a generic Home/nav entry point.
+- A team can have at most one genuinely open survey at a time; cadence is
+  entirely admin-driven per team, with no fixed global or per-team schedule.
+- Authenticated-mode participation is tracked (`SurveyParticipation`, `{uid,
+  surveyId}` only) solely to prevent a second accepted submission from the
+  same identity — it is never linked to the specific response it
+  accompanies, and does not exist for `public` surveys, which remain as
+  identity-free and dedup-free as Phase 1.
+- The publication threshold (`minimumResponses`) is now configured per
+  survey instance (an integer in `[3, 20]`, default 5 in the admin creation
+  form, immutable after creation) rather than one global constant.
+- A team's results/history are now its own closed survey instances, shown
+  in actual chronological order with real dates, replacing the fixed
+  "12 closed calendar periods" grid.
+- Retired: the static, always-on `/pulse-survey` page and `POST
+  /api/pulse-survey` endpoint, the implicit weekly calendar-period concept,
+  and the calendar-period-scoped results aggregation path — see
+  `docs/features/pulse-survey/SPEC.md` and `docs/features/
+  results-dashboard/SPEC.md` for the historical record of what those
+  superseded.
+- This phase also fixed the signed-in-user experience on Home so a
+  signed-in visitor is never offered "Logg inn"/"Opprett konto".
+
 ## Future capabilities (not implemented yet)
 
 - Anonymous challenges/problems: free-text reporting of issues, treated as

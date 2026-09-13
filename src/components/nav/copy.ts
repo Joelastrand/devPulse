@@ -7,7 +7,6 @@ export const navCopy = {
   brand: "DevPulse",
   mainNavLabel: "Hovednavigasjon",
   home: "Hjem",
-  pulseSurvey: "Pulsundersøkelse",
   signIn: "Logg inn",
   signUp: "Opprett konto",
   teams: "Team",

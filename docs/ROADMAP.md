@@ -45,12 +45,53 @@
   See `docs/UI-UX.md` (design direction) and
   `docs/features/product-ux-shell/SPEC.md` (implemented contract).
 
-- **Phase 4 — Anonymous Challenges**:
+- **Phase 4 — Managed Surveys & Survey-Based Insights** *(complete)*:
+  replaced the implicit, calendar-week-driven survey model with admin-managed
+  survey instances, so organizations with different participation needs can
+  both be served by the same product.
+
+  Delivered:
+  - admin-managed survey instances (create, choose access mode, optional
+    availability window, open/close, delete-before-responses or
+    archive-after-responses) owned by exactly one team
+  - configurable per-survey participation access: **public/link** (anonymous,
+    no account) or **authenticated team members** (server-verified identity +
+    actual team membership, not merely app-admin status)
+  - a generated, opaque `/survey/{surveyId}` URL for every survey, regardless
+    of access mode — no separate public/private URL namespaces
+  - a race-safe, one-open-survey-per-team invariant, enforced via a
+    dedicated `teamSurveyState` coordination document rather than a query
+  - authenticated survey participation tracked separately
+    (`SurveyParticipation`) from anonymous response content, so
+    authorization-for-access never becomes identity-in-response-content
+  - team-page "Pågående undersøkelse" discovery, and an admin team-management
+    surface for creating/monitoring a team's surveys
+  - survey-instance-based results and history, replacing the fixed
+    "12 closed calendar periods" trend with a team's actual survey
+    occurrences, at whatever cadence each team chooses
+  - a per-survey `minimumResponses` threshold (integer in `[3, 20]`, default
+    5, immutable after creation), replacing the single global threshold
+    constant for the publication decision
+  - a documented, non-blocking abuse/duplicate-response threat model for
+    public-link participation
+  - Home-page and site-navigation cleanup so a signed-in user is never shown
+    signed-out-only actions, and the public survey is discovered only via a
+    generated survey link, never the generic Home page
+  - retirement of the static, always-on `/pulse-survey` page and the
+    calendar-period-scoped results aggregation path
+
+  This phase preserved every existing privacy/security invariant
+  (anonymity, encryption, minimum response threshold, team isolation,
+  admin ≠ raw-response access) under the new model.
+
+  See `docs/features/managed-surveys/SPEC.md`.
+
+- **Phase 5 — Anonymous Challenges**:
   anonymous free-text challenge submission.
 
-- **Phase 5 — Developer Forum Capabilities**.
+- **Phase 6 — Developer Forum Capabilities**.
 
-- **Phase 6 — Skill / Capability Trees**.
+- **Phase 7 — Skill / Capability Trees**.
 
-Phases 0–3 are complete. Phase 4 is the next planned phase.
-See `docs/PRODUCT.md` for the product vision and non-goals.
+Phases 0–4 are complete. See `docs/PRODUCT.md` for the product vision and
+non-goals.

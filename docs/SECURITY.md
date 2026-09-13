@@ -23,7 +23,13 @@ is considered done.
 10. Individual wellbeing scores are never displayed as individual employee
     data.
 11. Aggregated results support a configurable minimum response threshold.
-12. Initial planned minimum threshold: **5 responses**.
+12. The minimum response threshold is configured per survey instance
+    (`minimumResponses`, an integer in `[3, 20]`, default **5**), set at
+    creation and immutable afterward — see
+    `docs/features/managed-surveys/SPEC.md` → "Per-survey result
+    threshold". A missing or invalid persisted threshold fails closed
+    (the survey's results are never published) rather than defaulting to
+    5 or any other value.
 13. Anonymous free-text challenges/comments are treated as highly sensitive.
 14. Survey payloads and sensitive free text must not enter ordinary
     application logs or error-reporting systems.

@@ -50,9 +50,16 @@ from `SPEC.md`'s recorded implementation decisions.
 
 Auth-aware header/navigation, driven by resolved auth and admin state:
 
-- **Signed out**: Hjem, Pulsundersøkelse, Logg inn, Opprett konto
-- **Signed in**: Hjem, Pulsundersøkelse, Team, Logg ut
+- **Signed out**: Hjem, Logg inn, Opprett konto
+- **Signed in**: Hjem, Team, Logg ut
 - **Signed in, app admin**: the signed-in set, plus Admin
+
+**Updated by `docs/features/managed-surveys/SPEC.md` (TASK-013):** the
+original Phase 3 nav set above included a "Pulsundersøkelse" entry linking
+to the single static public survey. That survey concept is retired —
+surveys are now admin-managed instances discovered via a team page or a
+shared `/survey/{surveyId}` link, never a generic nav entry — so the nav
+set no longer includes it, in either signed-out or signed-in state.
 
 Admin visibility in the UI must be derived from **server-derived admin
 state** (the caller's own `isAdmin` boolean, as already returned by the
@@ -65,9 +72,12 @@ already told this caller about themselves.
 
 ### Primary flows
 
-- **Public survey**: `/` → `/pulse-survey`
+- **Survey participation**: a generated `/survey/{surveyId}` link (shared
+  externally, or discovered on a team's own page) — never a Home/nav entry
+  point (`docs/features/managed-surveys/SPEC.md` — BR-38/BR-39).
 - **Primary authenticated flow**: `/teams` → `/teams/[teamId]`
-- **Admin flow**: `/admin/teams` → `/admin/teams/[teamId]`
+- **Admin flow**: `/admin/teams` → `/admin/teams/[teamId]`, which also
+  manages that team's surveys (create, open, close, delete/archive).
 - **After successful sign-in**, prefer continuing to `/teams` rather than
   a generic landing page — that is where a signed-in user's next
   meaningful action almost always is.
@@ -142,22 +152,29 @@ Every screen that fetches or mutates server data defines, at minimum:
   where relevant. Never another user's relationship, another team's
   member count, or any team's result data (unchanged,
   `docs/features/team-management/SPEC.md` BR-11).
-- `/teams/[teamId]`: for an authorized member/admin, the team's results
-  (see "Results UX"); for a non-member, only the non-sensitive
-  request-access state — the page must never attempt to render result
-  content it isn't authorized to have fetched.
+- `/teams/[teamId]`: for an authorized member/admin, a "Pågående
+  undersøkelse" (current survey) section — the team's `scheduled`/`open`
+  survey, if any, with its title/fallback label, availability state,
+  access mode, and a link to `/survey/{surveyId}` — above the team's
+  closed-survey results (see "Results UX"); for a non-member, only the
+  non-sensitive request-access state — the page must never attempt to
+  render result or current-survey content it isn't authorized to have
+  fetched (`docs/features/managed-surveys/SPEC.md` — BR-30/BR-31/BR-32).
 
 ## Results UX
 
-- Emphasize the **closed-period aggregate** and the **12-period trend**
-  as the primary content of a team's results view — these are the two
-  things `docs/features/results-dashboard/SPEC.md` actually defines and
-  the only two that gain trust from a coherent, calm presentation.
-  Nothing about the open/current period is ever rendered, per that
-  spec's BR-6.
-- An "insufficient responses" period is shown as a distinct, honest state
+- Emphasize the **most recently closed survey's aggregate** and the
+  **12-survey trend** as the primary content of a team's results view —
+  the survey-instance-based successors to the original closed-period
+  aggregate and 12-period trend (`docs/features/managed-surveys/SPEC.md`
+  → "Results/history model"). A survey that's still `scheduled`/`open`
+  never appears here — that's the separate "Pågående undersøkelse" section
+  above (see "Teams UX").
+- An "insufficient responses" survey is shown as a distinct, honest state
   — not a zero, not a blank, not merged visually with a genuinely
-  low-but-published value.
+  low-but-published value; the message may name the survey's own
+  configured threshold (e.g. "vises når minst 5 personer har svart"),
+  never the actual count.
 
 ## Admin UX
 
@@ -172,6 +189,16 @@ Every screen that fetches or mutates server data defines, at minimum:
   confirmation or clearly-labeled irreversible-vs-reversible affordance,
   consistent with the underlying model (e.g. team disable is reversible;
   see `docs/features/team-management/SPEC.md`).
+- `/admin/teams/[teamId]` also manages that team's surveys, in the same
+  dense, operational style: a creation form (access mode required, no
+  pre-selected default; `minimumResponses` pre-filled `5`; optional title/
+  start/end), a list of active surveys with their access mode, dates,
+  derived lifecycle, copyable `/survey/{surveyId}` link, and response count
+  where privacy rules permit, plus a separate archived section. Once
+  closed, a survey with zero responses can be deleted; a survey with any
+  responses can only be archived (never deleted) — this distinction is
+  surfaced as a clear, labeled affordance, not a single ambiguous "remove"
+  action (`docs/features/managed-surveys/SPEC.md` — BR-35/BR-36).
 
 ## Charts
 
@@ -188,6 +215,15 @@ Every screen that fetches or mutates server data defines, at minimum:
 - Charts render only the aggregate/trend data the server already returned
   for this caller — no client-side computation derives, estimates, or
   interpolates a value the server withheld.
+- A trend/history axis over irregular, admin-scheduled occurrences (e.g.
+  survey instances, `docs/features/managed-surveys/SPEC.md` — "Chart X-axis
+  decision") stays **categorical** (evenly spaced by occurrence, oldest to
+  newest), not time-proportional — a genuinely time-scaled axis would
+  compress most points into a sliver whenever one gap between occurrences
+  dominates. Each point is labeled with its actual date; a relative label
+  (e.g. "2 uker siden") may be computed client-side from the current date at
+  render time as secondary, non-load-bearing context, but is never persisted
+  or treated as the primary label.
 
 ## Accessibility
 

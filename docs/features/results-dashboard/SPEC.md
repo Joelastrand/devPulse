@@ -18,6 +18,17 @@ current model. See `docs/features/team-management/SPEC.md` for the
 current, Firestore-backed authorization model and its successor endpoint
 (`GET /api/teams/[teamId]/results`).
 
+**Further superseded (as of `docs/features/managed-surveys/SPEC.md`
+TASK-014):** the calendar-period aggregation model this document describes
+(`computePeriodAggregate`, `MIN_RESPONSE_THRESHOLD`, `get-team-results.ts`,
+the implicit always-open current period and its 12 preceding closed
+periods) has also been retired from the codebase. `GET
+/api/teams/[teamId]/results` now resolves `getTeamSurveyResults`, which
+computes results per admin-managed, explicitly-lifecycled `Survey`
+instance (each with its own persisted `minimumResponses`) rather than per
+calendar period. This document remains a historical record only — see
+`docs/features/managed-surveys/SPEC.md` for the current model.
+
 ## Problem
 DevPulse can currently only accept anonymous pulse survey responses (Phase
 1) — nobody can see the resulting signal yet. Teams and organizations have

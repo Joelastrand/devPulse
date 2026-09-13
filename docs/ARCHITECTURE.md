@@ -59,6 +59,18 @@ flowchart TD
   responses (see `docs/SECURITY.md`) — the app-admin role introduced by
   team-management extends *which teams'* aggregates an identity may view
   and team/membership management, not raw-response access.
+- **Participation vs. viewing authorization, implemented
+  (`docs/features/managed-surveys/SPEC.md`, BR-16)**: `authorizeTeamAccess`
+  (`"admin" | "member" | "denied"`) remains the sole boundary for *viewing*
+  a team's results, but is deliberately **not** reused to decide who may
+  *answer* an `authenticated` survey — an app admin with no actual
+  `teamMemberships` record for that team is `"admin"` under
+  `authorizeTeamAccess` yet must still be rejected as a respondent.
+  `resolveSurveyForParticipation` and `submitSurveyResponse`
+  (`src/features/surveys/server/`) instead check a real
+  `teamMemberships/{uid}__{teamId}` record directly, re-derived from a
+  fresh read at both page-load and submit time — never trusting an earlier
+  check or app-admin status alone.
 - **Own-admin-status read, implemented (`docs/features/product-ux-shell/
   SPEC.md`)**: a minimal `GET /api/me` route reuses `verifyIdToken` +
   `isAppAdmin` exactly as above and returns only the caller's own
@@ -91,19 +103,52 @@ flowchart LR
   team member or app admin (`authorizeTeamAccess`, enforced server-side —
   see "Authentication and authorization" above). App-admin status does not
   imply raw-response access (see invariant 17, `docs/SECURITY.md`).
-- **`SurveyParticipation` (future/not implemented)**: tracking who has
-  submitted a survey (for reminder/completion purposes), stored separately
-  from the anonymous response content itself, is a **decided invariant**
-  for if/when such tracking is ever introduced — but no participation-
-  tracking mechanism, collection, or field exists in the current
-  implementation. The current implementation has anonymous survey
-  responses only: no participant identity linkage and no
-  deduplication/participation tracking of any kind (see
-  `docs/features/pulse-survey/SPEC.md` and
-  `docs/features/results-dashboard/SPEC.md` → "Residual risk", which
-  documents this as an accepted limitation, not a gap to be silently
-  closed). Storage design for a future `SurveyParticipation` concept
-  remains an **open question** (see "Open questions" below).
+- **`SurveyParticipation`, implemented, `authenticated`-mode only
+  (`docs/features/managed-surveys/SPEC.md`)**: a deliberately minimal
+  `surveyParticipations/{uid}__{surveyId}` document (`{uid, surveyId}`
+  only — no `submittedAt` or any other field) records that one identity has
+  submitted to one survey, used solely to reject a second accepted
+  submission from the same `uid` (BR-21/BR-22). It carries no shared
+  identifier, foreign key, or content field joining it to the specific
+  `surveyResponses` document it accompanies (BR-18) — an app admin (or
+  anyone else, at the application level) can see *that* a `uid` submitted
+  to a survey, never *which* response is theirs. Written in the same
+  Firestore transaction as the response, for exactly-once duplicate
+  prevention with no race window; the resulting shared commit-timestamp
+  metadata is a residual, raw-Firestore-only correlation signal this
+  application itself never reads or exposes (see "Consistency vs.
+  unlinkability tradeoff," `docs/features/managed-surveys/SPEC.md`). Does
+  not exist for `public` surveys, which remain exactly as identity-free and
+  dedup-free as Phase 1.
+
+## Survey lifecycle (decided, implemented)
+
+- A survey's answerability (`"scheduled" | "open" | "closed"`) is a
+  **derived** value, computed identically everywhere it's used (submission
+  enforcement, admin UI, team UI) from three optional timestamps
+  (`openedAt`, `closedAt`, `endAt`) — never a separately stored status
+  field that could drift from them (`effectiveLifecycle`,
+  `src/features/surveys/domain/survey.ts`). This pattern replaces the
+  now-retired calendar-period equivalent (`isPeriodClosed`), generalized
+  from "is this fixed calendar period closed" to "is this survey closed,"
+  including a set `endAt` closing a survey automatically and live, with no
+  background job.
+- **One open survey per team** is enforced via a dedicated coordination
+  document (`teamSurveyState/{teamId}`, `{activeSurveyId, updatedAt}`)
+  rather than a query — the same established pattern this codebase already
+  uses for every other one-of-a-kind invariant (`teamMemberships/
+  {uid}__{teamId}`, `teamInvitations/{teamId}__{email}`). Opening and
+  closing a survey each happen inside one Firestore transaction that reads
+  this document, re-derives the referenced survey's own lifecycle before
+  trusting the pointer, and only then writes both documents together — so
+  two concurrent "open" attempts for the same team can never both succeed,
+  and a stale pointer left by a survey that auto-expired via `endAt` is
+  self-corrected rather than treated as a false conflict. See
+  `docs/features/managed-surveys/SPEC.md` → "One open survey per team" for
+  the full mechanism.
+- Every lifecycle/answerability decision uses the server's own clock
+  exclusively; a client/browser-supplied timestamp is never accepted or
+  compared against for any authorization or answerability decision.
 
 ## Application-level encryption boundary (decided invariant, provisional implementation)
 
@@ -125,7 +170,5 @@ flowchart LR
 ## Open questions
 
 - Key management provider and rotation strategy.
-- Exact mechanism for separating participation records from response
-  records (e.g. distinct collections, hashed linkage, no linkage at all).
 - Hosting/runtime target for the server-side boundary (not decided in this
   session; no deployment work has been done).

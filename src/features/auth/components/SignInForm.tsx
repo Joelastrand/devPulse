@@ -5,11 +5,22 @@ import { useState, type FormEvent } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
 import { signIn } from "../client/auth-client";
+import { resolveSignInDestination } from "../domain/continuation";
 import { authCopy } from "../copy";
 
 type Status = "idle" | "submitting" | "success" | "error";
 
-export function SignInForm() {
+interface SignInFormProps {
+  /**
+   * The raw `continue` query value from `/sign-in`'s URL, exactly as
+   * Next.js's `searchParams` hands it over — untrusted until validated by
+   * `resolveSignInDestination` below. Absent for the existing default
+   * `/teams` post-login behavior.
+   */
+  continuation?: string | string[] | null;
+}
+
+export function SignInForm({ continuation }: SignInFormProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<Status>("idle");
@@ -23,11 +34,19 @@ export function SignInForm() {
   }
 
   if (status === "success") {
+    const destination = resolveSignInDestination(continuation);
+    const continueLabel = destination.isSurveyContinuation
+      ? authCopy.signIn.continueToSurveyLabel
+      : authCopy.signIn.continueLabel;
+
     return (
       <Alert variant="success" className="mt-6">
         {authCopy.signIn.success}{" "}
-        <Link href="/teams" className="font-medium underline dark:text-zinc-50">
-          {authCopy.signIn.continueLabel}
+        <Link
+          href={destination.path}
+          className="font-medium underline dark:text-zinc-50"
+        >
+          {continueLabel}
         </Link>
         .
       </Alert>

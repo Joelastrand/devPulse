@@ -50,15 +50,16 @@ export interface ListActiveTeamsDeps {
 }
 
 /**
- * Public, unauthenticated read of the currently active teams — the sole
- * authoritative source for both the pulse-survey team selector (BR-31) and
- * submission-time team validation (BR-32). Exposes only `{teamId, name}`:
- * no status, membership, admin, invitation, or access-request data. A
- * malformed individual document (missing/invalid `status` or a non-string
- * or blank `name`) is excluded rather than failing the whole read; a
- * Firestore read failure fails the entire result closed rather than
- * falling back to any static list (docs/features/team-management/SPEC.md
- * — TASK-006).
+ * Read of the currently active teams, used by `getTeamsOverview` (`/teams`).
+ * Originally also the pulse survey's team selector/submission-validation
+ * source (docs/features/team-management/SPEC.md — TASK-006); that consumer
+ * was retired along with the rest of `src/features/pulse-survey/`
+ * (docs/features/managed-surveys/SPEC.md — TASK-014). Exposes only
+ * `{teamId, name}`: no status, membership, admin, invitation, or
+ * access-request data. A malformed individual document (missing/invalid
+ * `status` or a non-string or blank `name`) is excluded rather than failing
+ * the whole read; a Firestore read failure fails the entire result closed
+ * rather than falling back to any static list.
  */
 export async function listActiveTeams(
   deps: ListActiveTeamsDeps = {},

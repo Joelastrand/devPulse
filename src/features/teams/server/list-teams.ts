@@ -46,9 +46,8 @@ export interface ListTeamsDeps {
 /**
  * Lists every team, including `disabled` ones — an app-admin-only view
  * (docs/features/team-management/SPEC.md — TASK-009's "see every team,
- * including disabled ones"). Not for non-admin use: the public/authenticated
- * active-team listings (pulse-survey, `/teams`) are separate, more
- * restricted operations added by later tasks.
+ * including disabled ones"). Not for non-admin use: `listActiveTeams`
+ * (`/teams`) is a separate, more restricted operation added by a later task.
  */
 export async function listTeams(
   idToken: string,

@@ -9,6 +9,21 @@ import { EmptyState } from "../../../components/ui/EmptyState";
 import { LoadingState } from "../../../components/ui/LoadingState";
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
+import {
+  closeAdminSurvey,
+  createAdminSurvey,
+  deleteOrArchiveAdminSurvey,
+  fetchAdminSurveys,
+  openAdminSurvey,
+  type AdminSurveyEntry,
+  type SurveyAccessMode,
+} from "../../surveys/client/admin-survey-gateway";
+import { surveysCopy } from "../../surveys/copy";
+import {
+  DEFAULT_MINIMUM_RESPONSES,
+  MINIMUM_RESPONSES_MAX,
+  MINIMUM_RESPONSES_MIN,
+} from "../../surveys/domain/survey";
 import { adminCopy } from "../copy";
 import {
   cancelTeamInvitation,
@@ -48,14 +63,16 @@ type TeamDetailResult =
       members: AdminTeamMemberEntry[];
       invitations: AdminPendingInvitationEntry[];
       requests: AdminPendingAccessRequestEntry[];
+      surveys: AdminSurveyEntry[];
     };
 
 async function loadTeamDetail(idToken: string, teamId: string): Promise<TeamDetailResult> {
-  const [teamsResult, membersResult, invitationsResult, requestsResult] = await Promise.all([
+  const [teamsResult, membersResult, invitationsResult, requestsResult, surveysResult] = await Promise.all([
     fetchAdminTeams(idToken),
     fetchTeamMembers(idToken, teamId),
     fetchTeamInvitations(idToken, teamId),
     fetchTeamAccessRequests(idToken, teamId),
+    fetchAdminSurveys(idToken, teamId),
   ]);
 
   const statuses = [
@@ -63,6 +80,7 @@ async function loadTeamDetail(idToken: string, teamId: string): Promise<TeamDeta
     membersResult.status,
     invitationsResult.status,
     requestsResult.status,
+    surveysResult.status,
   ];
 
   if (statuses.includes("unauthenticated")) {
@@ -75,7 +93,8 @@ async function loadTeamDetail(idToken: string, teamId: string): Promise<TeamDeta
     teamsResult.status !== "ok" ||
     membersResult.status !== "ok" ||
     invitationsResult.status !== "ok" ||
-    requestsResult.status !== "ok"
+    requestsResult.status !== "ok" ||
+    surveysResult.status !== "ok"
   ) {
     return { status: "read_failed" };
   }
@@ -91,6 +110,7 @@ async function loadTeamDetail(idToken: string, teamId: string): Promise<TeamDeta
     members: membersResult.members,
     invitations: invitationsResult.invitations,
     requests: requestsResult.requests,
+    surveys: surveysResult.surveys,
   };
 }
 
@@ -106,6 +126,27 @@ type InviteState =
 
 type RowActionState =
   | { status: "idle" }
+  | { status: "pending" }
+  | { status: "error"; message: string };
+
+type SurveyCreateState =
+  | { status: "idle" }
+  | { status: "pending" }
+  | { status: "error"; message: string };
+
+/**
+ * Per-survey action state. Only one lifecycle-driven action is ever
+ * offered for a given row at a time (scheduled → open only; open → close
+ * only; closed & not archived → remove only) — unlike the access-request
+ * approve/reject pair, no two actions ever compete for the same row, so a
+ * plain per-survey state (mirroring `RowActionState`) is enough, with one
+ * extra phase (`confirming_removal`) for the destructive remove action's
+ * explicit confirmation step (docs/features/managed-surveys/SPEC.md —
+ * BR-37, `docs/UI-UX.md` → "Admin UX").
+ */
+type SurveyRowActionState =
+  | { status: "idle" }
+  | { status: "confirming_removal" }
   | { status: "pending" }
   | { status: "error"; message: string };
 
@@ -141,6 +182,18 @@ function inviteErrorMessage(
   return adminCopy.detail.inviteError.generic;
 }
 
+function surveyLifecycleLabel(entry: AdminSurveyEntry): string {
+  return surveysCopy.admin.lifecycleLabels[entry.lifecycle];
+}
+
+function surveyAccessModeLabel(accessMode: SurveyAccessMode): string {
+  return surveysCopy.admin.accessModeLabels[accessMode];
+}
+
+function surveyLink(surveyId: string): string {
+  return `/survey/${encodeURIComponent(surveyId)}`;
+}
+
 /**
  * Admin-only `/admin/teams/[teamId]` detail page
  * (docs/features/team-management/SPEC.md — BR-17, BR-19, BR-21, BR-26,
@@ -160,6 +213,16 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
   const [memberActions, setMemberActions] = useState<Record<string, RowActionState>>({});
   const [invitationActions, setInvitationActions] = useState<Record<string, RowActionState>>({});
   const [requestActions, setRequestActions] = useState<Record<string, RequestActionState>>({});
+  const [surveyCreateState, setSurveyCreateState] = useState<SurveyCreateState>({ status: "idle" });
+  const [surveyAccessMode, setSurveyAccessMode] = useState<SurveyAccessMode | null>(null);
+  const [surveyTitle, setSurveyTitle] = useState("");
+  const [surveyMinimumResponses, setSurveyMinimumResponses] = useState(
+    String(DEFAULT_MINIMUM_RESPONSES),
+  );
+  const [surveyStartAt, setSurveyStartAt] = useState("");
+  const [surveyEndAt, setSurveyEndAt] = useState("");
+  const [surveyActions, setSurveyActions] = useState<Record<string, SurveyRowActionState>>({});
+  const [copiedSurveyId, setCopiedSurveyId] = useState<string | null>(null);
 
   const { isCurrentGeneration } = useAuthGatedResource(
     (token, generation) => {
@@ -168,6 +231,13 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
       setMemberActions({});
       setInvitationActions({});
       setRequestActions({});
+      setSurveyCreateState({ status: "idle" });
+      setSurveyAccessMode(null);
+      setSurveyTitle("");
+      setSurveyStartAt("");
+      setSurveyEndAt("");
+      setSurveyActions({});
+      setCopiedSurveyId(null);
 
       if (!token) {
         setState({ phase: "signed_out" });
@@ -295,6 +365,137 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
     await loadForGeneration(token, generation);
   }
 
+  async function handleCreateSurvey(event: FormEvent<HTMLFormElement>, token: string, generation: number) {
+    event.preventDefault();
+    if (surveyCreateState.status === "pending" || surveyAccessMode === null) {
+      return;
+    }
+
+    setSurveyCreateState({ status: "pending" });
+    const result = await createAdminSurvey(token, teamId, {
+      accessMode: surveyAccessMode,
+      // Parsed client-side for the request only — the server independently
+      // validates this value and never relies on the UI's default or its
+      // min/max attributes (docs/features/managed-surveys/SPEC.md —
+      // "Per-survey result threshold": client input is always untrusted).
+      minimumResponses: Number(surveyMinimumResponses),
+      ...(surveyTitle.trim() !== "" ? { title: surveyTitle.trim() } : {}),
+      ...(surveyStartAt !== "" ? { startAt: surveyStartAt } : {}),
+      ...(surveyEndAt !== "" ? { endAt: surveyEndAt } : {}),
+    });
+
+    if (!isCurrentGeneration(generation)) {
+      return;
+    }
+
+    if (!result.ok) {
+      setSurveyCreateState({ status: "error", message: surveysCopy.admin.create.error });
+      return;
+    }
+
+    setSurveyCreateState({ status: "idle" });
+    setSurveyAccessMode(null);
+    setSurveyTitle("");
+    setSurveyMinimumResponses(String(DEFAULT_MINIMUM_RESPONSES));
+    setSurveyStartAt("");
+    setSurveyEndAt("");
+    await loadForGeneration(token, generation);
+  }
+
+  async function handleOpenSurvey(token: string, generation: number, surveyId: string) {
+    if (surveyActions[surveyId]?.status === "pending") {
+      return;
+    }
+    setSurveyActions((prev) => ({ ...prev, [surveyId]: { status: "pending" } }));
+
+    const result = await openAdminSurvey(token, teamId, surveyId);
+
+    if (!isCurrentGeneration(generation)) {
+      return;
+    }
+
+    if (!result.ok) {
+      setSurveyActions((prev) => ({
+        ...prev,
+        [surveyId]: { status: "error", message: surveysCopy.admin.openError },
+      }));
+      return;
+    }
+
+    setSurveyActions((prev) => ({ ...prev, [surveyId]: { status: "idle" } }));
+    await loadForGeneration(token, generation);
+  }
+
+  async function handleCloseSurvey(token: string, generation: number, surveyId: string) {
+    if (surveyActions[surveyId]?.status === "pending") {
+      return;
+    }
+    setSurveyActions((prev) => ({ ...prev, [surveyId]: { status: "pending" } }));
+
+    const result = await closeAdminSurvey(token, teamId, surveyId);
+
+    if (!isCurrentGeneration(generation)) {
+      return;
+    }
+
+    if (!result.ok) {
+      setSurveyActions((prev) => ({
+        ...prev,
+        [surveyId]: { status: "error", message: surveysCopy.admin.closeError },
+      }));
+      return;
+    }
+
+    setSurveyActions((prev) => ({ ...prev, [surveyId]: { status: "idle" } }));
+    await loadForGeneration(token, generation);
+  }
+
+  function handleRequestRemoveSurvey(surveyId: string) {
+    if (surveyActions[surveyId]?.status === "pending") {
+      return;
+    }
+    setSurveyActions((prev) => ({ ...prev, [surveyId]: { status: "confirming_removal" } }));
+  }
+
+  function handleCancelRemoveSurvey(surveyId: string) {
+    setSurveyActions((prev) => ({ ...prev, [surveyId]: { status: "idle" } }));
+  }
+
+  async function handleConfirmRemoveSurvey(token: string, generation: number, surveyId: string) {
+    if (surveyActions[surveyId]?.status === "pending") {
+      return;
+    }
+    setSurveyActions((prev) => ({ ...prev, [surveyId]: { status: "pending" } }));
+
+    const result = await deleteOrArchiveAdminSurvey(token, teamId, surveyId);
+
+    if (!isCurrentGeneration(generation)) {
+      return;
+    }
+
+    if (!result.ok) {
+      setSurveyActions((prev) => ({
+        ...prev,
+        [surveyId]: { status: "error", message: surveysCopy.admin.removeError },
+      }));
+      return;
+    }
+
+    setSurveyActions((prev) => ({ ...prev, [surveyId]: { status: "idle" } }));
+    await loadForGeneration(token, generation);
+  }
+
+  async function handleCopySurveyLink(surveyId: string) {
+    const url = `${window.location.origin}${surveyLink(surveyId)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      return;
+    }
+    setCopiedSurveyId(surveyId);
+    setTimeout(() => setCopiedSurveyId((current) => (current === surveyId ? null : current)), 2000);
+  }
+
   if (state.phase === "loading") {
     return <LoadingState label={adminCopy.detail.loading} />;
   }
@@ -323,7 +524,9 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
     return <Alert variant="error">{adminCopy.detail.notFound}</Alert>;
   }
 
-  const { team, members, invitations, requests } = result;
+  const { team, members, invitations, requests, surveys } = result;
+  const activeSurveys = surveys.filter((entry) => !entry.archived);
+  const archivedSurveys = surveys.filter((entry) => entry.archived);
 
   return (
     <div className="flex flex-col gap-10">
@@ -514,6 +717,198 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
           </ul>
         )}
       </section>
+
+      <section className="flex flex-col gap-4">
+        <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
+          {surveysCopy.admin.sectionTitle}
+        </h2>
+
+        <form
+          onSubmit={(event) => handleCreateSurvey(event, token, generation)}
+          className="flex flex-col gap-3"
+          aria-label={surveysCopy.admin.create.sectionTitle}
+        >
+          <fieldset className="flex flex-col gap-2">
+            <legend className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+              {surveysCopy.admin.create.accessModeLegend}
+            </legend>
+            <label className="flex items-start gap-2 text-sm text-zinc-900 dark:text-zinc-50">
+              <input
+                type="radio"
+                name="survey-access-mode"
+                value="public"
+                checked={surveyAccessMode === "public"}
+                onChange={() => setSurveyAccessMode("public")}
+                className="mt-1"
+              />
+              <span>
+                {surveysCopy.admin.accessModeLabels.public}
+                <span className="block text-zinc-600 dark:text-zinc-400">
+                  {surveysCopy.admin.create.accessModePublicHint}
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm text-zinc-900 dark:text-zinc-50">
+              <input
+                type="radio"
+                name="survey-access-mode"
+                value="authenticated"
+                checked={surveyAccessMode === "authenticated"}
+                onChange={() => setSurveyAccessMode("authenticated")}
+                className="mt-1"
+              />
+              <span>
+                {surveysCopy.admin.accessModeLabels.authenticated}
+                <span className="block text-zinc-600 dark:text-zinc-400">
+                  {surveysCopy.admin.create.accessModeAuthenticatedHint}
+                </span>
+              </span>
+            </label>
+          </fieldset>
+
+          <label
+            htmlFor="admin-survey-title"
+            className="text-sm font-medium text-zinc-900 dark:text-zinc-50"
+          >
+            {surveysCopy.admin.create.titleLabel}
+          </label>
+          <input
+            id="admin-survey-title"
+            type="text"
+            value={surveyTitle}
+            onChange={(event) => setSurveyTitle(event.target.value)}
+            className="rounded border border-zinc-300 px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:bg-zinc-900"
+          />
+
+          <label
+            htmlFor="admin-survey-minimum-responses"
+            className="text-sm font-medium text-zinc-900 dark:text-zinc-50"
+          >
+            {surveysCopy.admin.create.minimumResponsesLabel}
+          </label>
+          <input
+            id="admin-survey-minimum-responses"
+            type="number"
+            min={MINIMUM_RESPONSES_MIN}
+            max={MINIMUM_RESPONSES_MAX}
+            step={1}
+            value={surveyMinimumResponses}
+            onChange={(event) => setSurveyMinimumResponses(event.target.value)}
+            className="w-24 rounded border border-zinc-300 px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:bg-zinc-900"
+          />
+          <span className="text-sm text-zinc-600 dark:text-zinc-400">
+            {surveysCopy.admin.create.minimumResponsesHint}
+          </span>
+
+          <div className="flex flex-wrap gap-4">
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="admin-survey-start-at"
+                className="text-sm font-medium text-zinc-900 dark:text-zinc-50"
+              >
+                {surveysCopy.admin.create.startAtLabel}
+              </label>
+              <input
+                id="admin-survey-start-at"
+                type="datetime-local"
+                value={surveyStartAt}
+                onChange={(event) => setSurveyStartAt(event.target.value)}
+                className="rounded border border-zinc-300 px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:bg-zinc-900"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="admin-survey-end-at"
+                className="text-sm font-medium text-zinc-900 dark:text-zinc-50"
+              >
+                {surveysCopy.admin.create.endAtLabel}
+              </label>
+              <input
+                id="admin-survey-end-at"
+                type="datetime-local"
+                value={surveyEndAt}
+                onChange={(event) => setSurveyEndAt(event.target.value)}
+                className="rounded border border-zinc-300 px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:bg-zinc-900"
+              />
+            </div>
+          </div>
+
+          <div>
+            <Button
+              type="submit"
+              disabled={surveyAccessMode === null}
+              pending={surveyCreateState.status === "pending"}
+            >
+              {surveyCreateState.status === "pending"
+                ? surveysCopy.admin.create.submitting
+                : surveysCopy.admin.create.submit}
+            </Button>
+          </div>
+          {surveyCreateState.status === "error" && (
+            <Alert variant="error" className="text-sm">
+              {surveyCreateState.message}
+            </Alert>
+          )}
+        </form>
+
+        {surveys.length === 0 ? (
+          <EmptyState>{surveysCopy.admin.empty}</EmptyState>
+        ) : (
+          <>
+            <div className="flex flex-col gap-3">
+              <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                {surveysCopy.admin.activeListTitle}
+              </h3>
+              {activeSurveys.length === 0 ? (
+                <EmptyState>{surveysCopy.admin.empty}</EmptyState>
+              ) : (
+                <ul className="flex flex-col gap-3">
+                  {activeSurveys.map((entry) => (
+                    <SurveyRow
+                      key={entry.surveyId}
+                      entry={entry}
+                      action={surveyActions[entry.surveyId] ?? { status: "idle" as const }}
+                      isCopied={copiedSurveyId === entry.surveyId}
+                      onOpen={() => handleOpenSurvey(token, generation, entry.surveyId)}
+                      onClose={() => handleCloseSurvey(token, generation, entry.surveyId)}
+                      onRequestRemove={() => handleRequestRemoveSurvey(entry.surveyId)}
+                      onCancelRemove={() => handleCancelRemoveSurvey(entry.surveyId)}
+                      onConfirmRemove={() => handleConfirmRemoveSurvey(token, generation, entry.surveyId)}
+                      onCopyLink={() => handleCopySurveyLink(entry.surveyId)}
+                    />
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                {surveysCopy.admin.archivedListTitle}
+              </h3>
+              {archivedSurveys.length === 0 ? (
+                <EmptyState>{surveysCopy.admin.noArchived}</EmptyState>
+              ) : (
+                <ul className="flex flex-col gap-3">
+                  {archivedSurveys.map((entry) => (
+                    <SurveyRow
+                      key={entry.surveyId}
+                      entry={entry}
+                      action={surveyActions[entry.surveyId] ?? { status: "idle" as const }}
+                      isCopied={copiedSurveyId === entry.surveyId}
+                      onOpen={() => handleOpenSurvey(token, generation, entry.surveyId)}
+                      onClose={() => handleCloseSurvey(token, generation, entry.surveyId)}
+                      onRequestRemove={() => handleRequestRemoveSurvey(entry.surveyId)}
+                      onCancelRemove={() => handleCancelRemoveSurvey(entry.surveyId)}
+                      onConfirmRemove={() => handleConfirmRemoveSurvey(token, generation, entry.surveyId)}
+                      onCopyLink={() => handleCopySurveyLink(entry.surveyId)}
+                    />
+                  ))}
+                </ul>
+              )}
+            </div>
+          </>
+        )}
+      </section>
     </div>
   );
 }
@@ -526,5 +921,133 @@ function SignInPrompt() {
       </Link>{" "}
       {adminCopy.detail.signInPrompt}
     </p>
+  );
+}
+
+interface SurveyRowProps {
+  entry: AdminSurveyEntry;
+  action: SurveyRowActionState;
+  isCopied: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+  onRequestRemove: () => void;
+  onCancelRemove: () => void;
+  onConfirmRemove: () => void;
+  onCopyLink: () => void;
+}
+
+/**
+ * One survey row for the admin survey-management section. Renders exactly
+ * what `AdminTeamDetail`'s data (sourced from `listTeamSurveys`/
+ * `createSurvey`/`openSurvey`/`closeSurvey`/`deleteOrArchiveSurvey`)
+ * provides — it never computes lifecycle, access-mode eligibility, or any
+ * authorization decision itself (`.claude/rules/security.md`).
+ */
+function SurveyRow({
+  entry,
+  action,
+  isCopied,
+  onOpen,
+  onClose,
+  onRequestRemove,
+  onCancelRemove,
+  onConfirmRemove,
+  onCopyLink,
+}: SurveyRowProps) {
+  const isPending = action.status === "pending";
+  const isConfirmingRemoval = action.status === "confirming_removal";
+  const displayName = entry.title ?? surveysCopy.admin.fallbackTitle;
+
+  return (
+    <Card as="li" variant="bordered" padding="sm" className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="break-words font-medium text-zinc-900 dark:text-zinc-50">{displayName}</p>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            {surveyLifecycleLabel(entry)}
+            {entry.archived ? ` · ${surveysCopy.admin.archivedLabel}` : ""} ·{" "}
+            {surveyAccessModeLabel(entry.accessMode)} ·{" "}
+            {surveysCopy.admin.minimumResponsesSummary(entry.minimumResponses)}
+          </p>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            {surveysCopy.admin.linkLabel}{" "}
+            <Link href={surveyLink(entry.surveyId)} className="underline">
+              {surveyLink(entry.surveyId)}
+            </Link>
+          </p>
+          {action.status === "error" && (
+            <Alert variant="error" className="mt-1 text-sm">
+              {action.message}
+            </Alert>
+          )}
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            aria-label={`${surveysCopy.admin.copyLinkButton} – ${displayName}`}
+            onClick={onCopyLink}
+          >
+            {surveysCopy.admin.copyLinkButton}
+          </Button>
+          {isCopied && (
+            <span role="status" className="text-sm text-zinc-600 dark:text-zinc-400">
+              {surveysCopy.admin.linkCopied}
+            </span>
+          )}
+          {entry.lifecycle === "scheduled" && !entry.archived && (
+            <Button
+              variant="secondary"
+              size="sm"
+              pending={isPending}
+              aria-label={`${isPending ? surveysCopy.admin.openingButton : surveysCopy.admin.openButton} – ${displayName}`}
+              onClick={onOpen}
+            >
+              {isPending ? surveysCopy.admin.openingButton : surveysCopy.admin.openButton}
+            </Button>
+          )}
+          {entry.lifecycle === "open" && (
+            <Button
+              variant="secondary"
+              size="sm"
+              pending={isPending}
+              aria-label={`${isPending ? surveysCopy.admin.closingButton : surveysCopy.admin.closeButton} – ${displayName}`}
+              onClick={onClose}
+            >
+              {isPending ? surveysCopy.admin.closingButton : surveysCopy.admin.closeButton}
+            </Button>
+          )}
+          {entry.lifecycle === "closed" && !entry.archived && !isConfirmingRemoval && (
+            <Button
+              variant="destructive"
+              size="sm"
+              pending={isPending}
+              aria-label={`${isPending ? surveysCopy.admin.removingButton : surveysCopy.admin.removeButton} – ${displayName}`}
+              onClick={onRequestRemove}
+            >
+              {isPending ? surveysCopy.admin.removingButton : surveysCopy.admin.removeButton}
+            </Button>
+          )}
+        </div>
+      </div>
+      {isConfirmingRemoval && (
+        <div className="flex flex-col gap-2 rounded border border-red-300 p-3 dark:border-red-900">
+          <p className="text-sm text-zinc-900 dark:text-zinc-50">{surveysCopy.admin.removeConfirmPrompt}</p>
+          <div className="flex gap-2">
+            <Button
+              variant="destructive"
+              size="sm"
+              aria-label={`${surveysCopy.admin.removeConfirmButton} – ${displayName}`}
+              onClick={onConfirmRemove}
+            >
+              {surveysCopy.admin.removeConfirmButton}
+            </Button>
+            <Button variant="secondary" size="sm" onClick={onCancelRemove}>
+              {surveysCopy.admin.removeCancelButton}
+            </Button>
+          </div>
+        </div>
+      )}
+    </Card>
   );
 }

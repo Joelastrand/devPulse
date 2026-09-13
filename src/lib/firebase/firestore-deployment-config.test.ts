@@ -17,11 +17,35 @@ describe("Firestore deployment configuration", () => {
     expect(firebaseJson.firestore?.indexes).toBe("firestore.indexes.json");
   });
 
-  it("denies all client-SDK access to pulseSurveyResponses unconditionally", () => {
+  it("denies all client-SDK access to surveys unconditionally", () => {
     const rules = readRepoFile("firestore.rules");
 
     expect(rules).toMatch(
-      /match\s+\/pulseSurveyResponses\/\{document=\*\*\}\s*\{\s*allow read, write: if false;/,
+      /match\s+\/surveys\/\{document=\*\*\}\s*\{\s*allow read, write: if false;/,
+    );
+  });
+
+  it("denies all client-SDK access to teamSurveyState unconditionally", () => {
+    const rules = readRepoFile("firestore.rules");
+
+    expect(rules).toMatch(
+      /match\s+\/teamSurveyState\/\{document=\*\*\}\s*\{\s*allow read, write: if false;/,
+    );
+  });
+
+  it("denies all client-SDK access to surveyResponses unconditionally", () => {
+    const rules = readRepoFile("firestore.rules");
+
+    expect(rules).toMatch(
+      /match\s+\/surveyResponses\/\{document=\*\*\}\s*\{\s*allow read, write: if false;/,
+    );
+  });
+
+  it("denies all client-SDK access to surveyParticipations unconditionally", () => {
+    const rules = readRepoFile("firestore.rules");
+
+    expect(rules).toMatch(
+      /match\s+\/surveyParticipations\/\{document=\*\*\}\s*\{\s*allow read, write: if false;/,
     );
   });
 

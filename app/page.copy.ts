@@ -17,9 +17,8 @@ export const homeCopy = {
   privacyNote:
     "Individuelle svar er anonyme. Bare teamets samlede trender vises, aldri individuelle poeng.",
   actions: {
-    answerPulse: { label: "Svar på pulsmåling", href: "/pulse-survey" },
-    viewResults: { label: "Se resultater", href: "/results" },
     signIn: { label: "Logg inn", href: "/sign-in" },
     createAccount: { label: "Opprett konto", href: "/sign-up" },
+    myTeams: { label: "Mine team", href: "/teams" },
   },
 } as const;

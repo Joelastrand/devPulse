@@ -1,16 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { encrypt } from "../../../lib/encryption/encryption";
-import {
-  computePeriodAggregate,
-  MIN_RESPONSE_THRESHOLD,
-  type CandidateResponseRecord,
-} from "./aggregation";
-
-const NOW = new Date("2026-09-05T12:00:00.000Z"); // 2026-W36 is the current (open) period.
-const CLOSED_PERIOD = "2026-W35";
-const OPEN_PERIOD = "2026-W36";
-const FUTURE_PERIOD = "2026-W37";
+import { computeSurveyAggregate, type CandidateResponseRecord } from "./aggregation";
 
 function encryptedAnswers(answers: [number, number, number]): CandidateResponseRecord {
   return encrypt(JSON.stringify(answers));
@@ -32,7 +23,9 @@ function fiveValidRecords(): CandidateResponseRecord[] {
   ];
 }
 
-describe("computePeriodAggregate", () => {
+describe("computeSurveyAggregate", () => {
+  const SURVEY_ID = "survey-1";
+
   beforeEach(() => {
     vi.stubEnv("ENCRYPTION_KEY", randomBytes(32).toString("base64"));
   });
@@ -41,54 +34,69 @@ describe("computePeriodAggregate", () => {
     vi.unstubAllEnvs();
   });
 
-  it("never produces an aggregate for the current (open) period, regardless of input", () => {
-    const result = computePeriodAggregate(OPEN_PERIOD, fiveValidRecords(), {
-      now: NOW,
-    });
+  it("withholds the count and publishes 'insufficient' below the survey's own threshold, including zero", () => {
+    const zero = computeSurveyAggregate(SURVEY_ID, [], 5);
+    const belowThreshold = computeSurveyAggregate(SURVEY_ID, fiveValidRecords().slice(0, 4), 5);
 
-    expect(result).toEqual({ period: OPEN_PERIOD, status: "not_available" });
+    expect(zero).toEqual({ surveyId: SURVEY_ID, status: "insufficient" });
+    expect(belowThreshold).toEqual({ surveyId: SURVEY_ID, status: "insufficient" });
   });
 
-  it("never produces an aggregate for a period after the current one", () => {
-    const result = computePeriodAggregate(FUTURE_PERIOD, fiveValidRecords(), {
-      now: NOW,
-    });
-
-    expect(result).toEqual({ period: FUTURE_PERIOD, status: "not_available" });
-  });
-
-  it("treats the open period as ineligible even with zero candidate records", () => {
-    const result = computePeriodAggregate(OPEN_PERIOD, [], { now: NOW });
-
-    expect(result).toEqual({ period: OPEN_PERIOD, status: "not_available" });
-  });
-
-  it("withholds the count and publishes 'insufficient' below the threshold, including zero", () => {
-    const zero = computePeriodAggregate(CLOSED_PERIOD, [], { now: NOW });
-    const belowThreshold = computePeriodAggregate(
-      CLOSED_PERIOD,
-      fiveValidRecords().slice(0, MIN_RESPONSE_THRESHOLD - 1),
-      { now: NOW },
-    );
-
-    expect(zero).toEqual({ period: CLOSED_PERIOD, status: "insufficient" });
-    expect(belowThreshold).toEqual({
-      period: CLOSED_PERIOD,
-      status: "insufficient",
-    });
-  });
-
-  it("publishes mean and count once the threshold is met for a closed period", () => {
-    const result = computePeriodAggregate(CLOSED_PERIOD, fiveValidRecords(), {
-      now: NOW,
-    });
+  it("publishes mean and count once the survey's own threshold is met", () => {
+    const result = computeSurveyAggregate(SURVEY_ID, fiveValidRecords(), 5);
 
     expect(result).toEqual({
-      period: CLOSED_PERIOD,
+      surveyId: SURVEY_ID,
       status: "published",
       mean: { flow: 3, stress: 3, fun: 3 },
       count: 5,
     });
+  });
+
+  it("uses a lower threshold (3) to publish with fewer responses", () => {
+    const result = computeSurveyAggregate(SURVEY_ID, fiveValidRecords().slice(0, 3), 3);
+
+    expect(result.status).toBe("published");
+    if (result.status === "published") {
+      expect(result.count).toBe(3);
+    }
+  });
+
+  it("threshold matrix: minimumResponses=3 — 2 responses suppressed, 3 published", () => {
+    const two = computeSurveyAggregate(SURVEY_ID, fiveValidRecords().slice(0, 2), 3);
+    const three = computeSurveyAggregate(SURVEY_ID, fiveValidRecords().slice(0, 3), 3);
+
+    expect(two).toEqual({ surveyId: SURVEY_ID, status: "insufficient" });
+    expect(three.status).toBe("published");
+  });
+
+  it("threshold matrix: minimumResponses=5 — 4 responses suppressed, 5 published", () => {
+    const four = computeSurveyAggregate(SURVEY_ID, fiveValidRecords().slice(0, 4), 5);
+    const five = computeSurveyAggregate(SURVEY_ID, fiveValidRecords(), 5);
+
+    expect(four).toEqual({ surveyId: SURVEY_ID, status: "insufficient" });
+    expect(five.status).toBe("published");
+  });
+
+  it("threshold matrix: minimumResponses=10 — 9 responses suppressed, 10 published", () => {
+    const nineRecords = [
+      ...fiveValidRecords(),
+      ...fiveValidRecords().slice(0, 4),
+    ];
+    const tenRecords = [...fiveValidRecords(), ...fiveValidRecords()];
+
+    const nine = computeSurveyAggregate(SURVEY_ID, nineRecords, 10);
+    const ten = computeSurveyAggregate(SURVEY_ID, tenRecords, 10);
+
+    expect(nine).toEqual({ surveyId: SURVEY_ID, status: "insufficient" });
+    expect(ten.status).toBe("published");
+  });
+
+  it("never decrypts candidates when the raw count already proves it's below threshold", () => {
+    const spy = vi.spyOn(JSON, "parse");
+    computeSurveyAggregate(SURVEY_ID, fiveValidRecords().slice(0, 2), 5);
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
   });
 
   it("excludes undecryptable (tampered) records from both count and mean without throwing", () => {
@@ -98,56 +106,34 @@ describe("computePeriodAggregate", () => {
       tamper(encryptedAnswers([5, 5, 5])),
     ];
 
-    expect(() =>
-      computePeriodAggregate(CLOSED_PERIOD, records, { now: NOW }),
-    ).not.toThrow();
-
-    const result = computePeriodAggregate(CLOSED_PERIOD, records, { now: NOW });
+    expect(() => computeSurveyAggregate(SURVEY_ID, records, 5)).not.toThrow();
+    const result = computeSurveyAggregate(SURVEY_ID, records, 5);
     expect(result).toEqual({
-      period: CLOSED_PERIOD,
+      surveyId: SURVEY_ID,
       status: "published",
       mean: { flow: 3, stress: 3, fun: 3 },
       count: 5,
     });
   });
 
-  it("excludes schema-invalid decrypted content (out-of-range/malformed) from count and mean", () => {
-    const outOfRange = encrypt(JSON.stringify([0, 6, 3]));
-    const wrongShape = encrypt(JSON.stringify([1, 2]));
-    const nonJson = encrypt("not json");
-
+  it("becomes insufficient when enough records fail to decrypt to drop below the threshold, even though the raw count met it", () => {
     const records = [
-      ...fiveValidRecords(),
-      outOfRange,
-      wrongShape,
-      nonJson,
+      ...fiveValidRecords().slice(0, 2),
+      tamper(encryptedAnswers([5, 5, 5])),
+      tamper(encryptedAnswers([5, 5, 5])),
+      tamper(encryptedAnswers([5, 5, 5])),
     ];
 
-    const result = computePeriodAggregate(CLOSED_PERIOD, records, { now: NOW });
+    const result = computeSurveyAggregate(SURVEY_ID, records, 5);
 
-    expect(result).toEqual({
-      period: CLOSED_PERIOD,
-      status: "published",
-      mean: { flow: 3, stress: 3, fun: 3 },
-      count: 5,
-    });
+    expect(result).toEqual({ surveyId: SURVEY_ID, status: "insufficient" });
   });
 
-  it("respects a configured threshold override", () => {
-    const result = computePeriodAggregate(
-      CLOSED_PERIOD,
-      fiveValidRecords().slice(0, 2),
-      { now: NOW, threshold: 2 },
-    );
-
-    expect(result.status).toBe("published");
-  });
-
-  it("is deterministic: recomputing from an identical closed-period input set yields the same result (BR-12)", () => {
+  it("is deterministic: recomputing from an identical input set yields the same result", () => {
     const records = fiveValidRecords();
 
-    const first = computePeriodAggregate(CLOSED_PERIOD, records, { now: NOW });
-    const second = computePeriodAggregate(CLOSED_PERIOD, records, { now: NOW });
+    const first = computeSurveyAggregate(SURVEY_ID, records, 5);
+    const second = computeSurveyAggregate(SURVEY_ID, records, 5);
 
     expect(first).toEqual(second);
   });

@@ -2,18 +2,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
-import type { PeriodAggregateResult } from "../domain/aggregation";
+import type { SurveyResultSummary } from "../client/team-results-gateway";
 
 /**
  * `recharts` renders real SVG sized by the DOM (via `ResponsiveContainer`),
  * which jsdom cannot measure meaningfully, and its exact SVG output is an
  * implementation detail this task's own instructions say not to assert on.
  * Stubbing it lets these tests assert the *behavioral* contract instead:
- * exactly what data/props this component hands to the chart library — the
- * same approach the SPEC's own verification note calls for ("a behavioral
- * assertion on the rendered output/props passed into Recharts, not a
- * visual snapshot"). Names are `mock`-prefixed per this repo's established
- * Vitest hoisting convention (see e.g. `AdminTeams.test.tsx`).
+ * exactly what data/props this component hands to the chart library.
  */
 const mockResponsiveContainer = vi.fn(({ children }: { children: ReactNode }) => (
   <div data-testid="responsive-container">{children}</div>
@@ -31,6 +27,7 @@ interface MockLineProps {
 }
 
 const mockLine = vi.fn<(props: MockLineProps) => null>(() => null);
+const mockTooltip = vi.fn<(props: Record<string, unknown>) => null>(() => null);
 
 vi.mock("recharts", () => ({
   ResponsiveContainer: (props: { children: ReactNode }) => mockResponsiveContainer(props),
@@ -38,24 +35,35 @@ vi.mock("recharts", () => ({
   Line: (props: MockLineProps) => mockLine(props),
   XAxis: () => null,
   YAxis: () => null,
-  Tooltip: () => null,
+  Tooltip: (props: Record<string, unknown>) => mockTooltip(props),
   Legend: () => null,
   CartesianGrid: () => null,
 }));
 
 const { TrendChart, buildTrendSeries } = await import("./TrendChart");
 
-const MIXED_RESULTS: PeriodAggregateResult[] = [
-  { period: "2026-W23", status: "not_available" },
-  { period: "2026-W24", status: "insufficient" },
+const NOW = new Date("2026-09-13T12:00:00.000Z");
+
+const MIXED_RESULTS: SurveyResultSummary[] = [
   {
-    period: "2026-W25",
+    surveyId: "survey-1",
+    date: "2026-08-16T00:00:00.000Z",
+    minimumResponses: 5,
+    status: "insufficient",
+  },
+  {
+    surveyId: "survey-2",
+    title: "Q3-puls",
+    date: "2026-08-24T00:00:00.000Z",
+    minimumResponses: 5,
     status: "published",
     mean: { flow: 3.2, stress: 2.4, fun: 4.6 },
     count: 8,
   },
   {
-    period: "2026-W26",
+    surveyId: "survey-3",
+    date: "2026-09-06T00:00:00.000Z",
+    minimumResponses: 3,
     status: "published",
     mean: { flow: 1, stress: 5, fun: 1.5 },
     count: 6,
@@ -63,46 +71,63 @@ const MIXED_RESULTS: PeriodAggregateResult[] = [
 ];
 
 describe("buildTrendSeries", () => {
-  it("maps a published period to its exact mean values, never rounding or estimating", () => {
-    const series = buildTrendSeries([
-      { period: "2026-W25", status: "published", mean: { flow: 3.2, stress: 2.4, fun: 4.6 }, count: 8 },
-    ]);
+  it("maps a published survey to its exact mean values, never rounding or estimating", () => {
+    const series = buildTrendSeries(
+      [
+        {
+          surveyId: "survey-2",
+          date: "2026-08-24T00:00:00.000Z",
+          minimumResponses: 5,
+          status: "published",
+          mean: { flow: 3.2, stress: 2.4, fun: 4.6 },
+          count: 8,
+        },
+      ],
+      NOW,
+    );
 
-    expect(series).toEqual([
-      { period: "2026-W25", flow: 3.2, stress: 2.4, fun: 4.6, suppressed: false },
-    ]);
+    expect(series).toHaveLength(1);
+    expect(series[0]).toMatchObject({ flow: 3.2, stress: 2.4, fun: 4.6, suppressed: false });
   });
 
-  it("maps insufficient and not_available periods to null for every dimension, never zero", () => {
-    const series = buildTrendSeries([
-      { period: "2026-W23", status: "not_available" },
-      { period: "2026-W24", status: "insufficient" },
-    ]);
+  it("maps an insufficient survey to null for every dimension, never zero", () => {
+    const series = buildTrendSeries(
+      [{ surveyId: "survey-1", date: "2026-08-16T00:00:00.000Z", minimumResponses: 5, status: "insufficient" }],
+      NOW,
+    );
 
     for (const row of series) {
       expect(row.flow).toBeNull();
       expect(row.stress).toBeNull();
       expect(row.fun).toBeNull();
       expect(row.suppressed).toBe(true);
-      // Explicitly rule out the exact regression BR-20 forbids.
+      // Explicitly rule out the exact regression BR-29 forbids.
       expect(row.flow).not.toBe(0);
     }
   });
 
-  it("preserves period order and count exactly as given (no reordering, no dropped/added periods)", () => {
-    const series = buildTrendSeries(MIXED_RESULTS);
+  it("preserves survey order exactly as given (no reordering, no dropped/added surveys)", () => {
+    const series = buildTrendSeries(MIXED_RESULTS, NOW);
 
-    expect(series.map((row) => row.period)).toEqual([
-      "2026-W23",
-      "2026-W24",
-      "2026-W25",
-      "2026-W26",
-    ]);
+    expect(series.map((row) => row.surveyId)).toEqual(["survey-1", "survey-2", "survey-3"]);
     expect(series).toHaveLength(MIXED_RESULTS.length);
   });
 
-  it("returns an empty array for no periods", () => {
-    expect(buildTrendSeries([])).toEqual([]);
+  it("labels each point with its actual formatted date, not a period string", () => {
+    const series = buildTrendSeries(MIXED_RESULTS, NOW);
+
+    expect(series[1].date).toMatch(/24\.\s*aug\.?\s*2026/i);
+  });
+
+  it("computes a secondary relative label from the given 'now', never persisted", () => {
+    const series = buildTrendSeries(MIXED_RESULTS, NOW);
+
+    // survey-3 is 2026-09-06, exactly one week before NOW (2026-09-13).
+    expect(series[2].relative).toBe("1 uke siden");
+  });
+
+  it("returns an empty array for no surveys", () => {
+    expect(buildTrendSeries([], NOW)).toEqual([]);
   });
 });
 
@@ -112,9 +137,10 @@ describe("TrendChart", () => {
     mockResponsiveContainer.mockClear();
     mockLineChart.mockClear();
     mockLine.mockClear();
+    mockTooltip.mockClear();
   });
 
-  it("renders nothing when there are no periods to show", () => {
+  it("renders nothing when there are no closed surveys to show", () => {
     const { container } = render(<TrendChart results={[]} />);
 
     expect(container.firstChild).toBeNull();
@@ -157,9 +183,34 @@ describe("TrendChart", () => {
     render(<TrendChart results={MIXED_RESULTS} />);
 
     const dashPatterns = mockLine.mock.calls.map((call) => call[0].strokeDasharray);
-    // Three lines, three distinct dash treatments (including "no dash" for
-    // the first) — a colorblind viewer can still tell the series apart.
     expect(new Set(dashPatterns).size).toBe(3);
+  });
+
+  it("shows the relative label alongside, never instead of, the actual date in the tooltip", () => {
+    render(<TrendChart results={MIXED_RESULTS} />);
+
+    expect(mockTooltip).toHaveBeenCalledTimes(1);
+    const { labelFormatter } = mockTooltip.mock.calls[0][0] as {
+      labelFormatter: (label: unknown, payload: unknown) => string;
+    };
+
+    const row = buildTrendSeries(MIXED_RESULTS)[1];
+    const label = labelFormatter(row.date, [{ payload: row }]);
+
+    expect(label).toContain(row.date);
+    expect(label).toContain(row.relative);
+  });
+
+  it("never leaks a suppressed survey's exact response count via the tooltip formatter", () => {
+    render(<TrendChart results={MIXED_RESULTS} />);
+
+    const { formatter } = mockTooltip.mock.calls[0][0] as {
+      formatter: (value: unknown) => string;
+    };
+
+    // Suppressed dimensions are always `null` in the chart's own data — the
+    // formatter must never turn that into a number-looking string.
+    expect(formatter(null)).toBe("");
   });
 
   it("makes no network or gateway call of its own — it only ever renders the props it was given", () => {

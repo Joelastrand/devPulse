@@ -11,11 +11,14 @@ import {
   YAxis,
 } from "recharts";
 import { Card } from "../../../components/ui/Card";
-import type { PeriodAggregateResult } from "../domain/aggregation";
+import type { SurveyResultSummary } from "../client/team-results-gateway";
 import { resultsCopy } from "../copy";
+import { formatRelativeSurveyDate, formatSurveyDate } from "../domain/format-survey-date";
 
 export interface TrendChartRow {
-  period: string;
+  surveyId: string;
+  date: string;
+  relative: string;
   flow: number | null;
   stress: number | null;
   fun: number | null;
@@ -26,33 +29,47 @@ export interface TrendChartRow {
  * The valid single-answer range (`aggregation.ts`'s `MIN_ANSWER`/
  * `MAX_ANSWER`), so a dimension mean is always within `[1, 5]`. Fixing the
  * chart's Y-axis to this exact domain keeps `0` permanently off the visible
- * axis — a suppressed period can never be misread as "a real value of
- * zero" because zero is never a plottable position at all.
+ * axis — a suppressed survey can never be misread as "a real value of zero"
+ * because zero is never a plottable position at all.
  */
 const VALUE_DOMAIN: [number, number] = [1, 5];
 
 /**
- * Maps the same `PeriodAggregateResult[]` `TrendTable` already renders into
+ * Maps the same `SurveyResultSummary[]` `TrendTable` already renders into
  * Recharts-ready rows — the single source of truth both the chart and the
- * table derive from (`getTeamResults`/`computePeriodAggregate`, unchanged;
- * no new fetch). A suppressed (`insufficient`/`not_available`) period
- * becomes `null` for every dimension — never `0` and never an interpolated
- * or estimated value (`docs/SECURITY.md` invariants 10-12, SPEC BR-20).
+ * table derive from (`getTeamSurveyResults`/`computeSurveyAggregate`,
+ * unchanged; no new fetch). A suppressed (`insufficient`) survey becomes
+ * `null` for every dimension — never `0` and never an interpolated or
+ * estimated value (`docs/SECURITY.md` invariants 10-12, SPEC BR-29).
  * Recharts renders a `null` point as a gap (with `connectNulls={false}`)
  * rather than drawing a line through it or plotting a marker at it, so a
- * suppressed period is a visible break in the trend, never a shape
- * indistinguishable from a real low published value. Exported for direct,
+ * suppressed survey is a visible break in the trend, never a shape
+ * indistinguishable from a real low published value.
+ *
+ * The X-axis stays categorical (evenly spaced by occurrence, not
+ * time-proportional — SPEC → "Chart X-axis decision"): `date` is each
+ * survey's actual, formatted date, used as the axis label. `relative` (a
+ * secondary, non-load-bearing label like "2 uker siden") is computed here
+ * from `now`, never persisted or fetched. Exported for direct,
  * rendering-free testing of this suppression-safe mapping.
  */
 export function buildTrendSeries(
-  results: readonly PeriodAggregateResult[],
+  results: readonly SurveyResultSummary[],
+  now: Date = new Date(),
 ): TrendChartRow[] {
   return results.map((result) => {
+    const parsedDate = new Date(result.date);
+    const base = {
+      surveyId: result.surveyId,
+      date: formatSurveyDate(parsedDate),
+      relative: formatRelativeSurveyDate(parsedDate, now),
+    };
+
     if (result.status !== "published") {
-      return { period: result.period, flow: null, stress: null, fun: null, suppressed: true };
+      return { ...base, flow: null, stress: null, fun: null, suppressed: true };
     }
     return {
-      period: result.period,
+      ...base,
       flow: result.mean.flow,
       stress: result.mean.stress,
       fun: result.mean.fun,
@@ -65,7 +82,7 @@ export function buildTrendSeries(
  * One line per dimension, reusing `TrendTable`'s own column labels
  * (BR-2: no duplicate copy source). Each line also carries a distinct dash
  * pattern (solid/dashed/dotted), not just a distinct color, so the three
- * series remain distinguishable without relying on color alone (BR-23).
+ * series remain distinguishable without relying on color alone.
  */
 const DIMENSION_LINES = [
   { key: "flow" as const, color: "#2563eb", dash: undefined, label: resultsCopy.trendTable.columns.flow },
@@ -78,16 +95,29 @@ function formatTooltipValue(value: unknown): string {
 }
 
 /**
- * The 12-period trend chart (SPEC BR-19/BR-20/BR-21), additive to — never
- * replacing — the existing accessible `TrendTable`: it renders the exact
- * same already-fetched `results` `TrendTable` receives (no new fetch, no
- * new server call). The table remains the authoritative accessible
- * rendering of this data (SPEC → Implementation notes): the chart itself is
- * `aria-hidden`, and a visible (non-hidden) heading + description above it
- * explains what it shows and how a suppressed period is represented, so the
- * information is never conveyed by the chart's shape/color alone.
+ * Appends each point's secondary relative label to its tooltip title, e.g.
+ * "10. jan. 2026 (2 uker siden)" — the relative label is always shown
+ * alongside, never instead of, the actual date (SPEC → "Chart X-axis
+ * decision").
  */
-export function TrendChart({ results }: { results: readonly PeriodAggregateResult[] }) {
+function formatTooltipLabel(label: unknown, payload: unknown): string {
+  const rows = payload as ReadonlyArray<{ payload?: TrendChartRow }> | undefined;
+  const relative = rows?.[0]?.payload?.relative;
+  return relative ? `${String(label)} (${relative})` : String(label ?? "");
+}
+
+/**
+ * The survey-instance trend chart (SPEC → "Results/history model",
+ * TASK-012), additive to — never replacing — the existing accessible
+ * `TrendTable`: it renders the exact same already-fetched `results`
+ * `TrendTable` receives (no new fetch, no new server call). The table
+ * remains the authoritative accessible rendering of this data: the chart
+ * itself is `aria-hidden`, and a visible (non-hidden) heading + description
+ * above it explains what it shows and how a suppressed survey is
+ * represented, so the information is never conveyed by the chart's
+ * shape/color alone.
+ */
+export function TrendChart({ results }: { results: readonly SurveyResultSummary[] }) {
   if (results.length === 0) {
     return null;
   }
@@ -109,9 +139,9 @@ export function TrendChart({ results }: { results: readonly PeriodAggregateResul
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-zinc-200 dark:stroke-zinc-800" />
-            <XAxis dataKey="period" tick={{ fontSize: 12 }} />
+            <XAxis dataKey="date" tick={{ fontSize: 12 }} />
             <YAxis domain={VALUE_DOMAIN} allowDecimals={false} tick={{ fontSize: 12 }} />
-            <Tooltip formatter={formatTooltipValue} />
+            <Tooltip formatter={formatTooltipValue} labelFormatter={formatTooltipLabel} />
             <Legend />
             {DIMENSION_LINES.map(({ key, color, dash, label }) => (
               <Line

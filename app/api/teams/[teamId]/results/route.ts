@@ -1,17 +1,21 @@
 import { NextResponse } from "next/server";
-import { getTeamResults } from "../../../../../src/features/results/server/get-team-results";
+import {
+  getTeamSurveyResults,
+  type SurveyResultEntry,
+} from "../../../../../src/features/results/server/get-team-survey-results";
 
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
- * Protected, per-team dashboard/trend endpoint — the team-management
- * successor to `/api/results` (docs/features/team-management/SPEC.md).
- * `teamId` comes from the URL path but is never trusted as authorization
- * evidence on its own: `getTeamResults` always re-derives access via
- * `authorizeTeamAccess` before any protected data is read (item 9). Kept
- * thin; orchestration lives in `getTeamResults`. Does not modify or
- * replace `/api/results` — the two coexist until the old static-mapping
- * path is retired (SPEC → Migration strategy).
+ * Protected, per-team survey-instance results/history endpoint
+ * (docs/features/managed-surveys/SPEC.md — TASK-012). `teamId` comes from
+ * the URL path but is never trusted as authorization evidence on its own:
+ * `getTeamSurveyResults` always re-derives access via `authorizeTeamAccess`
+ * before any protected data is read. Kept thin; orchestration,
+ * threshold/suppression, and `closedAt` backfill logic all live in
+ * `getTeamSurveyResults` (TASK-011). Replaces this same route's previous
+ * calendar-period-scoped `getTeamResults`, retired by TASK-014
+ * (docs/features/managed-surveys/SPEC.md).
  */
 export async function GET(
   request: Request,
@@ -19,7 +23,7 @@ export async function GET(
 ) {
   const { teamId } = await params;
   const token = extractBearerToken(request.headers.get("authorization"));
-  const result = await getTeamResults(token, teamId);
+  const result = await getTeamSurveyResults(token, teamId);
 
   if (!result.ok) {
     const status =
@@ -35,11 +39,24 @@ export async function GET(
     {
       status: "ok",
       teamId: result.teamId,
-      current: result.current,
-      trend: result.trend,
+      results: result.results.map(toResultPayload),
     },
     { status: 200 },
   );
+}
+
+/** Serializes one `SurveyResultEntry` for JSON transport — `date` (a `Date`) becomes an ISO string; every other field is passed through unchanged. */
+function toResultPayload(entry: SurveyResultEntry) {
+  const base = {
+    surveyId: entry.surveyId,
+    ...(entry.title !== undefined ? { title: entry.title } : {}),
+    date: entry.date.toISOString(),
+    minimumResponses: entry.minimumResponses,
+  };
+
+  return entry.status === "published"
+    ? { ...base, status: "published" as const, mean: entry.mean, count: entry.count }
+    : { ...base, status: "insufficient" as const };
 }
 
 function extractBearerToken(header: string | null): string {

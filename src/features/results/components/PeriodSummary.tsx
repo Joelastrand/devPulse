@@ -1,69 +1,80 @@
 import { Alert } from "../../../components/ui/Alert";
 import { Card } from "../../../components/ui/Card";
-import type { PeriodAggregateResult } from "../domain/aggregation";
+import { EmptyState } from "../../../components/ui/EmptyState";
+import type { SurveyResultSummary } from "../client/team-results-gateway";
 import { resultsCopy } from "../copy";
+import { formatSurveyDate } from "../domain/format-survey-date";
 
 /**
- * Renders the most recently closed period's aggregate. `not_available`
- * should never actually reach the client for this slot (`getTeamResults`
- * only ever passes closed periods here) but is handled the same as
- * `insufficient` — a generic, non-revealing message — as defense in depth
- * against ever implying open-period data exists (BR-6).
+ * Renders the team's latest closed survey's result
+ * (docs/features/managed-surveys/SPEC.md — "Results/history model",
+ * TASK-012). `result` is `null` only when the team has no closed surveys
+ * yet — a `scheduled`/`open` survey is never eligible here (BR-27), so this
+ * component never needs to distinguish "no survey" from "current survey not
+ * yet closed."
  */
-export function PeriodSummary({ result }: { result: PeriodAggregateResult }) {
+export function PeriodSummary({ result }: { result: SurveyResultSummary | null }) {
   return (
     <Card
       as="section"
       variant="bordered"
       padding="md"
-      aria-labelledby="current-period-heading"
+      aria-labelledby="latest-survey-heading"
     >
       <h2
-        id="current-period-heading"
+        id="latest-survey-heading"
         className="text-lg font-semibold text-zinc-900 dark:text-zinc-50"
       >
-        {resultsCopy.periodSummary.heading}
+        {resultsCopy.latestSurvey.heading}
       </h2>
-      <p className="text-sm text-zinc-500 dark:text-zinc-400">{result.period}</p>
 
-      {result.status === "published" ? (
-        <>
-          <dl className="mt-4 grid grid-cols-3 gap-4">
-            <div>
-              <dt className="text-sm text-zinc-500 dark:text-zinc-400">
-                {resultsCopy.periodSummary.dimensions.flow}
-              </dt>
-              <dd className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-                {result.mean.flow.toFixed(1)}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-sm text-zinc-500 dark:text-zinc-400">
-                {resultsCopy.periodSummary.dimensions.stress}
-              </dt>
-              <dd className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-                {result.mean.stress.toFixed(1)}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-sm text-zinc-500 dark:text-zinc-400">
-                {resultsCopy.periodSummary.dimensions.fun}
-              </dt>
-              <dd className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-                {result.mean.fun.toFixed(1)}
-              </dd>
-            </div>
-          </dl>
-          <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-            {resultsCopy.periodSummary.responses(result.count)}
-          </p>
-        </>
+      {result === null ? (
+        <EmptyState className="mt-4">{resultsCopy.latestSurvey.empty}</EmptyState>
       ) : (
-        <Alert variant="info" className="mt-4">
-          {result.status === "insufficient"
-            ? resultsCopy.periodSummary.insufficient
-            : resultsCopy.periodSummary.notAvailable}
-        </Alert>
+        <>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            {result.title ? `${result.title} · ` : ""}
+            {formatSurveyDate(new Date(result.date))}
+          </p>
+
+          {result.status === "published" ? (
+            <>
+              <dl className="mt-4 grid grid-cols-3 gap-4">
+                <div>
+                  <dt className="text-sm text-zinc-500 dark:text-zinc-400">
+                    {resultsCopy.latestSurvey.dimensions.flow}
+                  </dt>
+                  <dd className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+                    {result.mean.flow.toFixed(1)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-sm text-zinc-500 dark:text-zinc-400">
+                    {resultsCopy.latestSurvey.dimensions.stress}
+                  </dt>
+                  <dd className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+                    {result.mean.stress.toFixed(1)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-sm text-zinc-500 dark:text-zinc-400">
+                    {resultsCopy.latestSurvey.dimensions.fun}
+                  </dt>
+                  <dd className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+                    {result.mean.fun.toFixed(1)}
+                  </dd>
+                </div>
+              </dl>
+              <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+                {resultsCopy.latestSurvey.responses(result.count)}
+              </p>
+            </>
+          ) : (
+            <Alert variant="info" className="mt-4">
+              {resultsCopy.latestSurvey.insufficient(result.minimumResponses)}
+            </Alert>
+          )}
+        </>
       )}
     </Card>
   );

@@ -4,6 +4,22 @@
 Approved — Phase 1 implemented (TASK-001 through TASK-004 Done; see
 [TASKS.md](./TASKS.md)).
 
+**Superseded (as of `docs/features/managed-surveys/SPEC.md` TASK-014):**
+the always-on, static-team-selection public survey model this document
+describes (the implicit weekly `getCurrentSurveyPeriod`, the
+self-declared-`teamId` dropdown, `/pulse-survey`, `POST
+/api/pulse-survey`, `src/features/pulse-survey/`, and the
+`pulseSurveyResponses` Firestore collection) has been retired from the
+codebase. Surveys are now admin-created instances reachable at
+`/survey/{surveyId}`, with an explicit `public`/`authenticated` access
+mode and an explicit admin-driven open/close lifecycle — never an
+implicit, always-open calendar period. The fixed three-question
+Flow/Stress/Fun 1-5 answer set this document defines is unchanged and
+still governs every survey submission. This document is preserved as a
+historical record of what Phase 1 implemented and why — it is not
+rewritten to describe the current model. See
+`docs/features/managed-surveys/SPEC.md` for the current model.
+
 ## Problem
 Teams and organizations currently have no lightweight, recurring signal for
 sustainable workload, delivery flow, and morale (see `docs/PRODUCT.md`).

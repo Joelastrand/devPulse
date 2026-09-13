@@ -30,6 +30,11 @@ interface NavLink {
  * emission and on any admin-status read failure (or one still in flight),
  * this renders as if the caller is signed out / not an admin, never the
  * reverse (SPEC edge case — "never a false positive").
+ *
+ * No longer links to `/pulse-survey` (docs/features/managed-surveys/
+ * SPEC.md — BR-39): that single static public survey concept is retired in
+ * favor of per-survey `/survey/{surveyId}` links, discovered via a team
+ * page or shared externally — never a generic nav entry.
  */
 export function SiteHeader() {
   const pathname = usePathname();
@@ -128,7 +133,6 @@ function navLinksFor(state: HeaderState): NavLink[] {
   if (state.phase === "signed_in") {
     const links: NavLink[] = [
       { href: "/", label: navCopy.home },
-      { href: "/pulse-survey", label: navCopy.pulseSurvey },
       { href: "/teams", label: navCopy.teams },
     ];
     if (state.isAdmin) {
@@ -142,7 +146,6 @@ function navLinksFor(state: HeaderState): NavLink[] {
   // only link to what might be an anonymous visitor.
   return [
     { href: "/", label: navCopy.home },
-    { href: "/pulse-survey", label: navCopy.pulseSurvey },
     { href: "/sign-in", label: navCopy.signIn },
     { href: "/sign-up", label: navCopy.signUp },
   ];

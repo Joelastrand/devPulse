@@ -48,8 +48,8 @@ function flushMicrotasks() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-const SIGNED_OUT_LINK_NAMES = [/hjem/i, /pulsundersøkelse/i, /logg inn/i, /opprett konto/i];
-const SIGNED_IN_LINK_NAMES = [/hjem/i, /pulsundersøkelse/i, /^team$/i];
+const SIGNED_OUT_LINK_NAMES = [/hjem/i, /logg inn/i, /opprett konto/i];
+const SIGNED_IN_LINK_NAMES = [/hjem/i, /^team$/i];
 
 function navLinkNames() {
   const nav = screen.getByRole("navigation");
@@ -88,6 +88,27 @@ describe("SiteHeader", () => {
     }
     expect(navLinkNames()).toHaveLength(SIGNED_OUT_LINK_NAMES.length);
     expect(screen.queryByRole("button", { name: /logg ut/i })).toBeNull();
+  });
+
+  it("never links to the retired static /pulse-survey page, signed out or signed in", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith(null));
+    render(<SiteHeader />);
+    expect(
+      Array.from(screen.getByRole("navigation").querySelectorAll("a")).some(
+        (link) => link.getAttribute("href") === "/pulse-survey",
+      ),
+    ).toBe(false);
+    cleanup();
+
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchOwnAdminStatusMock.mockResolvedValue({ ok: true, isAdmin: false });
+    render(<SiteHeader />);
+    await waitFor(() => expect(fetchOwnAdminStatusMock).toHaveBeenCalled());
+    expect(
+      Array.from(screen.getByRole("navigation").querySelectorAll("a")).some(
+        (link) => link.getAttribute("href") === "/pulse-survey",
+      ),
+    ).toBe(false);
   });
 
   it("shows exactly the signed-in, non-admin link set plus a Logg ut action for a non-admin caller", async () => {
@@ -176,12 +197,12 @@ describe("SiteHeader", () => {
   });
 
   it("marks the current page's nav link with aria-current", () => {
-    usePathnameMock.mockReturnValue("/pulse-survey");
+    usePathnameMock.mockReturnValue("/sign-in");
     observeIdTokenMock.mockImplementation(subscribingWith(null));
 
     render(<SiteHeader />);
 
-    expect(screen.getByRole("link", { name: /pulsundersøkelse/i }).getAttribute("aria-current")).toBe(
+    expect(screen.getByRole("link", { name: /logg inn/i }).getAttribute("aria-current")).toBe(
       "page",
     );
     expect(screen.getByRole("link", { name: /hjem/i }).getAttribute("aria-current")).toBeNull();

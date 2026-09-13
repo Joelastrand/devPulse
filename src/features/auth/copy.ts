@@ -13,6 +13,7 @@ export const authCopy = {
     submitting: "Logger inn…",
     success: "Du er logget inn.",
     continueLabel: "Fortsett til Team",
+    continueToSurveyLabel: "Fortsett til undersøkelsen",
     error: "Ugyldig e-post eller passord.",
     signUpPrompt: "Har du ikke en konto?",
     signUpLink: "Opprett en",

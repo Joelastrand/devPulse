@@ -69,13 +69,12 @@ from `.env.local.example`, which documents each variable):
    firebase deploy --only firestore:rules,firestore:indexes
    ```
 
-9. Seed the legacy pulse-survey team IDs into Firestore before exercising
-    the public survey, `/teams`, or `/teams/[teamId]` end-to-end against a
-    real project — the survey selector and submission validation read the
-    Firestore `teams` collection's `active` set
+9. Seed the legacy team IDs into Firestore before exercising `/teams` or
+    `/teams/[teamId]` end-to-end against a real project — `/teams`'s
+    overview reads the Firestore `teams` collection's `active` set
     (`docs/features/team-management/SPEC.md` TASK-006), so a fresh
-    Firestore project has no valid survey teams until this step runs. As an
-    app admin (see `APP_ADMIN_EMAILS` below), call the seed endpoint once:
+    Firestore project has no teams until this step runs. As an app admin
+    (see `APP_ADMIN_EMAILS` below), call the seed endpoint once:
 
     ```bash
     curl -X POST https://<your-app-host>/api/admin/teams/seed-legacy \
@@ -118,35 +117,29 @@ firebase deploy --only firestore:rules,firestore:indexes
 ```
 
 - **`firestore.rules`** denies all Firestore client-SDK reads and writes
-  unconditionally, on every collection, including `pulseSurveyResponses`.
-  This app's own code never needs client-SDK Firestore access to be
-  allowed: all server code (`src/lib/firebase/admin.ts`, used by
-  `submit-pulse-survey.ts` and `get-team-results.ts`) reads/writes Firestore
-  through the Firebase **Admin** SDK, which always bypasses Security Rules
-  — the client SDK (`src/lib/firebase/client.ts`) is Auth-only in this
-  codebase and never calls Firestore. Without this file deployed, the
-  browser's public `NEXT_PUBLIC_FIREBASE_*` web config would be enough for
-  any client to query `pulseSurveyResponses` directly, bypassing this
-  feature's server-side team scoping, open-period exclusion, and minimum-
-  response threshold entirely (`docs/SECURITY.md` invariants 8–11) — found
-  in `security-review` of `docs/features/results-dashboard/`. Do not
-  loosen this file to permit client reads/writes without an explicit,
-  reviewed decision to introduce direct client Firestore access.
-- The `teams`, `teamMemberships`, `teamInvitations`, and
-  `teamAccessRequests` collections (`docs/features/team-management/
-  SPEC.md`) each have the same explicit deny block as
-  `pulseSurveyResponses`, for the same defense-in-depth/documentation
-  reason — all access happens server-side via `src/features/teams/
-  server/`, which uses the Admin SDK and bypasses these rules entirely.
+  unconditionally, on every collection. This app's own code never needs
+  client-SDK Firestore access to be allowed: all server code
+  (`src/lib/firebase/admin.ts`, used by `src/features/surveys/server/` and
+  `src/features/results/server/get-team-survey-results.ts`) reads/writes
+  Firestore through the Firebase **Admin** SDK, which always bypasses
+  Security Rules — the client SDK (`src/lib/firebase/client.ts`) is
+  Auth-only in this codebase and never calls Firestore. Without this file
+  deployed, the browser's public `NEXT_PUBLIC_FIREBASE_*` web config would
+  be enough for any client to query `surveyResponses` (or any other
+  collection) directly, bypassing this feature's server-side team scoping,
+  survey-lifecycle exclusion, and minimum-response threshold entirely
+  (`docs/SECURITY.md` invariants 8–11). Do not loosen this file to permit
+  client reads/writes without an explicit, reviewed decision to introduce
+  direct client Firestore access.
+- The `teams`, `teamMemberships`, `teamInvitations`, `teamAccessRequests`
+  (`docs/features/team-management/SPEC.md`), `surveys`, `teamSurveyState`,
+  `surveyResponses`, and `surveyParticipations`
+  (`docs/features/managed-surveys/SPEC.md`) collections each have the same
+  explicit deny block, for the same defense-in-depth/documentation reason —
+  all access happens server-side via `src/features/teams/server/` or
+  `src/features/surveys/server/`, which use the Admin SDK and bypass these
+  rules entirely.
 - **`firestore.indexes.json`** declares:
-  - The composite index on `pulseSurveyResponses` (`teamId` ascending,
-    `period` ascending) the per-team results read path
-    (`src/features/results/server/get-team-results.ts`) depends on: it
-    filters by `teamId ==` together with `period in [...]`, a
-    compound-filter shape Firestore does not cover with automatic
-    single-field indexes. Without this index deployed, the results
-    endpoint (`GET /api/teams/[teamId]/results`) fails closed with a
-    read-failure response against a real Firestore project.
   - The composite index on `teamInvitations` (`email` ascending, `status`
     ascending) `resolveInvitations` (`src/features/teams/server/
     resolve-invitations.ts`) depends on to look up a caller's own pending
@@ -160,10 +153,17 @@ firebase deploy --only firestore:rules,firestore:indexes
     Without this index deployed, that listing fails closed with a
     read-failure response against a real Firestore project.
   - `listActiveTeams` (`src/features/teams/server/list-active-teams.ts`,
-    TASK-006's dynamic pulse-survey team source) filters `teams` by
-    `status == "active"` alone — a single-field equality filter, which
-    Firestore indexes automatically. No composite index entry is needed or
-    declared for it.
+    backing the `/teams` overview) filters `teams` by `status == "active"`
+    alone — a single-field equality filter, which Firestore indexes
+    automatically. No composite index entry is needed or declared for it.
+  - Querying `surveys` by `teamId` (the admin team page and team-page
+    survey discovery) and `surveyResponses` by `surveyId` (results/history)
+    are likewise single-field, auto-indexed queries — no composite index
+    entry is needed or declared for either
+    (`docs/features/managed-surveys/SPEC.md` → "Firestore/index
+    implications"). The one-open-survey-per-team check needs no index at
+    all: it's a direct document `get` on `teamSurveyState/{teamId}`, never
+    a query.
 
 Add new composite indexes or rule changes here whenever a new Firestore
 query or access path is introduced, rather than relying on manually

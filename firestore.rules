@@ -2,26 +2,14 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // pulseSurveyResponses holds encrypted wellbeing survey responses. All
-    // access happens server-side via the Firebase Admin SDK
-    // (src/lib/firebase/admin.ts), which bypasses these rules entirely —
-    // this rule exists solely to deny the separate, unrelated client-SDK
-    // path (src/lib/firebase/client.ts is Auth-only and never touches
-    // Firestore) unconditionally, regardless of authentication state. See
-    // docs/SECURITY.md invariants 8-11 and
-    // docs/features/results-dashboard/SPEC.md.
-    match /pulseSurveyResponses/{document=**} {
-      allow read, write: if false;
-    }
-
     // teams holds admin-managed team metadata (name, active/disabled
     // status). All access happens server-side via the Firebase Admin SDK
     // (src/features/teams/server/), which bypasses these rules entirely —
     // this rule exists solely to deny the separate client-SDK path
     // unconditionally, regardless of authentication state (including an
-    // app admin's), for the same documentation/defense-in-depth reason as
-    // pulseSurveyResponses above. See docs/features/team-management/SPEC.md
-    // (BR-35).
+    // app admin's) — every collection in this file carries the same
+    // documentation/defense-in-depth deny block, for the same reason. See
+    // docs/features/team-management/SPEC.md (BR-35).
     match /teams/{document=**} {
       allow read, write: if false;
     }
@@ -50,6 +38,54 @@ service cloud.firestore {
     // via src/features/teams/server/ using the Admin SDK. See
     // docs/features/team-management/SPEC.md (BR-35).
     match /teamAccessRequests/{document=**} {
+      allow read, write: if false;
+    }
+
+    // surveys holds admin-managed survey instances (teamId, accessMode,
+    // optional title/startAt/endAt, lifecycle timestamps, createdAt,
+    // createdBy). All access happens server-side via the Firebase Admin SDK
+    // (src/features/surveys/server/), which bypasses these rules entirely —
+    // this rule exists solely to deny the separate client-SDK path
+    // unconditionally, regardless of authentication state (including an
+    // app admin's), for the same documentation/defense-in-depth reason as
+    // teams above. See docs/features/managed-surveys/SPEC.md (TASK-002).
+    match /surveys/{document=**} {
+      allow read, write: if false;
+    }
+
+    // teamSurveyState is the write-side-only coordination document
+    // enforcing "at most one genuinely open survey per team"
+    // (docs/features/managed-surveys/SPEC.md — "One open survey per
+    // team"), read and written exclusively inside openSurvey's/
+    // closeSurvey's Firestore transactions
+    // (src/features/surveys/server/open-survey.ts). Same server-only-
+    // access rationale as surveys above.
+    match /teamSurveyState/{document=**} {
+      allow read, write: if false;
+    }
+
+    // surveyResponses holds anonymous, encrypted survey answers (surveyId,
+    // teamId, ciphertext, iv, authTag, keyVersion, submittedAt) — no
+    // identity field, for either access mode. All access happens
+    // server-side via the Firebase Admin SDK
+    // (src/features/surveys/server/submit-survey-response.ts), which
+    // bypasses these rules entirely — this rule exists solely to deny the
+    // separate client-SDK path unconditionally, regardless of
+    // authentication state (including an app admin's). Same
+    // server-only-access rationale as every other collection above. See
+    // docs/features/managed-surveys/SPEC.md (TASK-006).
+    match /surveyResponses/{document=**} {
+      allow read, write: if false;
+    }
+
+    // surveyParticipations links a Firebase uid to a surveyId, used only to
+    // detect a second accepted `authenticated`-mode submission from the
+    // same identity (BR-21/BR-22) — deliberately minimal ({uid, surveyId}
+    // only, no submittedAt) and never joined to a specific surveyResponses
+    // document by this application (BR-18). Same server-only-access
+    // rationale as surveyResponses above. See docs/features/
+    // managed-surveys/SPEC.md (TASK-006).
+    match /surveyParticipations/{document=**} {
       allow read, write: if false;
     }
 
