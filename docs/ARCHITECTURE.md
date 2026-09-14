@@ -159,6 +159,21 @@ flowchart LR
 - Key management approach (e.g. Cloud KMS, Secret Manager, or another
   provider) is an **open question** — future key-management integration
   point, not yet selected.
+- **Implemented (Phase 5, `docs/features/anonymous-challenges/SPEC.md`)**:
+  `challenges` (Anonymous Challenges' free-text reports) is a second
+  encrypted-at-rest collection alongside `surveyResponses`, reusing
+  `src/lib/encryption/encryption.ts` unchanged. Its anonymity shape is
+  deliberately different from a survey response's, and intentionally so, not
+  an inconsistency: a survey response's *content* is never shown to anyone,
+  only a threshold-gated aggregate, whereas a challenge's *content* is shown
+  individually to any authorized team member/admin once decrypted — the
+  guarantee this feature makes is narrower and different in kind (*never
+  who*, not *never what*). No identity field is ever persisted on a
+  `challenges` document, and there is no participation-tracking collection
+  for it at all (unlike `SurveyParticipation`), since Anonymous Challenges
+  has no duplicate-submission-detection requirement to enforce. See
+  `docs/features/anonymous-challenges/SPEC.md` — "Privacy/anonymity model"
+  for the full threat model.
 
 ## Aggregation
 

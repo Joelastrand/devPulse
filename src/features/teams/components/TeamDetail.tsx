@@ -10,6 +10,14 @@ import { LoadingState } from "../../../components/ui/LoadingState";
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import {
+  fetchTeamChallenges,
+  type FetchTeamChallengesResult,
+  type MemberChallengeView,
+} from "../../challenges/client/challenges-gateway";
+import { ChallengeList, type ChallengeListState } from "../../challenges/components/ChallengeList";
+import { ChallengeSubmissionPanel } from "../../challenges/components/ChallengeSubmissionPanel";
+import { challengesCopy } from "../../challenges/copy";
+import {
   fetchTeamResults,
   type SurveyResultSummary,
 } from "../../results/client/team-results-gateway";
@@ -55,21 +63,51 @@ function toCurrentSurveySectionState(
 }
 
 /**
+ * The "Utfordringer" section's own composed state, resolved independently
+ * of results/current-survey (docs/features/anonymous-challenges/SPEC.md —
+ * TASK-005: a challenge-list read failure must not erase results/current
+ * survey, and vice versa — every section fails independently). `"unavailable"`
+ * covers both a genuine read failure and a rare authorization race, exactly
+ * like `CurrentSurveySectionState` above — never fabricated as "no
+ * challenges yet" in either case.
+ */
+type ChallengesSectionState =
+  | { status: "loaded"; challenges: MemberChallengeView[] }
+  | { status: "unavailable" };
+
+function toChallengesSectionState(result: FetchTeamChallengesResult): ChallengesSectionState {
+  return result.status === "ok"
+    ? { status: "loaded", challenges: result.challenges }
+    : { status: "unavailable" };
+}
+
+/**
  * The composed result this component renders — never a raw gateway
  * response. Only `authorized` ever carries result/aggregate data; every
  * other state is a non-sensitive "you don't have access" variant
- * (docs/features/team-management/SPEC.md — BR-14, BR-15, BR-16).
+ * (docs/features/team-management/SPEC.md — BR-14, BR-15, BR-16). Both
+ * `authorized` and `results_unavailable` also carry `challenges` — the
+ * challenge section is shown to any authorized member/admin regardless of
+ * whether the results read itself succeeded (docs/features/
+ * anonymous-challenges/SPEC.md — BR-27); it is never fetched at all for a
+ * denied/unauthenticated caller (see `loadTeamDetail`).
  */
 type TeamDetailResult =
   | { status: "unauthenticated" }
   | { status: "read_failed" }
   | { status: "denied"; name?: string; relationship: DeniedRelationship }
-  | { status: "results_unavailable"; name?: string; currentSurvey: CurrentSurveySectionState }
+  | {
+      status: "results_unavailable";
+      name?: string;
+      currentSurvey: CurrentSurveySectionState;
+      challenges: ChallengesSectionState;
+    }
   | {
       status: "authorized";
       name?: string;
       results: SurveyResultSummary[];
       currentSurvey: CurrentSurveySectionState;
+      challenges: ChallengesSectionState;
     };
 
 /**
@@ -126,12 +164,15 @@ async function resolveViaResults(
   teamId: string,
   name: string | undefined,
 ): Promise<TeamDetailResult> {
-  // Fetched in parallel — separate server contracts (results vs. current-
-  // survey discovery), each independently authorized, so neither read waits
-  // on the other (docs/features/managed-surveys/SPEC.md — TASK-010).
-  const [results, surveyResult] = await Promise.all([
+  // Fetched in parallel — separate server contracts (results, current-survey
+  // discovery, and member-visible challenges), each independently
+  // authorized, so no read waits on another (docs/features/
+  // managed-surveys/SPEC.md — TASK-010; docs/features/
+  // anonymous-challenges/SPEC.md — TASK-005).
+  const [results, surveyResult, challengesResult] = await Promise.all([
     fetchTeamResults(idToken, teamId),
     fetchCurrentTeamSurvey(idToken, teamId),
+    fetchTeamChallenges(idToken, teamId),
   ]);
 
   if (results.status === "ok") {
@@ -140,6 +181,7 @@ async function resolveViaResults(
       name,
       results: results.results,
       currentSurvey: toCurrentSurveySectionState(surveyResult),
+      challenges: toChallengesSectionState(challengesResult),
     };
   }
   if (results.status === "unauthenticated") {
@@ -152,15 +194,16 @@ async function resolveViaResults(
     // — fail closed rather than trusting the now-stale overview
     // relationship), and the ambiguous no-entry case turning out to be a
     // genuine denial. Rendered identically either way (BR-16) — no
-    // distinguishing existence signal. The parallel current-survey result is
-    // discarded here regardless of its own outcome: a denied caller never
-    // sees survey data.
+    // distinguishing existence signal. The parallel current-survey and
+    // challenges results are discarded here regardless of their own
+    // outcome: a denied caller never sees survey or challenge data.
     return { status: "denied", name, relationship: "none" };
   }
   return {
     status: "results_unavailable",
     name,
     currentSurvey: toCurrentSurveySectionState(surveyResult),
+    challenges: toChallengesSectionState(challengesResult),
   };
 }
 
@@ -240,6 +283,37 @@ export function TeamDetail({ teamId }: { teamId: string }) {
     await loadForGeneration(token, generation);
   }
 
+  /**
+   * Refreshes only the challenge-list sub-state through the existing
+   * `fetchTeamChallenges` server contract after a successful submission
+   * (docs/features/anonymous-challenges/SPEC.md — TASK-005) — never
+   * fabricates a challenge DTO client-side. Checked against the current
+   * generation before applying, exactly like every other async continuation
+   * in this component: a stale response belonging to a superseded auth
+   * identity or a since-navigated-away `teamId` must never populate the
+   * current page. Results/current-survey sub-state is left untouched.
+   */
+  async function handleChallengeSubmitted(token: string, generation: number) {
+    const refreshed = await fetchTeamChallenges(token, teamId);
+    if (!isCurrentGeneration(generation)) {
+      return;
+    }
+
+    setState((previous) => {
+      if (previous.phase !== "loaded" || !isCurrentGeneration(generation)) {
+        return previous;
+      }
+      const { result } = previous;
+      if (result.status !== "authorized" && result.status !== "results_unavailable") {
+        return previous;
+      }
+      return {
+        ...previous,
+        result: { ...result, challenges: toChallengesSectionState(refreshed) },
+      };
+    });
+  }
+
   if (state.phase === "loading") {
     return <LoadingState label={teamsCopy.detail.loading} />;
   }
@@ -264,6 +338,12 @@ export function TeamDetail({ teamId }: { teamId: string }) {
         <TeamHeading name={result.name} />
         <Alert variant="error">{teamsCopy.detail.resultsUnavailable}</Alert>
         <CurrentSurveySection state={result.currentSurvey} />
+        <ChallengesSection
+          teamId={teamId}
+          token={token}
+          state={result.challenges}
+          onSubmitted={() => handleChallengeSubmitted(token, generation)}
+        />
       </div>
     );
   }
@@ -282,6 +362,12 @@ export function TeamDetail({ teamId }: { teamId: string }) {
         <PeriodSummary result={latest} />
         <TrendChart results={result.results} />
         <TrendTable results={result.results} />
+        <ChallengesSection
+          teamId={teamId}
+          token={token}
+          state={result.challenges}
+          onSubmitted={() => handleChallengeSubmitted(token, generation)}
+        />
       </div>
     );
   }
@@ -342,6 +428,46 @@ function CurrentSurveySection({ state }: { state: CurrentSurveySectionState }) {
       {state.status === "loaded" && state.survey !== null && (
         <CurrentSurveyCard survey={state.survey} />
       )}
+    </Card>
+  );
+}
+
+/**
+ * `/teams/[teamId]`'s "Utfordringer" section (docs/features/
+ * anonymous-challenges/SPEC.md — TASK-005, BR-27). Composes the submission
+ * panel and the read-only member challenge list — shown to any authorized
+ * member/admin, independently of whether results/current-survey succeeded
+ * (BR-27). Renders exactly what `fetchTeamChallenges` returned; no
+ * archived-challenge or status-based filtering logic of any kind lives
+ * here or in `ChallengeList` — TASK-003's `listTeamChallengesForMember`
+ * already guarantees an archived challenge never reaches this component
+ * (`.claude/rules/security.md`).
+ */
+function ChallengesSection({
+  teamId,
+  token,
+  state,
+  onSubmitted,
+}: {
+  teamId: string;
+  token: string;
+  state: ChallengesSectionState;
+  onSubmitted: () => void;
+}) {
+  const listState: ChallengeListState =
+    state.status === "loaded" ? { status: "loaded", challenges: state.challenges } : { status: "error" };
+
+  return (
+    <Card as="section" variant="bordered" padding="md" aria-labelledby="challenges-heading">
+      <h2 id="challenges-heading" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+        {challengesCopy.list.sectionTitle}
+      </h2>
+      <div className="mt-4">
+        <ChallengeSubmissionPanel idToken={token} teamId={teamId} onSubmitted={onSubmitted} />
+      </div>
+      <div className="mt-6">
+        <ChallengeList state={listState} />
+      </div>
     </Card>
   );
 }

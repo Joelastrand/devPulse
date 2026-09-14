@@ -86,12 +86,49 @@
 
   See `docs/features/managed-surveys/SPEC.md`.
 
-- **Phase 5 — Anonymous Challenges**:
-  anonymous free-text challenge submission.
+- **Phase 5 — Anonymous Challenges** *(complete)*:
+  let an actual team member submit a free-text challenge (friction, problem,
+  or improvement suggestion) for that team, with no submitter identity ever
+  persisted or recoverable, and gave an app admin a minimal, one-way
+  resolve/archive/delete lifecycle so a team's challenge list stays usable
+  over time.
+
+  Delivered:
+  - authenticated, real-team-membership-only challenge submission
+    (app-admin status alone is not sufficient) — no public/anonymous-link
+    submission mode
+  - server-side application-level encryption of challenge text at rest,
+    reusing the same encryption boundary as survey responses
+  - a `challenges` document containing no submitter identity field of any
+    kind, and no participation-tracking collection at all (no dedup
+    requirement to enforce, unlike `SurveyParticipation`)
+  - two separate, purpose-built read operations — `listTeamChallengesForMember`
+    (`open`/`resolved` only, backing the team page) and
+    `listTeamChallengesForAdmin` (`open`/`resolved`/`archived`, backing
+    admin management) — so archived-challenge visibility is enforced
+    server-side, never by client-side filtering
+  - `/teams/[teamId]`'s "Meld en utfordring" submission panel and read-only
+    challenge list, and `/admin/teams/[teamId]`'s "Utfordringer" management
+    section (resolve/archive/delete, delete behind explicit confirmation)
+  - a deliberately different anonymity shape from survey responses: a
+    challenge's *content* is individually visible to any authorized team
+    member/admin (the point of the feature), while *submitter identity* is
+    never persisted or recoverable — narrower than, not weaker than, the
+    survey-response guarantee
+  - no rate limiting, pagination, categories/tags, comments/voting/
+    reactions, or AI classification (explicit v1 non-goals)
+
+  This phase preserved every existing privacy/security invariant
+  (server-side authorization, team isolation, application-level encryption,
+  no client-side Firestore access, admin ≠ raw-identity access) and applied
+  it correctly to a feature where content is deliberately visible while the
+  submitter is not.
+
+  See `docs/features/anonymous-challenges/SPEC.md`.
 
 - **Phase 6 — Developer Forum Capabilities**.
 
 - **Phase 7 — Skill / Capability Trees**.
 
-Phases 0–4 are complete. See `docs/PRODUCT.md` for the product vision and
+Phases 0–5 are complete. See `docs/PRODUCT.md` for the product vision and
 non-goals.

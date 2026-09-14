@@ -17,6 +17,10 @@ const createAdminSurveyMock = vi.fn();
 const openAdminSurveyMock = vi.fn();
 const closeAdminSurveyMock = vi.fn();
 const deleteOrArchiveAdminSurveyMock = vi.fn();
+const fetchAdminChallengesMock = vi.fn();
+const resolveAdminChallengeMock = vi.fn();
+const archiveAdminChallengeMock = vi.fn();
+const deleteAdminChallengeMock = vi.fn();
 
 vi.mock("../../auth/client/auth-client", () => ({
   observeIdToken: observeIdTokenMock,
@@ -44,6 +48,13 @@ vi.mock("../../surveys/client/admin-survey-gateway", () => ({
   deleteOrArchiveAdminSurvey: deleteOrArchiveAdminSurveyMock,
 }));
 
+vi.mock("../../challenges/client/admin-challenges-gateway", () => ({
+  fetchAdminChallenges: fetchAdminChallengesMock,
+  resolveAdminChallenge: resolveAdminChallengeMock,
+  archiveAdminChallenge: archiveAdminChallengeMock,
+  deleteAdminChallenge: deleteAdminChallengeMock,
+}));
+
 const { AdminTeamDetail } = await import("./AdminTeamDetail");
 
 function subscribingWith(token: string | null) {
@@ -63,18 +74,21 @@ function mockOk({
   invitations = [],
   requests = [],
   surveys = [],
+  challenges = [],
 }: {
   teams?: { teamId: string; name: string; status: "active" | "disabled" }[];
   members?: { uid: string; email: string | null }[];
   invitations?: { email: string; invitedBy: string; createdAt: string }[];
   requests?: { uid: string; email: string | null; createdAt: string }[];
   surveys?: unknown[];
+  challenges?: unknown[];
 } = {}) {
   fetchAdminTeamsMock.mockResolvedValue({ status: "ok", teams });
   fetchTeamMembersMock.mockResolvedValue({ status: "ok", members });
   fetchTeamInvitationsMock.mockResolvedValue({ status: "ok", invitations });
   fetchTeamAccessRequestsMock.mockResolvedValue({ status: "ok", requests });
   fetchAdminSurveysMock.mockResolvedValue({ status: "ok", surveys });
+  fetchAdminChallengesMock.mockResolvedValue({ status: "ok", challenges });
 }
 
 describe("AdminTeamDetail", () => {
@@ -94,6 +108,10 @@ describe("AdminTeamDetail", () => {
     openAdminSurveyMock.mockReset();
     closeAdminSurveyMock.mockReset();
     deleteOrArchiveAdminSurveyMock.mockReset();
+    fetchAdminChallengesMock.mockReset();
+    resolveAdminChallengeMock.mockReset();
+    archiveAdminChallengeMock.mockReset();
+    deleteAdminChallengeMock.mockReset();
   });
 
   it("shows a Norwegian loading state before auth resolves", () => {
@@ -476,6 +494,10 @@ describe("AdminTeamDetail survey management", () => {
     openAdminSurveyMock.mockReset();
     closeAdminSurveyMock.mockReset();
     deleteOrArchiveAdminSurveyMock.mockReset();
+    fetchAdminChallengesMock.mockReset();
+    resolveAdminChallengeMock.mockReset();
+    archiveAdminChallengeMock.mockReset();
+    deleteAdminChallengeMock.mockReset();
   });
 
   it("shows an empty state when the team has no surveys", async () => {
@@ -925,6 +947,10 @@ describe("AdminTeamDetail stale mutation races", () => {
     openAdminSurveyMock.mockReset();
     closeAdminSurveyMock.mockReset();
     deleteOrArchiveAdminSurveyMock.mockReset();
+    fetchAdminChallengesMock.mockReset();
+    resolveAdminChallengeMock.mockReset();
+    archiveAdminChallengeMock.mockReset();
+    deleteAdminChallengeMock.mockReset();
   });
 
   it("ignores a stale in-flight remove-member result for team A once the route has changed to team B", async () => {
@@ -947,6 +973,7 @@ describe("AdminTeamDetail stale mutation races", () => {
     fetchTeamInvitationsMock.mockResolvedValue({ status: "ok", invitations: [] });
     fetchTeamAccessRequestsMock.mockResolvedValue({ status: "ok", requests: [] });
     fetchAdminSurveysMock.mockResolvedValue({ status: "ok", surveys: [] });
+    fetchAdminChallengesMock.mockResolvedValue({ status: "ok", challenges: [] });
 
     let resolveRemove: (value: unknown) => void = () => {};
     removeAdminTeamMemberMock.mockImplementation(
@@ -1018,6 +1045,7 @@ describe("AdminTeamDetail stale mutation races", () => {
       }
       return { status: "ok", surveys: [] };
     });
+    fetchAdminChallengesMock.mockResolvedValue({ status: "ok", challenges: [] });
 
     let resolveOpen: (value: unknown) => void = () => {};
     openAdminSurveyMock.mockImplementation(
@@ -1101,5 +1129,423 @@ describe("AdminTeamDetail stale mutation races", () => {
     // Still shows the signed-out prompt — the stale result never resurrects
     // the signed-in survey-management view.
     expect(screen.getByRole("link", { name: /logg inn/i })).toBeTruthy();
+  });
+
+  it("ignores a stale challenges list result for team A once the route has changed to team B", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+
+    fetchAdminTeamsMock.mockResolvedValue({
+      status: "ok",
+      teams: [
+        { teamId: "team-a", name: "Team A", status: "active" },
+        { teamId: "team-b", name: "Team B", status: "active" },
+      ],
+    });
+    fetchTeamMembersMock.mockResolvedValue({ status: "ok", members: [] });
+    fetchTeamInvitationsMock.mockResolvedValue({ status: "ok", invitations: [] });
+    fetchTeamAccessRequestsMock.mockResolvedValue({ status: "ok", requests: [] });
+    fetchAdminSurveysMock.mockResolvedValue({ status: "ok", surveys: [] });
+
+    let resolveChallengesA: (value: unknown) => void = () => {};
+    fetchAdminChallengesMock.mockImplementation(async (_token: string, teamId: string) => {
+      if (teamId === "team-a") {
+        return new Promise((resolve) => {
+          resolveChallengesA = resolve;
+        });
+      }
+      return { status: "ok", challenges: [] };
+    });
+
+    // Team A's own challenge fetch never resolves before the route moves on
+    // (its overall load stays pending on this one slow contract) — mirrors
+    // navigating away before a slow read ever completed.
+    const { rerender } = render(<AdminTeamDetail teamId="team-a" />);
+    rerender(<AdminTeamDetail teamId="team-b" />);
+    await screen.findByRole("heading", { name: "Team B" });
+    await screen.findByText(/ingen utfordringer/i);
+
+    // Team A's deferred challenge list now resolves, long after the route
+    // moved on to team B.
+    resolveChallengesA({
+      status: "ok",
+      challenges: [
+        { challengeId: "stale-a", text: "STALE-CANARY-team-a", status: "open", submittedAt: "2026-01-01" },
+      ],
+    });
+    await flushMicrotasks();
+
+    // Team B's already-rendered (empty) challenge list is untouched — no
+    // phantom row from team A's stale response.
+    expect(screen.getByRole("heading", { name: "Team B" })).toBeTruthy();
+    expect(screen.queryByText(/STALE-CANARY-team-a/)).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("ignores a stale in-flight resolve-challenge result for team A once the route has changed to team B", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+
+    fetchAdminTeamsMock.mockResolvedValue({
+      status: "ok",
+      teams: [
+        { teamId: "team-a", name: "Team A", status: "active" },
+        { teamId: "team-b", name: "Team B", status: "active" },
+      ],
+    });
+    fetchTeamMembersMock.mockResolvedValue({ status: "ok", members: [] });
+    fetchTeamInvitationsMock.mockResolvedValue({ status: "ok", invitations: [] });
+    fetchTeamAccessRequestsMock.mockResolvedValue({ status: "ok", requests: [] });
+    fetchAdminSurveysMock.mockResolvedValue({ status: "ok", surveys: [] });
+    fetchAdminChallengesMock.mockImplementation(async (_token: string, teamId: string) => {
+      if (teamId === "team-a") {
+        return {
+          status: "ok",
+          challenges: [
+            { challengeId: "challenge-a", text: "Team A challenge", status: "open", submittedAt: "2026-01-01" },
+          ],
+        };
+      }
+      return { status: "ok", challenges: [] };
+    });
+
+    let resolveResolve: (value: unknown) => void = () => {};
+    resolveAdminChallengeMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveResolve = resolve;
+        }),
+    );
+
+    const { rerender } = render(<AdminTeamDetail teamId="team-a" />);
+    await screen.findByText("Team A challenge");
+
+    await user.click(screen.getByRole("button", { name: /marker som løst/i }));
+    expect(resolveAdminChallengeMock).toHaveBeenCalledWith("a-token", "team-a", "challenge-a");
+
+    // Route changes to team B while team A's resolve call is still in
+    // flight — mirrors navigating away mid-mutation.
+    rerender(<AdminTeamDetail teamId="team-b" />);
+    await screen.findByRole("heading", { name: "Team B" });
+    await screen.findByText(/ingen utfordringer/i);
+
+    const fetchChallengesCallsBeforeResolve = fetchAdminChallengesMock.mock.calls.length;
+
+    // Team A's deferred resolve result now resolves, long after the route
+    // moved on to team B.
+    resolveResolve({ ok: true });
+    await flushMicrotasks();
+
+    // No stale post-mutation refresh for team A fired, and team B's
+    // already-rendered (empty) challenge list is untouched.
+    expect(screen.getByRole("heading", { name: "Team B" })).toBeTruthy();
+    expect(screen.getByText(/ingen utfordringer/i)).toBeTruthy();
+    expect(screen.queryByText("Team A challenge")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(fetchAdminChallengesMock.mock.calls.length).toBe(fetchChallengesCallsBeforeResolve);
+  });
+
+  it("ignores a stale in-flight archive-challenge result after sign-out", async () => {
+    const user = userEvent.setup();
+    let authCallback: (token: string | null) => void = () => {};
+    observeIdTokenMock.mockImplementation((callback: (token: string | null) => void) => {
+      authCallback = callback;
+      callback("a-token");
+      return () => {};
+    });
+
+    mockOk({
+      challenges: [
+        { challengeId: "challenge-1", text: "A challenge", status: "open", submittedAt: "2026-01-01" },
+      ],
+    });
+
+    let resolveArchive: (value: unknown) => void = () => {};
+    archiveAdminChallengeMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveArchive = resolve;
+        }),
+    );
+
+    render(<AdminTeamDetail teamId="team-1" />);
+    await screen.findByText("A challenge");
+
+    await user.click(screen.getByRole("button", { name: /^arkiver –/i }));
+
+    // Sign out while the archive call is still in flight.
+    authCallback(null);
+    await screen.findByRole("link", { name: /logg inn/i });
+
+    resolveArchive({ ok: true });
+    await flushMicrotasks();
+
+    // Still shows the signed-out prompt — the stale result never resurrects
+    // the signed-in admin view.
+    expect(screen.getByRole("link", { name: /logg inn/i })).toBeTruthy();
+  });
+});
+
+describe("AdminTeamDetail challenge management", () => {
+  afterEach(() => {
+    cleanup();
+    observeIdTokenMock.mockReset();
+    fetchAdminTeamsMock.mockReset();
+    fetchTeamMembersMock.mockReset();
+    fetchTeamInvitationsMock.mockReset();
+    fetchTeamAccessRequestsMock.mockReset();
+    fetchAdminSurveysMock.mockReset();
+    fetchAdminChallengesMock.mockReset();
+    resolveAdminChallengeMock.mockReset();
+    archiveAdminChallengeMock.mockReset();
+    deleteAdminChallengeMock.mockReset();
+  });
+
+  const OPEN_CHALLENGE = {
+    challengeId: "challenge-open",
+    text: "Deploy process has no clear owner",
+    status: "open" as const,
+    submittedAt: "2026-01-10",
+  };
+  const RESOLVED_CHALLENGE = {
+    challengeId: "challenge-resolved",
+    text: "Code review is too slow",
+    status: "resolved" as const,
+    submittedAt: "2026-01-05",
+  };
+  const ARCHIVED_CHALLENGE = {
+    challengeId: "challenge-archived",
+    text: "An old, already-archived friction",
+    status: "archived" as const,
+    submittedAt: "2025-12-01",
+  };
+
+  it("shows a loading state, then an empty state when the team has no challenges", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({ challenges: [] });
+
+    render(<AdminTeamDetail teamId="team-1" />);
+
+    await screen.findByText(/ingen utfordringer/i);
+  });
+
+  it("shows a controlled error state for the challenges section without erasing team details, members, invitations, requests, or survey management", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({
+      members: [{ uid: "uid-1", email: "member@example.com" }],
+      invitations: [{ email: "invitee@example.com", invitedBy: "admin-uid", createdAt: "2026-01-01T00:00:00.000Z" }],
+      requests: [{ uid: "uid-2", email: "requester@example.com", createdAt: "2026-01-01T00:00:00.000Z" }],
+      surveys: [
+        {
+          surveyId: "survey-1",
+          accessMode: "public",
+          minimumResponses: 5,
+          lifecycle: "scheduled",
+          archived: false,
+          createdBy: "admin-1",
+          createdAt: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+    });
+    fetchAdminChallengesMock.mockResolvedValue({ status: "read_failed" });
+
+    render(<AdminTeamDetail teamId="team-1" />);
+
+    await screen.findByRole("heading", { name: "Platform" });
+    // The team, members, invitations, requests, and survey sections all
+    // still render — only the challenges section shows its own error.
+    expect(screen.getByText("member@example.com")).toBeTruthy();
+    expect(screen.getByText("invitee@example.com")).toBeTruthy();
+    expect(screen.getByText("requester@example.com")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "/survey/survey-1" })).toBeTruthy();
+    const alert = screen.getByRole("alert");
+    expect(alert.textContent).toMatch(/noe gikk galt/i);
+  });
+
+  it("renders active and archived challenges, active including both open and resolved", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({ challenges: [OPEN_CHALLENGE, RESOLVED_CHALLENGE, ARCHIVED_CHALLENGE] });
+
+    render(<AdminTeamDetail teamId="team-1" />);
+
+    await screen.findByText(OPEN_CHALLENGE.text);
+    expect(screen.getByText(RESOLVED_CHALLENGE.text)).toBeTruthy();
+    // Archived remains visible to the admin — the key difference from the
+    // member-facing team page.
+    expect(screen.getByText(ARCHIVED_CHALLENGE.text)).toBeTruthy();
+  });
+
+  it("resolves an open challenge and refreshes the authoritative view", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({ challenges: [OPEN_CHALLENGE] });
+    resolveAdminChallengeMock.mockResolvedValue({ ok: true });
+
+    render(<AdminTeamDetail teamId="team-1" />);
+    await screen.findByText(OPEN_CHALLENGE.text);
+
+    await user.click(screen.getByRole("button", { name: /marker som løst/i }));
+
+    expect(resolveAdminChallengeMock).toHaveBeenCalledWith("a-token", "team-1", "challenge-open");
+    expect(fetchAdminChallengesMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows a row-local Norwegian error and preserves other sections when resolve fails", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({ challenges: [OPEN_CHALLENGE] });
+    resolveAdminChallengeMock.mockResolvedValue({ ok: false, error: "persistence_failed" });
+
+    render(<AdminTeamDetail teamId="team-1" />);
+    await screen.findByText(OPEN_CHALLENGE.text);
+
+    await user.click(screen.getByRole("button", { name: /marker som løst/i }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/kunne ikke markere/i);
+    expect(alert.textContent).not.toMatch(/persistence_failed|firebase|firestore/i);
+  });
+
+  it("archives an open challenge and refreshes the authoritative view", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({ challenges: [OPEN_CHALLENGE] });
+    archiveAdminChallengeMock.mockResolvedValue({ ok: true });
+
+    render(<AdminTeamDetail teamId="team-1" />);
+    await screen.findByText(OPEN_CHALLENGE.text);
+
+    await user.click(screen.getByRole("button", { name: /^arkiver –/i }));
+
+    expect(archiveAdminChallengeMock).toHaveBeenCalledWith("a-token", "team-1", "challenge-open");
+    expect(fetchAdminChallengesMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("archives a resolved challenge and refreshes the authoritative view", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({ challenges: [RESOLVED_CHALLENGE] });
+    archiveAdminChallengeMock.mockResolvedValue({ ok: true });
+
+    render(<AdminTeamDetail teamId="team-1" />);
+    await screen.findByText(RESOLVED_CHALLENGE.text);
+
+    await user.click(screen.getByRole("button", { name: /^arkiver –/i }));
+
+    expect(archiveAdminChallengeMock).toHaveBeenCalledWith("a-token", "team-1", "challenge-resolved");
+  });
+
+  it("requires explicit confirmation before deleting, and cancels cleanly without calling the delete gateway", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({ challenges: [OPEN_CHALLENGE] });
+
+    render(<AdminTeamDetail teamId="team-1" />);
+    await screen.findByText(OPEN_CHALLENGE.text);
+
+    await user.click(screen.getByRole("button", { name: /^slett –/i }));
+    const prompt = await screen.findByText(/slettes permanent/i);
+    expect(prompt).toBeTruthy();
+    expect(deleteAdminChallengeMock).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: /avbryt/i }));
+    expect(deleteAdminChallengeMock).not.toHaveBeenCalled();
+    expect(screen.queryByText(/slettes permanent/i)).toBeNull();
+  });
+
+  it("deletes a challenge after explicit confirmation and refreshes the authoritative view", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({ challenges: [OPEN_CHALLENGE] });
+    deleteAdminChallengeMock.mockResolvedValue({ ok: true });
+
+    render(<AdminTeamDetail teamId="team-1" />);
+    await screen.findByText(OPEN_CHALLENGE.text);
+
+    await user.click(screen.getByRole("button", { name: /^slett –/i }));
+    await screen.findByText(/slettes permanent/i);
+    await user.click(screen.getByRole("button", { name: /bekreft sletting/i }));
+
+    expect(deleteAdminChallengeMock).toHaveBeenCalledWith("a-token", "team-1", "challenge-open");
+    expect(fetchAdminChallengesMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps one challenge row's pending state independent of another row's actions", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({ challenges: [OPEN_CHALLENGE, RESOLVED_CHALLENGE] });
+    let resolvePending: (value: unknown) => void = () => {};
+    resolveAdminChallengeMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvePending = resolve;
+        }),
+    );
+
+    render(<AdminTeamDetail teamId="team-1" />);
+    await screen.findByText(OPEN_CHALLENGE.text);
+
+    const openRow = screen.getByText(OPEN_CHALLENGE.text).closest("li")!;
+    const resolvedRow = screen.getByText(RESOLVED_CHALLENGE.text).closest("li")!;
+
+    await user.click(within(openRow).getByRole("button", { name: /marker som løst/i }));
+
+    expect(within(openRow).getByRole("button", { name: /markerer/i }).hasAttribute("disabled")).toBe(true);
+    const resolvedArchiveButton = within(resolvedRow).getByRole("button", { name: /^arkiver –/i });
+    expect(resolvedArchiveButton.hasAttribute("disabled")).toBe(false);
+
+    resolvePending({ ok: true });
+    await flushMicrotasks();
+  });
+
+  it("still allows resolve/archive/delete for a disabled team's challenges", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({
+      teams: [{ teamId: "team-1", name: "Platform", status: "disabled" }],
+      challenges: [OPEN_CHALLENGE],
+    });
+    resolveAdminChallengeMock.mockResolvedValue({ ok: true });
+
+    render(<AdminTeamDetail teamId="team-1" />);
+    await screen.findByText(OPEN_CHALLENGE.text);
+
+    const resolveButton = screen.getByRole("button", { name: /marker som løst/i });
+    expect(resolveButton.hasAttribute("disabled")).toBe(false);
+
+    await user.click(resolveButton);
+    expect(resolveAdminChallengeMock).toHaveBeenCalledWith("a-token", "team-1", "challenge-open");
+  });
+
+  it("never renders a submitter identity or an identity-implying label anywhere in the admin challenge section", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({
+      challenges: [
+        {
+          challengeId: "challenge-canary",
+          text: "Legitimate challenge text",
+          status: "open",
+          submittedAt: "2026-01-01",
+        },
+      ],
+    });
+
+    const { container } = render(<AdminTeamDetail teamId="team-1" />);
+    await screen.findByText("Legitimate challenge text");
+
+    expect(container.textContent).not.toMatch(/uid|resolvedBy|archivedBy/i);
+    expect(container.textContent).not.toMatch(/[\w.-]+@[\w.-]+\.\w+/);
+    expect(container.textContent).not.toMatch(/submitted by|meldt inn av|forfatter|sendt av/i);
+  });
+
+  it("contains no leftover English copy in the challenges section", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({ challenges: [OPEN_CHALLENGE] });
+
+    render(<AdminTeamDetail teamId="team-1" />);
+    await screen.findByText(OPEN_CHALLENGE.text);
+
+    expect(screen.queryByText(/^resolve$/i)).toBeNull();
+    expect(screen.queryByText(/^archive$/i)).toBeNull();
+    expect(screen.queryByText(/^delete$/i)).toBeNull();
   });
 });

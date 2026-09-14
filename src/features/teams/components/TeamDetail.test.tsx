@@ -8,6 +8,8 @@ const fetchTeamsOverviewMock = vi.fn();
 const requestTeamAccessMock = vi.fn();
 const fetchTeamResultsMock = vi.fn();
 const fetchCurrentTeamSurveyMock = vi.fn();
+const fetchTeamChallengesMock = vi.fn();
+const submitChallengeMock = vi.fn();
 
 vi.mock("../../auth/client/auth-client", () => ({
   observeIdToken: observeIdTokenMock,
@@ -26,10 +28,18 @@ vi.mock("../../surveys/client/current-team-survey-gateway", () => ({
   fetchCurrentTeamSurvey: fetchCurrentTeamSurveyMock,
 }));
 
+vi.mock("../../challenges/client/challenges-gateway", () => ({
+  fetchTeamChallenges: fetchTeamChallengesMock,
+  submitChallenge: submitChallengeMock,
+}));
+
 const { TeamDetail } = await import("./TeamDetail");
 
 /** The no-current-survey outcome — the harmless default most tests want, since they aren't exercising this section. */
 const NO_CURRENT_SURVEY = { status: "ok", survey: null };
+
+/** The empty-challenge-list outcome — the harmless default most tests want, since they aren't exercising this section. */
+const NO_CHALLENGES = { status: "ok", challenges: [] };
 
 const PUBLISHED_RESULTS = {
   status: "ok",
@@ -113,6 +123,7 @@ function flushMicrotasks() {
 describe("TeamDetail", () => {
   beforeEach(() => {
     fetchCurrentTeamSurveyMock.mockResolvedValue(NO_CURRENT_SURVEY);
+    fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
   });
 
   afterEach(() => {
@@ -122,6 +133,8 @@ describe("TeamDetail", () => {
     requestTeamAccessMock.mockReset();
     fetchTeamResultsMock.mockReset();
     fetchCurrentTeamSurveyMock.mockReset();
+    fetchTeamChallengesMock.mockReset();
+    submitChallengeMock.mockReset();
   });
 
   it("shows a Norwegian loading state before auth resolves", () => {
@@ -427,6 +440,7 @@ describe("TeamDetail current-survey section (TASK-010)", () => {
       teams: [{ teamId: "team-1", name: "Platform", relationship: "member" }],
     });
     fetchTeamResultsMock.mockResolvedValue(INSUFFICIENT_RESULTS);
+    fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
   });
 
   afterEach(() => {
@@ -436,6 +450,8 @@ describe("TeamDetail current-survey section (TASK-010)", () => {
     requestTeamAccessMock.mockReset();
     fetchTeamResultsMock.mockReset();
     fetchCurrentTeamSurveyMock.mockReset();
+    fetchTeamChallengesMock.mockReset();
+    submitChallengeMock.mockReset();
   });
 
   it("renders an open current survey with lifecycle/access-mode labels and a working /survey/{surveyId} link", async () => {
@@ -573,6 +589,10 @@ describe("TeamDetail current-survey section (TASK-010)", () => {
 });
 
 describe("TeamDetail current-survey section auth/route races (TASK-010)", () => {
+  beforeEach(() => {
+    fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
+  });
+
   afterEach(() => {
     cleanup();
     observeIdTokenMock.mockReset();
@@ -580,6 +600,8 @@ describe("TeamDetail current-survey section auth/route races (TASK-010)", () => 
     requestTeamAccessMock.mockReset();
     fetchTeamResultsMock.mockReset();
     fetchCurrentTeamSurveyMock.mockReset();
+    fetchTeamChallengesMock.mockReset();
+    submitChallengeMock.mockReset();
   });
 
   it("ignores a stale current-survey result that resolves after the user has signed out", async () => {
@@ -678,6 +700,7 @@ describe("TeamDetail current-survey section auth/route races (TASK-010)", () => 
 describe("TeamDetail auth/route races", () => {
   beforeEach(() => {
     fetchCurrentTeamSurveyMock.mockResolvedValue(NO_CURRENT_SURVEY);
+    fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
   });
 
   afterEach(() => {
@@ -687,6 +710,8 @@ describe("TeamDetail auth/route races", () => {
     requestTeamAccessMock.mockReset();
     fetchTeamResultsMock.mockReset();
     fetchCurrentTeamSurveyMock.mockReset();
+    fetchTeamChallengesMock.mockReset();
+    submitChallengeMock.mockReset();
   });
 
   it("ignores a stale overview result that resolves after the user has signed out", async () => {
@@ -928,5 +953,229 @@ describe("TeamDetail auth/route races", () => {
 
     expect(screen.getByText(/venter på godkjenning/i)).toBeTruthy();
     expect(screen.queryByText(/ikke godkjent/i)).toBeNull();
+  });
+});
+
+describe("TeamDetail challenges section (TASK-005)", () => {
+  const OPEN_CHALLENGE = {
+    challengeId: "c1",
+    text: "Deploy process has no clear owner",
+    status: "open",
+    submittedAt: "2026-01-10",
+  };
+  const RESOLVED_CHALLENGE = {
+    challengeId: "c2",
+    text: "Code review regularly takes more than two days",
+    status: "resolved",
+    submittedAt: "2026-01-05",
+  };
+
+  beforeEach(() => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "member" }],
+    });
+    fetchTeamResultsMock.mockResolvedValue(INSUFFICIENT_RESULTS);
+    fetchCurrentTeamSurveyMock.mockResolvedValue(NO_CURRENT_SURVEY);
+    fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
+  });
+
+  afterEach(() => {
+    cleanup();
+    observeIdTokenMock.mockReset();
+    fetchTeamsOverviewMock.mockReset();
+    requestTeamAccessMock.mockReset();
+    fetchTeamResultsMock.mockReset();
+    fetchCurrentTeamSurveyMock.mockReset();
+    fetchTeamChallengesMock.mockReset();
+    submitChallengeMock.mockReset();
+  });
+
+  it("renders the section heading, submission panel, and open/resolved challenges for an authorized member", async () => {
+    fetchTeamChallengesMock.mockResolvedValue({
+      status: "ok",
+      challenges: [OPEN_CHALLENGE, RESOLVED_CHALLENGE],
+    });
+
+    render(<TeamDetail teamId="team-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Utfordringer" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Meld en utfordring" })).toBeTruthy();
+    expect(screen.getByText(OPEN_CHALLENGE.text)).toBeTruthy();
+    expect(screen.getByText(RESOLVED_CHALLENGE.text)).toBeTruthy();
+    expect(fetchTeamChallengesMock).toHaveBeenCalledWith("a-token", "team-1");
+  });
+
+  it("shows the Norwegian empty state when the team has no challenges", async () => {
+    render(<TeamDetail teamId="team-1" />);
+
+    await screen.findByRole("heading", { name: "Utfordringer" });
+    expect(screen.getByText(/ingen utfordringer ennå/i)).toBeTruthy();
+  });
+
+  it("shows a distinct challenge-list error without hiding results/current survey (independent section failures)", async () => {
+    fetchTeamChallengesMock.mockResolvedValue({ status: "read_failed" });
+    fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
+
+    render(<TeamDetail teamId="team-1" />);
+
+    await screen.findByText("7 svar");
+    const alerts = screen.getAllByRole("alert");
+    expect(alerts.some((alert) => /lasting av utfordringer/i.test(alert.textContent ?? ""))).toBe(true);
+  });
+
+  it("keeps the challenges section on a results read failure (results_unavailable branch)", async () => {
+    fetchTeamResultsMock.mockResolvedValue({ status: "read_failed" });
+    fetchTeamChallengesMock.mockResolvedValue({ status: "ok", challenges: [OPEN_CHALLENGE] });
+
+    render(<TeamDetail teamId="team-1" />);
+
+    await screen.findByText(/teamets resultater/i);
+    expect(screen.getByText(OPEN_CHALLENGE.text)).toBeTruthy();
+  });
+
+  it("keeps the challenges section on a current-survey read failure", async () => {
+    fetchCurrentTeamSurveyMock.mockResolvedValue({ status: "read_failed" });
+    fetchTeamChallengesMock.mockResolvedValue({ status: "ok", challenges: [OPEN_CHALLENGE] });
+
+    render(<TeamDetail teamId="team-1" />);
+
+    await screen.findByText(OPEN_CHALLENGE.text);
+    expect(screen.getByRole("heading", { name: /pågående undersøkelse/i })).toBeTruthy();
+  });
+
+  it("never fetches challenges for a caller the overview already reports as denied", async () => {
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "none" }],
+    });
+
+    render(<TeamDetail teamId="team-1" />);
+
+    await screen.findByRole("button", { name: /be om tilgang/i });
+    expect(fetchTeamChallengesMock).not.toHaveBeenCalled();
+  });
+
+  it("submits a challenge and refreshes the list through the existing server contract, without fabricating a DTO", async () => {
+    const user = userEvent.setup();
+    fetchTeamChallengesMock
+      .mockResolvedValueOnce(NO_CHALLENGES)
+      .mockResolvedValueOnce({ status: "ok", challenges: [OPEN_CHALLENGE] });
+    submitChallengeMock.mockResolvedValue({ status: "ok" });
+
+    render(<TeamDetail teamId="team-1" />);
+    await screen.findByRole("heading", { name: "Meld en utfordring" });
+    expect(screen.getByText(/ingen utfordringer ennå/i)).toBeTruthy();
+
+    await user.type(screen.getByRole("textbox", { name: "Utfordring" }), "Deploy process has no clear owner");
+    await user.click(screen.getByRole("button", { name: /^send inn$/i }));
+
+    await screen.findByText(/registrert/i);
+    expect(submitChallengeMock).toHaveBeenCalledWith("a-token", "team-1", "Deploy process has no clear owner");
+
+    await screen.findByText(OPEN_CHALLENGE.text);
+    expect(fetchTeamChallengesMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("discards a stale post-submission challenge-list refresh once the caller has signed out before it resolves", async () => {
+    const observer = capturingObserver();
+    const user = userEvent.setup();
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "member" }],
+    });
+    submitChallengeMock.mockResolvedValue({ status: "ok" });
+    let resolveRefresh: (value: unknown) => void = () => {};
+    fetchTeamChallengesMock
+      .mockResolvedValueOnce(NO_CHALLENGES)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveRefresh = resolve;
+          }),
+      );
+
+    render(<TeamDetail teamId="team-1" />);
+    observer.emit("a-token");
+    await screen.findByRole("heading", { name: "Meld en utfordring" });
+
+    await user.type(screen.getByRole("textbox", { name: "Utfordring" }), "Deploy process has no clear owner");
+    await user.click(screen.getByRole("button", { name: /^send inn$/i }));
+    await screen.findByText(/registrert/i);
+
+    observer.emit(null);
+    await screen.findByRole("link", { name: /logg inn/i });
+
+    resolveRefresh({ status: "ok", challenges: [OPEN_CHALLENGE] });
+    await flushMicrotasks();
+
+    expect(screen.queryByText(OPEN_CHALLENGE.text)).toBeNull();
+    expect(screen.getByRole("link", { name: /logg inn/i })).toBeTruthy();
+  });
+
+  it("discards a stale post-submission challenge-list refresh once the route has changed to a different team", async () => {
+    const user = userEvent.setup();
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [
+        { teamId: "team-a", name: "Team A", relationship: "member" },
+        { teamId: "team-b", name: "Team B", relationship: "member" },
+      ],
+    });
+    fetchTeamResultsMock.mockResolvedValue({ status: "ok", teamId: "team-a", results: INSUFFICIENT_RESULTS.results });
+    submitChallengeMock.mockResolvedValue({ status: "ok" });
+    let resolveRefresh: (value: unknown) => void = () => {};
+    fetchTeamChallengesMock
+      .mockResolvedValueOnce(NO_CHALLENGES)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveRefresh = resolve;
+          }),
+      )
+      .mockResolvedValue(NO_CHALLENGES);
+
+    const { rerender } = render(<TeamDetail teamId="team-a" />);
+    await screen.findByRole("heading", { name: "Meld en utfordring" });
+
+    await user.type(screen.getByRole("textbox", { name: "Utfordring" }), "Deploy process has no clear owner");
+    await user.click(screen.getByRole("button", { name: /^send inn$/i }));
+    await screen.findByText(/registrert/i);
+
+    rerender(<TeamDetail teamId="team-b" />);
+    await screen.findByText("Team B");
+
+    resolveRefresh({ status: "ok", challenges: [OPEN_CHALLENGE] });
+    await flushMicrotasks();
+
+    expect(screen.queryByText(OPEN_CHALLENGE.text)).toBeNull();
+  });
+
+  it("never renders an identity-shaped value (uid/email/resolvedBy/archivedBy) anywhere on the page", async () => {
+    fetchTeamChallengesMock.mockResolvedValue({
+      status: "ok",
+      challenges: [OPEN_CHALLENGE, RESOLVED_CHALLENGE],
+    });
+    fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
+
+    const { container } = render(<TeamDetail teamId="team-1" />);
+    await screen.findByText(OPEN_CHALLENGE.text);
+
+    expect(container.textContent).not.toMatch(/@|uid|resolvedBy|archivedBy|ciphertext|\biv\b|\btag\b/i);
+  });
+
+  it("contains no leftover English copy in the challenges section", async () => {
+    fetchTeamChallengesMock.mockResolvedValue({
+      status: "ok",
+      challenges: [OPEN_CHALLENGE],
+    });
+
+    render(<TeamDetail teamId="team-1" />);
+
+    await screen.findByText(OPEN_CHALLENGE.text);
+    expect(screen.queryByText(/^report a challenge$/i)).toBeNull();
+    expect(screen.queryByText(/^no challenges yet$/i)).toBeNull();
+    expect(screen.queryByText(/^submit$/i)).toBeNull();
   });
 });

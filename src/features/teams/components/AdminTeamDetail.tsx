@@ -10,6 +10,20 @@ import { LoadingState } from "../../../components/ui/LoadingState";
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import {
+  archiveAdminChallenge,
+  deleteAdminChallenge,
+  fetchAdminChallenges,
+  resolveAdminChallenge,
+  type AdminChallengeView,
+  type FetchAdminChallengesResult,
+} from "../../challenges/client/admin-challenges-gateway";
+import {
+  AdminChallengeList,
+  type AdminChallengeListState,
+  type AdminChallengeRowActionState,
+} from "../../challenges/components/AdminChallengeList";
+import { challengesCopy } from "../../challenges/copy";
+import {
   closeAdminSurvey,
   createAdminSurvey,
   deleteOrArchiveAdminSurvey,
@@ -47,10 +61,30 @@ interface TeamSummary {
 }
 
 /**
+ * The Anonymous Challenges section's own composed state, resolved
+ * independently of the team/members/invitations/requests/surveys read above
+ * it (docs/features/anonymous-challenges/SPEC.md — TASK-006: a challenge
+ * read failure must not erase any other section, mirroring `TeamDetail.tsx`'s
+ * `ChallengesSectionState`/`CurrentSurveySectionState` pattern). `"unavailable"`
+ * covers both a genuine read failure and a rare authorization race — never
+ * fabricated as "no challenges yet" in either case.
+ */
+type ChallengesSectionState =
+  | { status: "loaded"; challenges: AdminChallengeView[] }
+  | { status: "unavailable" };
+
+function toChallengesSectionState(result: FetchAdminChallengesResult): ChallengesSectionState {
+  return result.status === "ok"
+    ? { status: "loaded", challenges: result.challenges }
+    : { status: "unavailable" };
+}
+
+/**
  * The composed result this component renders — combines the existing
  * TASK-009 admin team catalog (for the team's name/status) with the
- * TASK-004/TASK-005 member/invitation/access-request lists. No new server
- * logic is introduced; this only reads from existing, unchanged endpoints.
+ * TASK-004/TASK-005 member/invitation/access-request lists, and TASK-006's
+ * independently-resolved challenges section. No new server logic is
+ * introduced; this only reads from existing, unchanged endpoints.
  */
 type TeamDetailResult =
   | { status: "unauthenticated" }
@@ -64,16 +98,23 @@ type TeamDetailResult =
       invitations: AdminPendingInvitationEntry[];
       requests: AdminPendingAccessRequestEntry[];
       surveys: AdminSurveyEntry[];
+      challenges: ChallengesSectionState;
     };
 
 async function loadTeamDetail(idToken: string, teamId: string): Promise<TeamDetailResult> {
-  const [teamsResult, membersResult, invitationsResult, requestsResult, surveysResult] = await Promise.all([
-    fetchAdminTeams(idToken),
-    fetchTeamMembers(idToken, teamId),
-    fetchTeamInvitations(idToken, teamId),
-    fetchTeamAccessRequests(idToken, teamId),
-    fetchAdminSurveys(idToken, teamId),
-  ]);
+  // Challenges are fetched in the same parallel batch but deliberately
+  // excluded from the gate below — a challenges-only read failure must
+  // never erase team/members/invitations/requests/surveys, and vice versa
+  // (TASK-006, mirrors `TeamDetail.tsx`'s independent-section pattern).
+  const [teamsResult, membersResult, invitationsResult, requestsResult, surveysResult, challengesResult] =
+    await Promise.all([
+      fetchAdminTeams(idToken),
+      fetchTeamMembers(idToken, teamId),
+      fetchTeamInvitations(idToken, teamId),
+      fetchTeamAccessRequests(idToken, teamId),
+      fetchAdminSurveys(idToken, teamId),
+      fetchAdminChallenges(idToken, teamId),
+    ]);
 
   const statuses = [
     teamsResult.status,
@@ -111,6 +152,7 @@ async function loadTeamDetail(idToken: string, teamId: string): Promise<TeamDeta
     invitations: invitationsResult.invitations,
     requests: requestsResult.requests,
     surveys: surveysResult.surveys,
+    challenges: toChallengesSectionState(challengesResult),
   };
 }
 
@@ -223,6 +265,7 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
   const [surveyEndAt, setSurveyEndAt] = useState("");
   const [surveyActions, setSurveyActions] = useState<Record<string, SurveyRowActionState>>({});
   const [copiedSurveyId, setCopiedSurveyId] = useState<string | null>(null);
+  const [challengeActions, setChallengeActions] = useState<Record<string, AdminChallengeRowActionState>>({});
 
   const { isCurrentGeneration } = useAuthGatedResource(
     (token, generation) => {
@@ -238,6 +281,7 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
       setSurveyEndAt("");
       setSurveyActions({});
       setCopiedSurveyId(null);
+      setChallengeActions({});
 
       if (!token) {
         setState({ phase: "signed_out" });
@@ -496,6 +540,101 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
     setTimeout(() => setCopiedSurveyId((current) => (current === surveyId ? null : current)), 2000);
   }
 
+  /**
+   * Resolve/archive/delete each guard against a duplicate click for their
+   * own row only (`challengeActions[challengeId]`) — resolving one
+   * challenge never disables, shows pending, or overwrites the error state
+   * of another (docs/features/anonymous-challenges/SPEC.md — TASK-006,
+   * mirrors `SurveyRowActionState`'s existing per-row isolation). Every
+   * result is applied only if `generation` is still current, and a
+   * successful action always re-fetches the full authoritative view via
+   * `loadForGeneration` — never a fabricated `resolvedAt`/`archivedAt`/
+   * `status` — reusing this component's single existing auth subscription
+   * rather than a second one.
+   */
+  async function handleResolveChallenge(token: string, generation: number, challengeId: string) {
+    if (challengeActions[challengeId]?.status === "pending") {
+      return;
+    }
+    setChallengeActions((prev) => ({ ...prev, [challengeId]: { status: "pending", action: "resolve" } }));
+
+    const result = await resolveAdminChallenge(token, teamId, challengeId);
+
+    if (!isCurrentGeneration(generation)) {
+      return;
+    }
+
+    if (!result.ok) {
+      setChallengeActions((prev) => ({
+        ...prev,
+        [challengeId]: { status: "error", message: challengesCopy.admin.resolveError },
+      }));
+      return;
+    }
+
+    setChallengeActions((prev) => ({ ...prev, [challengeId]: { status: "idle" } }));
+    await loadForGeneration(token, generation);
+  }
+
+  async function handleArchiveChallenge(token: string, generation: number, challengeId: string) {
+    if (challengeActions[challengeId]?.status === "pending") {
+      return;
+    }
+    setChallengeActions((prev) => ({ ...prev, [challengeId]: { status: "pending", action: "archive" } }));
+
+    const result = await archiveAdminChallenge(token, teamId, challengeId);
+
+    if (!isCurrentGeneration(generation)) {
+      return;
+    }
+
+    if (!result.ok) {
+      setChallengeActions((prev) => ({
+        ...prev,
+        [challengeId]: { status: "error", message: challengesCopy.admin.archiveError },
+      }));
+      return;
+    }
+
+    setChallengeActions((prev) => ({ ...prev, [challengeId]: { status: "idle" } }));
+    await loadForGeneration(token, generation);
+  }
+
+  function handleRequestDeleteChallenge(challengeId: string) {
+    if (challengeActions[challengeId]?.status === "pending") {
+      return;
+    }
+    setChallengeActions((prev) => ({ ...prev, [challengeId]: { status: "confirming_deletion" } }));
+  }
+
+  function handleCancelDeleteChallenge(challengeId: string) {
+    setChallengeActions((prev) => ({ ...prev, [challengeId]: { status: "idle" } }));
+  }
+
+  async function handleConfirmDeleteChallenge(token: string, generation: number, challengeId: string) {
+    if (challengeActions[challengeId]?.status === "pending") {
+      return;
+    }
+    setChallengeActions((prev) => ({ ...prev, [challengeId]: { status: "pending", action: "delete" } }));
+
+    const result = await deleteAdminChallenge(token, teamId, challengeId);
+
+    if (!isCurrentGeneration(generation)) {
+      return;
+    }
+
+    if (!result.ok) {
+      setChallengeActions((prev) => ({
+        ...prev,
+        [challengeId]: { status: "error", message: challengesCopy.admin.deleteError },
+      }));
+      return;
+    }
+
+    setChallengeActions((prev) => ({ ...prev, [challengeId]: { status: "idle" } }));
+    await loadForGeneration(token, generation);
+  }
+
   if (state.phase === "loading") {
     return <LoadingState label={adminCopy.detail.loading} />;
   }
@@ -524,9 +663,13 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
     return <Alert variant="error">{adminCopy.detail.notFound}</Alert>;
   }
 
-  const { team, members, invitations, requests, surveys } = result;
+  const { team, members, invitations, requests, surveys, challenges } = result;
   const activeSurveys = surveys.filter((entry) => !entry.archived);
   const archivedSurveys = surveys.filter((entry) => entry.archived);
+  const challengeListState: AdminChallengeListState =
+    challenges.status === "loaded"
+      ? { status: "loaded", challenges: challenges.challenges }
+      : { status: "error" };
 
   return (
     <div className="flex flex-col gap-10">
@@ -908,6 +1051,21 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
             </div>
           </>
         )}
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
+          {challengesCopy.admin.sectionTitle}
+        </h2>
+        <AdminChallengeList
+          state={challengeListState}
+          actions={challengeActions}
+          onResolve={(challengeId) => handleResolveChallenge(token, generation, challengeId)}
+          onArchive={(challengeId) => handleArchiveChallenge(token, generation, challengeId)}
+          onRequestDelete={handleRequestDeleteChallenge}
+          onCancelDelete={handleCancelDeleteChallenge}
+          onConfirmDelete={(challengeId) => handleConfirmDeleteChallenge(token, generation, challengeId)}
+        />
       </section>
     </div>
   );

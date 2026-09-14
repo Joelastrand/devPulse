@@ -140,10 +140,30 @@ until attrition, burnout, or delivery failure makes them obvious.
 - This phase also fixed the signed-in-user experience on Home so a
   signed-in visitor is never offered "Logg inn"/"Opprett konto".
 
+## Delivered: Anonymous Challenges (Phase 5)
+
+- Let an actual member of a team submit a free-text "challenge" (friction,
+  problem, or improvement suggestion) for that team, with no submitter
+  identity ever persisted or recoverable through the application. See
+  `docs/features/anonymous-challenges/SPEC.md`.
+- `/teams/[teamId]`: an authorized real team member sees a "Meld en
+  utfordring" submission panel; every member/admin of the team sees a
+  read-only, newest-first list of the team's `open`/`resolved` challenges —
+  unlike survey responses, challenge content is shown individually, since
+  the point of the feature is that someone can act on it; a non-member sees
+  no challenge content or data.
+- `/admin/teams/[teamId]`: an app admin additionally sees `archived`
+  challenges and can resolve, archive, or permanently delete a challenge
+  (delete requires explicit confirmation) — a minimal, one-way lifecycle
+  (`open → resolved → archived`, no reversal) so a team's challenge list
+  stays usable over time.
+- No public/anonymous-link submission, no comments/voting/reactions, no
+  categories/tags, and no AI classification of challenge text exist for this
+  feature — a challenge always requires real, authenticated team membership
+  to submit.
+
 ## Future capabilities (not implemented yet)
 
-- Anonymous challenges/problems: free-text reporting of issues, treated as
-  highly sensitive.
 - Developer forums/communities.
 - Skill/capability trees for teams and sections, e.g.:
   Container fundamentals → Evaluate alternatives → Build competence →
