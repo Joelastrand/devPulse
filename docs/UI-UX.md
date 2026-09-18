@@ -161,6 +161,61 @@ Every screen that fetches or mutates server data defines, at minimum:
   render result or current-survey content it isn't authorized to have
   fetched (`docs/features/managed-surveys/SPEC.md` — BR-30/BR-31/BR-32).
 
+## Skill Tree UX (Kompetanseområder)
+
+**Added at Phase 7 closeout (`docs/features/team-skill-tree/SPEC.md` —
+TASK-005/TASK-006/TASK-007), documenting the conventions that shipped**, in
+the same format as "Forum UX"/"Teams UX" above — this section describes the
+as-built Team Skill Tree feature, not a pre-implementation direction. Every
+rendered heading/label uses the Norwegian "Kompetanseområder" ("skill/
+capability areas") as natural-language UI copy; the underlying technical
+concept, every route, file, type, and Firestore field is named "skill," not
+"capability" — natural-language copy is not a competing technical
+identifier (see `docs/features/team-skill-tree/SPEC.md` — Owner decision 4).
+
+- **`/admin/skills`** (app-admin-only; a non-admin sees the generic
+  no-permission state): a creation form (tree name + a dynamic list of
+  2-20 stage-label inputs, with add/remove-row controls) and a read-only
+  catalog of existing trees, bounded to the 500 oldest-created — the
+  catalog never claims to show more than that bound (no "showing all
+  trees"/total-count text anywhere). Each catalog entry offers a
+  correction action: a form pre-filled with the tree's current name/
+  labels, with **no add/remove-row controls at all** — its row count is
+  fixed to the existing tree's node count, so the UI itself cannot submit
+  a different stage count.
+- **`/admin/teams/[teamId]`** gains a "Kompetanseområder" section
+  (app-admin-only): a picker to start tracking any catalog tree not yet
+  tracked by this team, and, for each already-tracked tree, its ordered
+  stage list with the current stage marked plus controls to set/advance
+  the stage (forward or backward) or stop tracking. The start-tracking
+  picker is hidden/disabled for a disabled team; the set-stage/
+  stop-tracking controls for an already-tracked tree remain available
+  regardless of team status, matching the server contract exactly. A
+  fresh render of this page reconstructs each tree's actual persisted
+  stage from the same team-scoped read the team-facing view uses — it
+  does not merely reflect this browser session's own prior actions.
+- **`/teams/[teamId]`** gains a read-only "Kompetanseområder" section,
+  visible to an authorized member/admin: for each tracked tree, its name
+  and full ordered stage list, rendered as a semantic ordered list
+  (`<ol>`/`<li>`) — **never** a graphical/canvas/SVG diagram. The current
+  stage is marked by both visible text ("Nåværende steg") and
+  `aria-current="step"` together, never by color alone. A tree with no
+  stage set yet shows a distinct "Ikke startet" state rather than leaving
+  the marker absent with no explanation. A non-member sees no skill
+  content or data.
+- A tree's name and every stage's label are untrusted, admin-authored
+  display strings, rendered as ordinary text on every surface — never
+  `dangerouslySetInnerHTML`, never passed through an HTML/Markdown parser.
+  Text that looks like HTML or a script tag renders as inert, visible
+  characters everywhere this feature displays it.
+- No comment, voting, reaction, free-text note, per-person assignment, or
+  ranking/leaderboard control exists anywhere in this feature's UI — every
+  surface shows team-level progress only, never an individual's.
+- Every admin creation/correction/tracking control, and the boundary
+  validation errors the creation form's dynamic add/remove-stage-row
+  controls can trigger, are keyboard-operable with a visible focus state
+  and an associated, accessible error message.
+
 ## Results UX
 
 - Emphasize the **most recently closed survey's aggregate** and the
@@ -270,7 +325,7 @@ existing privacy model (`docs/SECURITY.md`, `docs/ARCHITECTURE.md`):
   privacy rules/thresholds — Phase 3 is UI/UX, localization, and
   application-shell work only (unchanged, `docs/ROADMAP.md`).
 - New product capabilities (`AnonymousChallenge`, forums, skill trees —
-  Phases 4–6).
+  Phases 4–7).
 - Any new Firestore collection, field, or query pattern.
 - A final visual/brand identity system beyond what's needed for a
   coherent Phase 3 (a distinct branding pass may follow later, but is not

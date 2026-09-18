@@ -10,6 +10,7 @@ const fetchTeamResultsMock = vi.fn();
 const fetchCurrentTeamSurveyMock = vi.fn();
 const fetchTeamChallengesMock = vi.fn();
 const submitChallengeMock = vi.fn();
+const fetchTeamSkillsMock = vi.fn();
 
 vi.mock("../../auth/client/auth-client", () => ({
   observeIdToken: observeIdTokenMock,
@@ -33,6 +34,10 @@ vi.mock("../../challenges/client/challenges-gateway", () => ({
   submitChallenge: submitChallengeMock,
 }));
 
+vi.mock("../../skill-trees/client/skill-trees-gateway", () => ({
+  fetchTeamSkills: fetchTeamSkillsMock,
+}));
+
 const { TeamDetail } = await import("./TeamDetail");
 
 /** The no-current-survey outcome — the harmless default most tests want, since they aren't exercising this section. */
@@ -40,6 +45,9 @@ const NO_CURRENT_SURVEY = { status: "ok", survey: null };
 
 /** The empty-challenge-list outcome — the harmless default most tests want, since they aren't exercising this section. */
 const NO_CHALLENGES = { status: "ok", challenges: [] };
+
+/** The empty-skill-list outcome — the harmless default most tests want, since they aren't exercising the skill section. */
+const NO_SKILLS = { status: "ok", skills: [] };
 
 const PUBLISHED_RESULTS = {
   status: "ok",
@@ -124,6 +132,7 @@ describe("TeamDetail", () => {
   beforeEach(() => {
     fetchCurrentTeamSurveyMock.mockResolvedValue(NO_CURRENT_SURVEY);
     fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
+    fetchTeamSkillsMock.mockResolvedValue(NO_SKILLS);
   });
 
   afterEach(() => {
@@ -134,6 +143,7 @@ describe("TeamDetail", () => {
     fetchTeamResultsMock.mockReset();
     fetchCurrentTeamSurveyMock.mockReset();
     fetchTeamChallengesMock.mockReset();
+    fetchTeamSkillsMock.mockReset();
     submitChallengeMock.mockReset();
   });
 
@@ -441,6 +451,7 @@ describe("TeamDetail current-survey section (TASK-010)", () => {
     });
     fetchTeamResultsMock.mockResolvedValue(INSUFFICIENT_RESULTS);
     fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
+    fetchTeamSkillsMock.mockResolvedValue(NO_SKILLS);
   });
 
   afterEach(() => {
@@ -451,6 +462,7 @@ describe("TeamDetail current-survey section (TASK-010)", () => {
     fetchTeamResultsMock.mockReset();
     fetchCurrentTeamSurveyMock.mockReset();
     fetchTeamChallengesMock.mockReset();
+    fetchTeamSkillsMock.mockReset();
     submitChallengeMock.mockReset();
   });
 
@@ -591,6 +603,7 @@ describe("TeamDetail current-survey section (TASK-010)", () => {
 describe("TeamDetail current-survey section auth/route races (TASK-010)", () => {
   beforeEach(() => {
     fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
+    fetchTeamSkillsMock.mockResolvedValue(NO_SKILLS);
   });
 
   afterEach(() => {
@@ -601,6 +614,7 @@ describe("TeamDetail current-survey section auth/route races (TASK-010)", () => 
     fetchTeamResultsMock.mockReset();
     fetchCurrentTeamSurveyMock.mockReset();
     fetchTeamChallengesMock.mockReset();
+    fetchTeamSkillsMock.mockReset();
     submitChallengeMock.mockReset();
   });
 
@@ -701,6 +715,7 @@ describe("TeamDetail auth/route races", () => {
   beforeEach(() => {
     fetchCurrentTeamSurveyMock.mockResolvedValue(NO_CURRENT_SURVEY);
     fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
+    fetchTeamSkillsMock.mockResolvedValue(NO_SKILLS);
   });
 
   afterEach(() => {
@@ -711,6 +726,7 @@ describe("TeamDetail auth/route races", () => {
     fetchTeamResultsMock.mockReset();
     fetchCurrentTeamSurveyMock.mockReset();
     fetchTeamChallengesMock.mockReset();
+    fetchTeamSkillsMock.mockReset();
     submitChallengeMock.mockReset();
   });
 
@@ -979,6 +995,7 @@ describe("TeamDetail challenges section (TASK-005)", () => {
     fetchTeamResultsMock.mockResolvedValue(INSUFFICIENT_RESULTS);
     fetchCurrentTeamSurveyMock.mockResolvedValue(NO_CURRENT_SURVEY);
     fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
+    fetchTeamSkillsMock.mockResolvedValue(NO_SKILLS);
   });
 
   afterEach(() => {
@@ -989,6 +1006,7 @@ describe("TeamDetail challenges section (TASK-005)", () => {
     fetchTeamResultsMock.mockReset();
     fetchCurrentTeamSurveyMock.mockReset();
     fetchTeamChallengesMock.mockReset();
+    fetchTeamSkillsMock.mockReset();
     submitChallengeMock.mockReset();
   });
 
@@ -1177,5 +1195,155 @@ describe("TeamDetail challenges section (TASK-005)", () => {
     expect(screen.queryByText(/^report a challenge$/i)).toBeNull();
     expect(screen.queryByText(/^no challenges yet$/i)).toBeNull();
     expect(screen.queryByText(/^submit$/i)).toBeNull();
+  });
+});
+
+describe("TeamDetail skill section (TASK-007)", () => {
+  const TRACKED_SKILL = {
+    treeId: "tree-1",
+    name: "Containers",
+    nodes: [
+      { nodeId: "node-0", label: "Fundamentals", order: 0 },
+      { nodeId: "node-1", label: "Pilot", order: 1 },
+    ],
+    currentNodeId: "node-0",
+  };
+
+  const NOT_STARTED_SKILL = {
+    treeId: "tree-2",
+    name: "Observability",
+    nodes: [{ nodeId: "node-0", label: "Basic logging", order: 0 }],
+    currentNodeId: null,
+  };
+
+  beforeEach(() => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "member" }],
+    });
+    fetchTeamResultsMock.mockResolvedValue(INSUFFICIENT_RESULTS);
+    fetchCurrentTeamSurveyMock.mockResolvedValue(NO_CURRENT_SURVEY);
+    fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
+  });
+
+  afterEach(() => {
+    cleanup();
+    observeIdTokenMock.mockReset();
+    fetchTeamsOverviewMock.mockReset();
+    requestTeamAccessMock.mockReset();
+    fetchTeamResultsMock.mockReset();
+    fetchCurrentTeamSurveyMock.mockReset();
+    fetchTeamChallengesMock.mockReset();
+    submitChallengeMock.mockReset();
+    fetchTeamSkillsMock.mockReset();
+  });
+
+  it("renders the section heading and every tracked tree's full ordered stage list for an authorized member", async () => {
+    fetchTeamSkillsMock.mockResolvedValue({ status: "ok", skills: [TRACKED_SKILL] });
+
+    render(<TeamDetail teamId="team-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Kompetanseområder" })).toBeTruthy();
+    expect(screen.getByText("Containers")).toBeTruthy();
+    expect(screen.getByText("Fundamentals")).toBeTruthy();
+    expect(screen.getByText("Pilot")).toBeTruthy();
+    expect(fetchTeamSkillsMock).toHaveBeenCalledWith("a-token", "team-1");
+  });
+
+  it("shows the Norwegian empty state when the team tracks no SkillTree", async () => {
+    fetchTeamSkillsMock.mockResolvedValue(NO_SKILLS);
+
+    render(<TeamDetail teamId="team-1" />);
+
+    await screen.findByRole("heading", { name: "Kompetanseområder" });
+    expect(screen.getByText(/sporer ingen kompetanseområder/i)).toBeTruthy();
+  });
+
+  it("represents a currentNodeId of null with a distinct 'not started' state", async () => {
+    fetchTeamSkillsMock.mockResolvedValue({ status: "ok", skills: [NOT_STARTED_SKILL] });
+
+    render(<TeamDetail teamId="team-1" />);
+
+    await screen.findByText("Observability");
+    expect(screen.getByText(/ikke startet/i)).toBeTruthy();
+  });
+
+  it("marks the current stage with visible text, never color alone", async () => {
+    fetchTeamSkillsMock.mockResolvedValue({ status: "ok", skills: [TRACKED_SKILL] });
+
+    render(<TeamDetail teamId="team-1" />);
+
+    await screen.findByText("Containers");
+    expect(screen.getByText(/nåværende steg/i)).toBeTruthy();
+  });
+
+  it("shows a distinct skill-section error without hiding results/challenges/forum (independent section failures)", async () => {
+    fetchTeamSkillsMock.mockResolvedValue({ status: "read_failed" });
+    fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
+    fetchTeamChallengesMock.mockResolvedValue({ status: "ok", challenges: [] });
+
+    render(<TeamDetail teamId="team-1" />);
+
+    await screen.findByText("7 svar");
+    const alerts = screen.getAllByRole("alert");
+    expect(alerts.some((alert) => /lasting av kompetanseområder/i.test(alert.textContent ?? ""))).toBe(true);
+  });
+
+  it("keeps the skill section on a results read failure (results_unavailable branch)", async () => {
+    fetchTeamResultsMock.mockResolvedValue({ status: "read_failed" });
+    fetchTeamSkillsMock.mockResolvedValue({ status: "ok", skills: [TRACKED_SKILL] });
+
+    render(<TeamDetail teamId="team-1" />);
+
+    await screen.findByText(/teamets resultater/i);
+    expect(screen.getByText("Containers")).toBeTruthy();
+  });
+
+  it("never fetches skills for a caller the overview already reports as denied", async () => {
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "none" }],
+    });
+
+    render(<TeamDetail teamId="team-1" />);
+
+    await screen.findByRole("button", { name: /be om tilgang/i });
+    expect(fetchTeamSkillsMock).not.toHaveBeenCalled();
+  });
+
+  it("renders no start/set-stage/stop control — strictly read-only", async () => {
+    fetchTeamSkillsMock.mockResolvedValue({ status: "ok", skills: [TRACKED_SKILL] });
+
+    render(<TeamDetail teamId="team-1" />);
+
+    await screen.findByText("Containers");
+    expect(screen.queryByRole("button", { name: /start sporing|stopp sporing|sett stadium/i })).toBeNull();
+    expect(screen.queryByRole("combobox")).toBeNull();
+  });
+
+  it("never renders member/admin identity data in the skill section", async () => {
+    fetchTeamSkillsMock.mockResolvedValue({ status: "ok", skills: [TRACKED_SKILL] });
+
+    const { container } = render(<TeamDetail teamId="team-1" />);
+    await screen.findByText("Containers");
+
+    expect(container.textContent).not.toMatch(/@|uid|createdBy|updatedBy/i);
+  });
+
+  it("renders untrusted-looking SkillTree name/label content as plain text, never HTML injection", async () => {
+    const maliciousSkill = {
+      treeId: "tree-3",
+      name: "<img src=x onerror=alert(1)>Evil Tree",
+      nodes: [{ nodeId: "node-0", label: "<script>alert('xss')</script>Stage", order: 0 }],
+      currentNodeId: "node-0",
+    };
+    fetchTeamSkillsMock.mockResolvedValue({ status: "ok", skills: [maliciousSkill] });
+
+    const { container } = render(<TeamDetail teamId="team-1" />);
+
+    await screen.findByText(maliciousSkill.name);
+    expect(container.querySelector("script")).toBeNull();
+    expect(container.querySelector("img")).toBeNull();
   });
 });

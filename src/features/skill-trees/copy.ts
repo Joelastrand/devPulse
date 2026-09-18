@@ -1,0 +1,108 @@
+/**
+ * Norwegian user-facing copy for the TASK-005 admin SkillTree catalog/
+ * creation/correction UI (`app/admin/skills/page.tsx`), per the copy-module
+ * convention established in `teams/copy.ts`.
+ *
+ * Owner decision 4 (docs/features/team-skill-tree/SPEC.md): "skill" is the
+ * only technical identifier used anywhere in this feature's routes, files,
+ * types, and Firestore fields. Natural Norwegian wording such as
+ * "Kompetanseområder"/"Rett opp" is localization, not a competing technical
+ * identifier, and belongs only in this module's exported string values.
+ */
+export const adminSkillsCopy = {
+  pageTitle: "Kompetanseområder",
+  pageDescription: "Opprett kompetanseområder, og rett opp navn eller stadier i eksisterende områder.",
+  loading: "Laster kompetanseområder…",
+  signInPrompt: "for å administrere kompetanseområder.",
+  signInLink: "Logg inn",
+  forbidden: "Du har ikke tilgang til denne siden.",
+  error: "Noe gikk galt under lasting av kompetanseområder. Prøv igjen senere.",
+  empty: "Ingen kompetanseområder ennå.",
+  creation: {
+    sectionTitle: "Nytt kompetanseområde",
+    nameLabel: "Navn på kompetanseområdet",
+    stageLabelPrefix: "Stadium",
+    addStageButton: "Legg til stadium",
+    removeStageButton: "Fjern stadium",
+    submitButton: "Opprett kompetanseområde",
+    submittingButton: "Oppretter…",
+    error: {
+      invalidInput: "Kontroller navnet og alle stadienavn (3–100 tegn hver, 2–20 stadier totalt).",
+      generic: "Noe gikk galt under opprettelsen. Prøv igjen.",
+    },
+  },
+  correction: {
+    openButton: "Rett opp",
+    cancelButton: "Avbryt",
+    nameLabel: "Navn på kompetanseområdet",
+    stageLabelPrefix: "Stadium",
+    submitButton: "Lagre rettelse",
+    submittingButton: "Lagrer…",
+    error: {
+      invalidInput: "Kontroller navnet og alle stadienavn (3–100 tegn hver).",
+      treeNotFound: "Dette kompetanseområdet finnes ikke lenger.",
+      nodeCountMismatch: "Antall stadier kan ikke endres her.",
+      generic: "Noe gikk galt under lagring av rettelsen. Prøv igjen.",
+    },
+  },
+  catalog: {
+    sectionTitle: "Eksisterende kompetanseområder",
+    stagesLabel: "Stadier:",
+  },
+} as const;
+
+/**
+ * Norwegian user-facing copy for the TASK-006 `/admin/teams/[teamId]`
+ * per-team skill-tracking section (`TeamSkillTrackingSection.tsx`). Same
+ * "skill" (technical) / "Kompetanseområder" (UI copy) split as
+ * `adminSkillsCopy` (Owner decision 4).
+ */
+export const teamSkillTrackingCopy = {
+  sectionTitle: "Kompetanseområder",
+  loading: "Laster kompetanseområder…",
+  error: "Noe gikk galt under lasting av kompetanseområder. Prøv igjen senere.",
+  empty: "Ingen kompetanseområder er opprettet ennå.",
+  tracked: {
+    sectionTitle: "Sporede kompetanseområder",
+    empty: "Teamet sporer ingen kompetanseområder ennå.",
+    currentStageLabel: "Nåværende steg",
+    notStarted: "Ikke startet",
+    stageSelectLabel: "Sett stadium",
+    stopButton: "Stopp sporing",
+    stoppingButton: "Stopper…",
+    error: {
+      notTracked: "Sporingen er allerede stoppet.",
+      invalidInput: "Ugyldig stadium valgt.",
+      generic: "Noe gikk galt. Prøv igjen.",
+    },
+  },
+  untracked: {
+    sectionTitle: "Start sporing",
+    empty: "Alle kompetanseområder spores allerede av dette teamet.",
+    startButton: "Start sporing",
+    startingButton: "Starter…",
+    disabledHint: "Teamet er deaktivert. Sporing kan først startes når teamet er aktivt igjen.",
+    error: {
+      teamDisabled: "Teamet er deaktivert – sporing kan ikke startes.",
+      treeNotFound: "Dette kompetanseområdet finnes ikke lenger.",
+      teamNotFound: "Fant ikke teamet.",
+      generic: "Noe gikk galt under start av sporing. Prøv igjen.",
+    },
+  },
+} as const;
+
+/**
+ * Norwegian user-facing copy for the TASK-007 `/teams/[teamId]` read-only
+ * "Kompetanseområder" section (`TeamSkillSection.tsx`). Same "skill"
+ * (technical) / "Kompetanseområder" (UI copy) split as `adminSkillsCopy`/
+ * `teamSkillTrackingCopy` (Owner decision 4). This section is strictly
+ * read-only — no action copy (start/stop/set-stage) belongs here.
+ */
+export const teamSkillSectionCopy = {
+  sectionTitle: "Kompetanseområder",
+  loading: "Laster kompetanseområder…",
+  error: "Noe gikk galt under lasting av kompetanseområder. Prøv igjen senere.",
+  empty: "Teamet sporer ingen kompetanseområder ennå.",
+  currentStageLabel: "Nåværende steg",
+  notStarted: "Ikke startet",
+} as const;

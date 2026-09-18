@@ -128,7 +128,54 @@
 
 - **Phase 6 — Developer Forum Capabilities**.
 
-- **Phase 7 — Skill / Capability Trees**.
+- **Phase 7 — Skill / Capability Trees** *(complete, v1 slice)*: let an app
+  admin define a named, ordered capability-maturity progression (a
+  **SkillTree**) once and track which stage a specific team has reached
+  against it — team-level data only, never a person's.
 
-Phases 0–5 are complete. See `docs/PRODUCT.md` for the product vision and
+  Delivered:
+  - `createSkillTree`/`updateSkillTree`/`listSkillTrees`
+    (`skillTrees/{treeId}`, app-admin-only): create a 2-20-stage tree;
+    cosmetically correct an existing tree's name/stage-label text with its
+    stage count, order, and every stage's `nodeId` permanently immutable —
+    no structural editing or deletion exists; list the catalog bounded to
+    the 500 oldest-created
+  - `startTeamSkillTracking`/`updateTeamSkillProgress`/
+    `stopTeamSkillTracking` (`skillProgress/{teamId}__{treeId}`,
+    app-admin-only): start tracking a tree for a team (rejected for a
+    `disabled` team — the one skill-tracking write gated on team status);
+    set/advance a tracked tree's current stage to any stage, forward or
+    backward; stop tracking, which hard-deletes the record with no
+    tombstone — updating or stopping an already-tracked pair remains
+    available regardless of team status, and a later restart always begins
+    again at "not started," with no history retained anywhere
+  - `getTeamSkillProgress`: a real team member or admin can read their own
+    team's full tracked-skill state; a caller authorized for one team can
+    never obtain another's via any team id it supplies; viewing a disabled
+    team's existing progress remains available
+  - `/admin/skills` (tree creation/correction/catalog) and
+    `/admin/teams/[teamId]`'s per-team tracking section (start/set-stage/
+    stop, with the start picker hidden for a disabled team) — both
+    app-admin-only; `/teams/[teamId]`'s read-only section for an authorized
+    member/admin, rendered as a semantic ordered list with the current
+    stage marked by both text and `aria-current`, never color alone
+  - every write is app-admin-only in v1 — a deliberate scope-minimization
+    decision, not one this feature's individual-data non-goal itself
+    requires; no comment/voting/reaction/ranking/leaderboard feature, no
+    progress history, and no section-scoped or org-wide (multi-team) trees
+    exist
+  - `skillTrees`/`skillProgress` are org-wide/team-scoped reference data,
+    not encrypted, matching this codebase's existing posture for similarly
+    short, structured, admin-authored text such as `teams.name`
+
+  This phase preserved every existing privacy/security invariant
+  (server-side authorization, team isolation, no client-side Firestore
+  access, admin ≠ raw-identity access) while introducing this codebase's
+  first feature with a genuinely immutable-by-default persisted structure
+  (a tree's stage identity) alongside a narrowly-scoped, explicitly
+  approved cosmetic-correction exception to it.
+
+  See `docs/features/team-skill-tree/SPEC.md`.
+
+Phases 0–5 and 7 are complete. See `docs/PRODUCT.md` for the product vision and
 non-goals.

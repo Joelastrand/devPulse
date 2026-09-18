@@ -162,13 +162,43 @@ until attrition, burnout, or delivery failure makes them obvious.
   feature — a challenge always requires real, authenticated team membership
   to submit.
 
+## Delivered: Team Skill Tree (Phase 7)
+
+- Let an app admin define a **SkillTree**: a name plus an ordered,
+  2-20-stage progression (e.g. Container fundamentals → Evaluate
+  alternatives → Build competence → Proof of concept → Pilot → Production
+  rollout → Monitoring and operations → Mature production capability), and
+  track which stage a specific team has reached against it. See
+  `docs/features/team-skill-tree/SPEC.md`.
+- This is **team-level, not individual/person-level**, data — there is no
+  "a person's skill level" anywhere in this feature; a team's members/
+  admins can see their own team's progress, never another team's.
+- `/admin/skills`: an app admin can create a SkillTree and cosmetically
+  correct an existing one's name/stage-label text — **never** its stage
+  count, order, or identity, which are permanently immutable after
+  creation; no structural editing or deletion of a SkillTree exists.
+  `/admin/teams/[teamId]` gains a per-team section to start tracking a
+  catalog tree (rejected for a disabled team), advance/reverse its current
+  stage, and stop tracking (both remain available regardless of team
+  status). `/teams/[teamId]` gains a read-only section for an authorized
+  member/admin.
+- Every write (create/correct a tree; start/update/stop a team's tracking)
+  is **app-admin-only** in v1 — a deliberate scope-minimization decision
+  for the smallest v1 surface, not one this feature's individual-data
+  non-goal itself requires; a future member-initiated write path remains
+  possible as a pure addition later.
+- SkillTree names/stage labels are short, structured, admin-authored text —
+  not encrypted, matching `teams.name`/`surveys.title`'s existing trust
+  level (see `docs/DATA-MODEL.md` for the accepted residual risk this
+  carries).
+
 ## Future capabilities (not implemented yet)
 
 - Developer forums/communities.
-- Skill/capability trees for teams and sections, e.g.:
-  Container fundamentals → Evaluate alternatives → Build competence →
-  Proof of concept → Pilot → Production rollout → Monitoring and
-  operations → Mature production capability.
+- Member-initiated (self-assessed) skill-progress updates, and
+  section-scoped or org-wide (multi-team) skill trees, beyond Team Skill
+  Tree's team-scoped, admin-write-only v1 slice (see "Delivered: Team
+  Skill Tree (Phase 7)" above).
 
 ## Non-goals
 

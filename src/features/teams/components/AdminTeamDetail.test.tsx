@@ -21,6 +21,11 @@ const fetchAdminChallengesMock = vi.fn();
 const resolveAdminChallengeMock = vi.fn();
 const archiveAdminChallengeMock = vi.fn();
 const deleteAdminChallengeMock = vi.fn();
+const fetchAdminSkillTreesMock = vi.fn();
+const startAdminTeamSkillTrackingMock = vi.fn();
+const updateAdminTeamSkillProgressMock = vi.fn();
+const stopAdminTeamSkillTrackingMock = vi.fn();
+const fetchTeamSkillsMock = vi.fn();
 
 vi.mock("../../auth/client/auth-client", () => ({
   observeIdToken: observeIdTokenMock,
@@ -55,6 +60,14 @@ vi.mock("../../challenges/client/admin-challenges-gateway", () => ({
   deleteAdminChallenge: deleteAdminChallengeMock,
 }));
 
+vi.mock("../../skill-trees/client/skill-trees-gateway", () => ({
+  fetchAdminSkillTrees: fetchAdminSkillTreesMock,
+  startAdminTeamSkillTracking: startAdminTeamSkillTrackingMock,
+  updateAdminTeamSkillProgress: updateAdminTeamSkillProgressMock,
+  stopAdminTeamSkillTracking: stopAdminTeamSkillTrackingMock,
+  fetchTeamSkills: fetchTeamSkillsMock,
+}));
+
 const { AdminTeamDetail } = await import("./AdminTeamDetail");
 
 function subscribingWith(token: string | null) {
@@ -75,6 +88,8 @@ function mockOk({
   requests = [],
   surveys = [],
   challenges = [],
+  skillTrees = [],
+  teamSkills = [],
 }: {
   teams?: { teamId: string; name: string; status: "active" | "disabled" }[];
   members?: { uid: string; email: string | null }[];
@@ -82,6 +97,8 @@ function mockOk({
   requests?: { uid: string; email: string | null; createdAt: string }[];
   surveys?: unknown[];
   challenges?: unknown[];
+  skillTrees?: unknown[];
+  teamSkills?: unknown[];
 } = {}) {
   fetchAdminTeamsMock.mockResolvedValue({ status: "ok", teams });
   fetchTeamMembersMock.mockResolvedValue({ status: "ok", members });
@@ -89,6 +106,8 @@ function mockOk({
   fetchTeamAccessRequestsMock.mockResolvedValue({ status: "ok", requests });
   fetchAdminSurveysMock.mockResolvedValue({ status: "ok", surveys });
   fetchAdminChallengesMock.mockResolvedValue({ status: "ok", challenges });
+  fetchAdminSkillTreesMock.mockResolvedValue({ status: "ok", trees: skillTrees });
+  fetchTeamSkillsMock.mockResolvedValue({ status: "ok", skills: teamSkills });
 }
 
 describe("AdminTeamDetail", () => {
@@ -112,6 +131,11 @@ describe("AdminTeamDetail", () => {
     resolveAdminChallengeMock.mockReset();
     archiveAdminChallengeMock.mockReset();
     deleteAdminChallengeMock.mockReset();
+    fetchAdminSkillTreesMock.mockReset();
+    startAdminTeamSkillTrackingMock.mockReset();
+    updateAdminTeamSkillProgressMock.mockReset();
+    stopAdminTeamSkillTrackingMock.mockReset();
+    fetchTeamSkillsMock.mockReset();
   });
 
   it("shows a Norwegian loading state before auth resolves", () => {
@@ -498,6 +522,11 @@ describe("AdminTeamDetail survey management", () => {
     resolveAdminChallengeMock.mockReset();
     archiveAdminChallengeMock.mockReset();
     deleteAdminChallengeMock.mockReset();
+    fetchAdminSkillTreesMock.mockReset();
+    startAdminTeamSkillTrackingMock.mockReset();
+    updateAdminTeamSkillProgressMock.mockReset();
+    stopAdminTeamSkillTrackingMock.mockReset();
+    fetchTeamSkillsMock.mockReset();
   });
 
   it("shows an empty state when the team has no surveys", async () => {
@@ -951,6 +980,11 @@ describe("AdminTeamDetail stale mutation races", () => {
     resolveAdminChallengeMock.mockReset();
     archiveAdminChallengeMock.mockReset();
     deleteAdminChallengeMock.mockReset();
+    fetchAdminSkillTreesMock.mockReset();
+    startAdminTeamSkillTrackingMock.mockReset();
+    updateAdminTeamSkillProgressMock.mockReset();
+    stopAdminTeamSkillTrackingMock.mockReset();
+    fetchTeamSkillsMock.mockReset();
   });
 
   it("ignores a stale in-flight remove-member result for team A once the route has changed to team B", async () => {
@@ -974,6 +1008,8 @@ describe("AdminTeamDetail stale mutation races", () => {
     fetchTeamAccessRequestsMock.mockResolvedValue({ status: "ok", requests: [] });
     fetchAdminSurveysMock.mockResolvedValue({ status: "ok", surveys: [] });
     fetchAdminChallengesMock.mockResolvedValue({ status: "ok", challenges: [] });
+    fetchAdminSkillTreesMock.mockResolvedValue({ status: "ok", trees: [] });
+    fetchTeamSkillsMock.mockResolvedValue({ status: "ok", skills: [] });
 
     let resolveRemove: (value: unknown) => void = () => {};
     removeAdminTeamMemberMock.mockImplementation(
@@ -1046,6 +1082,8 @@ describe("AdminTeamDetail stale mutation races", () => {
       return { status: "ok", surveys: [] };
     });
     fetchAdminChallengesMock.mockResolvedValue({ status: "ok", challenges: [] });
+    fetchAdminSkillTreesMock.mockResolvedValue({ status: "ok", trees: [] });
+    fetchTeamSkillsMock.mockResolvedValue({ status: "ok", skills: [] });
 
     let resolveOpen: (value: unknown) => void = () => {};
     openAdminSurveyMock.mockImplementation(
@@ -1145,6 +1183,8 @@ describe("AdminTeamDetail stale mutation races", () => {
     fetchTeamInvitationsMock.mockResolvedValue({ status: "ok", invitations: [] });
     fetchTeamAccessRequestsMock.mockResolvedValue({ status: "ok", requests: [] });
     fetchAdminSurveysMock.mockResolvedValue({ status: "ok", surveys: [] });
+    fetchAdminSkillTreesMock.mockResolvedValue({ status: "ok", trees: [] });
+    fetchTeamSkillsMock.mockResolvedValue({ status: "ok", skills: [] });
 
     let resolveChallengesA: (value: unknown) => void = () => {};
     fetchAdminChallengesMock.mockImplementation(async (_token: string, teamId: string) => {
@@ -1196,6 +1236,8 @@ describe("AdminTeamDetail stale mutation races", () => {
     fetchTeamInvitationsMock.mockResolvedValue({ status: "ok", invitations: [] });
     fetchTeamAccessRequestsMock.mockResolvedValue({ status: "ok", requests: [] });
     fetchAdminSurveysMock.mockResolvedValue({ status: "ok", surveys: [] });
+    fetchAdminSkillTreesMock.mockResolvedValue({ status: "ok", trees: [] });
+    fetchTeamSkillsMock.mockResolvedValue({ status: "ok", skills: [] });
     fetchAdminChallengesMock.mockImplementation(async (_token: string, teamId: string) => {
       if (teamId === "team-a") {
         return {
@@ -1298,6 +1340,11 @@ describe("AdminTeamDetail challenge management", () => {
     resolveAdminChallengeMock.mockReset();
     archiveAdminChallengeMock.mockReset();
     deleteAdminChallengeMock.mockReset();
+    fetchAdminSkillTreesMock.mockReset();
+    startAdminTeamSkillTrackingMock.mockReset();
+    updateAdminTeamSkillProgressMock.mockReset();
+    stopAdminTeamSkillTrackingMock.mockReset();
+    fetchTeamSkillsMock.mockReset();
   });
 
   const OPEN_CHALLENGE = {
@@ -1547,5 +1594,220 @@ describe("AdminTeamDetail challenge management", () => {
     expect(screen.queryByText(/^resolve$/i)).toBeNull();
     expect(screen.queryByText(/^archive$/i)).toBeNull();
     expect(screen.queryByText(/^delete$/i)).toBeNull();
+  });
+});
+
+describe("AdminTeamDetail skill tracking (TASK-006)", () => {
+  afterEach(() => {
+    cleanup();
+    observeIdTokenMock.mockReset();
+    fetchAdminTeamsMock.mockReset();
+    fetchTeamMembersMock.mockReset();
+    fetchTeamInvitationsMock.mockReset();
+    fetchTeamAccessRequestsMock.mockReset();
+    fetchAdminSurveysMock.mockReset();
+    fetchAdminChallengesMock.mockReset();
+    fetchAdminSkillTreesMock.mockReset();
+    startAdminTeamSkillTrackingMock.mockReset();
+    updateAdminTeamSkillProgressMock.mockReset();
+    stopAdminTeamSkillTrackingMock.mockReset();
+    fetchTeamSkillsMock.mockReset();
+  });
+
+  const TREE = {
+    treeId: "tree-1",
+    name: "Containere",
+    nodes: [
+      { nodeId: "node-0", label: "Fundamentals", order: 0 },
+      { nodeId: "node-1", label: "Pilotdrift", order: 1 },
+    ],
+  };
+
+  it("renders the Kompetanseområder section with the catalog's untracked trees offered for start", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({ skillTrees: [TREE] });
+
+    render(<AdminTeamDetail teamId="team-1" />);
+
+    await screen.findByRole("heading", { name: "Kompetanseområder" });
+    expect(screen.getByRole("button", { name: /start sporing – containere/i })).toBeTruthy();
+  });
+
+  it("reconstructs a persisted tracked tree's current stage on a fresh render, with no prior start action in this session (TASK-008 admin-reload closeout fix)", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({
+      skillTrees: [TREE],
+      teamSkills: [{ treeId: "tree-1", name: "Containere", nodes: TREE.nodes, currentNodeId: "node-1" }],
+    });
+
+    render(<AdminTeamDetail teamId="team-1" />);
+
+    // Rendered as already-tracked, at its true persisted stage, purely from
+    // this fresh render's own read — no "start sporing" action was ever
+    // clicked in this session.
+    const select = await screen.findByRole("combobox", { name: /sett stadium – containere/i });
+    expect((select as HTMLSelectElement).value).toBe("node-1");
+    expect(screen.queryByRole("button", { name: /start sporing – containere/i })).toBeNull();
+    expect(fetchTeamSkillsMock).toHaveBeenCalledWith("a-token", "team-1");
+  });
+
+  it("permits set-stage and stop-tracking on a fresh render's reconstructed persisted tree, without first calling start", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({
+      skillTrees: [TREE],
+      teamSkills: [{ treeId: "tree-1", name: "Containere", nodes: TREE.nodes, currentNodeId: "node-0" }],
+    });
+    updateAdminTeamSkillProgressMock.mockResolvedValue({ ok: true });
+    stopAdminTeamSkillTrackingMock.mockResolvedValue({ ok: true });
+
+    render(<AdminTeamDetail teamId="team-1" />);
+
+    const select = await screen.findByRole("combobox", { name: /sett stadium – containere/i });
+    await user.selectOptions(select, "node-1");
+    expect(updateAdminTeamSkillProgressMock).toHaveBeenCalledWith("a-token", "team-1", "tree-1", "node-1");
+    expect(startAdminTeamSkillTrackingMock).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: /stopp sporing – containere/i }));
+    expect(stopAdminTeamSkillTrackingMock).toHaveBeenCalledWith("a-token", "team-1", "tree-1");
+  });
+
+  it("derives the untracked start-tracking picker from persisted state after reload — an already-tracked tree is never re-offered", async () => {
+    const trackedTree = TREE;
+    const untrackedTree = {
+      treeId: "tree-2",
+      name: "Observability",
+      nodes: [{ nodeId: "node-0", label: "Basic logging", order: 0 }],
+    };
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({
+      skillTrees: [trackedTree, untrackedTree],
+      teamSkills: [{ treeId: "tree-1", name: "Containere", nodes: trackedTree.nodes, currentNodeId: null }],
+    });
+
+    render(<AdminTeamDetail teamId="team-1" />);
+
+    await screen.findByRole("combobox", { name: /sett stadium – containere/i });
+    // The already-tracked tree offers no "start" action; only the genuinely
+    // untracked tree does.
+    expect(screen.queryByRole("button", { name: /start sporing – containere/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /start sporing – observability/i })).toBeTruthy();
+  });
+
+  it("degrades gracefully to session-derived-only tracking when the persisted-progress read fails, without erasing the catalog or other sections", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({ skillTrees: [TREE], members: [{ uid: "uid-1", email: "member@example.com" }] });
+    fetchTeamSkillsMock.mockResolvedValue({ status: "read_failed" });
+
+    render(<AdminTeamDetail teamId="team-1" />);
+
+    // Falls back to the pre-fix baseline (nothing known yet — offered as
+    // untracked) rather than blocking the whole page.
+    await screen.findByRole("button", { name: /start sporing – containere/i });
+    expect(screen.getByText("member@example.com")).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("starts tracking a tree and moves it into the tracked section without erasing other page sections", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({
+      skillTrees: [TREE],
+      members: [{ uid: "uid-1", email: "member@example.com" }],
+    });
+    startAdminTeamSkillTrackingMock.mockResolvedValue({ ok: true });
+
+    render(<AdminTeamDetail teamId="team-1" />);
+    await screen.findByRole("button", { name: /start sporing – containere/i });
+
+    await user.click(screen.getByRole("button", { name: /start sporing – containere/i }));
+
+    expect(startAdminTeamSkillTrackingMock).toHaveBeenCalledWith("a-token", "team-1", "tree-1");
+    await screen.findByRole("combobox", { name: /sett stadium – containere/i });
+    expect(screen.queryByRole("button", { name: /start sporing – containere/i })).toBeNull();
+    // Other sections remain untouched by this local state update.
+    expect(screen.getByText("member@example.com")).toBeTruthy();
+  });
+
+  it("sets a tracked tree's stage, including moving backward", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({ skillTrees: [TREE] });
+    startAdminTeamSkillTrackingMock.mockResolvedValue({ ok: true });
+    updateAdminTeamSkillProgressMock.mockResolvedValue({ ok: true });
+
+    render(<AdminTeamDetail teamId="team-1" />);
+    await user.click(await screen.findByRole("button", { name: /start sporing – containere/i }));
+
+    const select = await screen.findByRole("combobox", { name: /sett stadium – containere/i });
+    await user.selectOptions(select, "node-1");
+    expect(updateAdminTeamSkillProgressMock).toHaveBeenCalledWith("a-token", "team-1", "tree-1", "node-1");
+
+    await user.selectOptions(select, "node-0");
+    expect(updateAdminTeamSkillProgressMock).toHaveBeenCalledWith("a-token", "team-1", "tree-1", "node-0");
+  });
+
+  it("stops tracking a tree and moves it back into the untracked picker", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({ skillTrees: [TREE] });
+    startAdminTeamSkillTrackingMock.mockResolvedValue({ ok: true });
+    stopAdminTeamSkillTrackingMock.mockResolvedValue({ ok: true });
+
+    render(<AdminTeamDetail teamId="team-1" />);
+    await user.click(await screen.findByRole("button", { name: /start sporing – containere/i }));
+
+    await user.click(await screen.findByRole("button", { name: /stopp sporing – containere/i }));
+
+    expect(stopAdminTeamSkillTrackingMock).toHaveBeenCalledWith("a-token", "team-1", "tree-1");
+    await screen.findByRole("button", { name: /start sporing – containere/i });
+  });
+
+  it("hides the start-tracking picker for a disabled team, wiring teamDisabled from the loaded team status", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({
+      teams: [{ teamId: "team-1", name: "Platform", status: "disabled" }],
+      skillTrees: [TREE],
+    });
+
+    render(<AdminTeamDetail teamId="team-1" />);
+
+    await screen.findByRole("heading", { name: "Kompetanseområder" });
+    // The start-tracking picker is hidden entirely for a disabled team; the
+    // component-level `TeamSkillTrackingSection` tests separately prove
+    // set-stage/stop-tracking remain available and functional for an
+    // already-tracked tree regardless of `teamDisabled`.
+    expect(screen.queryByRole("button", { name: /start sporing/i })).toBeNull();
+    expect(screen.getByText(/teamet er deaktivert/i)).toBeTruthy();
+    expect(startAdminTeamSkillTrackingMock).not.toHaveBeenCalled();
+  });
+
+  it("shows a controlled catalog error without erasing other sections", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({ members: [{ uid: "uid-1", email: "member@example.com" }] });
+    fetchAdminSkillTreesMock.mockResolvedValue({ status: "read_failed" });
+
+    render(<AdminTeamDetail teamId="team-1" />);
+
+    await screen.findByRole("heading", { name: "Platform" });
+    expect(screen.getByText("member@example.com")).toBeTruthy();
+    const alerts = screen.getAllByRole("alert");
+    expect(alerts.some((alert) => /noe gikk galt under lasting av kompetanseområder/i.test(alert.textContent ?? ""))).toBe(
+      true,
+    );
+  });
+
+  it("shows no skill-tracking UI for a non-admin caller", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchAdminTeamsMock.mockResolvedValue({ status: "forbidden" });
+    fetchTeamMembersMock.mockResolvedValue({ status: "forbidden" });
+    fetchTeamInvitationsMock.mockResolvedValue({ status: "forbidden" });
+    fetchTeamAccessRequestsMock.mockResolvedValue({ status: "forbidden" });
+    fetchAdminSurveysMock.mockResolvedValue({ status: "forbidden" });
+
+    render(<AdminTeamDetail teamId="team-1" />);
+
+    await screen.findByRole("alert");
+    expect(screen.queryByRole("heading", { name: "Kompetanseområder" })).toBeNull();
   });
 });

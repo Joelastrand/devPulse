@@ -21,6 +21,8 @@ import {
   fetchTeamResults,
   type SurveyResultSummary,
 } from "../../results/client/team-results-gateway";
+import { fetchTeamSkills, type FetchTeamSkillsResult, type TeamSkillView } from "../../skill-trees/client/skill-trees-gateway";
+import { TeamSkillSection, type TeamSkillSectionState } from "../../skill-trees/components/TeamSkillSection";
 import { PeriodSummary } from "../../results/components/PeriodSummary";
 import { TrendChart } from "../../results/components/TrendChart";
 import { TrendTable } from "../../results/components/TrendTable";
@@ -82,6 +84,28 @@ function toChallengesSectionState(result: FetchTeamChallengesResult): Challenges
 }
 
 /**
+ * The "Kompetanseområder" section's own composed state, resolved
+ * independently of results/current-survey/challenges (docs/features/
+ * team-skill-tree/SPEC.md — TASK-007, BR-28 through BR-30): a skill-list
+ * read failure must not erase any other section, and vice versa (mirrors
+ * `ChallengesSectionState`'s identical established pattern). `"unavailable"`
+ * covers both a genuine read failure and a rare authorization race — never
+ * fabricated as "no skills yet" in either case.
+ */
+type SkillSectionState =
+  | { status: "loaded"; skills: TeamSkillView[] }
+  | { status: "unavailable" };
+
+function toSkillSectionState(result: FetchTeamSkillsResult): SkillSectionState {
+  return result.status === "ok" ? { status: "loaded", skills: result.skills } : { status: "unavailable" };
+}
+
+/** Adapts the already-resolved `SkillSectionState` to `TeamSkillSection`'s own state shape — "unavailable" always renders as "error", never a stale "loading" (the fetch has already completed by the time this component ever mounts). */
+function toTeamSkillSectionState(state: SkillSectionState): TeamSkillSectionState {
+  return state.status === "loaded" ? { status: "loaded", skills: state.skills } : { status: "error" };
+}
+
+/**
  * The composed result this component renders — never a raw gateway
  * response. Only `authorized` ever carries result/aggregate data; every
  * other state is a non-sensitive "you don't have access" variant
@@ -101,6 +125,7 @@ type TeamDetailResult =
       name?: string;
       currentSurvey: CurrentSurveySectionState;
       challenges: ChallengesSectionState;
+      skills: SkillSectionState;
     }
   | {
       status: "authorized";
@@ -108,6 +133,7 @@ type TeamDetailResult =
       results: SurveyResultSummary[];
       currentSurvey: CurrentSurveySectionState;
       challenges: ChallengesSectionState;
+      skills: SkillSectionState;
     };
 
 /**
@@ -165,14 +191,16 @@ async function resolveViaResults(
   name: string | undefined,
 ): Promise<TeamDetailResult> {
   // Fetched in parallel — separate server contracts (results, current-survey
-  // discovery, and member-visible challenges), each independently
-  // authorized, so no read waits on another (docs/features/
-  // managed-surveys/SPEC.md — TASK-010; docs/features/
-  // anonymous-challenges/SPEC.md — TASK-005).
-  const [results, surveyResult, challengesResult] = await Promise.all([
+  // discovery, member-visible challenges, and the read-only skill-tracking
+  // list), each independently authorized, so no read waits on another
+  // (docs/features/managed-surveys/SPEC.md — TASK-010; docs/features/
+  // anonymous-challenges/SPEC.md — TASK-005; docs/features/
+  // team-skill-tree/SPEC.md — TASK-007).
+  const [results, surveyResult, challengesResult, skillsResult] = await Promise.all([
     fetchTeamResults(idToken, teamId),
     fetchCurrentTeamSurvey(idToken, teamId),
     fetchTeamChallenges(idToken, teamId),
+    fetchTeamSkills(idToken, teamId),
   ]);
 
   if (results.status === "ok") {
@@ -182,6 +210,7 @@ async function resolveViaResults(
       results: results.results,
       currentSurvey: toCurrentSurveySectionState(surveyResult),
       challenges: toChallengesSectionState(challengesResult),
+      skills: toSkillSectionState(skillsResult),
     };
   }
   if (results.status === "unauthenticated") {
@@ -194,9 +223,10 @@ async function resolveViaResults(
     // — fail closed rather than trusting the now-stale overview
     // relationship), and the ambiguous no-entry case turning out to be a
     // genuine denial. Rendered identically either way (BR-16) — no
-    // distinguishing existence signal. The parallel current-survey and
-    // challenges results are discarded here regardless of their own
-    // outcome: a denied caller never sees survey or challenge data.
+    // distinguishing existence signal. The parallel current-survey,
+    // challenges, and skills results are discarded here regardless of
+    // their own outcome: a denied caller never sees survey, challenge, or
+    // skill data.
     return { status: "denied", name, relationship: "none" };
   }
   return {
@@ -204,6 +234,7 @@ async function resolveViaResults(
     name,
     currentSurvey: toCurrentSurveySectionState(surveyResult),
     challenges: toChallengesSectionState(challengesResult),
+    skills: toSkillSectionState(skillsResult),
   };
 }
 
@@ -344,6 +375,7 @@ export function TeamDetail({ teamId }: { teamId: string }) {
           state={result.challenges}
           onSubmitted={() => handleChallengeSubmitted(token, generation)}
         />
+        <TeamSkillSection state={toTeamSkillSectionState(result.skills)} />
       </div>
     );
   }
@@ -368,6 +400,7 @@ export function TeamDetail({ teamId }: { teamId: string }) {
           state={result.challenges}
           onSubmitted={() => handleChallengeSubmitted(token, generation)}
         />
+        <TeamSkillSection state={toTeamSkillSectionState(result.skills)} />
       </div>
     );
   }

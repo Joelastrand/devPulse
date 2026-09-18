@@ -22,9 +22,8 @@ See `docs/SECURITY.md` for the invariants these concepts must respect.
 | SurveyParticipation | Implemented (Firestore-backed), `authenticated`-mode surveys only | `surveyParticipations/{uid}__{surveyId}` (`{uid, surveyId}` only — deliberately no `submittedAt` or any other field), used solely to reject a second accepted submission from the same identity (BR-21/BR-22). Never joined to the specific `SurveyResponse` document it accompanies by any query, API, or UI this application provides (BR-18). Does not exist for `public` surveys. | Yes (linkage) | No | No |
 | SurveyAggregate | Implemented as a computed value only (no persisted Firestore document/collection — computed server-side on demand per request; see `docs/features/managed-surveys/SPEC.md`) | Team/survey-instance-level rollup of a closed survey's responses, published only at or above that survey's own `minimumResponses` | No | Possibly (small-team re-identification risk) | No (derived; source responses are encrypted) |
 | AnonymousChallenge | Implemented (Firestore-backed, `docs/features/anonymous-challenges/SPEC.md`) | A team member's free-text problem/friction/improvement report, scoped to one team, with no submitter identity ever persisted. Firestore-backed as of Phase 5: `challenges/{challengeId}` (`teamId`, `ciphertext`, `iv`, `authTag`, `keyVersion`, `submittedAt`, `resolvedAt?`, `resolvedBy?`, `archivedAt?`, `archivedBy?`) — `challengeId` is an opaque, Firestore-auto-generated document ID; `resolvedBy`/`archivedBy` identify the *acting admin*, never the submitter, and are never returned by any API response. Derived lifecycle (`"open" \| "resolved" \| "archived"`, `effectiveChallengeStatus`) is computed identically everywhere from `resolvedAt`/`archivedAt`, never a stored status field. Unlike `SurveyResponse`, content is individually visible to any authorized team member/admin once decrypted server-side — only submitter identity is unrecoverable, not content (see `docs/ARCHITECTURE.md`). Server-only via the Firebase Admin SDK; `firestore.rules` denies client-SDK access. | No (must not contain identity fields) | Yes (highly sensitive) | Yes |
-| SkillTree | Not implemented (future) | Defines a capability progression (future) | No | No | No |
-| SkillNode | Not implemented (future) | One stage within a SkillTree (future) | No | No | No |
-| SkillProgress | Not implemented (future) | A team/section's progress against a SkillTree (future) | No | No | No |
+| SkillTree | Implemented (Firestore-backed, `docs/features/team-skill-tree/SPEC.md`) | An admin-defined, org-wide, named capability-maturity progression — an ordered, count/order-immutable list of 2-20 stages, not owned by any one team. Firestore-backed: `skillTrees/{treeId}` (`treeId` opaque, Firestore-auto-generated; `name`, `nodes: [{nodeId, label, order}]`, `createdAt`, `createdBy`, `updatedAt?`, `updatedBy?` — the last two paired-optional, present only once a tree has been cosmetically corrected). Node `nodeId`/`order`/count are permanently immutable after creation; only a tree's `name` and its nodes' `label` text may later be cosmetically corrected (`updateSkillTree`) — no structural editing or deletion exists in v1. No separate `SkillNode` collection: nodes are embedded as an ordered array on their parent document, since a node has no independent lifecycle. Server-only via the Firebase Admin SDK; `firestore.rules` denies client-SDK access. `createdBy`/`updatedBy` identify the *acting admin*, never returned by any API response. | No | No (short, structured admin-authored taxonomy text — see Notes) | No |
+| SkillProgress | Implemented (Firestore-backed, `docs/features/team-skill-tree/SPEC.md`) | Exactly one team's tracking record against exactly one SkillTree — never a person's; this feature has no individual-level data anywhere. Firestore-backed: `skillProgress/{teamId}__{treeId}` (deterministic composite key, mirrors `teamMemberships/{uid}__{teamId}`; `teamId`, `treeId`, `currentNodeId: string \| null`, `updatedAt`, `updatedBy`). `currentNodeId: null` means "tracked, not yet started." Created by `startTeamSkillTracking` (rejected for a `disabled` team), updated by `updateTeamSkillProgress` (allowed regardless of team status), and hard-deleted with no tombstone by `stopTeamSkillTracking` (also allowed regardless of team status) — a later restart creates a fresh record with `currentNodeId: null` again, with no history retained anywhere. Every write is app-admin-only (a deliberate v1 scope-minimization decision, not one this feature's individual-data non-goal itself compels). `updatedBy` identifies the *acting admin*, never returned by any API response. Server-only via the Firebase Admin SDK; `firestore.rules` denies client-SDK access. | No | No | No |
 
 ## Notes
 
@@ -42,6 +41,15 @@ See `docs/SECURITY.md` for the invariants these concepts must respect.
   instance, not a single global value.
 - For every concept above marked "Implemented," the relevant
   `docs/features/<feature-id>/SPEC.md` is authoritative for exact field
-  names, state transitions, and indexes. For concepts not yet implemented
-  (`SkillTree`, `SkillNode`, `SkillProgress`), Firestore collection design
-  remains fully deferred to future feature-level work.
+  names, state transitions, and indexes.
+- `SkillTree`/`SkillProgress` are org-wide/team-scoped reference data, not
+  personal or sensitive data — unlike `SurveyResponse`/`AnonymousChallenge`/
+  `ForumThread`/`ForumReply`, neither is encrypted, matching this
+  codebase's existing posture for similarly-trusted short text such as
+  `teams.name` or `surveys.title`. **Accepted residual risk**: a
+  `SkillTree`'s `name`/node `label`s are short (3-100 character),
+  admin-authored free text; nothing architecturally prevents an admin from
+  typing something identifying or sensitive into one (e.g. naming a
+  specific person in a label). This cannot be prevented by validation
+  alone and is not scanned for — see `docs/features/team-skill-tree/
+  SPEC.md` → "Accepted residual risks" for the full acceptance.

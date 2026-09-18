@@ -34,6 +34,26 @@ import {
 } from "../../surveys/client/admin-survey-gateway";
 import { surveysCopy } from "../../surveys/copy";
 import {
+  fetchAdminSkillTrees,
+  fetchTeamSkills,
+  startAdminTeamSkillTracking,
+  updateAdminTeamSkillProgress,
+  stopAdminTeamSkillTracking,
+  type AdminSkillTreeEntry,
+  type FetchAdminSkillTreesResult,
+  type FetchTeamSkillsResult,
+  type StartAdminTeamSkillTrackingResult,
+  type TeamSkillView,
+  type UpdateAdminTeamSkillProgressResult,
+} from "../../skill-trees/client/skill-trees-gateway";
+import {
+  TeamSkillTrackingSection,
+  type TeamSkillCatalogState,
+  type TeamSkillRowActionState,
+  type TeamSkillTrackingState,
+} from "../../skill-trees/components/TeamSkillTrackingSection";
+import { teamSkillTrackingCopy } from "../../skill-trees/copy";
+import {
   DEFAULT_MINIMUM_RESPONSES,
   MINIMUM_RESPONSES_MAX,
   MINIMUM_RESPONSES_MIN,
@@ -80,11 +100,63 @@ function toChallengesSectionState(result: FetchAdminChallengesResult): Challenge
 }
 
 /**
+ * The TASK-006 SkillTree catalog section's own composed state, resolved
+ * independently of the rest of the page (docs/features/team-skill-tree/
+ * SPEC.md — TASK-006), mirroring `ChallengesSectionState`: a catalog read
+ * failure must not erase any other section of `/admin/teams/[teamId]`.
+ */
+type SkillCatalogSectionState =
+  | { status: "loaded"; trees: AdminSkillTreeEntry[] }
+  | { status: "unavailable" };
+
+function toSkillCatalogSectionState(result: FetchAdminSkillTreesResult): SkillCatalogSectionState {
+  return result.status === "ok" ? { status: "loaded", trees: result.trees } : { status: "unavailable" };
+}
+
+/**
+ * The persisted skill-tracking-state section (TASK-008 closeout fix for the
+ * TASK-006/TASK-007 admin-reload finding — docs/features/team-skill-tree/
+ * TASKS.md, TASK-007's "TASK-008 closeout finding"). TASK-006 originally
+ * derived "which trees are tracked, and their current stage" purely from
+ * this session's own start/update/stop calls because it owned no read
+ * endpoint at the time; TASK-007 has since delivered the approved
+ * `GET /api/teams/[teamId]/skills` → `getTeamSkillProgress` read contract,
+ * which an app admin is already an authorized reader of via
+ * `authorizeTeamAccess` (BR-18) regardless of real team membership. This
+ * section reuses that exact, unchanged read path — no new endpoint, no new
+ * authorization architecture — so a fresh render of this page reconstructs
+ * actually-persisted tracking state instead of starting every catalog tree
+ * "untracked" again. Mirrors `ChallengesSectionState`/`SkillCatalogSectionState`:
+ * a read failure here degrades gracefully to the pre-fix "nothing known yet"
+ * behavior rather than erasing any other section.
+ */
+type SkillProgressSectionState =
+  | { status: "loaded"; skills: TeamSkillView[] }
+  | { status: "unavailable" };
+
+function toSkillProgressSectionState(result: FetchTeamSkillsResult): SkillProgressSectionState {
+  return result.status === "ok" ? { status: "loaded", skills: result.skills } : { status: "unavailable" };
+}
+
+/** Seeds the session's `skillTracking` map from the persisted read above — every returned tree is "tracked" at its actual `currentNodeId`; a tree absent from the list is left for `TeamSkillTrackingSection` to treat as untracked, exactly as it already does for a tree missing from the map. */
+function toInitialSkillTracking(state: SkillProgressSectionState): Record<string, TeamSkillTrackingState> {
+  if (state.status !== "loaded") {
+    return {};
+  }
+  const tracking: Record<string, TeamSkillTrackingState> = {};
+  for (const skill of state.skills) {
+    tracking[skill.treeId] = { status: "tracked", currentNodeId: skill.currentNodeId };
+  }
+  return tracking;
+}
+
+/**
  * The composed result this component renders — combines the existing
  * TASK-009 admin team catalog (for the team's name/status) with the
- * TASK-004/TASK-005 member/invitation/access-request lists, and TASK-006's
- * independently-resolved challenges section. No new server logic is
- * introduced; this only reads from existing, unchanged endpoints.
+ * TASK-004/TASK-005 member/invitation/access-request lists, TASK-006's
+ * independently-resolved challenges section, and this closeout's persisted
+ * skill-progress section. No new server logic is introduced; this only
+ * reads from existing, unchanged endpoints.
  */
 type TeamDetailResult =
   | { status: "unauthenticated" }
@@ -99,22 +171,37 @@ type TeamDetailResult =
       requests: AdminPendingAccessRequestEntry[];
       surveys: AdminSurveyEntry[];
       challenges: ChallengesSectionState;
+      skillCatalog: SkillCatalogSectionState;
+      skillProgress: SkillProgressSectionState;
     };
 
 async function loadTeamDetail(idToken: string, teamId: string): Promise<TeamDetailResult> {
-  // Challenges are fetched in the same parallel batch but deliberately
-  // excluded from the gate below — a challenges-only read failure must
-  // never erase team/members/invitations/requests/surveys, and vice versa
-  // (TASK-006, mirrors `TeamDetail.tsx`'s independent-section pattern).
-  const [teamsResult, membersResult, invitationsResult, requestsResult, surveysResult, challengesResult] =
-    await Promise.all([
-      fetchAdminTeams(idToken),
-      fetchTeamMembers(idToken, teamId),
-      fetchTeamInvitations(idToken, teamId),
-      fetchTeamAccessRequests(idToken, teamId),
-      fetchAdminSurveys(idToken, teamId),
-      fetchAdminChallenges(idToken, teamId),
-    ]);
+  // Challenges, the skill-tree catalog, and the team's persisted skill
+  // progress are fetched in the same parallel batch but deliberately
+  // excluded from the gate below — a challenges-, catalog-, or
+  // progress-only read failure must never erase team/members/invitations/
+  // requests/surveys, and vice versa (mirrors `TeamDetail.tsx`'s
+  // independent-section pattern, extended in TASK-006 to the skill-tree
+  // catalog and in this TASK-008 closeout fix to persisted skill progress).
+  const [
+    teamsResult,
+    membersResult,
+    invitationsResult,
+    requestsResult,
+    surveysResult,
+    challengesResult,
+    skillCatalogResult,
+    skillProgressResult,
+  ] = await Promise.all([
+    fetchAdminTeams(idToken),
+    fetchTeamMembers(idToken, teamId),
+    fetchTeamInvitations(idToken, teamId),
+    fetchTeamAccessRequests(idToken, teamId),
+    fetchAdminSurveys(idToken, teamId),
+    fetchAdminChallenges(idToken, teamId),
+    fetchAdminSkillTrees(idToken),
+    fetchTeamSkills(idToken, teamId),
+  ]);
 
   const statuses = [
     teamsResult.status,
@@ -153,6 +240,8 @@ async function loadTeamDetail(idToken: string, teamId: string): Promise<TeamDeta
     requests: requestsResult.requests,
     surveys: surveysResult.surveys,
     challenges: toChallengesSectionState(challengesResult),
+    skillCatalog: toSkillCatalogSectionState(skillCatalogResult),
+    skillProgress: toSkillProgressSectionState(skillProgressResult),
   };
 }
 
@@ -224,6 +313,21 @@ function inviteErrorMessage(
   return adminCopy.detail.inviteError.generic;
 }
 
+function skillStartErrorMessage(error: Exclude<StartAdminTeamSkillTrackingResult, { ok: true }>["error"]): string {
+  if (error === "team_disabled") return teamSkillTrackingCopy.untracked.error.teamDisabled;
+  if (error === "tree_not_found") return teamSkillTrackingCopy.untracked.error.treeNotFound;
+  if (error === "team_not_found") return teamSkillTrackingCopy.untracked.error.teamNotFound;
+  return teamSkillTrackingCopy.untracked.error.generic;
+}
+
+function skillStageErrorMessage(
+  error: Exclude<UpdateAdminTeamSkillProgressResult, { ok: true }>["error"],
+): string {
+  if (error === "not_tracked") return teamSkillTrackingCopy.tracked.error.notTracked;
+  if (error === "invalid_input") return teamSkillTrackingCopy.tracked.error.invalidInput;
+  return teamSkillTrackingCopy.tracked.error.generic;
+}
+
 function surveyLifecycleLabel(entry: AdminSurveyEntry): string {
   return surveysCopy.admin.lifecycleLabels[entry.lifecycle];
 }
@@ -266,6 +370,8 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
   const [surveyActions, setSurveyActions] = useState<Record<string, SurveyRowActionState>>({});
   const [copiedSurveyId, setCopiedSurveyId] = useState<string | null>(null);
   const [challengeActions, setChallengeActions] = useState<Record<string, AdminChallengeRowActionState>>({});
+  const [skillTracking, setSkillTracking] = useState<Record<string, TeamSkillTrackingState>>({});
+  const [skillActions, setSkillActions] = useState<Record<string, TeamSkillRowActionState>>({});
 
   const { isCurrentGeneration } = useAuthGatedResource(
     (token, generation) => {
@@ -282,6 +388,8 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
       setSurveyActions({});
       setCopiedSurveyId(null);
       setChallengeActions({});
+      setSkillTracking({});
+      setSkillActions({});
 
       if (!token) {
         setState({ phase: "signed_out" });
@@ -305,6 +413,17 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
     const result = await loadTeamDetail(token, teamId);
     if (isCurrentGeneration(generation)) {
       setState({ phase: "loaded", token, generation, result });
+      // Reconstructs the session's `skillTracking` map from persisted state
+      // on every (re)load, including the first one — a fresh render no
+      // longer starts every catalog tree "untracked" regardless of what is
+      // actually tracked in Firestore (TASK-008 closeout fix). A skill
+      // mutation (`handleStartSkillTracking`/`handleSetSkillStage`/
+      // `handleStopSkillTracking`) updates `skillTracking` directly and
+      // never calls `loadForGeneration`, so this reseed never clobbers an
+      // in-flight optimistic update.
+      setSkillTracking(
+        result.status === "ok" ? toInitialSkillTracking(result.skillProgress) : {},
+      );
     }
   }
 
@@ -635,6 +754,89 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
     await loadForGeneration(token, generation);
   }
 
+  /**
+   * TASK-006's start/set-stage/stop handlers (docs/features/team-skill-tree/
+   * SPEC.md — BR-27). Each guards its own row (`skillActions[treeId]`) the
+   * same way `handleResolveChallenge`/`handleArchiveChallenge` do — one
+   * pending action per row at a time — and, on success, updates
+   * `skillTracking[treeId]` directly rather than re-fetching, since TASK-006
+   * owns no read endpoint for this team's tracking state (see
+   * `TeamSkillTrackingSection`'s module doc): the mutation's own known
+   * outcome (`currentNodeId: null` on start, the selected `nodeId` on
+   * update, "untracked" on stop) is the only state this session ever needs.
+   */
+  async function handleStartSkillTracking(token: string, generation: number, treeId: string) {
+    if (skillActions[treeId]?.status === "pending") {
+      return;
+    }
+    setSkillActions((prev) => ({ ...prev, [treeId]: { status: "pending", action: "start" } }));
+
+    const result = await startAdminTeamSkillTracking(token, teamId, treeId);
+
+    if (!isCurrentGeneration(generation)) {
+      return;
+    }
+
+    if (!result.ok) {
+      setSkillActions((prev) => ({
+        ...prev,
+        [treeId]: { status: "error", message: skillStartErrorMessage(result.error) },
+      }));
+      return;
+    }
+
+    setSkillTracking((prev) => ({ ...prev, [treeId]: { status: "tracked", currentNodeId: null } }));
+    setSkillActions((prev) => ({ ...prev, [treeId]: { status: "idle" } }));
+  }
+
+  async function handleSetSkillStage(token: string, generation: number, treeId: string, nodeId: string) {
+    if (skillActions[treeId]?.status === "pending") {
+      return;
+    }
+    setSkillActions((prev) => ({ ...prev, [treeId]: { status: "pending", action: "setStage" } }));
+
+    const result = await updateAdminTeamSkillProgress(token, teamId, treeId, nodeId);
+
+    if (!isCurrentGeneration(generation)) {
+      return;
+    }
+
+    if (!result.ok) {
+      setSkillActions((prev) => ({
+        ...prev,
+        [treeId]: { status: "error", message: skillStageErrorMessage(result.error) },
+      }));
+      return;
+    }
+
+    setSkillTracking((prev) => ({ ...prev, [treeId]: { status: "tracked", currentNodeId: nodeId } }));
+    setSkillActions((prev) => ({ ...prev, [treeId]: { status: "idle" } }));
+  }
+
+  async function handleStopSkillTracking(token: string, generation: number, treeId: string) {
+    if (skillActions[treeId]?.status === "pending") {
+      return;
+    }
+    setSkillActions((prev) => ({ ...prev, [treeId]: { status: "pending", action: "stop" } }));
+
+    const result = await stopAdminTeamSkillTracking(token, teamId, treeId);
+
+    if (!isCurrentGeneration(generation)) {
+      return;
+    }
+
+    if (!result.ok) {
+      setSkillActions((prev) => ({
+        ...prev,
+        [treeId]: { status: "error", message: teamSkillTrackingCopy.tracked.error.generic },
+      }));
+      return;
+    }
+
+    setSkillTracking((prev) => ({ ...prev, [treeId]: { status: "untracked" } }));
+    setSkillActions((prev) => ({ ...prev, [treeId]: { status: "idle" } }));
+  }
+
   if (state.phase === "loading") {
     return <LoadingState label={adminCopy.detail.loading} />;
   }
@@ -663,13 +865,15 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
     return <Alert variant="error">{adminCopy.detail.notFound}</Alert>;
   }
 
-  const { team, members, invitations, requests, surveys, challenges } = result;
+  const { team, members, invitations, requests, surveys, challenges, skillCatalog } = result;
   const activeSurveys = surveys.filter((entry) => !entry.archived);
   const archivedSurveys = surveys.filter((entry) => entry.archived);
   const challengeListState: AdminChallengeListState =
     challenges.status === "loaded"
       ? { status: "loaded", challenges: challenges.challenges }
       : { status: "error" };
+  const skillCatalogState: TeamSkillCatalogState =
+    skillCatalog.status === "loaded" ? { status: "loaded", trees: skillCatalog.trees } : { status: "error" };
 
   return (
     <div className="flex flex-col gap-10">
@@ -1065,6 +1269,21 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
           onRequestDelete={handleRequestDeleteChallenge}
           onCancelDelete={handleCancelDeleteChallenge}
           onConfirmDelete={(challengeId) => handleConfirmDeleteChallenge(token, generation, challengeId)}
+        />
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
+          {teamSkillTrackingCopy.sectionTitle}
+        </h2>
+        <TeamSkillTrackingSection
+          catalogState={skillCatalogState}
+          tracking={skillTracking}
+          actions={skillActions}
+          teamDisabled={team.status === "disabled"}
+          onStart={(treeId) => handleStartSkillTracking(token, generation, treeId)}
+          onSetStage={(treeId, nodeId) => handleSetSkillStage(token, generation, treeId, nodeId)}
+          onStop={(treeId) => handleStopSkillTracking(token, generation, treeId)}
         />
       </section>
     </div>

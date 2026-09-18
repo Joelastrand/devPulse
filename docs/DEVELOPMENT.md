@@ -133,12 +133,14 @@ firebase deploy --only firestore:rules,firestore:indexes
   direct client Firestore access.
 - The `teams`, `teamMemberships`, `teamInvitations`, `teamAccessRequests`
   (`docs/features/team-management/SPEC.md`), `surveys`, `teamSurveyState`,
-  `surveyResponses`, and `surveyParticipations`
-  (`docs/features/managed-surveys/SPEC.md`) collections each have the same
-  explicit deny block, for the same defense-in-depth/documentation reason —
-  all access happens server-side via `src/features/teams/server/` or
-  `src/features/surveys/server/`, which use the Admin SDK and bypass these
-  rules entirely.
+  `surveyResponses`, `surveyParticipations`
+  (`docs/features/managed-surveys/SPEC.md`), and `skillTrees`/
+  `skillProgress` (`docs/features/team-skill-tree/SPEC.md`) collections each
+  have the same explicit deny block, for the same defense-in-depth/
+  documentation reason — all access happens server-side via
+  `src/features/teams/server/`, `src/features/surveys/server/`, or
+  `src/features/skill-trees/server/`, which use the Admin SDK and bypass
+  these rules entirely.
 - **`firestore.indexes.json`** declares:
   - The composite index on `teamInvitations` (`email` ascending, `status`
     ascending) `resolveInvitations` (`src/features/teams/server/
@@ -164,6 +166,17 @@ firebase deploy --only firestore:rules,firestore:indexes
     implications"). The one-open-survey-per-team check needs no index at
     all: it's a direct document `get` on `teamSurveyState/{teamId}`, never
     a query.
+  - `listSkillTrees` (`src/features/skill-trees/server/list-skill-trees.ts`)
+    queries `skillTrees` with `.orderBy("createdAt", "asc").limit(500)` and
+    no `.where()` — a single-field `orderBy` with no additional filter,
+    auto-indexed; `.limit()` never triggers an index requirement either
+    (`docs/features/team-skill-tree/SPEC.md` — BR-25). `getTeamSkillProgress`
+    queries `skillProgress` with a single-field equality filter
+    (`where("teamId", "==", teamId)`), likewise auto-indexed. Every other
+    Skill Tree operation (create/correct a tree; start/update/stop tracking)
+    is a direct document `get`/`add`/`set`/`update`/`delete` by a
+    deterministic or already-known id, not a query. No composite index is
+    declared for this feature.
 
 Add new composite indexes or rule changes here whenever a new Firestore
 query or access path is introduced, rather than relying on manually

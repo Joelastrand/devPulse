@@ -103,6 +103,36 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // skillTrees holds admin-defined, org-wide capability progressions
+    // (name, an ordered/count/identity-immutable nodes array, createdAt/
+    // createdBy, optional updatedAt/updatedBy after a cosmetic correction).
+    // Not sensitive/free text beyond a short admin-authored name/label. All
+    // access happens server-side via the Firebase Admin SDK
+    // (src/features/skill-trees/server/), which bypasses these rules
+    // entirely — this rule exists solely to deny the separate client-SDK
+    // path unconditionally, regardless of authentication state (including
+    // an app admin's). Same server-only-access rationale as every other
+    // collection above. See docs/features/team-skill-tree/SPEC.md
+    // (TASK-002).
+    match /skillTrees/{document=**} {
+      allow read, write: if false;
+    }
+
+    // skillProgress holds exactly one team's tracking record against
+    // exactly one SkillTree (teamId, treeId, currentNodeId, updatedAt,
+    // updatedBy), keyed by the deterministic id `{teamId}__{treeId}` — never
+    // a person's data (docs/features/team-skill-tree/SPEC.md — "Purpose").
+    // All access happens server-side via the Firebase Admin SDK
+    // (src/features/skill-trees/server/), which bypasses these rules
+    // entirely — this rule exists solely to deny the separate client-SDK
+    // path unconditionally, regardless of authentication state (including
+    // an app admin's). Same server-only-access rationale as every other
+    // collection above. See docs/features/team-skill-tree/SPEC.md
+    // (TASK-003).
+    match /skillProgress/{document=**} {
+      allow read, write: if false;
+    }
+
     // Deny everything else by default; no collection is currently intended
     // to be reached directly by the Firebase client SDK.
     match /{document=**} {

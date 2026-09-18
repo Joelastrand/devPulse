@@ -57,9 +57,43 @@ describe("Firestore deployment configuration", () => {
     );
   });
 
+  it("denies all client-SDK access to skillTrees unconditionally", () => {
+    const rules = readRepoFile("firestore.rules");
+
+    expect(rules).toMatch(
+      /match\s+\/skillTrees\/\{document=\*\*\}\s*\{\s*allow read, write: if false;/,
+    );
+  });
+
+  it("denies all client-SDK access to skillProgress unconditionally", () => {
+    const rules = readRepoFile("firestore.rules");
+
+    expect(rules).toMatch(
+      /match\s+\/skillProgress\/\{document=\*\*\}\s*\{\s*allow read, write: if false;/,
+    );
+  });
+
   it("has no unconditional allow anywhere in the rules file (denies by default)", () => {
     const rules = readRepoFile("firestore.rules");
 
     expect(rules).not.toMatch(/allow\s+(?:read|write|read\s*,\s*write)\s*:\s*if\s+true/);
+  });
+
+  it("declares no composite index for skillTrees — listSkillTrees's single-field orderBy+limit is auto-indexed", () => {
+    const indexes = JSON.parse(readRepoFile("firestore.indexes.json")) as {
+      indexes: Array<{ collectionGroup: string; fields: Array<{ fieldPath: string; order: string }> }>;
+    };
+
+    const skillTreesIndexes = indexes.indexes.filter((index) => index.collectionGroup === "skillTrees");
+    expect(skillTreesIndexes).toHaveLength(0);
+  });
+
+  it("declares no composite index for skillProgress — every start/update/stop/read operation is a direct document or single-field-filter operation", () => {
+    const indexes = JSON.parse(readRepoFile("firestore.indexes.json")) as {
+      indexes: Array<{ collectionGroup: string; fields: Array<{ fieldPath: string; order: string }> }>;
+    };
+
+    const skillProgressIndexes = indexes.indexes.filter((index) => index.collectionGroup === "skillProgress");
+    expect(skillProgressIndexes).toHaveLength(0);
   });
 });
