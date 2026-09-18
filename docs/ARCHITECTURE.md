@@ -174,6 +174,35 @@ flowchart LR
   has no duplicate-submission-detection requirement to enforce. See
   `docs/features/anonymous-challenges/SPEC.md` — "Privacy/anonymity model"
   for the full threat model.
+- **Implemented (Phase 6, `docs/features/team-forum/SPEC.md`)**:
+  `forumThreads`/`forumReplies` (Team Forum's attributed discussion
+  threads/replies) are a third encrypted-at-rest collection pair, reusing
+  `src/lib/encryption/encryption.ts` unchanged — a thread's title/body and
+  a reply's body are each encrypted server-side before being written, for
+  the same reason Anonymous Challenges' free text is: this content can
+  easily discuss the same kind of sensitive workplace-friction material,
+  regardless of whether it happens to be attributed. Team Forum's identity
+  shape is different in kind from both existing encrypted collections, not
+  merely a third instance of the same pattern: a survey response is never
+  individually shown to anyone (only a threshold-gated aggregate); a
+  challenge is individually shown but its *submitter* is never persisted or
+  recoverable; a forum thread/reply is individually shown **and** its
+  author's real `authorUid` is persisted — attribution itself is this
+  feature's deliberate point, not something to avoid. What Team Forum still
+  keeps hidden is the author's *real-world* identity: `authorUid` is never
+  returned by any API response, and the only member-visible attribution is
+  `authorTag`, a deterministic, one-way pseudonym computed purely from
+  `(teamId, authorUid)` (`src/features/forum/domain/author-tag.ts`) — never
+  an email address, display name, or the raw `uid` itself, and never
+  derived from a Firebase Auth lookup. Deletion goes further than Anonymous
+  Challenges too: a deleted thread is a genuine Firestore document deletion
+  of the thread and every one of its replies (not an update), and a deleted
+  reply has its encrypted fields physically removed from the document
+  (`FieldValue.delete()`), not merely withheld from a response — deleted
+  forum content is not just unauthorized to read, it no longer exists
+  anywhere to decrypt. See `docs/features/team-forum/SPEC.md` —
+  "Identity/attribution model" and "Encryption/content classification" for
+  the full model.
 
 ## Aggregation
 

@@ -161,6 +161,67 @@ Every screen that fetches or mutates server data defines, at minimum:
   render result or current-survey content it isn't authorized to have
   fetched (`docs/features/managed-surveys/SPEC.md` — BR-30/BR-31/BR-32).
 
+## Forum UX
+
+**Added at Phase 6 closeout (`docs/features/team-forum/SPEC.md` —
+TASK-005/TASK-006), documenting the conventions that shipped**, in the same
+format as "Teams UX"/"Results UX" above — this section describes the
+as-built Team Forum feature, not a pre-implementation direction.
+
+- `/teams/[teamId]` gains a "Forum" section, visible to an authorized
+  member/admin alongside the existing results/current-survey/challenges
+  sections: a newest-first thread list (title, `authorTag`, date) and a
+  "start a new thread" form (title + body). Its own fetch/mutation failures
+  are isolated from those other sections — a forum read failure never hides
+  results/current-survey/challenges, and vice versa.
+- A new `/teams/[teamId]/forum/[threadId]` route (not a client-side panel)
+  shows one thread's title, body, `authorTag`, and every one of its replies
+  in chronological order, plus a reply-submission form — a real route so a
+  thread's own author keeps a durable link to it even after it ages out of
+  the list's 200-newest window.
+- `authorTag` is shown with a short Norwegian framing prefix ("Medlem
+  {authorTag}"), never bare and never styled to resemble a real name or
+  email — it identifies authorship *continuity* (recognizing two posts
+  share an author) without implying real-world identity.
+- A deleted reply renders a fixed, non-identifying placeholder ("Innlegget
+  er fjernet") at its original position — conveyed by text, never by color
+  or an icon alone, and never simply omitted from the list.
+- A thread/reply's own author, or an app admin, sees a "Slett"-style delete
+  action; no one else does. Delete always requires an explicit
+  confirm/cancel step before it executes — for a thread, the confirmation
+  copy states plainly that every reply is also permanently removed, since
+  that is literally true (a thread delete is a hard delete, not a
+  visibility change). Deleting a reply that's already been removed (e.g. a
+  retried request) succeeds silently rather than showing an error — the
+  caller's desired end state ("this content is gone") already holds.
+  Repeated delete affordances on one page (each reply's own) carry a
+  distinguishing accessible name (its posted date) so keyboard/
+  screen-reader users can tell rows apart; the visible button label itself
+  stays identical across rows.
+- Once a thread reports it has reached its reply capacity, the reply form
+  is replaced by a disabled, explanatory message rather than continuing to
+  accept input that the server will reject — discovered reactively (after
+  an actual submission attempt), never pre-computed client-side from a
+  locally counted reply list.
+- After a successful create-thread submission, the caller is taken to the
+  new thread's detail view (focus moves to a success confirmation first, in
+  case navigation is slow); after a successful reply, the reply list
+  refreshes from the server (never an optimistic local insert) and the
+  reply form stays available for another reply.
+- A create-thread/create-reply/delete response that resolves after the
+  caller has signed out, or after navigating to a different team or thread,
+  is discarded rather than applied to the now-stale view — the same
+  generation-guard pattern every other mutating section in this application
+  uses.
+- Thread/reply content is rendered strictly as literal text (ordinary JSX
+  interpolation) on every surface — never `dangerouslySetInnerHTML`, never
+  passed through a Markdown/HTML parser. Text that looks like HTML or a
+  script tag renders as inert, visible characters, never as markup or a
+  side effect.
+- A cross-team, deleted, or never-existed `threadId` renders the same
+  generic "not found" state in every case — never a distinguishing message
+  that would let a caller infer which of those three actually occurred.
+
 ## Skill Tree UX (Kompetanseområder)
 
 **Added at Phase 7 closeout (`docs/features/team-skill-tree/SPEC.md` —

@@ -3,8 +3,8 @@
 ## Vision
 
 DevPulse helps development organizations sense and improve team wellbeing and
-delivery health over time, using short recurring pulse surveys and (later)
-anonymous challenges, team forums, and capability tracking.
+delivery health over time, using short recurring pulse surveys, anonymous
+challenges, team forums, and team-level skill-tracking progressions.
 
 ## Intended users
 
@@ -162,6 +162,39 @@ until attrition, burnout, or delivery failure makes them obvious.
   feature — a challenge always requires real, authenticated team membership
   to submit.
 
+## Delivered: Team Forum (Phase 6)
+
+- Let a real member of a team start a titled discussion thread and reply to
+  one, scoped to that team, with ordinary attribution — a reader can tell
+  which posts share an author, without learning that author's real name,
+  email, or `uid`. See `docs/features/team-forum/SPEC.md`.
+- `/teams/[teamId]`: an authorized member/admin sees a "Forum" section — a
+  newest-first thread list (title, `authorTag`, date) and, for a real team
+  member, a "start a new thread" action; a non-member sees no forum content
+  or data.
+- A new `/teams/[teamId]/forum/[threadId]` detail view shows a thread's
+  title/body/`authorTag`, every one of its replies in chronological order
+  (a deleted reply renders only a fixed, non-identifying placeholder, never
+  omitted or showing its original content), and a reply-submission panel
+  for a real team member (disabled once a thread reaches its 500-reply
+  capacity).
+- A thread's own author, or an app admin, can permanently delete that
+  thread — this genuinely removes the thread and every one of its replies
+  from Firestore, for everyone, including an app admin with direct
+  database access. A reply's own author, or an app admin, can delete that
+  one reply, leaving a content-erased placeholder in its place so the
+  thread's other replies keep their position.
+- Attribution is deliberately **pseudonymous, not real-name**: this is the
+  first feature in DevPulse where persisted, member-visible author
+  attribution is the point, rather than something the product avoids
+  (contrast with the pulse survey and Anonymous Challenges, both
+  identity-free by design). A genuine display-name/profile system, and a
+  cross-team/org-wide "developer forum" beyond this team-scoped v1 slice,
+  both remain future scope.
+- No edit, no restore/undelete, no reactions/voting/categories/tags/
+  mentions/notifications/search, and no rate limiting exist for this
+  feature (explicit v1 non-goals).
+
 ## Delivered: Team Skill Tree (Phase 7)
 
 - Let an app admin define a **SkillTree**: a name plus an ordered,
@@ -194,7 +227,9 @@ until attrition, burnout, or delivery failure makes them obvious.
 
 ## Future capabilities (not implemented yet)
 
-- Developer forums/communities.
+- A cross-team/org-wide "developer forum" or community, beyond Team
+  Forum's team-scoped v1 slice, and real-name/display-name attribution for
+  it (see "Delivered: Team Forum (Phase 6)" above).
 - Member-initiated (self-assessed) skill-progress updates, and
   section-scoped or org-wide (multi-team) skill trees, beyond Team Skill
   Tree's team-scoped, admin-write-only v1 slice (see "Delivered: Team

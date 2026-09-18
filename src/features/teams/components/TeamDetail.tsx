@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
@@ -17,6 +18,14 @@ import {
 import { ChallengeList, type ChallengeListState } from "../../challenges/components/ChallengeList";
 import { ChallengeSubmissionPanel } from "../../challenges/components/ChallengeSubmissionPanel";
 import { challengesCopy } from "../../challenges/copy";
+import {
+  fetchTeamThreads,
+  type FetchTeamThreadsResult,
+  type ThreadSummaryView,
+} from "../../forum/client/forum-gateway";
+import { CreateThreadForm } from "../../forum/components/CreateThreadForm";
+import { ThreadList, type ThreadListState } from "../../forum/components/ThreadList";
+import { forumCopy } from "../../forum/copy";
 import {
   fetchTeamResults,
   type SurveyResultSummary,
@@ -84,13 +93,30 @@ function toChallengesSectionState(result: FetchTeamChallengesResult): Challenges
 }
 
 /**
+ * The "Forum" section's own composed state, resolved independently of
+ * results/current-survey/challenges (docs/features/team-forum/SPEC.md —
+ * BR-45: a forum read failure must not erase any other section, and vice
+ * versa — every section fails independently, mirroring
+ * `ChallengesSectionState`'s identical established pattern).
+ * `"unavailable"` covers both a genuine read failure and a rare
+ * authorization race — never fabricated as "no threads yet" in either case.
+ */
+type ForumSectionState =
+  | { status: "loaded"; threads: ThreadSummaryView[] }
+  | { status: "unavailable" };
+
+function toForumSectionState(result: FetchTeamThreadsResult): ForumSectionState {
+  return result.status === "ok" ? { status: "loaded", threads: result.threads } : { status: "unavailable" };
+}
+
+/**
  * The "Kompetanseområder" section's own composed state, resolved
- * independently of results/current-survey/challenges (docs/features/
+ * independently of results/current-survey/challenges/forum (docs/features/
  * team-skill-tree/SPEC.md — TASK-007, BR-28 through BR-30): a skill-list
  * read failure must not erase any other section, and vice versa (mirrors
- * `ChallengesSectionState`'s identical established pattern). `"unavailable"`
- * covers both a genuine read failure and a rare authorization race — never
- * fabricated as "no skills yet" in either case.
+ * `ChallengesSectionState`/`ForumSectionState`'s identical established
+ * pattern). `"unavailable"` covers both a genuine read failure and a rare
+ * authorization race — never fabricated as "no skills yet" in either case.
  */
 type SkillSectionState =
   | { status: "loaded"; skills: TeamSkillView[] }
@@ -125,6 +151,7 @@ type TeamDetailResult =
       name?: string;
       currentSurvey: CurrentSurveySectionState;
       challenges: ChallengesSectionState;
+      forum: ForumSectionState;
       skills: SkillSectionState;
     }
   | {
@@ -133,6 +160,7 @@ type TeamDetailResult =
       results: SurveyResultSummary[];
       currentSurvey: CurrentSurveySectionState;
       challenges: ChallengesSectionState;
+      forum: ForumSectionState;
       skills: SkillSectionState;
     };
 
@@ -191,15 +219,17 @@ async function resolveViaResults(
   name: string | undefined,
 ): Promise<TeamDetailResult> {
   // Fetched in parallel — separate server contracts (results, current-survey
-  // discovery, member-visible challenges, and the read-only skill-tracking
-  // list), each independently authorized, so no read waits on another
-  // (docs/features/managed-surveys/SPEC.md — TASK-010; docs/features/
-  // anonymous-challenges/SPEC.md — TASK-005; docs/features/
+  // discovery, member-visible challenges, the forum thread list, and the
+  // read-only skill-tracking list), each independently authorized, so no
+  // read waits on another (docs/features/managed-surveys/SPEC.md —
+  // TASK-010; docs/features/anonymous-challenges/SPEC.md — TASK-005;
+  // docs/features/team-forum/SPEC.md — TASK-005, BR-45; docs/features/
   // team-skill-tree/SPEC.md — TASK-007).
-  const [results, surveyResult, challengesResult, skillsResult] = await Promise.all([
+  const [results, surveyResult, challengesResult, forumResult, skillsResult] = await Promise.all([
     fetchTeamResults(idToken, teamId),
     fetchCurrentTeamSurvey(idToken, teamId),
     fetchTeamChallenges(idToken, teamId),
+    fetchTeamThreads(idToken, teamId),
     fetchTeamSkills(idToken, teamId),
   ]);
 
@@ -210,6 +240,7 @@ async function resolveViaResults(
       results: results.results,
       currentSurvey: toCurrentSurveySectionState(surveyResult),
       challenges: toChallengesSectionState(challengesResult),
+      forum: toForumSectionState(forumResult),
       skills: toSkillSectionState(skillsResult),
     };
   }
@@ -224,9 +255,9 @@ async function resolveViaResults(
     // relationship), and the ambiguous no-entry case turning out to be a
     // genuine denial. Rendered identically either way (BR-16) — no
     // distinguishing existence signal. The parallel current-survey,
-    // challenges, and skills results are discarded here regardless of
-    // their own outcome: a denied caller never sees survey, challenge, or
-    // skill data.
+    // challenges, forum, and skills results are discarded here regardless of
+    // their own outcome: a denied caller never sees survey, challenge,
+    // forum, or skill data.
     return { status: "denied", name, relationship: "none" };
   }
   return {
@@ -234,6 +265,7 @@ async function resolveViaResults(
     name,
     currentSurvey: toCurrentSurveySectionState(surveyResult),
     challenges: toChallengesSectionState(challengesResult),
+    forum: toForumSectionState(forumResult),
     skills: toSkillSectionState(skillsResult),
   };
 }
@@ -264,6 +296,7 @@ const RELATIONSHIP_MESSAGES: Record<DeniedRelationship, string> =
  * reuse is not relied on for this guarantee.
  */
 export function TeamDetail({ teamId }: { teamId: string }) {
+  const router = useRouter();
   const [state, setState] = useState<ViewState>({ phase: "loading" });
   const [actionState, setActionState] = useState<RequestActionState>({ status: "idle" });
 
@@ -345,6 +378,20 @@ export function TeamDetail({ teamId }: { teamId: string }) {
     });
   }
 
+  /**
+   * Navigates to the newly created thread's detail view (docs/features/
+   * team-forum/SPEC.md — "Product behavior" #2). Discarded, per BR-46, if
+   * the caller has since signed out or navigated to a different team before
+   * `CreateThreadForm`'s own request resolves — never navigates on behalf of
+   * a superseded auth state or route.
+   */
+  function handleThreadCreated(generation: number, threadId: string) {
+    if (!isCurrentGeneration(generation)) {
+      return;
+    }
+    router.push(`/teams/${encodeURIComponent(teamId)}/forum/${encodeURIComponent(threadId)}`);
+  }
+
   if (state.phase === "loading") {
     return <LoadingState label={teamsCopy.detail.loading} />;
   }
@@ -375,6 +422,12 @@ export function TeamDetail({ teamId }: { teamId: string }) {
           state={result.challenges}
           onSubmitted={() => handleChallengeSubmitted(token, generation)}
         />
+        <ForumSection
+          teamId={teamId}
+          token={token}
+          state={result.forum}
+          onThreadCreated={(threadId) => handleThreadCreated(generation, threadId)}
+        />
         <TeamSkillSection state={toTeamSkillSectionState(result.skills)} />
       </div>
     );
@@ -399,6 +452,12 @@ export function TeamDetail({ teamId }: { teamId: string }) {
           token={token}
           state={result.challenges}
           onSubmitted={() => handleChallengeSubmitted(token, generation)}
+        />
+        <ForumSection
+          teamId={teamId}
+          token={token}
+          state={result.forum}
+          onThreadCreated={(threadId) => handleThreadCreated(generation, threadId)}
         />
         <TeamSkillSection state={toTeamSkillSectionState(result.skills)} />
       </div>
@@ -500,6 +559,46 @@ function ChallengesSection({
       </div>
       <div className="mt-6">
         <ChallengeList state={listState} />
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * `/teams/[teamId]`'s "Forum" section (docs/features/team-forum/SPEC.md —
+ * TASK-005, BR-37, BR-45). Composes the thread-creation form and the
+ * read-only thread list — shown to any authorized member/admin,
+ * independently of whether results/current-survey/challenges succeeded
+ * (BR-45, mirrors `ChallengesSection`'s identical established pattern).
+ * Renders exactly what `fetchTeamThreads` returned; no deleted-thread
+ * filtering logic of any kind lives here — TASK-002's `listTeamThreads`
+ * already guarantees a deleted thread never appears
+ * (`.claude/rules/security.md`).
+ */
+function ForumSection({
+  teamId,
+  token,
+  state,
+  onThreadCreated,
+}: {
+  teamId: string;
+  token: string;
+  state: ForumSectionState;
+  onThreadCreated: (threadId: string) => void;
+}) {
+  const listState: ThreadListState =
+    state.status === "loaded" ? { status: "loaded", threads: state.threads } : { status: "error" };
+
+  return (
+    <Card as="section" variant="bordered" padding="md" aria-labelledby="forum-heading">
+      <h2 id="forum-heading" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+        {forumCopy.section.title}
+      </h2>
+      <div className="mt-4">
+        <CreateThreadForm idToken={token} teamId={teamId} onCreated={onThreadCreated} />
+      </div>
+      <div className="mt-6">
+        <ThreadList teamId={teamId} state={listState} />
       </div>
     </Card>
   );

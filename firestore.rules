@@ -103,6 +103,39 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // forumThreads holds attributed, encrypted, team-scoped discussion
+    // threads (teamId, authorUid, ciphertext, iv, authTag, keyVersion,
+    // createdAt) — a thread has no tombstone/soft-delete shape at all;
+    // deletion is a genuine document removal (docs/features/team-forum/
+    // SPEC.md — "Data model", "Lifecycle/moderation"). All access happens
+    // server-side via the Firebase Admin SDK (src/features/forum/server/),
+    // which bypasses these rules entirely — this rule exists solely to deny
+    // the separate client-SDK path unconditionally, regardless of
+    // authentication state (including an app admin's). Same
+    // server-only-access rationale as every other collection above. See
+    // docs/features/team-forum/SPEC.md (BR-33, TASK-002).
+    match /forumThreads/{document=**} {
+      allow read, write: if false;
+    }
+
+    // forumReplies holds attributed, encrypted, flat replies to a
+    // forumThreads document (teamId, threadId, authorUid, ciphertext, iv,
+    // authTag, keyVersion, createdAt while active). Deleting a single reply
+    // (outside a thread's own cascade) leaves a content-erasing tombstone —
+    // teamId, threadId, createdAt, deletedAt, deletedBy only — rather than a
+    // hard delete, solely to preserve its position in the reply list
+    // (docs/features/team-forum/SPEC.md — "Data model",
+    // "Lifecycle/moderation"). All access happens server-side via the
+    // Firebase Admin SDK (src/features/forum/server/), which bypasses these
+    // rules entirely — this rule exists solely to deny the separate
+    // client-SDK path unconditionally, regardless of authentication state
+    // (including an app admin's). Same server-only-access rationale as every
+    // other collection above. See docs/features/team-forum/SPEC.md (BR-33,
+    // TASK-003).
+    match /forumReplies/{document=**} {
+      allow read, write: if false;
+    }
+
     // skillTrees holds admin-defined, org-wide capability progressions
     // (name, an ordered/count/identity-immutable nodes array, createdAt/
     // createdBy, optional updatedAt/updatedBy after a cosmetic correction).

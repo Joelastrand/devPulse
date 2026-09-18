@@ -133,12 +133,15 @@ firebase deploy --only firestore:rules,firestore:indexes
   direct client Firestore access.
 - The `teams`, `teamMemberships`, `teamInvitations`, `teamAccessRequests`
   (`docs/features/team-management/SPEC.md`), `surveys`, `teamSurveyState`,
-  `surveyResponses`, `surveyParticipations`
-  (`docs/features/managed-surveys/SPEC.md`), and `skillTrees`/
+  `surveyResponses`, and `surveyParticipations`
+  (`docs/features/managed-surveys/SPEC.md`), `challenges`
+  (`docs/features/anonymous-challenges/SPEC.md`), `forumThreads`/
+  `forumReplies` (`docs/features/team-forum/SPEC.md`), and `skillTrees`/
   `skillProgress` (`docs/features/team-skill-tree/SPEC.md`) collections each
   have the same explicit deny block, for the same defense-in-depth/
   documentation reason — all access happens server-side via
-  `src/features/teams/server/`, `src/features/surveys/server/`, or
+  `src/features/teams/server/`, `src/features/surveys/server/`,
+  `src/features/challenges/server/`, `src/features/forum/server/`, or
   `src/features/skill-trees/server/`, which use the Admin SDK and bypass
   these rules entirely.
 - **`firestore.indexes.json`** declares:
@@ -166,6 +169,24 @@ firebase deploy --only firestore:rules,firestore:indexes
     implications"). The one-open-survey-per-team check needs no index at
     all: it's a direct document `get` on `teamSurveyState/{teamId}`, never
     a query.
+  - The composite index on `forumThreads` (`teamId` ascending, `createdAt`
+    **descending**) `listTeamThreads` depends on for a team's newest-first
+    thread list (`docs/features/team-forum/SPEC.md` — BR-34). Without this
+    index deployed, that listing fails closed with a read-failure response
+    against a real Firestore project.
+  - The composite index on `forumReplies` (`threadId` ascending, `createdAt`
+    **ascending**) `getThreadWithReplies` depends on for a thread's
+    oldest-first reply list (`docs/features/team-forum/SPEC.md` — BR-34) —
+    ascending, unlike `forumThreads`' descending order, since every reply of
+    a thread is always returned in full rather than a "most-recent-N,
+    reversed" window. Without this index deployed, thread-detail reads fail
+    closed with a read-failure response against a real Firestore project.
+  - `createReply`'s 500-reply-capacity check (`forumReplies.where("threadId",
+    "==", threadId).count()`) and `deleteThread`'s reply-cascade query
+    (`forumReplies.where("threadId", "==", threadId).limit(500)`) are each a
+    single-field equality filter with no `orderBy` — Firestore indexes these
+    automatically, so no composite index entry is needed or declared for
+    either.
   - `listSkillTrees` (`src/features/skill-trees/server/list-skill-trees.ts`)
     queries `skillTrees` with `.orderBy("createdAt", "asc").limit(500)` and
     no `.where()` — a single-field `orderBy` with no additional filter,

@@ -57,6 +57,22 @@ describe("Firestore deployment configuration", () => {
     );
   });
 
+  it("denies all client-SDK access to forumThreads unconditionally", () => {
+    const rules = readRepoFile("firestore.rules");
+
+    expect(rules).toMatch(
+      /match\s+\/forumThreads\/\{document=\*\*\}\s*\{\s*allow read, write: if false;/,
+    );
+  });
+
+  it("denies all client-SDK access to forumReplies unconditionally", () => {
+    const rules = readRepoFile("firestore.rules");
+
+    expect(rules).toMatch(
+      /match\s+\/forumReplies\/\{document=\*\*\}\s*\{\s*allow read, write: if false;/,
+    );
+  });
+
   it("denies all client-SDK access to skillTrees unconditionally", () => {
     const rules = readRepoFile("firestore.rules");
 
@@ -77,6 +93,32 @@ describe("Firestore deployment configuration", () => {
     const rules = readRepoFile("firestore.rules");
 
     expect(rules).not.toMatch(/allow\s+(?:read|write|read\s*,\s*write)\s*:\s*if\s+true/);
+  });
+
+  it("declares exactly the forumThreads composite index listTeamThreads's query shape requires (teamId ascending, createdAt descending)", () => {
+    const indexes = JSON.parse(readRepoFile("firestore.indexes.json")) as {
+      indexes: Array<{ collectionGroup: string; fields: Array<{ fieldPath: string; order: string }> }>;
+    };
+
+    const forumThreadsIndexes = indexes.indexes.filter((index) => index.collectionGroup === "forumThreads");
+    expect(forumThreadsIndexes).toHaveLength(1);
+    expect(forumThreadsIndexes[0].fields).toEqual([
+      { fieldPath: "teamId", order: "ASCENDING" },
+      { fieldPath: "createdAt", order: "DESCENDING" },
+    ]);
+  });
+
+  it("declares exactly the forumReplies composite index getThreadWithReplies's query shape requires (threadId ascending, createdAt ascending)", () => {
+    const indexes = JSON.parse(readRepoFile("firestore.indexes.json")) as {
+      indexes: Array<{ collectionGroup: string; fields: Array<{ fieldPath: string; order: string }> }>;
+    };
+
+    const forumRepliesIndexes = indexes.indexes.filter((index) => index.collectionGroup === "forumReplies");
+    expect(forumRepliesIndexes).toHaveLength(1);
+    expect(forumRepliesIndexes[0].fields).toEqual([
+      { fieldPath: "threadId", order: "ASCENDING" },
+      { fieldPath: "createdAt", order: "ASCENDING" },
+    ]);
   });
 
   it("declares no composite index for skillTrees — listSkillTrees's single-field orderBy+limit is auto-indexed", () => {

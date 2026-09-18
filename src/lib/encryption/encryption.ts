@@ -38,12 +38,20 @@ export function encrypt(plaintext: string): EncryptedPayload {
 }
 
 /**
- * Reverses `encrypt`. This is the first authorized decryption path in the
- * codebase (`docs/features/results-dashboard/SPEC.md`) — callers must be
- * server-side, authorized aggregation code (`src/features/results/`), never
- * a route handler returning decrypted content directly to a client
- * (`docs/SECURITY.md` invariant 10). Throws on a missing/invalid key or a
- * tampered/corrupt payload; callers must not log the thrown error, since it
+ * Reverses `encrypt`. Callers must always be server-side, authorized code —
+ * never called from client-reachable code, and never from an unauthorized
+ * request path. Whether the resulting plaintext may then be returned
+ * directly to an authorized client, or must instead be aggregated/suppressed
+ * before any value derived from it leaves the server, is a per-feature
+ * product decision, not a rule this function enforces: Survey Responses
+ * (`docs/features/results-dashboard/SPEC.md`) only ever expose a
+ * threshold-gated aggregate, never a decrypted response itself, while
+ * Anonymous Challenges (`docs/features/anonymous-challenges/SPEC.md`) and
+ * Team Forum (`docs/features/team-forum/SPEC.md`) decrypt content and return
+ * it directly to an authorized team member/admin, since individually-visible
+ * content is each feature's own deliberate design — identity, not content,
+ * is what those two features keep hidden. Throws on a missing/invalid key or
+ * a tampered/corrupt payload; callers must not log the thrown error, since it
  * may echo ciphertext/IV bytes.
  */
 export function decrypt(payload: EncryptedPayload): string {

@@ -126,7 +126,53 @@
 
   See `docs/features/anonymous-challenges/SPEC.md`.
 
-- **Phase 6 — Developer Forum Capabilities**.
+- **Phase 6 — Developer Forum Capabilities** *(complete, v1 slice)*:
+  let a real team member start a titled, team-scoped discussion thread and
+  reply to one, with ordinary (not anonymous) attribution, and gave a
+  thread/reply's own author or an app admin a minimal way to remove it.
+
+  Delivered:
+  - authenticated, real-team-membership-only thread/reply creation
+    (app-admin status alone is not sufficient) — the same BR-1 posture as
+    Anonymous Challenges, applied to a feature where content is deliberately
+    attributed rather than anonymous
+  - a pseudonymous, per-team `authorTag` attribution mechanism
+    (`uppercase(hex(SHA-256(teamId:authorUid)).slice(0, 6))`) — a reader can
+    recognize "the same person wrote these two posts" without learning that
+    person's real name, email, or `uid`; no Firebase Auth lookup or
+    persisted display field is involved
+  - server-side application-level encryption of thread/reply content at
+    rest, reusing the same encryption boundary as survey responses and
+    challenges
+  - genuine hard deletion: deleting a thread removes the thread document
+    and every one of its reply documents from Firestore (with a
+    looped, multi-batch cascade for threads with more than 500 replies),
+    not a soft-delete; deleting a single reply content-erases it into a
+    terminal tombstone (encrypted/identity fields physically removed,
+    only its position/timestamp retained) so it is never decryptable again
+  - a 500-reply-per-thread creation-time capacity limit, guaranteeing a
+    thread's reply list is always returned in full, with no reply that
+    becomes unreachable to read or delete
+  - `/teams/[teamId]`'s new "Forum" section (thread list + creation form)
+    and a new `/teams/[teamId]/forum/[threadId]` detail view (replies,
+    reply form, delete affordances) — content rendered strictly as literal
+    text everywhere, with a runtime regression proving HTML/script-shaped
+    input never executes
+  - no edit, no restore/undelete, no reactions/voting/tags/mentions/
+    notifications/search, and no rate limiting (explicit v1 non-goals,
+    mirroring Anonymous Challenges' equivalent choices)
+  - a cross-team/org-wide "developer forum" and real-name attribution both
+    remain unimplemented future scope — this v1 slice is deliberately
+    team-scoped only, per its own feature-id note
+
+  This phase preserved every existing privacy/security invariant
+  (server-side authorization, team isolation, application-level encryption,
+  no client-side Firestore access, admin ≠ raw-identity access) while
+  introducing this codebase's first feature where persisted, member-visible
+  author attribution is the deliberate point rather than a near-miss to
+  avoid.
+
+  See `docs/features/team-forum/SPEC.md`.
 
 - **Phase 7 — Skill / Capability Trees** *(complete, v1 slice)*: let an app
   admin define a named, ordered capability-maturity progression (a
@@ -177,5 +223,5 @@
 
   See `docs/features/team-skill-tree/SPEC.md`.
 
-Phases 0–5 and 7 are complete. See `docs/PRODUCT.md` for the product vision and
+Phases 0–7 are complete. See `docs/PRODUCT.md` for the product vision and
 non-goals.

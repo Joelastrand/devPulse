@@ -10,6 +10,8 @@ const fetchTeamResultsMock = vi.fn();
 const fetchCurrentTeamSurveyMock = vi.fn();
 const fetchTeamChallengesMock = vi.fn();
 const submitChallengeMock = vi.fn();
+const fetchTeamThreadsMock = vi.fn();
+const createThreadMock = vi.fn();
 const fetchTeamSkillsMock = vi.fn();
 
 vi.mock("../../auth/client/auth-client", () => ({
@@ -34,8 +36,19 @@ vi.mock("../../challenges/client/challenges-gateway", () => ({
   submitChallenge: submitChallengeMock,
 }));
 
+vi.mock("../../forum/client/forum-gateway", () => ({
+  fetchTeamThreads: fetchTeamThreadsMock,
+  createThread: createThreadMock,
+}));
+
 vi.mock("../../skill-trees/client/skill-trees-gateway", () => ({
   fetchTeamSkills: fetchTeamSkillsMock,
+}));
+
+const routerPushMock = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: routerPushMock }),
 }));
 
 const { TeamDetail } = await import("./TeamDetail");
@@ -45,6 +58,9 @@ const NO_CURRENT_SURVEY = { status: "ok", survey: null };
 
 /** The empty-challenge-list outcome — the harmless default most tests want, since they aren't exercising this section. */
 const NO_CHALLENGES = { status: "ok", challenges: [] };
+
+/** The empty-thread-list outcome — the harmless default most tests want, since they aren't exercising the forum section. */
+const NO_THREADS = { status: "ok", threads: [] };
 
 /** The empty-skill-list outcome — the harmless default most tests want, since they aren't exercising the skill section. */
 const NO_SKILLS = { status: "ok", skills: [] };
@@ -132,6 +148,7 @@ describe("TeamDetail", () => {
   beforeEach(() => {
     fetchCurrentTeamSurveyMock.mockResolvedValue(NO_CURRENT_SURVEY);
     fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
+    fetchTeamThreadsMock.mockResolvedValue(NO_THREADS);
     fetchTeamSkillsMock.mockResolvedValue(NO_SKILLS);
   });
 
@@ -143,7 +160,10 @@ describe("TeamDetail", () => {
     fetchTeamResultsMock.mockReset();
     fetchCurrentTeamSurveyMock.mockReset();
     fetchTeamChallengesMock.mockReset();
+    fetchTeamThreadsMock.mockReset();
     fetchTeamSkillsMock.mockReset();
+    createThreadMock.mockReset();
+    routerPushMock.mockReset();
     submitChallengeMock.mockReset();
   });
 
@@ -451,6 +471,7 @@ describe("TeamDetail current-survey section (TASK-010)", () => {
     });
     fetchTeamResultsMock.mockResolvedValue(INSUFFICIENT_RESULTS);
     fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
+    fetchTeamThreadsMock.mockResolvedValue(NO_THREADS);
     fetchTeamSkillsMock.mockResolvedValue(NO_SKILLS);
   });
 
@@ -462,7 +483,10 @@ describe("TeamDetail current-survey section (TASK-010)", () => {
     fetchTeamResultsMock.mockReset();
     fetchCurrentTeamSurveyMock.mockReset();
     fetchTeamChallengesMock.mockReset();
+    fetchTeamThreadsMock.mockReset();
     fetchTeamSkillsMock.mockReset();
+    createThreadMock.mockReset();
+    routerPushMock.mockReset();
     submitChallengeMock.mockReset();
   });
 
@@ -603,6 +627,7 @@ describe("TeamDetail current-survey section (TASK-010)", () => {
 describe("TeamDetail current-survey section auth/route races (TASK-010)", () => {
   beforeEach(() => {
     fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
+    fetchTeamThreadsMock.mockResolvedValue(NO_THREADS);
     fetchTeamSkillsMock.mockResolvedValue(NO_SKILLS);
   });
 
@@ -614,7 +639,10 @@ describe("TeamDetail current-survey section auth/route races (TASK-010)", () => 
     fetchTeamResultsMock.mockReset();
     fetchCurrentTeamSurveyMock.mockReset();
     fetchTeamChallengesMock.mockReset();
+    fetchTeamThreadsMock.mockReset();
     fetchTeamSkillsMock.mockReset();
+    createThreadMock.mockReset();
+    routerPushMock.mockReset();
     submitChallengeMock.mockReset();
   });
 
@@ -715,6 +743,7 @@ describe("TeamDetail auth/route races", () => {
   beforeEach(() => {
     fetchCurrentTeamSurveyMock.mockResolvedValue(NO_CURRENT_SURVEY);
     fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
+    fetchTeamThreadsMock.mockResolvedValue(NO_THREADS);
     fetchTeamSkillsMock.mockResolvedValue(NO_SKILLS);
   });
 
@@ -726,7 +755,10 @@ describe("TeamDetail auth/route races", () => {
     fetchTeamResultsMock.mockReset();
     fetchCurrentTeamSurveyMock.mockReset();
     fetchTeamChallengesMock.mockReset();
+    fetchTeamThreadsMock.mockReset();
     fetchTeamSkillsMock.mockReset();
+    createThreadMock.mockReset();
+    routerPushMock.mockReset();
     submitChallengeMock.mockReset();
   });
 
@@ -995,6 +1027,7 @@ describe("TeamDetail challenges section (TASK-005)", () => {
     fetchTeamResultsMock.mockResolvedValue(INSUFFICIENT_RESULTS);
     fetchCurrentTeamSurveyMock.mockResolvedValue(NO_CURRENT_SURVEY);
     fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
+    fetchTeamThreadsMock.mockResolvedValue(NO_THREADS);
     fetchTeamSkillsMock.mockResolvedValue(NO_SKILLS);
   });
 
@@ -1006,7 +1039,10 @@ describe("TeamDetail challenges section (TASK-005)", () => {
     fetchTeamResultsMock.mockReset();
     fetchCurrentTeamSurveyMock.mockReset();
     fetchTeamChallengesMock.mockReset();
+    fetchTeamThreadsMock.mockReset();
     fetchTeamSkillsMock.mockReset();
+    createThreadMock.mockReset();
+    routerPushMock.mockReset();
     submitChallengeMock.mockReset();
   });
 
@@ -1198,6 +1234,207 @@ describe("TeamDetail challenges section (TASK-005)", () => {
   });
 });
 
+describe("TeamDetail forum section (TASK-005)", () => {
+  const THREAD_1 = {
+    threadId: "thread-1",
+    title: "Har noen løst dette?",
+    authorTag: "48D73D",
+    isOwnThread: false,
+    createdAt: "2026-01-10T10:00:00.000Z",
+  };
+
+  beforeEach(() => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "member" }],
+    });
+    fetchTeamResultsMock.mockResolvedValue(INSUFFICIENT_RESULTS);
+    fetchCurrentTeamSurveyMock.mockResolvedValue(NO_CURRENT_SURVEY);
+    fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
+    fetchTeamThreadsMock.mockResolvedValue(NO_THREADS);
+    fetchTeamSkillsMock.mockResolvedValue(NO_SKILLS);
+  });
+
+  afterEach(() => {
+    cleanup();
+    observeIdTokenMock.mockReset();
+    fetchTeamsOverviewMock.mockReset();
+    requestTeamAccessMock.mockReset();
+    fetchTeamResultsMock.mockReset();
+    fetchCurrentTeamSurveyMock.mockReset();
+    fetchTeamChallengesMock.mockReset();
+    submitChallengeMock.mockReset();
+    fetchTeamThreadsMock.mockReset();
+    fetchTeamSkillsMock.mockReset();
+    createThreadMock.mockReset();
+    routerPushMock.mockReset();
+  });
+
+  it("renders the section heading, create-thread form, and existing threads for an authorized member", async () => {
+    fetchTeamThreadsMock.mockResolvedValue({ status: "ok", threads: [THREAD_1] });
+
+    render(<TeamDetail teamId="team-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Forum" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Start en ny tråd" })).toBeTruthy();
+    expect(screen.getByText(THREAD_1.title)).toBeTruthy();
+    expect(fetchTeamThreadsMock).toHaveBeenCalledWith("a-token", "team-1");
+  });
+
+  it("shows the Norwegian empty state when the team has no threads", async () => {
+    render(<TeamDetail teamId="team-1" />);
+
+    await screen.findByRole("heading", { name: "Forum" });
+    expect(screen.getByText(/ingen tråder ennå/i)).toBeTruthy();
+  });
+
+  it("shows a distinct forum error without hiding results/challenges (independent section failures)", async () => {
+    fetchTeamThreadsMock.mockResolvedValue({ status: "read_failed" });
+    fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
+    fetchTeamChallengesMock.mockResolvedValue({ status: "ok", challenges: [] });
+
+    render(<TeamDetail teamId="team-1" />);
+
+    await screen.findByText("7 svar");
+    const alerts = screen.getAllByRole("alert");
+    expect(alerts.some((alert) => /lasting av forumet/i.test(alert.textContent ?? ""))).toBe(true);
+  });
+
+  it("keeps the forum section on a results read failure (results_unavailable branch)", async () => {
+    fetchTeamResultsMock.mockResolvedValue({ status: "read_failed" });
+    fetchTeamThreadsMock.mockResolvedValue({ status: "ok", threads: [THREAD_1] });
+
+    render(<TeamDetail teamId="team-1" />);
+
+    await screen.findByText(/teamets resultater/i);
+    expect(screen.getByText(THREAD_1.title)).toBeTruthy();
+  });
+
+  it("never fetches threads for a caller the overview already reports as denied", async () => {
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "none" }],
+    });
+
+    render(<TeamDetail teamId="team-1" />);
+
+    await screen.findByRole("button", { name: /be om tilgang/i });
+    expect(fetchTeamThreadsMock).not.toHaveBeenCalled();
+  });
+
+  it("creates a thread and navigates to its detail view, without fabricating a DTO", async () => {
+    const user = userEvent.setup();
+    createThreadMock.mockResolvedValue({ status: "ok", threadId: "thread-9" });
+
+    render(<TeamDetail teamId="team-1" />);
+    await screen.findByRole("heading", { name: "Start en ny tråd" });
+
+    await user.type(screen.getByLabelText("Tittel"), "En helt ny tråd");
+    await user.type(screen.getByLabelText("Innhold"), "Med et gyldig innhold i tråden.");
+    await user.click(screen.getByRole("button", { name: /^opprett tråd$/i }));
+
+    await screen.findByText(/tråden ble opprettet/i);
+    expect(createThreadMock).toHaveBeenCalledWith(
+      "a-token",
+      "team-1",
+      "En helt ny tråd",
+      "Med et gyldig innhold i tråden.",
+    );
+    expect(routerPushMock).toHaveBeenCalledWith("/teams/team-1/forum/thread-9");
+  });
+
+  it("discards a stale post-create navigation once the caller has signed out before it resolves", async () => {
+    const observer = capturingObserver();
+    const user = userEvent.setup();
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "member" }],
+    });
+    let resolveCreate: (value: unknown) => void = () => {};
+    createThreadMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveCreate = resolve;
+        }),
+    );
+
+    render(<TeamDetail teamId="team-1" />);
+    observer.emit("a-token");
+    await screen.findByRole("heading", { name: "Start en ny tråd" });
+
+    await user.type(screen.getByLabelText("Tittel"), "En helt ny tråd");
+    await user.type(screen.getByLabelText("Innhold"), "Med et gyldig innhold i tråden.");
+    await user.click(screen.getByRole("button", { name: /^opprett tråd$/i }));
+
+    observer.emit(null);
+    await screen.findByRole("link", { name: /logg inn/i });
+
+    resolveCreate({ status: "ok", threadId: "thread-9" });
+    await flushMicrotasks();
+
+    expect(routerPushMock).not.toHaveBeenCalled();
+  });
+
+  it("discards a stale post-create navigation once the route has changed to a different team", async () => {
+    const user = userEvent.setup();
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [
+        { teamId: "team-a", name: "Team A", relationship: "member" },
+        { teamId: "team-b", name: "Team B", relationship: "member" },
+      ],
+    });
+    fetchTeamResultsMock.mockResolvedValue({
+      status: "ok",
+      teamId: "team-a",
+      results: INSUFFICIENT_RESULTS.results,
+    });
+    let resolveCreate: (value: unknown) => void = () => {};
+    createThreadMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveCreate = resolve;
+        }),
+    );
+
+    const { rerender } = render(<TeamDetail teamId="team-a" />);
+    await screen.findByRole("heading", { name: "Start en ny tråd" });
+
+    await user.type(screen.getByLabelText("Tittel"), "En helt ny tråd");
+    await user.type(screen.getByLabelText("Innhold"), "Med et gyldig innhold i tråden.");
+    await user.click(screen.getByRole("button", { name: /^opprett tråd$/i }));
+
+    rerender(<TeamDetail teamId="team-b" />);
+    await screen.findByText("Team B");
+
+    resolveCreate({ status: "ok", threadId: "thread-9" });
+    await flushMicrotasks();
+
+    expect(routerPushMock).not.toHaveBeenCalled();
+  });
+
+  it("never renders an identity-shaped value (authorUid/ciphertext/deletedBy) anywhere on the page", async () => {
+    fetchTeamThreadsMock.mockResolvedValue({ status: "ok", threads: [THREAD_1] });
+    fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
+
+    const { container } = render(<TeamDetail teamId="team-1" />);
+    await screen.findByText(THREAD_1.title);
+
+    expect(container.textContent).not.toMatch(/authorUid|ciphertext|deletedBy|\bkeyVersion\b/i);
+  });
+
+  it("contains no leftover English copy in the forum section", async () => {
+    fetchTeamThreadsMock.mockResolvedValue({ status: "ok", threads: [THREAD_1] });
+
+    render(<TeamDetail teamId="team-1" />);
+
+    await screen.findByText(THREAD_1.title);
+    expect(screen.queryByText(/^start a new thread$/i)).toBeNull();
+    expect(screen.queryByText(/^no threads yet$/i)).toBeNull();
+  });
+});
+
 describe("TeamDetail skill section (TASK-007)", () => {
   const TRACKED_SKILL = {
     treeId: "tree-1",
@@ -1225,6 +1462,7 @@ describe("TeamDetail skill section (TASK-007)", () => {
     fetchTeamResultsMock.mockResolvedValue(INSUFFICIENT_RESULTS);
     fetchCurrentTeamSurveyMock.mockResolvedValue(NO_CURRENT_SURVEY);
     fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
+    fetchTeamThreadsMock.mockResolvedValue(NO_THREADS);
   });
 
   afterEach(() => {
@@ -1236,7 +1474,10 @@ describe("TeamDetail skill section (TASK-007)", () => {
     fetchCurrentTeamSurveyMock.mockReset();
     fetchTeamChallengesMock.mockReset();
     submitChallengeMock.mockReset();
+    fetchTeamThreadsMock.mockReset();
+    createThreadMock.mockReset();
     fetchTeamSkillsMock.mockReset();
+    routerPushMock.mockReset();
   });
 
   it("renders the section heading and every tracked tree's full ordered stage list for an authorized member", async () => {
