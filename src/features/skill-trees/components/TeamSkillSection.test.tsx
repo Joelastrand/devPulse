@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { TeamSkillSection, type TeamSkillSectionState } from "./TeamSkillSection";
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
 });
 
 const CONTAINERS_SKILL = {
@@ -28,36 +30,53 @@ const OBSERVABILITY_SKILL = {
   currentNodeId: null,
 };
 
+function jsonResponse(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), { status });
+}
+
+function stageSelect(name: string | RegExp) {
+  return screen.getByRole("combobox", { name });
+}
+
+function saveButton(name: string | RegExp) {
+  return screen.getByRole("button", { name });
+}
+
+/** Scopes a stage-label lookup to the read-only `<ol>` marker, since the same label text also appears in the stage-select `<option>`. */
+function stageListItemText(text: string | RegExp) {
+  return screen.getByText(text, { selector: "li" });
+}
+
 describe("TeamSkillSection", () => {
   it("shows a Norwegian loading state", () => {
     const state: TeamSkillSectionState = { status: "loading" };
-    render(<TeamSkillSection state={state} />);
+    render(<TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />);
 
     expect(screen.getByRole("status").textContent).toMatch(/laster/i);
   });
 
   it("shows a Norwegian error state", () => {
     const state: TeamSkillSectionState = { status: "error" };
-    render(<TeamSkillSection state={state} />);
+    render(<TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />);
 
     expect(screen.getByRole("alert").textContent).toMatch(/noe gikk galt/i);
   });
 
   it("shows a Norwegian empty state when the team tracks nothing", () => {
     const state: TeamSkillSectionState = { status: "loaded", skills: [] };
-    render(<TeamSkillSection state={state} />);
+    render(<TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />);
 
     expect(screen.getByRole("status").textContent).toMatch(/ingen|sporer/i);
   });
 
   it("renders a single tracked tree's full ordered stage list", () => {
     const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL] };
-    render(<TeamSkillSection state={state} />);
+    render(<TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />);
 
     expect(screen.getByText("Containers")).toBeTruthy();
-    expect(screen.getByText("Fundamentals")).toBeTruthy();
-    expect(screen.getByText("Evaluate alternatives")).toBeTruthy();
-    expect(screen.getByText("Production rollout")).toBeTruthy();
+    expect(stageListItemText("Fundamentals")).toBeTruthy();
+    expect(stageListItemText("Evaluate alternatives")).toBeTruthy();
+    expect(stageListItemText("Production rollout")).toBeTruthy();
   });
 
   it("renders multiple tracked trees, each with its own stage list", () => {
@@ -65,30 +84,30 @@ describe("TeamSkillSection", () => {
       status: "loaded",
       skills: [CONTAINERS_SKILL, OBSERVABILITY_SKILL],
     };
-    render(<TeamSkillSection state={state} />);
+    render(<TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />);
 
     expect(screen.getByText("Containers")).toBeTruthy();
     expect(screen.getByText("Observability")).toBeTruthy();
-    expect(screen.getByText("Basic logging")).toBeTruthy();
-    expect(screen.getByText("Full tracing")).toBeTruthy();
+    expect(stageListItemText("Basic logging")).toBeTruthy();
+    expect(stageListItemText("Full tracing")).toBeTruthy();
   });
 
   it("marks the current stage with both aria-current='step' and visible text — never color alone", () => {
     const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL] };
-    render(<TeamSkillSection state={state} />);
+    render(<TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />);
 
-    const currentItem = screen.getByText("Evaluate alternatives").closest("li");
+    const currentItem = stageListItemText("Evaluate alternatives").closest("li");
     expect(currentItem?.getAttribute("aria-current")).toBe("step");
     expect(currentItem?.textContent).toMatch(/nåværende steg/i);
 
-    const otherItem = screen.getByText("Fundamentals").closest("li");
+    const otherItem = stageListItemText("Fundamentals").closest("li");
     expect(otherItem?.getAttribute("aria-current")).toBeNull();
     expect(otherItem?.textContent).not.toMatch(/nåværende steg/i);
   });
 
   it("renders a distinct 'not started' state for a currentNodeId of null, with no current-stage marker", () => {
     const state: TeamSkillSectionState = { status: "loaded", skills: [OBSERVABILITY_SKILL] };
-    render(<TeamSkillSection state={state} />);
+    render(<TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />);
 
     expect(screen.getByText(/ikke startet/i)).toBeTruthy();
     expect(screen.queryByText(/nåværende steg/i)).toBeNull();
@@ -99,24 +118,20 @@ describe("TeamSkillSection", () => {
 
   it("renders as a semantic ordered list, never a graphical/canvas element", () => {
     const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL] };
-    const { container } = render(<TeamSkillSection state={state} />);
+    const { container } = render(
+      <TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />,
+    );
 
     expect(container.querySelector("ol")).toBeTruthy();
     expect(container.querySelector("canvas")).toBeNull();
     expect(container.querySelector("svg")).toBeNull();
   });
 
-  it("is strictly read-only — no start/set-stage/stop control of any kind", () => {
-    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL, OBSERVABILITY_SKILL] };
-    render(<TeamSkillSection state={state} />);
-
-    expect(screen.queryAllByRole("button")).toHaveLength(0);
-    expect(screen.queryAllByRole("combobox")).toHaveLength(0);
-  });
-
   it("never renders an identity-shaped value (uid/email/createdBy/updatedBy) anywhere in its output", () => {
     const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL, OBSERVABILITY_SKILL] };
-    const { container } = render(<TeamSkillSection state={state} />);
+    const { container } = render(
+      <TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />,
+    );
 
     expect(container.textContent).not.toMatch(/uid|email|createdBy|updatedBy|@/i);
   });
@@ -131,12 +146,235 @@ describe("TeamSkillSection", () => {
       currentNodeId: "node-0",
     };
     const state: TeamSkillSectionState = { status: "loaded", skills: [maliciousSkill] };
-    const { container } = render(<TeamSkillSection state={state} />);
+    const { container } = render(
+      <TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />,
+    );
 
     // Rendered as literal text content, never parsed as markup.
     expect(screen.getByText(maliciousSkill.name)).toBeTruthy();
-    expect(screen.getByText(/Stage One/)).toBeTruthy();
+    expect(stageListItemText(/Stage One/)).toBeTruthy();
     expect(container.querySelector("script")).toBeNull();
     expect(container.querySelector("img")).toBeNull();
+  });
+});
+
+describe("TeamSkillSection self-report control (docs/features/skill-progress-self-report/SPEC.md — TASK-002)", () => {
+  it("renders a stage-select control and a save button for each already-tracked tree, for any authorized viewer (BR-10)", () => {
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL, OBSERVABILITY_SKILL] };
+    render(<TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />);
+
+    expect(stageSelect(/sett stadium.*containers/i)).toBeTruthy();
+    expect(stageSelect(/sett stadium.*observability/i)).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /lagre/i }).length).toBe(2);
+  });
+
+  it("defaults the select to the current stage for a tracked tree", () => {
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL] };
+    render(<TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />);
+
+    expect((stageSelect(/sett stadium/i) as HTMLSelectElement).value).toBe("node-1");
+  });
+
+  it("defaults the select to a valid node for a not-started tree, so the control remains usable", () => {
+    const state: TeamSkillSectionState = { status: "loaded", skills: [OBSERVABILITY_SKILL] };
+    render(<TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />);
+
+    const select = stageSelect(/sett stadium/i) as HTMLSelectElement;
+    expect(select.value).toBe("node-0");
+    expect(select.disabled).toBe(false);
+  });
+
+  it("submits a forward move via PATCH /api/teams/[teamId]/skills/[treeId] and calls onReported on success", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+    const onReported = vi.fn();
+    const user = userEvent.setup();
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL] };
+
+    render(<TeamSkillSection idToken="a-token" teamId="team-9" state={state} onReported={onReported} />);
+    await user.selectOptions(stageSelect(/sett stadium/i), "node-2");
+    await user.click(saveButton(/lagre/i));
+
+    await waitFor(() => expect(onReported).toHaveBeenCalledTimes(1));
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/teams/team-9/skills/tree-1");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(init.body as string)).toEqual({ nodeId: "node-2" });
+    expect(init.headers).toMatchObject({ Authorization: "Bearer a-token" });
+  });
+
+  it("submits a backward move the same way as any other", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+    const onReported = vi.fn();
+    const user = userEvent.setup();
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL] };
+
+    render(<TeamSkillSection idToken="a-token" teamId="team-1" state={state} onReported={onReported} />);
+    await user.selectOptions(stageSelect(/sett stadium/i), "node-0");
+    await user.click(saveButton(/lagre/i));
+
+    await waitFor(() => expect(onReported).toHaveBeenCalledTimes(1));
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ nodeId: "node-0" });
+  });
+
+  it("submits a same-node re-report — clicking save without changing the selection still sends a request", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+    const onReported = vi.fn();
+    const user = userEvent.setup();
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL] };
+
+    render(<TeamSkillSection idToken="a-token" teamId="team-1" state={state} onReported={onReported} />);
+    // No selection change — the select already shows the current stage (node-1).
+    await user.click(saveButton(/lagre/i));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ nodeId: "node-1" });
+    expect(onReported).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a pending state while the request is in flight", async () => {
+    let resolveFetch: (value: Response) => void = () => {};
+    const fetchMock = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL] };
+
+    render(<TeamSkillSection idToken="a-token" teamId="team-1" state={state} onReported={() => {}} />);
+    await user.click(saveButton(/lagre/i));
+
+    const pendingButton = screen.getByRole("button", { name: /lagrer/i });
+    expect(pendingButton.getAttribute("aria-busy")).toBe("true");
+
+    resolveFetch(jsonResponse(200, { ok: true }));
+  });
+
+  it("shows one generic authorization-failure message for a forbidden response, and never calls onReported", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(403, { error: "forbidden" })));
+    const onReported = vi.fn();
+    const user = userEvent.setup();
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL] };
+
+    render(<TeamSkillSection idToken="a-token" teamId="team-1" state={state} onReported={onReported} />);
+    await user.click(saveButton(/lagre/i));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/ikke tilgang/i);
+    expect(alert.textContent?.toLowerCase()).not.toMatch(/medlem/);
+    expect(onReported).not.toHaveBeenCalled();
+    // The previously-displayed current stage remains marked — no false success.
+    const currentItem = stageListItemText("Evaluate alternatives").closest("li");
+    expect(currentItem?.getAttribute("aria-current")).toBe("step");
+  });
+
+  it("shows the same generic message for a disabled-team (team_disabled) response — no distinct team-status wording", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(400, { error: "team_disabled" })));
+    const onReported = vi.fn();
+    const user = userEvent.setup();
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL] };
+
+    render(<TeamSkillSection idToken="a-token" teamId="team-1" state={state} onReported={onReported} />);
+    await user.click(saveButton(/lagre/i));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/ikke tilgang/i);
+    expect(alert.textContent?.toLowerCase()).not.toMatch(/deaktivert/);
+    expect(onReported).not.toHaveBeenCalled();
+  });
+
+  it("shows a validation-error message for an invalid_input response, and never calls onReported", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(400, { error: "invalid_input" })));
+    const onReported = vi.fn();
+    const user = userEvent.setup();
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL] };
+
+    render(<TeamSkillSection idToken="a-token" teamId="team-1" state={state} onReported={onReported} />);
+    await user.click(saveButton(/lagre/i));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/ugyldig/i);
+    expect(onReported).not.toHaveBeenCalled();
+  });
+
+  it("shows one generic infrastructure-failure message for a persistence_failed response, without exposing the distinction", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(500, { error: "persistence_failed" })));
+    const onReported = vi.fn();
+    const user = userEvent.setup();
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL] };
+
+    render(<TeamSkillSection idToken="a-token" teamId="team-1" state={state} onReported={onReported} />);
+    await user.click(saveButton(/lagre/i));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/noe gikk galt/i);
+    expect(alert.textContent?.toLowerCase()).not.toMatch(/persistence/);
+    expect(onReported).not.toHaveBeenCalled();
+  });
+
+  it("shows the same generic infrastructure-failure message for a network failure", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.reject(new Error("network down"))),
+    );
+    const onReported = vi.fn();
+    const user = userEvent.setup();
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL] };
+
+    render(<TeamSkillSection idToken="a-token" teamId="team-1" state={state} onReported={onReported} />);
+    await user.click(saveButton(/lagre/i));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/noe gikk galt/i);
+    expect(onReported).not.toHaveBeenCalled();
+  });
+
+  it("keyboard-operates the select and the save button", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, { ok: true })));
+    const user = userEvent.setup();
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL] };
+
+    render(<TeamSkillSection idToken="a-token" teamId="team-1" state={state} onReported={() => {}} />);
+    const select = stageSelect(/sett stadium/i);
+    select.focus();
+    expect(document.activeElement).toBe(select);
+
+    await user.tab();
+    expect(document.activeElement).toBe(saveButton(/lagre/i));
+  });
+
+  it("fresh-load reconstruction: a freshly mounted section reflects a newly persisted stage from state alone, not retained instance state", () => {
+    // Simulates two independent page loads: the first shows the
+    // pre-report persisted stage; a second, wholly separate mount (as a
+    // fresh getTeamSkillProgress/fetchTeamSkills read would produce) shows
+    // the post-report persisted stage — proving reconstruction comes from
+    // the `state` prop alone (docs/features/skill-progress-self-report/
+    // SPEC.md — TASK-002, "State/reload integration").
+    const beforeReport: TeamSkillSectionState = {
+      status: "loaded",
+      skills: [{ ...CONTAINERS_SKILL, currentNodeId: null }],
+    };
+    const { unmount } = render(
+      <TeamSkillSection idToken="token" teamId="team-1" state={beforeReport} onReported={() => {}} />,
+    );
+    expect(screen.getByText(/ikke startet/i)).toBeTruthy();
+    unmount();
+
+    const afterReport: TeamSkillSectionState = {
+      status: "loaded",
+      skills: [{ ...CONTAINERS_SKILL, currentNodeId: "node-2" }],
+    };
+    render(<TeamSkillSection idToken="token" teamId="team-1" state={afterReport} onReported={() => {}} />);
+
+    expect(screen.queryByText(/ikke startet/i)).toBeNull();
+    const currentItem = stageListItemText("Production rollout").closest("li");
+    expect(currentItem?.getAttribute("aria-current")).toBe("step");
   });
 });

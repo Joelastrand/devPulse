@@ -225,15 +225,36 @@ until attrition, burnout, or delivery failure makes them obvious.
   level (see `docs/DATA-MODEL.md` for the accepted residual risk this
   carries).
 
+## Delivered: Member Skill Progress Self-Report (Phase 8)
+
+- A **second, additive write path** for `skillProgress.currentNodeId`:
+  `reportTeamSkillProgress`, usable by any real member of a team, alongside
+  the unchanged app-admin path from Phase 7. A member can set their team's
+  current stage — forward or backward, identical to the admin contract —
+  on any SkillTree the team already tracks, without needing an app admin
+  to do it for them. See
+  `docs/features/skill-progress-self-report/SPEC.md`.
+- A member cannot start or stop tracking, and cannot define/correct
+  SkillTree structure — self-report only ever updates the stage of a tree
+  the team is *already* tracking. `/admin/skills` and
+  `/admin/teams/[teamId]`'s tracking controls are unchanged.
+- Unlike Phase 7's admin-only `updateTeamSkillProgress` (unaffected by team
+  status), this member path requires an `active` team — matching this
+  codebase's established pattern for every other member-originated write
+  (`submitChallenge`, `createThread`, `createReply`).
+- No visible attribution: a member's update is recorded exactly like an
+  admin's (`updatedBy: uid`, never returned by any API response). No new
+  Firestore collection, field, or index — the identical `skillProgress`
+  document shape from Phase 7 is reused unchanged.
+
 ## Future capabilities (not implemented yet)
 
 - A cross-team/org-wide "developer forum" or community, beyond Team
   Forum's team-scoped v1 slice, and real-name/display-name attribution for
   it (see "Delivered: Team Forum (Phase 6)" above).
-- Member-initiated (self-assessed) skill-progress updates, and
-  section-scoped or org-wide (multi-team) skill trees, beyond Team Skill
-  Tree's team-scoped, admin-write-only v1 slice (see "Delivered: Team
-  Skill Tree (Phase 7)" above).
+- Section-scoped or org-wide (multi-team) skill trees, beyond Team Skill
+  Tree's team-scoped v1 slice (see "Delivered: Team Skill Tree (Phase 7)"
+  above) — separately deferred, unaffected by Phase 8's member self-report.
 
 ## Non-goals
 

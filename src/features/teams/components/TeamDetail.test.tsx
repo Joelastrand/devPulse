@@ -13,6 +13,7 @@ const submitChallengeMock = vi.fn();
 const fetchTeamThreadsMock = vi.fn();
 const createThreadMock = vi.fn();
 const fetchTeamSkillsMock = vi.fn();
+const reportTeamSkillProgressMock = vi.fn();
 
 vi.mock("../../auth/client/auth-client", () => ({
   observeIdToken: observeIdTokenMock,
@@ -43,6 +44,7 @@ vi.mock("../../forum/client/forum-gateway", () => ({
 
 vi.mock("../../skill-trees/client/skill-trees-gateway", () => ({
   fetchTeamSkills: fetchTeamSkillsMock,
+  reportTeamSkillProgress: reportTeamSkillProgressMock,
 }));
 
 const routerPushMock = vi.fn();
@@ -162,6 +164,7 @@ describe("TeamDetail", () => {
     fetchTeamChallengesMock.mockReset();
     fetchTeamThreadsMock.mockReset();
     fetchTeamSkillsMock.mockReset();
+    reportTeamSkillProgressMock.mockReset();
     createThreadMock.mockReset();
     routerPushMock.mockReset();
     submitChallengeMock.mockReset();
@@ -485,6 +488,7 @@ describe("TeamDetail current-survey section (TASK-010)", () => {
     fetchTeamChallengesMock.mockReset();
     fetchTeamThreadsMock.mockReset();
     fetchTeamSkillsMock.mockReset();
+    reportTeamSkillProgressMock.mockReset();
     createThreadMock.mockReset();
     routerPushMock.mockReset();
     submitChallengeMock.mockReset();
@@ -641,6 +645,7 @@ describe("TeamDetail current-survey section auth/route races (TASK-010)", () => 
     fetchTeamChallengesMock.mockReset();
     fetchTeamThreadsMock.mockReset();
     fetchTeamSkillsMock.mockReset();
+    reportTeamSkillProgressMock.mockReset();
     createThreadMock.mockReset();
     routerPushMock.mockReset();
     submitChallengeMock.mockReset();
@@ -757,6 +762,7 @@ describe("TeamDetail auth/route races", () => {
     fetchTeamChallengesMock.mockReset();
     fetchTeamThreadsMock.mockReset();
     fetchTeamSkillsMock.mockReset();
+    reportTeamSkillProgressMock.mockReset();
     createThreadMock.mockReset();
     routerPushMock.mockReset();
     submitChallengeMock.mockReset();
@@ -1041,6 +1047,7 @@ describe("TeamDetail challenges section (TASK-005)", () => {
     fetchTeamChallengesMock.mockReset();
     fetchTeamThreadsMock.mockReset();
     fetchTeamSkillsMock.mockReset();
+    reportTeamSkillProgressMock.mockReset();
     createThreadMock.mockReset();
     routerPushMock.mockReset();
     submitChallengeMock.mockReset();
@@ -1267,6 +1274,7 @@ describe("TeamDetail forum section (TASK-005)", () => {
     submitChallengeMock.mockReset();
     fetchTeamThreadsMock.mockReset();
     fetchTeamSkillsMock.mockReset();
+    reportTeamSkillProgressMock.mockReset();
     createThreadMock.mockReset();
     routerPushMock.mockReset();
   });
@@ -1435,7 +1443,7 @@ describe("TeamDetail forum section (TASK-005)", () => {
   });
 });
 
-describe("TeamDetail skill section (TASK-007)", () => {
+describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
   const TRACKED_SKILL = {
     treeId: "tree-1",
     name: "Containers",
@@ -1477,6 +1485,7 @@ describe("TeamDetail skill section (TASK-007)", () => {
     fetchTeamThreadsMock.mockReset();
     createThreadMock.mockReset();
     fetchTeamSkillsMock.mockReset();
+    reportTeamSkillProgressMock.mockReset();
     routerPushMock.mockReset();
   });
 
@@ -1487,8 +1496,8 @@ describe("TeamDetail skill section (TASK-007)", () => {
 
     expect(await screen.findByRole("heading", { name: "Kompetanseområder" })).toBeTruthy();
     expect(screen.getByText("Containers")).toBeTruthy();
-    expect(screen.getByText("Fundamentals")).toBeTruthy();
-    expect(screen.getByText("Pilot")).toBeTruthy();
+    expect(screen.getByText("Fundamentals", { selector: "li" })).toBeTruthy();
+    expect(screen.getByText("Pilot", { selector: "li" })).toBeTruthy();
     expect(fetchTeamSkillsMock).toHaveBeenCalledWith("a-token", "team-1");
   });
 
@@ -1553,14 +1562,111 @@ describe("TeamDetail skill section (TASK-007)", () => {
     expect(fetchTeamSkillsMock).not.toHaveBeenCalled();
   });
 
-  it("renders no start/set-stage/stop control — strictly read-only", async () => {
+  it("renders a member self-report control (stage select + save button) alongside the read-only list (TASK-002, BR-10)", async () => {
     fetchTeamSkillsMock.mockResolvedValue({ status: "ok", skills: [TRACKED_SKILL] });
 
     render(<TeamDetail teamId="team-1" />);
 
     await screen.findByText("Containers");
-    expect(screen.queryByRole("button", { name: /start sporing|stopp sporing|sett stadium/i })).toBeNull();
-    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.queryByRole("button", { name: /start sporing|stopp sporing/i })).toBeNull();
+    expect(screen.getByRole("combobox", { name: /sett stadium/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /lagre/i })).toBeTruthy();
+  });
+
+  it("reports a stage via the gateway and refreshes the skill section through the existing GET path, without fabricating a DTO", async () => {
+    const user = userEvent.setup();
+    fetchTeamSkillsMock
+      .mockResolvedValueOnce({ status: "ok", skills: [TRACKED_SKILL] })
+      .mockResolvedValueOnce({ status: "ok", skills: [{ ...TRACKED_SKILL, currentNodeId: "node-1" }] });
+    reportTeamSkillProgressMock.mockResolvedValue({ ok: true });
+
+    render(<TeamDetail teamId="team-1" />);
+    await screen.findByText("Containers");
+
+    await user.selectOptions(screen.getByRole("combobox", { name: /sett stadium/i }), "node-1");
+    await user.click(screen.getByRole("button", { name: /lagre/i }));
+
+    await waitFor(() => expect(fetchTeamSkillsMock).toHaveBeenCalledTimes(2));
+    expect(reportTeamSkillProgressMock).toHaveBeenCalledWith("a-token", "team-1", "tree-1", "node-1");
+    await screen.findByText("Pilot", { selector: "li[aria-current='step']" });
+  });
+
+  it("discards a stale post-report skill refresh once the route has changed to a different team", async () => {
+    const user = userEvent.setup();
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [
+        { teamId: "team-a", name: "Team A", relationship: "member" },
+        { teamId: "team-b", name: "Team B", relationship: "member" },
+      ],
+    });
+    fetchTeamResultsMock.mockResolvedValue({ status: "ok", teamId: "team-a", results: INSUFFICIENT_RESULTS.results });
+    reportTeamSkillProgressMock.mockResolvedValue({ ok: true });
+    let resolveRefresh: (value: unknown) => void = () => {};
+    fetchTeamSkillsMock
+      .mockResolvedValueOnce({ status: "ok", skills: [TRACKED_SKILL] })
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveRefresh = resolve;
+          }),
+      )
+      .mockResolvedValue(NO_SKILLS);
+
+    const { rerender } = render(<TeamDetail teamId="team-a" />);
+    await screen.findByText("Containers");
+
+    await user.selectOptions(screen.getByRole("combobox", { name: /sett stadium/i }), "node-1");
+    await user.click(screen.getByRole("button", { name: /lagre/i }));
+    await waitFor(() => expect(reportTeamSkillProgressMock).toHaveBeenCalledTimes(1));
+
+    rerender(<TeamDetail teamId="team-b" />);
+    await screen.findByText("Team B");
+
+    resolveRefresh({ status: "ok", skills: [{ ...TRACKED_SKILL, currentNodeId: "node-1" }] });
+    await flushMicrotasks();
+
+    expect(screen.queryByText("Containers")).toBeNull();
+  });
+
+  it("surfaces the generic authorization-failure state for an app-admin-only viewer's forbidden report (TASK-002)", async () => {
+    const user = userEvent.setup();
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "admin" }],
+    });
+    fetchTeamSkillsMock.mockResolvedValue({ status: "ok", skills: [TRACKED_SKILL] });
+    reportTeamSkillProgressMock.mockResolvedValue({ ok: false, error: "forbidden" });
+
+    render(<TeamDetail teamId="team-1" />);
+    await screen.findByText("Containers");
+
+    await user.selectOptions(screen.getByRole("combobox", { name: /sett stadium/i }), "node-1");
+    await user.click(screen.getByRole("button", { name: /lagre/i }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/ikke tilgang/i);
+    expect(alert.textContent?.toLowerCase()).not.toMatch(/medlem/);
+    expect(fetchTeamSkillsMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("surfaces the same generic failure state for a disabled team's report, without revealing team status (TASK-002)", async () => {
+    const user = userEvent.setup();
+    fetchTeamSkillsMock.mockResolvedValue({ status: "ok", skills: [TRACKED_SKILL] });
+    reportTeamSkillProgressMock.mockResolvedValue({ ok: false, error: "team_disabled" });
+
+    render(<TeamDetail teamId="team-1" />);
+    await screen.findByText("Containers");
+
+    await user.selectOptions(screen.getByRole("combobox", { name: /sett stadium/i }), "node-1");
+    await user.click(screen.getByRole("button", { name: /lagre/i }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/ikke tilgang/i);
+    expect(alert.textContent?.toLowerCase()).not.toMatch(/deaktivert/);
+    expect(fetchTeamSkillsMock).toHaveBeenCalledTimes(1);
+    // The previously-displayed current stage remains marked — no false success.
+    expect(screen.getByText("Fundamentals", { selector: "li[aria-current='step']" })).toBeTruthy();
   });
 
   it("never renders member/admin identity data in the skill section", async () => {

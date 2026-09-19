@@ -223,5 +223,49 @@
 
   See `docs/features/team-skill-tree/SPEC.md`.
 
-Phases 0–7 are complete. See `docs/PRODUCT.md` for the product vision and
+- **Phase 8 — Member Skill Progress Self-Report** *(complete, v1 slice)*:
+  let a real team member set their own team's current stage on any
+  SkillTree the team is already tracking, without needing an app admin to
+  do it for them.
+
+  Delivered:
+  - `reportTeamSkillProgress` (`skillProgress/{teamId}__{treeId}`): a
+    **second, additive** write path alongside Phase 7's unchanged
+    `updateTeamSkillProgress` — a caller with a genuine, fresh-read
+    `teamMemberships/{uid}__{teamId}` record for the requested team may set
+    that team's `currentNodeId` for a tree it already tracks, forward or
+    backward, identical to the admin contract. App-admin status alone,
+    without a real membership record, is never sufficient. A member cannot
+    start/stop tracking or define/correct a tree — self-report only ever
+    updates the stage of an already-tracked tree.
+  - Unlike `updateTeamSkillProgress`, `reportTeamSkillProgress` **is**
+    gated on the owning team's `active` status (`team_disabled` otherwise)
+    — matching this codebase's established pattern for every other
+    member-originated write (`submitChallenge`, `createThread`,
+    `createReply`), not Phase 7's admin-only creation-vs-management split.
+  - `PATCH /api/teams/[teamId]/skills/[treeId]` (new route, member-facing,
+    distinct from the unchanged admin route) and an extension to
+    `/teams/[teamId]`'s existing read-only Kompetanseområder section: each
+    already-tracked tree gains a stage-setting control, rendered for any
+    authorized viewer (member or admin) with the server remaining the sole
+    authority; a successful report re-fetches through the existing
+    `getTeamSkillProgress` read path rather than an optimistic local
+    update.
+  - No visible attribution (`updatedBy` remains internal-only bookkeeping,
+    never returned by any API response, identical in shape whether an
+    admin or a member wrote it last); no per-team/per-tree opt-in toggle;
+    no new Firestore collection, field, or index — the identical
+    `skillProgress` document shape from Phase 7 is reused unchanged.
+    `/admin/skills` and `/admin/teams/[teamId]`'s tracking controls are
+    byte-for-byte unmodified.
+
+  This phase preserved every existing privacy/security invariant
+  (server-side authorization, team isolation, no client-side Firestore
+  access, admin ≠ raw-identity access) while adding this codebase's first
+  second-writer-class extension to an existing team-level record, resolving
+  the gap Phase 7's own "Open questions" #1 had flagged.
+
+  See `docs/features/skill-progress-self-report/SPEC.md`.
+
+Phases 0–8 are complete. See `docs/PRODUCT.md` for the product vision and
 non-goals.

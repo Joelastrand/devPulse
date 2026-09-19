@@ -4,6 +4,7 @@ import {
   createAdminSkillTree,
   fetchAdminSkillTrees,
   fetchTeamSkills,
+  reportTeamSkillProgress,
   startAdminTeamSkillTracking,
   updateAdminTeamSkillProgress,
   stopAdminTeamSkillTracking,
@@ -11,6 +12,7 @@ import {
   type CreateAdminSkillTreeGateway,
   type FetchAdminSkillTreesGateway,
   type FetchTeamSkillsGateway,
+  type ReportTeamSkillProgressGateway,
   type StartAdminTeamSkillTrackingGateway,
   type UpdateAdminTeamSkillProgressGateway,
   type StopAdminTeamSkillTrackingGateway,
@@ -618,6 +620,139 @@ describe("fetchTeamSkills", () => {
       await fetchTeamSkills("token", "team-1");
       expect(calledInit?.body).toBeUndefined();
       expect(calledInit?.method).toBeUndefined();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe("reportTeamSkillProgress", () => {
+  it("sends only nodeId to PATCH /api/teams/[teamId]/skills/[treeId] — teamId/treeId never in the body", async () => {
+    let sentUrl = "";
+    let sentBody: unknown;
+    const gateway: ReportTeamSkillProgressGateway = {
+      async reportTeamSkillProgress(idToken, teamId, treeId, nodeId) {
+        sentUrl = `/api/teams/${teamId}/skills/${treeId}`;
+        sentBody = { nodeId };
+        return { ok: true };
+      },
+    };
+
+    const result = await reportTeamSkillProgress("token", "team-1", "tree-1", "node-1", { gateway });
+
+    expect(result).toEqual({ ok: true });
+    expect(sentUrl).toBe("/api/teams/team-1/skills/tree-1");
+    expect(sentBody).toEqual({ nodeId: "node-1" });
+    expect(sentBody).not.toHaveProperty("teamId");
+    expect(sentBody).not.toHaveProperty("treeId");
+    expect(sentBody).not.toHaveProperty("updatedBy");
+  });
+
+  it("the default gateway's request body contains only nodeId, PATCHes the correct URL with a bearer token, and URL-encodes teamId/treeId", async () => {
+    const originalFetch = globalThis.fetch;
+    let calledUrl: string | undefined;
+    let calledMethod: string | undefined;
+    let calledHeaders: HeadersInit | undefined;
+    let capturedBody: unknown;
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      calledUrl = url;
+      calledMethod = init?.method;
+      calledHeaders = init?.headers;
+      capturedBody = init?.body ? JSON.parse(init.body as string) : undefined;
+      return jsonResponse(200, { ok: true });
+    }) as typeof fetch;
+
+    try {
+      const result = await reportTeamSkillProgress("token-abc", "team with space", "tree-1", "node-0");
+      expect(result).toEqual({ ok: true });
+      expect(calledUrl).toBe("/api/teams/team%20with%20space/skills/tree-1");
+      expect(calledMethod).toBe("PATCH");
+      expect(calledHeaders).toMatchObject({ Authorization: "Bearer token-abc" });
+      expect(capturedBody).toEqual({ nodeId: "node-0" });
+      expect(Object.keys(capturedBody as object)).toEqual(["nodeId"]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("maps a forbidden error", async () => {
+    const gateway: ReportTeamSkillProgressGateway = {
+      async reportTeamSkillProgress() {
+        return { ok: false, error: "forbidden" };
+      },
+    };
+
+    const result = await reportTeamSkillProgress("token", "team-1", "tree-1", "node-1", { gateway });
+    expect(result).toEqual({ ok: false, error: "forbidden" });
+  });
+
+  it("maps a team_disabled error", async () => {
+    const gateway: ReportTeamSkillProgressGateway = {
+      async reportTeamSkillProgress() {
+        return { ok: false, error: "team_disabled" };
+      },
+    };
+
+    const result = await reportTeamSkillProgress("token", "team-1", "tree-1", "node-1", { gateway });
+    expect(result).toEqual({ ok: false, error: "team_disabled" });
+  });
+
+  it("maps a not_tracked error", async () => {
+    const gateway: ReportTeamSkillProgressGateway = {
+      async reportTeamSkillProgress() {
+        return { ok: false, error: "not_tracked" };
+      },
+    };
+
+    const result = await reportTeamSkillProgress("token", "team-1", "tree-1", "node-1", { gateway });
+    expect(result).toEqual({ ok: false, error: "not_tracked" });
+  });
+
+  it("maps an invalid_input error", async () => {
+    const gateway: ReportTeamSkillProgressGateway = {
+      async reportTeamSkillProgress() {
+        return { ok: false, error: "invalid_input" };
+      },
+    };
+
+    const result = await reportTeamSkillProgress("token", "team-1", "tree-1", "node-1", { gateway });
+    expect(result).toEqual({ ok: false, error: "invalid_input" });
+  });
+
+  it("falls back to unknown on a network failure", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      throw new Error("network down");
+    }) as typeof fetch;
+
+    try {
+      const result = await reportTeamSkillProgress("token", "team-1", "tree-1", "node-1");
+      expect(result).toEqual({ ok: false, error: "unknown" });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("falls back to unknown on an unrecognized error shape, never fabricating success", async () => {
+    const gateway: ReportTeamSkillProgressGateway = {
+      async reportTeamSkillProgress() {
+        return { ok: false, error: "unknown" };
+      },
+    };
+
+    const result = await reportTeamSkillProgress("token", "team-1", "tree-1", "node-1", { gateway });
+    expect(result).toEqual({ ok: false, error: "unknown" });
+  });
+
+  it("never surfaces an updatedBy/audit field in its result shape", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      jsonResponse(200, { ok: true, updatedBy: "admin-uid-should-never-appear" })) as typeof fetch;
+
+    try {
+      const result = await reportTeamSkillProgress("token", "team-1", "tree-1", "node-1");
+      expect(result).toEqual({ ok: true });
+      expect(JSON.stringify(result)).not.toMatch(/admin-uid/);
     } finally {
       globalThis.fetch = originalFetch;
     }

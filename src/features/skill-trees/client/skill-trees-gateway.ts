@@ -673,3 +673,122 @@ export async function fetchTeamSkills(
   const gateway = deps.gateway ?? getDefaultFetchTeamSkillsGateway();
   return gateway.fetchTeamSkills(idToken, teamId);
 }
+
+// --- Team-facing self-report (TASK-002) ------------------------------------
+// docs/features/skill-progress-self-report/SPEC.md — BR-14: a thin fetch
+// wrapper around the new `PATCH /api/teams/[teamId]/skills/[treeId]`
+// endpoint, which delegates entirely to `reportTeamSkillProgress`. This
+// gateway only ever sends `{nodeId}` — `teamId`/`treeId` travel as route
+// params, never inside the body, and no `updatedBy`/audit field of any kind
+// is ever exposed to or accepted from the client (BR-5's server-only
+// posture is preserved; this gateway has no parameter capable of
+// expressing one).
+
+export type ReportTeamSkillProgressResult =
+  | { ok: true }
+  | {
+      ok: false;
+      error:
+        | "unauthenticated"
+        | "forbidden"
+        | "team_disabled"
+        | "not_tracked"
+        | "tree_not_found"
+        | "invalid_input"
+        | "persistence_failed"
+        | "unknown";
+    };
+
+const KNOWN_REPORT_ERRORS = new Set([
+  "unauthenticated",
+  "forbidden",
+  "team_disabled",
+  "not_tracked",
+  "tree_not_found",
+  "invalid_input",
+  "persistence_failed",
+]);
+
+function parseReportTeamSkillProgressResponse(status: number, body: unknown): ReportTeamSkillProgressResult {
+  if (status === 200 && typeof body === "object" && body !== null) {
+    const { ok } = body as { ok: unknown };
+    if (ok === true) {
+      return { ok: true };
+    }
+  }
+
+  if (typeof body === "object" && body !== null) {
+    const { error } = body as { error: unknown };
+    if (typeof error === "string" && KNOWN_REPORT_ERRORS.has(error)) {
+      return {
+        ok: false,
+        error: error as
+          | "unauthenticated"
+          | "forbidden"
+          | "team_disabled"
+          | "not_tracked"
+          | "tree_not_found"
+          | "invalid_input"
+          | "persistence_failed",
+      };
+    }
+  }
+
+  return { ok: false, error: "unknown" };
+}
+
+export interface ReportTeamSkillProgressGateway {
+  reportTeamSkillProgress(
+    idToken: string,
+    teamId: string,
+    treeId: string,
+    nodeId: string,
+  ): Promise<ReportTeamSkillProgressResult>;
+}
+
+function getDefaultReportGateway(): ReportTeamSkillProgressGateway {
+  return {
+    async reportTeamSkillProgress(idToken, teamId, treeId, nodeId) {
+      try {
+        const response = await fetch(
+          `/api/teams/${encodeURIComponent(teamId)}/skills/${encodeURIComponent(treeId)}`,
+          {
+            method: "PATCH",
+            headers: {
+              Authorization: `Bearer ${idToken}`,
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({ nodeId }),
+          },
+        );
+        return parseReportTeamSkillProgressResponse(response.status, await parseJson(response));
+      } catch {
+        return { ok: false, error: "unknown" };
+      }
+    },
+  };
+}
+
+export interface ReportTeamSkillProgressDeps {
+  gateway?: ReportTeamSkillProgressGateway;
+}
+
+/**
+ * Reports a real team member's own stage on an already-tracked tree via
+ * `PATCH /api/teams/[teamId]/skills/[treeId]` (docs/features/
+ * skill-progress-self-report/SPEC.md — BR-14). This gateway only ever sends
+ * `{nodeId}` — `teamId`/`treeId` travel as route params, never inside the
+ * body — and never surfaces `updatedBy` or any other audit identity in
+ * either direction: the caller's uid is derived entirely server-side
+ * (`.claude/rules/security.md`).
+ */
+export async function reportTeamSkillProgress(
+  idToken: string,
+  teamId: string,
+  treeId: string,
+  nodeId: string,
+  deps: ReportTeamSkillProgressDeps = {},
+): Promise<ReportTeamSkillProgressResult> {
+  const gateway = deps.gateway ?? getDefaultReportGateway();
+  return gateway.reportTeamSkillProgress(idToken, teamId, treeId, nodeId);
+}

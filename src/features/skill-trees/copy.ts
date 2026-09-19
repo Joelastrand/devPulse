@@ -92,11 +92,15 @@ export const teamSkillTrackingCopy = {
 } as const;
 
 /**
- * Norwegian user-facing copy for the TASK-007 `/teams/[teamId]` read-only
- * "Kompetanseområder" section (`TeamSkillSection.tsx`). Same "skill"
- * (technical) / "Kompetanseområder" (UI copy) split as `adminSkillsCopy`/
- * `teamSkillTrackingCopy` (Owner decision 4). This section is strictly
- * read-only — no action copy (start/stop/set-stage) belongs here.
+ * Norwegian user-facing copy for the `/teams/[teamId]` "Kompetanseområder"
+ * section (`TeamSkillSection.tsx`) — originally read-only (Phase 7,
+ * TASK-007), extended with a member self-report control by docs/features/
+ * skill-progress-self-report/SPEC.md (TASK-002, BR-10 through BR-12). Same
+ * "skill" (technical) / "Kompetanseområder" (UI copy) split as
+ * `adminSkillsCopy`/`teamSkillTrackingCopy` (Owner decision 4). `report`'s
+ * `authorizationError` deliberately covers both a non-member's `forbidden`
+ * and a disabled team's `team_disabled` with one generic message — neither
+ * ever reveals *why* the report failed (SPEC BR-10, "Disabled team").
  */
 export const teamSkillSectionCopy = {
   sectionTitle: "Kompetanseområder",
@@ -105,4 +109,12 @@ export const teamSkillSectionCopy = {
   empty: "Teamet sporer ingen kompetanseområder ennå.",
   currentStageLabel: "Nåværende steg",
   notStarted: "Ikke startet",
+  report: {
+    stageSelectLabel: "Sett stadium",
+    submitButton: "Lagre",
+    submittingButton: "Lagrer…",
+    validationError: "Ugyldig stadium valgt.",
+    authorizationError: "Du har ikke tilgang til å gjøre dette.",
+    genericError: "Noe gikk galt. Prøv igjen.",
+  },
 } as const;

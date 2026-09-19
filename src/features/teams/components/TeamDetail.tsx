@@ -379,6 +379,37 @@ export function TeamDetail({ teamId }: { teamId: string }) {
   }
 
   /**
+   * Refreshes only the skill-tracking sub-state through the existing
+   * `fetchTeamSkills` (→ `getTeamSkillProgress`) server contract after a
+   * successful self-report (docs/features/skill-progress-self-report/
+   * SPEC.md — TASK-002, "No optimistic local update") — mirrors
+   * `handleChallengeSubmitted`'s identical established pattern. Never
+   * fabricates a `TeamSkillView` client-side; a stale response belonging to
+   * a superseded auth identity or a since-navigated-away `teamId` must
+   * never populate the current page.
+   */
+  async function handleSkillReported(token: string, generation: number) {
+    const refreshed = await fetchTeamSkills(token, teamId);
+    if (!isCurrentGeneration(generation)) {
+      return;
+    }
+
+    setState((previous) => {
+      if (previous.phase !== "loaded" || !isCurrentGeneration(generation)) {
+        return previous;
+      }
+      const { result } = previous;
+      if (result.status !== "authorized" && result.status !== "results_unavailable") {
+        return previous;
+      }
+      return {
+        ...previous,
+        result: { ...result, skills: toSkillSectionState(refreshed) },
+      };
+    });
+  }
+
+  /**
    * Navigates to the newly created thread's detail view (docs/features/
    * team-forum/SPEC.md — "Product behavior" #2). Discarded, per BR-46, if
    * the caller has since signed out or navigated to a different team before
@@ -428,7 +459,12 @@ export function TeamDetail({ teamId }: { teamId: string }) {
           state={result.forum}
           onThreadCreated={(threadId) => handleThreadCreated(generation, threadId)}
         />
-        <TeamSkillSection state={toTeamSkillSectionState(result.skills)} />
+        <TeamSkillSection
+          idToken={token}
+          teamId={teamId}
+          state={toTeamSkillSectionState(result.skills)}
+          onReported={() => handleSkillReported(token, generation)}
+        />
       </div>
     );
   }
@@ -459,7 +495,12 @@ export function TeamDetail({ teamId }: { teamId: string }) {
           state={result.forum}
           onThreadCreated={(threadId) => handleThreadCreated(generation, threadId)}
         />
-        <TeamSkillSection state={toTeamSkillSectionState(result.skills)} />
+        <TeamSkillSection
+          idToken={token}
+          teamId={teamId}
+          state={toTeamSkillSectionState(result.skills)}
+          onReported={() => handleSkillReported(token, generation)}
+        />
       </div>
     );
   }
