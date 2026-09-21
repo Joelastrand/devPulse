@@ -62,3 +62,14 @@ See `docs/SECURITY.md` for the invariants these concepts must respect.
   specific person in a label). This cannot be prevented by validation
   alone and is not scanned for — see `docs/features/team-skill-tree/
   SPEC.md` → "Accepted residual risks" for the full acceptance.
+- The Cross-Team Skill Progress Overview (`docs/features/
+  org-skill-progress-overview/SPEC.md`, Phase 9) introduces **no new
+  collection and no new persisted concept**. Its `getOrgSkillProgressOverview`
+  operation is a computed, on-demand join across the existing `SkillTree`,
+  `SkillProgress`, and `Team` rows above — the same "computed value only,
+  no persisted document" pattern `SurveyAggregate` already establishes —
+  never a fourth collection. Its response DTO is a strict subset of fields
+  already covered by the `SkillTree`/`SkillProgress`/`Team` rows above (plus
+  `Team.name`/`Team.status`), so the "Personal data?"/"Sensitive data?"/
+  "Encryption likely?" answers on those existing rows already apply; Phase 9
+  changes none of them.

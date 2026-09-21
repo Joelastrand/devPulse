@@ -267,5 +267,44 @@
 
   See `docs/features/skill-progress-self-report/SPEC.md`.
 
-Phases 0–8 are complete. See `docs/PRODUCT.md` for the product vision and
+- **Phase 9 — Cross-Team Skill Progress Overview** *(complete)*: let an app
+  admin see, in one place, every team tracking a given SkillTree and that
+  team's current stage — closing the gap where comparing adoption of a
+  capability across the organization required opening each team's own
+  `/admin/teams/[teamId]` page individually.
+
+  Delivered:
+  - `getOrgSkillProgressOverview` (app-admin-only, read-only): composes the
+    existing `skillTrees`, `skillProgress`, and `teams` collections into a
+    per-tree, per-team view, computed fresh on every call like
+    `SurveyAggregate` — no new Firestore collection, and no change to any
+    Phase 7/8 read or write operation (`createSkillTree`, `updateSkillTree`,
+    `listSkillTrees`, `startTeamSkillTracking`, `updateTeamSkillProgress`,
+    `stopTeamSkillTracking`, `getTeamSkillProgress`,
+    `reportTeamSkillProgress` all remain byte-for-byte unchanged)
+  - `GET /api/admin/skills/overview` and a new read-only section on the
+    existing `/admin/skills` page (no new route, no new navigation entry) —
+    for each SkillTree at least one team tracks, every tracking team's
+    name, active/disabled status, and current stage (or "Ikke startet"),
+    ordered exactly as the server returns it (trees oldest-created-first,
+    teams alphabetical)
+  - a disabled team's existing tracking remains visible and labeled
+    ("Deaktivert", text-only, never color alone) here too, matching every
+    other existing read of `SkillProgress` — no new suppression/minimum-
+    team-count threshold, since this data was never anonymous or sensitive
+  - deliberately narrow scope: "org-wide" means only the set of teams the
+    existing app-admin model already sees, not a new Section/department
+    grouping concept above `Team` — that remains future scope, unaffected
+    by this phase (see `docs/PRODUCT.md` → "Future capabilities")
+
+  This phase preserved every existing privacy/security invariant
+  (server-side `requireAppAdmin` authorization, no `authorizeTeamAccess`/
+  team-scoping of any kind, no client-side Firestore access, no new write
+  path, no individual/per-person data, no audit-identity field ever
+  reaching the DTO) while adding this codebase's first read that joins
+  across every team's tracking data in a single admin-only view.
+
+  See `docs/features/org-skill-progress-overview/SPEC.md`.
+
+Phases 0–9 are complete. See `docs/PRODUCT.md` for the product vision and
 non-goals.

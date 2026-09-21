@@ -112,6 +112,135 @@ export async function fetchAdminSkillTrees(
   return gateway.fetchAdminSkillTrees(idToken);
 }
 
+// --- Org-wide overview (TASK-002, docs/features/org-skill-progress-overview/
+// SPEC.md) -------------------------------------------------------------
+// A thin fetch wrapper around the new, admin-only, read-only `GET /api/admin/
+// skills/overview` endpoint, which delegates entirely to
+// `getOrgSkillProgressOverview`. No request body, no query parameter — the
+// caller's Firebase ID token is the only input.
+
+/** One tracking team's entry within a tree, exactly as `getOrgSkillProgressOverview` returns it — never `createdAt`/`createdBy`/`updatedAt`/`updatedBy` (BR-23/BR-24/BR-25). */
+export interface OrgSkillProgressTeamEntryView {
+  teamId: string;
+  teamName: string;
+  teamStatus: "active" | "disabled";
+  currentNodeId: string | null;
+}
+
+/** One included `SkillTree` and its tracking teams, exactly as `getOrgSkillProgressOverview` returns it. */
+export interface OrgSkillProgressTreeView {
+  treeId: string;
+  name: string;
+  nodes: SkillTreeNodeView[];
+  teams: OrgSkillProgressTeamEntryView[];
+}
+
+const ORG_SKILL_PROGRESS_TEAM_ENTRY_KEYS = new Set(["teamId", "teamName", "teamStatus", "currentNodeId"]);
+
+/**
+ * Structural check plus an exact-key check — a response object carrying any
+ * field beyond the declared DTO shape (e.g. a stray `updatedBy`) is rejected
+ * rather than passed through, reinforcing BR-23/BR-25 on the client side as
+ * well as the server.
+ */
+function isOrgSkillProgressTeamEntryView(value: unknown): value is OrgSkillProgressTeamEntryView {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const keys = Object.keys(value);
+  if (keys.length !== ORG_SKILL_PROGRESS_TEAM_ENTRY_KEYS.size || !keys.every((key) => ORG_SKILL_PROGRESS_TEAM_ENTRY_KEYS.has(key))) {
+    return false;
+  }
+  const { teamId, teamName, teamStatus, currentNodeId } = value as Record<string, unknown>;
+  return (
+    typeof teamId === "string" &&
+    teamId.length > 0 &&
+    typeof teamName === "string" &&
+    (teamStatus === "active" || teamStatus === "disabled") &&
+    (currentNodeId === null || typeof currentNodeId === "string")
+  );
+}
+
+const ORG_SKILL_PROGRESS_TREE_VIEW_KEYS = new Set(["treeId", "name", "nodes", "teams"]);
+
+function isOrgSkillProgressTreeView(value: unknown): value is OrgSkillProgressTreeView {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const keys = Object.keys(value);
+  if (keys.length !== ORG_SKILL_PROGRESS_TREE_VIEW_KEYS.size || !keys.every((key) => ORG_SKILL_PROGRESS_TREE_VIEW_KEYS.has(key))) {
+    return false;
+  }
+  const { treeId, name, nodes, teams } = value as Record<string, unknown>;
+  return (
+    typeof treeId === "string" &&
+    treeId.length > 0 &&
+    typeof name === "string" &&
+    Array.isArray(nodes) &&
+    nodes.every(isSkillTreeNodeView) &&
+    Array.isArray(teams) &&
+    teams.every(isOrgSkillProgressTeamEntryView)
+  );
+}
+
+export type FetchOrgSkillProgressOverviewResult =
+  | { status: "ok"; trees: OrgSkillProgressTreeView[] }
+  | { status: "unauthenticated" }
+  | { status: "forbidden" }
+  | { status: "read_failed" };
+
+const KNOWN_ORG_SKILL_PROGRESS_OVERVIEW_ERRORS = new Set(["unauthenticated", "forbidden", "read_failed"]);
+
+function parseFetchOrgSkillProgressOverviewResponse(body: unknown): FetchOrgSkillProgressOverviewResult {
+  if (typeof body === "object" && body !== null) {
+    const record = body as Record<string, unknown>;
+    if (Array.isArray(record.trees) && record.trees.every(isOrgSkillProgressTreeView)) {
+      return { status: "ok", trees: record.trees };
+    }
+    if (typeof record.error === "string" && KNOWN_ORG_SKILL_PROGRESS_OVERVIEW_ERRORS.has(record.error)) {
+      return { status: record.error as "unauthenticated" | "forbidden" | "read_failed" };
+    }
+  }
+  return { status: "read_failed" };
+}
+
+export interface FetchOrgSkillProgressOverviewGateway {
+  fetchOrgSkillProgressOverview(idToken: string): Promise<FetchOrgSkillProgressOverviewResult>;
+}
+
+function getDefaultFetchOrgSkillProgressOverviewGateway(): FetchOrgSkillProgressOverviewGateway {
+  return {
+    async fetchOrgSkillProgressOverview(idToken) {
+      try {
+        const response = await fetch("/api/admin/skills/overview", {
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+        return parseFetchOrgSkillProgressOverviewResponse(await parseJson(response));
+      } catch {
+        return { status: "read_failed" };
+      }
+    },
+  };
+}
+
+export interface FetchOrgSkillProgressOverviewDeps {
+  gateway?: FetchOrgSkillProgressOverviewGateway;
+}
+
+/**
+ * Fetches the app-admin-only cross-team overview via the existing, unchanged
+ * `GET /api/admin/skills/overview` endpoint — no Firestore access, no
+ * member/team identity of any kind lives here; admin status is always
+ * re-derived server-side by `getOrgSkillProgressOverview`.
+ */
+export async function fetchOrgSkillProgressOverview(
+  idToken: string,
+  deps: FetchOrgSkillProgressOverviewDeps = {},
+): Promise<FetchOrgSkillProgressOverviewResult> {
+  const gateway = deps.gateway ?? getDefaultFetchOrgSkillProgressOverviewGateway();
+  return gateway.fetchOrgSkillProgressOverview(idToken);
+}
+
 // --- Creation ----------------------------------------------------------
 
 export type CreateAdminSkillTreeResult =

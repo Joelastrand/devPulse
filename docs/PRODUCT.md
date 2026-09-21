@@ -247,14 +247,48 @@ until attrition, burnout, or delivery failure makes them obvious.
   Firestore collection, field, or index — the identical `skillProgress`
   document shape from Phase 7 is reused unchanged.
 
+## Delivered: Cross-Team Skill Progress Overview (Phase 9)
+
+- A read-only, app-admin-only view at `/admin/skills`: for every SkillTree
+  at least one team tracks, every tracking team's current stage, side by
+  side — so an app admin responsible for a capability across the
+  organization can see adoption without opening each team's own
+  `/admin/teams/[teamId]` page individually. See
+  `docs/features/org-skill-progress-overview/SPEC.md`.
+- Composes existing team-level data only (`SkillTree`, `SkillProgress`,
+  `Team`), computed fresh on every call like `SurveyAggregate` — no new
+  Firestore collection, no new write path, and no individual/per-person
+  data of any kind.
+- **Deliberately narrower than a true organizational hierarchy**: "org-wide"
+  here means exactly the set of teams the existing app-admin model already
+  sees, using no new grouping concept above `Team`. A genuine Section/
+  department-scoped entity, or org-wide SkillTree *ownership/tracking*
+  itself (as opposed to today's per-team tracking model read through a new
+  cross-team view), both remain unimplemented future scope — this phase
+  does not deliver either (see "Future capabilities" below).
+- A disabled team's existing tracking remains visible here too, labeled
+  ("Deaktivert," never color alone) — the same "no team-status read gate"
+  precedent every other `SkillProgress` read in this codebase already
+  follows (Phase 7's `getTeamSkillProgress`/admin tracking view).
+- No new suppression/minimum-team-count threshold: `SkillTree`/
+  `SkillProgress` are non-sensitive, non-anonymous, team-level reference
+  data, unlike `SurveyAggregate` — a tree tracked by exactly one team
+  appears, same as it would to that team's own admin page.
+
 ## Future capabilities (not implemented yet)
 
 - A cross-team/org-wide "developer forum" or community, beyond Team
   Forum's team-scoped v1 slice, and real-name/display-name attribution for
   it (see "Delivered: Team Forum (Phase 6)" above).
-- Section-scoped or org-wide (multi-team) skill trees, beyond Team Skill
-  Tree's team-scoped v1 slice (see "Delivered: Team Skill Tree (Phase 7)"
-  above) — separately deferred, unaffected by Phase 8's member self-report.
+- A genuine Section/department-scoped grouping entity above `Team`, or
+  org-wide (multi-team) SkillTree *ownership/tracking* itself — beyond both
+  Team Skill Tree's team-scoped v1 tracking model (Phase 7) and the
+  Cross-Team Skill Progress Overview (Phase 9). Phase 9 is a read-only
+  *view* composed over already-existing per-team tracking data through the
+  existing app-admin model, not a new hierarchy, grouping, or ownership
+  concept — that distinction is deliberate (see "Delivered: Cross-Team
+  Skill Progress Overview (Phase 9)" above) and remains separately
+  deferred, unaffected by Phase 8's member self-report or by Phase 9.
 
 ## Non-goals
 

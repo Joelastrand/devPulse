@@ -92,6 +92,24 @@ export const teamSkillTrackingCopy = {
 } as const;
 
 /**
+ * Norwegian user-facing copy for the `/admin/skills` cross-team overview
+ * section (docs/features/org-skill-progress-overview/SPEC.md — TASK-002,
+ * `OrgSkillProgressOverview.tsx`). `disabledLabel` reuses the exact
+ * "Deaktivert" string `teams/copy.ts`'s `statusDisabled` already establishes
+ * for the same concept, rather than duplicating a second, independent copy
+ * value for the identical meaning. `notStarted` similarly reuses
+ * `teamSkillTrackingCopy.tracked.notStarted`'s exact "Ikke startet" string —
+ * this module defines only the copy genuinely new to this overview.
+ */
+export const orgSkillProgressOverviewCopy = {
+  sectionTitle: "Sporing på tvers av team",
+  loading: "Laster oversikt…",
+  error: "Noe gikk galt under lasting av oversikten. Prøv igjen senere.",
+  empty: "Ingen kompetanseområder spores av noe team ennå.",
+  disabledLabel: "Deaktivert",
+} as const;
+
+/**
  * Norwegian user-facing copy for the `/teams/[teamId]` "Kompetanseområder"
  * section (`TeamSkillSection.tsx`) — originally read-only (Phase 7,
  * TASK-007), extended with a member self-report control by docs/features/

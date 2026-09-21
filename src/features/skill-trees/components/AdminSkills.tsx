@@ -2,13 +2,18 @@
 
 import Link from "next/link";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
-import { fetchAdminSkillTrees, type FetchAdminSkillTreesResult } from "../client/skill-trees-gateway";
+import {
+  fetchAdminSkillTrees,
+  fetchOrgSkillProgressOverview,
+  type FetchAdminSkillTreesResult,
+} from "../client/skill-trees-gateway";
 import { adminSkillsCopy } from "../copy";
 import { useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { LoadingState } from "../../../components/ui/LoadingState";
 import { SkillTreeCreationForm } from "./SkillTreeCreationForm";
 import { SkillTreeCatalogList, type SkillTreeCatalogState } from "./SkillTreeCatalogList";
+import { OrgSkillProgressOverview, type OrgSkillProgressOverviewState } from "./OrgSkillProgressOverview";
 
 type ViewState =
   | { phase: "loading" }
@@ -26,6 +31,7 @@ type ViewState =
  */
 export function AdminSkills() {
   const [state, setState] = useState<ViewState>({ phase: "loading" });
+  const [overviewState, setOverviewState] = useState<OrgSkillProgressOverviewState>({ status: "loading" });
 
   const { isCurrentGeneration } = useAuthGatedResource((token, generation) => {
     if (!token) {
@@ -34,7 +40,9 @@ export function AdminSkills() {
     }
 
     setState({ phase: "loading" });
+    setOverviewState({ status: "loading" });
     loadForGeneration(token, generation);
+    loadOverviewForGeneration(token, generation);
   });
 
   async function loadForGeneration(token: string, generation: number) {
@@ -42,6 +50,24 @@ export function AdminSkills() {
     if (isCurrentGeneration(generation)) {
       setState({ phase: "loaded", token, generation, result });
     }
+  }
+
+  /**
+   * Fetched once per auth generation, independently of `loadForGeneration`'s
+   * catalog refresh — a tree creation/correction never re-triggers this
+   * (SPEC "Refresh behavior": no invented mutation-triggered coupling). A
+   * failure here only ever affects `overviewState`, never `state` — the
+   * existing creation form/catalog stay fully usable regardless of this
+   * fetch's outcome (SPEC "Failure isolation").
+   */
+  async function loadOverviewForGeneration(token: string, generation: number) {
+    const result = await fetchOrgSkillProgressOverview(token);
+    if (!isCurrentGeneration(generation)) {
+      return;
+    }
+    setOverviewState(
+      result.status === "ok" ? { status: "loaded", trees: result.trees } : { status: "error" },
+    );
   }
 
   if (state.phase === "loading") {
@@ -75,6 +101,7 @@ export function AdminSkills() {
         token={token}
         onChanged={() => loadForGeneration(token, generation)}
       />
+      <OrgSkillProgressOverview state={overviewState} />
     </div>
   );
 }

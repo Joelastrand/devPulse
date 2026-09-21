@@ -3,6 +3,7 @@ import {
   correctAdminSkillTree,
   createAdminSkillTree,
   fetchAdminSkillTrees,
+  fetchOrgSkillProgressOverview,
   fetchTeamSkills,
   reportTeamSkillProgress,
   startAdminTeamSkillTracking,
@@ -11,6 +12,7 @@ import {
   type CorrectAdminSkillTreeGateway,
   type CreateAdminSkillTreeGateway,
   type FetchAdminSkillTreesGateway,
+  type FetchOrgSkillProgressOverviewGateway,
   type FetchTeamSkillsGateway,
   type ReportTeamSkillProgressGateway,
   type StartAdminTeamSkillTrackingGateway,
@@ -105,6 +107,135 @@ describe("fetchAdminSkillTrees", () => {
 
     const result = await fetchAdminSkillTrees("token", { gateway });
     expect(result).toEqual({ status: "forbidden" });
+  });
+});
+
+describe("fetchOrgSkillProgressOverview", () => {
+  it("returns the overview on a well-formed success response via GET, no body", async () => {
+    const trees = [
+      {
+        treeId: "tree-1",
+        name: "Containere",
+        nodes: [{ nodeId: "node-0", label: "Fundamentals", order: 0 }],
+        teams: [{ teamId: "team-1", teamName: "Alpha", teamStatus: "active", currentNodeId: "node-0" }],
+      },
+    ];
+    let capturedUrl = "";
+    let capturedHeaders: HeadersInit | undefined;
+    const gateway: FetchOrgSkillProgressOverviewGateway = {
+      async fetchOrgSkillProgressOverview(idToken) {
+        capturedHeaders = { Authorization: `Bearer ${idToken}` };
+        capturedUrl = "/api/admin/skills/overview";
+        const response = jsonResponse(200, { trees });
+        const body = await response.json();
+        return { status: "ok", trees: body.trees };
+      },
+    };
+
+    const result = await fetchOrgSkillProgressOverview("token-123", { gateway });
+
+    expect(result).toEqual({ status: "ok", trees });
+    expect(capturedUrl).toBe("/api/admin/skills/overview");
+    expect(capturedHeaders).toEqual({ Authorization: "Bearer token-123" });
+  });
+
+  it("uses the default gateway to call GET /api/admin/skills/overview with a bearer token and no body", async () => {
+    const originalFetch = globalThis.fetch;
+    let calledUrl: string | undefined;
+    let calledInit: RequestInit | undefined;
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      calledUrl = url;
+      calledInit = init;
+      return jsonResponse(200, { trees: [] });
+    }) as typeof fetch;
+
+    try {
+      const result = await fetchOrgSkillProgressOverview("token-abc");
+      expect(result).toEqual({ status: "ok", trees: [] });
+      expect(calledUrl).toBe("/api/admin/skills/overview");
+      expect(calledInit?.headers).toEqual({ Authorization: "Bearer token-abc" });
+      expect(calledInit?.method).toBeUndefined();
+      expect(calledInit?.body).toBeUndefined();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("rejects a malformed team entry (missing currentNodeId) as read_failed", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      jsonResponse(200, {
+        trees: [
+          {
+            treeId: "tree-1",
+            name: "x",
+            nodes: [],
+            teams: [{ teamId: "team-1", teamName: "Alpha", teamStatus: "active" }],
+          },
+        ],
+      })) as typeof fetch;
+
+    try {
+      const result = await fetchOrgSkillProgressOverview("token");
+      expect(result).toEqual({ status: "read_failed" });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("rejects a team entry carrying a field beyond the declared DTO shape (e.g. updatedBy)", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      jsonResponse(200, {
+        trees: [
+          {
+            treeId: "tree-1",
+            name: "x",
+            nodes: [],
+            teams: [
+              {
+                teamId: "team-1",
+                teamName: "Alpha",
+                teamStatus: "active",
+                currentNodeId: null,
+                updatedBy: "attacker-uid",
+              },
+            ],
+          },
+        ],
+      })) as typeof fetch;
+
+    try {
+      const result = await fetchOrgSkillProgressOverview("token");
+      expect(result).toEqual({ status: "read_failed" });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("maps unauthenticated/forbidden/read_failed correctly", async () => {
+    const gateway: FetchOrgSkillProgressOverviewGateway = {
+      async fetchOrgSkillProgressOverview() {
+        return { status: "forbidden" };
+      },
+    };
+
+    const result = await fetchOrgSkillProgressOverview("token", { gateway });
+    expect(result).toEqual({ status: "forbidden" });
+  });
+
+  it("falls back to read_failed on a network error", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      throw new Error("network down");
+    }) as typeof fetch;
+
+    try {
+      const result = await fetchOrgSkillProgressOverview("token");
+      expect(result).toEqual({ status: "read_failed" });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });
 

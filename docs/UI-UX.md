@@ -244,6 +244,22 @@ identifier (see `docs/features/team-skill-tree/SPEC.md` — Owner decision 4).
   labels, with **no add/remove-row controls at all** — its row count is
   fixed to the existing tree's node count, so the UI itself cannot submit
   a different stage count.
+- **`/admin/skills`'s read-only cross-team overview** (added at Phase 9
+  closeout, `docs/features/org-skill-progress-overview/SPEC.md`): a new
+  section below the existing catalog, additive and independently loaded —
+  a failure loading it never hides or blocks the creation form/catalog
+  above it, and vice versa. For every SkillTree at least one team tracks,
+  its name as a sub-heading followed by a semantic list (`<ul>`/`<li>`) of
+  its tracking teams — never a canvas/SVG diagram: each team's name, a
+  "Deaktivert" text suffix for a disabled team (never color alone, matching
+  `AdminTeams.tsx`'s existing convention), and its current stage's label or
+  the same "Ikke startet" copy the read-only team view already uses for
+  "not started." Observation-only — no button, form, or link that starts/
+  stops tracking or sets a stage exists anywhere in this section, even
+  though its viewer (an app admin) already holds that permission elsewhere
+  on the same page. Tree and team ordering come entirely from the server
+  response (trees oldest-created-first, teams alphabetical); nothing here
+  is re-sorted client-side.
 - **`/admin/teams/[teamId]`** gains a "Kompetanseområder" section
   (app-admin-only): a picker to start tracking any catalog tree not yet
   tracked by this team, and, for each already-tracked tree, its ordered
