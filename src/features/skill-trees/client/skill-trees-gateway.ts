@@ -745,18 +745,32 @@ function isTeamSkillView(value: unknown): value is TeamSkillView {
 }
 
 export type FetchTeamSkillsResult =
-  | { status: "ok"; skills: TeamSkillView[] }
+  | { status: "ok"; skills: TeamSkillView[]; canReportProgress: boolean }
   | { status: "unauthenticated" }
   | { status: "forbidden" }
   | { status: "read_failed" };
 
 const KNOWN_TEAM_SKILLS_ERRORS = new Set(["unauthenticated", "forbidden", "read_failed"]);
 
+/**
+ * Requires `canReportProgress` to be strictly boolean (docs/features/
+ * skill-progress-self-report/SPEC.md — "Permission-UI correction"). A
+ * missing or non-boolean value fails the whole response closed to
+ * `read_failed` rather than defaulting to `true`/permissively enabling
+ * mutation controls, or silently defaulting to `false` while still trusting
+ * the rest of an otherwise-malformed response — mirrors this gateway's
+ * existing all-or-nothing shape validation for `skills` itself.
+ */
 function parseFetchTeamSkillsResponse(body: unknown): FetchTeamSkillsResult {
   if (typeof body === "object" && body !== null) {
     const record = body as Record<string, unknown>;
-    if (record.status === "ok" && Array.isArray(record.skills) && record.skills.every(isTeamSkillView)) {
-      return { status: "ok", skills: record.skills };
+    if (
+      record.status === "ok" &&
+      Array.isArray(record.skills) &&
+      record.skills.every(isTeamSkillView) &&
+      typeof record.canReportProgress === "boolean"
+    ) {
+      return { status: "ok", skills: record.skills, canReportProgress: record.canReportProgress };
     }
     if (typeof record.status === "string" && KNOWN_TEAM_SKILLS_ERRORS.has(record.status)) {
       return { status: record.status as "unauthenticated" | "forbidden" | "read_failed" };

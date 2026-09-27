@@ -123,10 +123,13 @@ describe("BR-35 full regression: startTeamSkillTracking -> updateTeamSkillProgre
     // 5-6. Read the team's progress as an authorized member — the existing
     // progress must still resolve to the same stable node-1, and the DTO
     // must reflect the corrected name/label.
+    const authCollection = fakeAuthCollection();
     const read = await getTeamSkillProgress("token", TEAM_ID, {
       verifyToken: verifyTokenReturning(memberIdentity()),
       allowList: [ADMIN_EMAIL],
-      authCollection: fakeAuthCollection(),
+      authCollection,
+      membershipReader: authCollection,
+      teamStatusReader: authCollection,
       progressReader: {
         async listRawForTeam(teamId) {
           return Array.from(progress.docs.entries())
@@ -151,6 +154,10 @@ describe("BR-35 full regression: startTeamSkillTracking -> updateTeamSkillProgre
           currentNodeId: "node-1",
         },
       ],
+      // The reading member also holds real team membership on an active
+      // team (docs/features/skill-progress-self-report/SPEC.md —
+      // "Permission-UI correction").
+      canReportProgress: true,
     });
   });
 });

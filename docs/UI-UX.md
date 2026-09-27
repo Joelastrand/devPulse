@@ -280,16 +280,19 @@ identifier (see `docs/features/team-skill-tree/SPEC.md` — Owner decision 4).
   stage set yet shows a distinct "Ikke startet" state rather than leaving
   the marker absent with no explanation. A non-member sees no skill
   content or data. **Extended by `docs/features/skill-progress-self-report/
-  SPEC.md` (Phase 8, TASK-002):** this section is no longer strictly
-  read-only — each already-tracked tree also gets a "Sett stadium" select
-  plus a "Lagre" button, rendered for any authorized viewer (member or
-  admin) without a client-side membership check of its own; the server
-  remains the sole authority (a non-member's or a disabled team's rejection
-  surfaces one generic failure message, never a distinguishing one). A
-  successful report re-fetches through the same team-scoped read this
-  section already used — never an optimistic/local-only update — so a
-  fresh page load always reconstructs the persisted stage the same way,
-  whether it was last set by a member or an admin.
+  SPEC.md` (Phase 8, TASK-002, corrected by its later "permission-UI
+  correction"):** this section is no longer strictly read-only for a viewer
+  who may actually use the control — each already-tracked tree also gets a
+  "Sett stadium" select plus a "Lagre" button, but only for a viewer the
+  server reports as `canReportProgress: true` (a genuine, fresh-read team
+  member on a currently active team, independent of `authorizeTeamAccess`'s
+  broader read result). An app-admin-only viewer with no real membership, or
+  a genuine member of a disabled team, sees the read-only stage list without
+  the mutation control at all — never merely a disabled one. A successful
+  report re-fetches through the same team-scoped read this section already
+  used — never an optimistic/local-only update — so a fresh page load always
+  reconstructs the persisted stage, and the currently-shown capability, the
+  same way, whether the value was last set by a member or an admin.
 - A tree's name and every stage's label are untrusted, admin-authored
   display strings, rendered as ordinary text on every surface — never
   `dangerouslySetInnerHTML`, never passed through an HTML/Markdown parser.

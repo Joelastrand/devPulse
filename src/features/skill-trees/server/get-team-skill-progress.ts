@@ -5,11 +5,15 @@ import {
   authorizeTeamAccess,
   type AuthorizeTeamAccessDeps,
 } from "../../teams/server/authorize-team-access";
+import { isValidTeamStatus } from "../../teams/domain/team";
+import { isValidMembershipFor, membershipDocId } from "../../teams/domain/team-membership";
 import { isValidSkillTree, type SkillTreeRecord } from "../domain/skill-tree";
 import { isValidSkillProgress, type SkillProgressRecord } from "../domain/skill-progress";
 
 const SKILL_PROGRESS_COLLECTION = "skillProgress";
 const SKILL_TREES_COLLECTION = "skillTrees";
+const MEMBERSHIPS_COLLECTION = "teamMemberships";
+const TEAMS_COLLECTION = "teams";
 
 /** The client-facing shape of one node within a tracked tree — never `createdAt`/`createdBy`/`updatedAt`/`updatedBy`. */
 export interface SkillNodeView {
@@ -127,8 +131,93 @@ function toDateOrUndefined(value: unknown): unknown {
   return value;
 }
 
+/**
+ * The read seam for a real `teamMemberships/{uid}__{teamId}` record, mirroring
+ * `list-team-challenges.ts`'s identical `MembershipReader` seam (kept as its
+ * own local declaration, not a cross-module import, matching this codebase's
+ * per-operation dependency-seam convention). Used only to compute
+ * `canReportProgress` below; never influences which skills are returned.
+ */
+export interface MembershipReader {
+  getMembership(uid: string, teamId: string): Promise<unknown>;
+}
+
+function getDefaultMembershipReader(): MembershipReader {
+  return {
+    async getMembership(uid, teamId) {
+      const snapshot = await getFirestoreDb()
+        .collection(MEMBERSHIPS_COLLECTION)
+        .doc(membershipDocId(uid, teamId))
+        .get();
+      return snapshot.exists ? snapshot.data() : undefined;
+    },
+  };
+}
+
+/**
+ * The read seam for the owning team's fresh `status`, mirroring
+ * `report-team-skill-progress.ts`'s identical `TeamStatusReader` seam. Used
+ * only to compute `canReportProgress` below — reading team status here adds
+ * no new authorization behavior of its own and never gates which skills this
+ * operation returns (BR-21 — viewing a disabled team's progress is
+ * unaffected).
+ */
+export interface TeamStatusReader {
+  getTeamStatus(teamId: string): Promise<unknown>;
+}
+
+function getDefaultTeamStatusReader(): TeamStatusReader {
+  return {
+    async getTeamStatus(teamId) {
+      const snapshot = await getFirestoreDb().collection(TEAMS_COLLECTION).doc(teamId).get();
+      return snapshot.exists ? snapshot.data()?.status : undefined;
+    },
+  };
+}
+
+/**
+ * Independently re-derives "may this caller currently call
+ * `reportTeamSkillProgress` for this team," using the exact same
+ * membership-then-team-status semantics that operation requires
+ * (docs/features/skill-progress-self-report/SPEC.md — BR-1, BR-4) — never
+ * inferred from `authorizeTeamAccess`'s broader `"admin"`/`"member"` result,
+ * since an app admin short-circuits that check before membership is ever
+ * read (`authorize-team-access.ts`). This is a UI-capability signal only
+ * (docs/features/skill-progress-self-report/SPEC.md — "Permission-UI
+ * correction"): it never gates which skills are returned by this operation,
+ * and `reportTeamSkillProgress` itself remains the sole write-authorization
+ * boundary, re-deriving both checks fresh on every call regardless of this
+ * value. Fails closed (`false`) on any read error or malformed record — a
+ * transient failure to confirm eligibility must never present a mutation
+ * affordance the server would then reject anyway.
+ */
+async function resolveCanReportProgress(
+  uid: string,
+  teamId: string,
+  membershipReader: MembershipReader,
+  teamStatusReader: TeamStatusReader,
+): Promise<boolean> {
+  let rawMembership: unknown;
+  try {
+    rawMembership = await membershipReader.getMembership(uid, teamId);
+  } catch {
+    return false;
+  }
+  if (!isValidMembershipFor(rawMembership, { uid, teamId })) {
+    return false;
+  }
+
+  let rawStatus: unknown;
+  try {
+    rawStatus = await teamStatusReader.getTeamStatus(teamId);
+  } catch {
+    return false;
+  }
+  return isValidTeamStatus(rawStatus) && rawStatus === "active";
+}
+
 export type GetTeamSkillProgressResult =
-  | { ok: true; skills: TeamSkillProgressView[] }
+  | { ok: true; skills: TeamSkillProgressView[]; canReportProgress: boolean }
   | { ok: false; error: "unauthenticated" | "forbidden" | "read_failed" };
 
 export interface GetTeamSkillProgressDeps {
@@ -137,6 +226,8 @@ export interface GetTeamSkillProgressDeps {
   authCollection?: AuthorizeTeamAccessDeps["collection"];
   progressReader?: SkillProgressReader;
   treeReader?: SkillTreeReader;
+  membershipReader?: MembershipReader;
+  teamStatusReader?: TeamStatusReader;
 }
 
 /**
@@ -176,6 +267,20 @@ export interface GetTeamSkillProgressDeps {
  *
  * No ordering requirement (SPEC/TASKS.md — "No ordering requirement on the
  * returned array"); the result reflects the query's own document order.
+ *
+ * Also returns `canReportProgress` (docs/features/skill-progress-self-report/
+ * SPEC.md — "Permission-UI correction"): whether *this* caller currently
+ * holds a genuine `teamMemberships/{uid}__{teamId}` record **and** the team
+ * is currently `active`, re-derived independently via
+ * `resolveCanReportProgress` using the exact membership-then-team-status
+ * semantics `reportTeamSkillProgress` itself requires — an app admin with no
+ * such record, or a genuine member of a disabled team, gets
+ * `canReportProgress: false` even though their broader `authorizeTeamAccess`
+ * result already let this read through. This value never affects which
+ * skills are returned above; it exists solely so `/teams/[teamId]` can hide
+ * its stage-mutation controls from a viewer who could never successfully use
+ * them (mirrors `listTeamChallengesForMember`'s identical `canSubmit`
+ * precedent — the "Challenge submission composition gap" debug fix).
  */
 export async function getTeamSkillProgress(
   idToken: string,
@@ -197,6 +302,13 @@ export async function getTeamSkillProgress(
   if (authResult.access === "denied") {
     return { ok: false, error: "forbidden" };
   }
+
+  const canReportProgressPromise = resolveCanReportProgress(
+    verified.identity.uid,
+    teamId,
+    deps.membershipReader ?? getDefaultMembershipReader(),
+    deps.teamStatusReader ?? getDefaultTeamStatusReader(),
+  );
 
   const progressReader = deps.progressReader ?? getDefaultSkillProgressReader();
   let rawDocs: RawSkillProgressDoc[];
@@ -241,5 +353,7 @@ export async function getTeamSkillProgress(
     });
   }
 
-  return { ok: true, skills };
+  const canReportProgress = await canReportProgressPromise;
+
+  return { ok: true, skills, canReportProgress };
 }

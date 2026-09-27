@@ -12,7 +12,7 @@ import { teamSkillSectionCopy } from "../copy";
 export type TeamSkillSectionState =
   | { status: "loading" }
   | { status: "error" }
-  | { status: "loaded"; skills: TeamSkillView[] };
+  | { status: "loaded"; skills: TeamSkillView[]; canReportProgress: boolean };
 
 export interface TeamSkillSectionProps {
   idToken: string;
@@ -41,19 +41,31 @@ export interface TeamSkillSectionProps {
  * a distinct "ikke startet" state rather than silently showing no marker at
  * all.
  *
- * Each already-tracked tree also gets a stage-setting control, rendered
- * unconditionally for any authorized viewer of the page (member or admin,
- * per `authorizeTeamAccess`) — this component invents no client-side
- * membership/admin distinction of its own (BR-10). A non-member/non-admin's
- * `forbidden` response and a disabled team's `team_disabled` response both
- * surface as the same one generic authorization-failure message — never a
- * distinct "you're not a member"/"team is disabled" text. **No optimistic
- * local update**: a successful submission calls `onReported`, which
- * re-fetches through the existing `fetchTeamSkills` read path — this
- * component never locally mutates `state.skills`. A failed submission
- * leaves the previously-rendered current-stage marker untouched, since it
- * is driven entirely by the (unchanged) `state` prop
- * (`.claude/rules/security.md`, `.claude/rules/nextjs-react.md`).
+ * Each already-tracked tree also gets a stage-setting control — but **only
+ * when `state.canReportProgress` is true** (docs/features/
+ * skill-progress-self-report/SPEC.md — "Permission-UI correction"): a
+ * server-derived capability signal for whether *this* caller currently holds
+ * genuine team membership on an active team, re-derived independently of
+ * `authorizeTeamAccess`'s broader read-authorization result (an app-admin-
+ * only viewer, or a member of a disabled team, gets `canReportProgress:
+ * false`). When it is `false`, neither the stage `<select>` nor the "Lagre"
+ * button is rendered at all for that viewer — not merely disabled — so
+ * nothing on the page implies the control would become usable by waiting;
+ * the read-only stage list above remains fully visible either way. This
+ * component still invents no authorization logic of its own: it only ever
+ * reflects the capability the server already computed, and
+ * `reportTeamSkillProgress` remains the sole write-authorization boundary
+ * regardless of this value. When the control is shown, a non-member/non-
+ * admin's `forbidden` response and a disabled team's `team_disabled`
+ * response (e.g. a team disabled after this page loaded) both still surface
+ * as the same one generic authorization-failure message — never a distinct
+ * "you're not a member"/"team is disabled" text. **No optimistic local
+ * update**: a successful submission calls `onReported`, which re-fetches
+ * through the existing `fetchTeamSkills` read path — this component never
+ * locally mutates `state.skills`. A failed submission leaves the
+ * previously-rendered current-stage marker untouched, since it is driven
+ * entirely by the (unchanged) `state` prop (`.claude/rules/security.md`,
+ * `.claude/rules/nextjs-react.md`).
  *
  * Each row is keyed by `treeId` **and** `currentNodeId` so that a
  * post-report refresh (a new `currentNodeId` arriving via `state`) remounts
@@ -95,6 +107,7 @@ export function TeamSkillSection({ idToken, teamId, state, onReported }: TeamSki
               skill={skill}
               idToken={idToken}
               teamId={teamId}
+              canReportProgress={state.canReportProgress}
               onReported={onReported}
             />
           ))}
@@ -114,11 +127,13 @@ function TrackedSkillRow({
   skill,
   idToken,
   teamId,
+  canReportProgress,
   onReported,
 }: {
   skill: TeamSkillView;
   idToken: string;
   teamId: string;
+  canReportProgress: boolean;
   onReported: () => void;
 }) {
   const nodes = sortedNodes(skill);
@@ -175,54 +190,56 @@ function TrackedSkillRow({
         })}
       </ol>
 
-      {phase === "validation_error" && (
+      {canReportProgress && phase === "validation_error" && (
         <Alert variant="error" className="text-sm">
           {teamSkillSectionCopy.report.validationError}
         </Alert>
       )}
-      {phase === "authorization_error" && (
+      {canReportProgress && phase === "authorization_error" && (
         <Alert variant="error" className="text-sm">
           {teamSkillSectionCopy.report.authorizationError}
         </Alert>
       )}
-      {phase === "infrastructure_error" && (
+      {canReportProgress && phase === "infrastructure_error" && (
         <Alert variant="error" className="text-sm">
           {teamSkillSectionCopy.report.genericError}
         </Alert>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <label
-          htmlFor={`skill-tree-report-${skill.treeId}`}
-          className="text-sm font-medium text-zinc-900 dark:text-zinc-50"
-        >
-          {teamSkillSectionCopy.report.stageSelectLabel}
-        </label>
-        <select
-          id={`skill-tree-report-${skill.treeId}`}
-          aria-label={`${teamSkillSectionCopy.report.stageSelectLabel} – ${skill.name}`}
-          value={selectedNodeId}
-          disabled={isPending}
-          onChange={(event) => setSelectedNodeId(event.target.value)}
-          className="rounded border border-zinc-300 px-2 py-1 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:bg-zinc-900"
-        >
-          {nodes.map((node) => (
-            <option key={node.nodeId} value={node.nodeId}>
-              {node.label}
-            </option>
-          ))}
-        </select>
-        <Button
-          variant="secondary"
-          size="sm"
-          disabled={isPending}
-          pending={isPending}
-          aria-label={`${isPending ? teamSkillSectionCopy.report.submittingButton : teamSkillSectionCopy.report.submitButton} – ${skill.name}`}
-          onClick={handleReport}
-        >
-          {isPending ? teamSkillSectionCopy.report.submittingButton : teamSkillSectionCopy.report.submitButton}
-        </Button>
-      </div>
+      {canReportProgress && (
+        <div className="flex flex-wrap items-center gap-2">
+          <label
+            htmlFor={`skill-tree-report-${skill.treeId}`}
+            className="text-sm font-medium text-zinc-900 dark:text-zinc-50"
+          >
+            {teamSkillSectionCopy.report.stageSelectLabel}
+          </label>
+          <select
+            id={`skill-tree-report-${skill.treeId}`}
+            aria-label={`${teamSkillSectionCopy.report.stageSelectLabel} – ${skill.name}`}
+            value={selectedNodeId}
+            disabled={isPending}
+            onChange={(event) => setSelectedNodeId(event.target.value)}
+            className="rounded border border-zinc-300 px-2 py-1 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:bg-zinc-900"
+          >
+            {nodes.map((node) => (
+              <option key={node.nodeId} value={node.nodeId}>
+                {node.label}
+              </option>
+            ))}
+          </select>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={isPending}
+            pending={isPending}
+            aria-label={`${isPending ? teamSkillSectionCopy.report.submittingButton : teamSkillSectionCopy.report.submitButton} – ${skill.name}`}
+            onClick={handleReport}
+          >
+            {isPending ? teamSkillSectionCopy.report.submittingButton : teamSkillSectionCopy.report.submitButton}
+          </Button>
+        </div>
+      )}
     </Card>
   );
 }

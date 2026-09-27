@@ -599,15 +599,15 @@ describe("fetchTeamSkills", () => {
       async fetchTeamSkills(idToken, teamId) {
         capturedHeaders = { Authorization: `Bearer ${idToken}` };
         capturedUrl = `/api/teams/${teamId}/skills`;
-        const response = jsonResponse(200, { status: "ok", skills });
+        const response = jsonResponse(200, { status: "ok", skills, canReportProgress: true });
         const body = await response.json();
-        return { status: "ok", skills: body.skills };
+        return { status: "ok", skills: body.skills, canReportProgress: body.canReportProgress };
       },
     };
 
     const result = await fetchTeamSkills("token-123", "team-1", { gateway });
 
-    expect(result).toEqual({ status: "ok", skills });
+    expect(result).toEqual({ status: "ok", skills, canReportProgress: true });
     expect(capturedUrl).toBe("/api/teams/team-1/skills");
     expect(capturedHeaders).toEqual({ Authorization: "Bearer token-123" });
   });
@@ -619,16 +619,67 @@ describe("fetchTeamSkills", () => {
     globalThis.fetch = (async (url: string, init?: RequestInit) => {
       calledUrl = url;
       calledInit = init;
-      return jsonResponse(200, { status: "ok", skills: [] });
+      return jsonResponse(200, { status: "ok", skills: [], canReportProgress: false });
     }) as typeof fetch;
 
     try {
       const result = await fetchTeamSkills("token-abc", "team/needs encoding");
-      expect(result).toEqual({ status: "ok", skills: [] });
+      expect(result).toEqual({ status: "ok", skills: [], canReportProgress: false });
       expect(calledUrl).toBe("/api/teams/team%2Fneeds%20encoding/skills");
       expect(calledInit?.headers).toEqual({ Authorization: "Bearer token-abc" });
       expect(calledInit?.method).toBeUndefined();
       expect(calledInit?.body).toBeUndefined();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("fails closed to read_failed when canReportProgress is missing from an otherwise well-formed response (docs/features/skill-progress-self-report/SPEC.md — 'Permission-UI correction')", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => jsonResponse(200, { status: "ok", skills: [] })) as typeof fetch;
+
+    try {
+      const result = await fetchTeamSkills("token", "team-1");
+      expect(result).toEqual({ status: "read_failed" });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("fails closed to read_failed when canReportProgress is not a boolean, never permissively enabling mutation", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      jsonResponse(200, { status: "ok", skills: [], canReportProgress: "true" })) as typeof fetch;
+
+    try {
+      const result = await fetchTeamSkills("token", "team-1");
+      expect(result).toEqual({ status: "read_failed" });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("accepts canReportProgress: true from a well-formed response", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      jsonResponse(200, { status: "ok", skills: [], canReportProgress: true })) as typeof fetch;
+
+    try {
+      const result = await fetchTeamSkills("token", "team-1");
+      expect(result).toEqual({ status: "ok", skills: [], canReportProgress: true });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("accepts canReportProgress: false from a well-formed response", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      jsonResponse(200, { status: "ok", skills: [], canReportProgress: false })) as typeof fetch;
+
+    try {
+      const result = await fetchTeamSkills("token", "team-1");
+      expect(result).toEqual({ status: "ok", skills: [], canReportProgress: false });
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -645,12 +696,12 @@ describe("fetchTeamSkills", () => {
     ];
     const gateway: FetchTeamSkillsGateway = {
       async fetchTeamSkills() {
-        return { status: "ok", skills };
+        return { status: "ok", skills, canReportProgress: true };
       },
     };
 
     const result = await fetchTeamSkills("token", "team-1", { gateway });
-    expect(result).toEqual({ status: "ok", skills });
+    expect(result).toEqual({ status: "ok", skills, canReportProgress: true });
   });
 
   it("rejects a malformed skills array (bad node shape) as read_failed", async () => {
@@ -673,7 +724,7 @@ describe("fetchTeamSkills", () => {
               ),
           )
         ) {
-          return { status: "ok", skills: body.skills as never };
+          return { status: "ok", skills: body.skills as never, canReportProgress: true };
         }
         return { status: "read_failed" };
       },
@@ -695,7 +746,11 @@ describe("fetchTeamSkills", () => {
           currentNodeId: null,
           updatedBy: "admin-uid-should-never-appear",
         };
-        return { status: "ok", skills: [{ treeId: raw.treeId, name: raw.name, nodes: raw.nodes, currentNodeId: raw.currentNodeId }] };
+        return {
+          status: "ok",
+          skills: [{ treeId: raw.treeId, name: raw.name, nodes: raw.nodes, currentNodeId: raw.currentNodeId }],
+          canReportProgress: true,
+        };
       },
     };
 
@@ -710,6 +765,7 @@ describe("fetchTeamSkills", () => {
           currentNodeId: null,
         },
       ],
+      canReportProgress: true,
     });
     expect(JSON.stringify(result)).not.toMatch(/admin-uid/);
   });

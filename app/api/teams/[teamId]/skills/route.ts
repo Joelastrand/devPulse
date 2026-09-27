@@ -27,7 +27,10 @@ export async function GET(
     return NextResponse.json({ status: result.error }, { status });
   }
 
-  return NextResponse.json({ status: "ok", skills: result.skills }, { status: 200 });
+  return NextResponse.json(
+    { status: "ok", skills: result.skills, canReportProgress: result.canReportProgress },
+    { status: 200 },
+  );
 }
 
 function extractBearerToken(header: string | null): string {

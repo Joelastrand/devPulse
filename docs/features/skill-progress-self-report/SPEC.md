@@ -8,6 +8,29 @@ member-originated-write pattern). Produced by `plan-feature`, revised
 during an independent approval review. Task planning proceeds via
 `split-tasks` → `TASKS.md`.
 
+**Revision note (permission-UI correction).** BR-10's original text had the
+stage-mutation control render unconditionally "for any authorized viewer of
+the page (member or admin per `authorizeTeamAccess`)," deferring
+write-eligibility enforcement to the server alone — the same posture
+`ChallengeSubmissionPanel` originally had, before its own composition gap
+(an app-admin-only viewer seeing a submission form the server would always
+reject) was fixed. The identical gap existed here: an app-admin-only viewer,
+or a genuine member of a disabled team, saw the stage select and "Lagre"
+button even though `reportTeamSkillProgress` would always reject their
+submission (BR-1, BR-4). This is now corrected: `getTeamSkillProgress`
+(`docs/features/team-skill-tree/SPEC.md`) additionally returns
+`canReportProgress: boolean`, re-derived independently of
+`authorizeTeamAccess`'s broader read-authorization result using the exact
+membership-then-team-status semantics `reportTeamSkillProgress` itself
+requires. `TeamSkillSection` renders the stage select and "Lagre" button
+only when `canReportProgress` is `true` for that viewer; a non-capable
+viewer still sees the full read-only stage list. BR-10 below reflects this
+corrected behavior — no product decision changed (a non-member/disabled-team
+caller could never actually report progress before this fix either); only
+the UI's visibility now matches the server's existing authorization exactly.
+`reportTeamSkillProgress`'s own authorization is unchanged and remains the
+sole write-authorization boundary.
+
 ## Problem
 Team Skill Tree (Phase 7, `docs/features/team-skill-tree/SPEC.md`) let an
 app admin define a SkillTree and record which stage a team has reached, but
@@ -185,16 +208,23 @@ member-gated writes in this codebase.
   to a given `skillProgress` document was made by an admin or a member.
 
 **UI**
-- **BR-10**: `/teams/[teamId]`'s existing read-only Kompetanseområder
-  section gains, for each already-tracked tree, a control to set the
-  current stage to any node in that tree — rendered for any authorized
-  viewer of the page (member or admin per `authorizeTeamAccess`), matching
-  this codebase's established pattern of deferring precise write-
-  eligibility enforcement to the server rather than pre-computing it
-  client-side (e.g. `ChallengeSubmissionPanel`'s existing, identical
-  posture). A caller who submits without genuine team membership receives
-  the existing generic authorization-failure treatment from the server's
-  `forbidden` response — never a distinct message that would reveal *why*.
+- **BR-10** *(revised — see "Revision note (permission-UI correction)"
+  above)*: `/teams/[teamId]`'s existing read-only Kompetanseområder section
+  gains, for each already-tracked tree, a control to set the current stage
+  to any node in that tree — rendered only for a viewer the server reports
+  as `canReportProgress: true` (a genuine, fresh-read `teamMemberships`
+  record on a currently `active` team — the same membership-then-team-status
+  semantics `reportTeamSkillProgress` itself requires, re-derived
+  independently of `authorizeTeamAccess`'s broader read-authorization
+  result). A viewer for whom this is `false` — an app-admin-only viewer with
+  no real membership, or a genuine member of a disabled team — sees the
+  read-only stage list without the mutation control at all, never merely a
+  disabled one. This is UI-visibility only: `reportTeamSkillProgress` remains
+  the sole write-authorization boundary, and a caller who somehow submits
+  without genuine team membership (e.g. a membership revoked between page
+  load and submission) still receives the existing generic
+  authorization-failure treatment from the server's `forbidden` response —
+  never a distinct message that would reveal *why*.
 - **BR-11**: The existing `/admin/teams/[teamId]` skill-tracking section
   (start tracking, set/advance stage, stop tracking) is visually and
   behaviorally unchanged — an app admin continues to have full write
@@ -384,6 +414,17 @@ stage N* transition (`updateTeamSkillProgress`'s row), leaving the
 Every other route from `docs/features/team-skill-tree/SPEC.md` →
 "API/DTO contracts" is unchanged. `TeamSkillProgressView` (the DTO
 `getTeamSkillProgress` returns) is unchanged — see BR-9.
+
+**Permission-UI correction (added after initial delivery).**
+`GET /api/teams/[teamId]/skills`'s response gains one additive, top-level
+sibling field alongside the unchanged `skills` array:
+`canReportProgress: boolean` (see "Revision note (permission-UI correction)"
+above and BR-10). This is an envelope-level addition, not a
+`TeamSkillProgressView` field — BR-9's "DTO unchanged" claim still holds for
+every item in `skills`. The gateway (`fetchTeamSkills`) requires this field
+to be strictly boolean; a missing or non-boolean value fails the whole
+response closed to `read_failed` rather than defaulting to a permissive
+value.
 
 ## UI/UX behavior
 - **`/teams/[teamId]`**: the existing read-only Kompetanseområder section

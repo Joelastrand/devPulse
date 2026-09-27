@@ -4,9 +4,11 @@ import type { AuthorizeTeamAccessCollection } from "../../teams/server/authorize
 import type {
   GetTeamSkillProgressDeps,
   GetTeamSkillProgressDocSnapshot,
+  MembershipReader,
   RawSkillProgressDoc,
   SkillProgressReader,
   SkillTreeReader,
+  TeamStatusReader,
 } from "./get-team-skill-progress";
 import { getTeamSkillProgress } from "./get-team-skill-progress";
 
@@ -94,6 +96,14 @@ function failingProgressReader(): SkillProgressReader {
   return { listRawForTeam: vi.fn().mockRejectedValue(new Error("simulated firestore outage")) };
 }
 
+function failingMembershipReader(): MembershipReader {
+  return { getMembership: vi.fn().mockRejectedValue(new Error("simulated firestore outage")) };
+}
+
+function failingTeamStatusReader(): TeamStatusReader {
+  return { getTeamStatus: vi.fn().mockRejectedValue(new Error("simulated firestore outage")) };
+}
+
 /** A tree reader keyed by treeId — `undefined` for a given id means "no such document" (`exists: false`). */
 function fakeTreeReader(trees: Record<string, Record<string, unknown> | undefined>): SkillTreeReader {
   return {
@@ -104,14 +114,31 @@ function fakeTreeReader(trees: Record<string, Record<string, unknown> | undefine
   };
 }
 
+/**
+ * `AuthorizeTeamAccessCollection`'s `getTeamStatus`/`getMembership` shape is
+ * structurally identical to `MembershipReader`/`TeamStatusReader` (both
+ * defined independently in production code, per this codebase's
+ * per-operation dependency-seam convention — see `get-team-skill-progress.ts`).
+ * Reusing the same fake collection for all three deps here is a test-only
+ * convenience, not a production coupling: `getTeamSkillProgress` never calls
+ * `authorizeTeamAccess`'s own collection to compute `canReportProgress`, and
+ * every test below that needs the two to diverge (e.g. an app admin with no
+ * real membership) passes a distinct `membershipReader`/`teamStatusReader`
+ * explicitly.
+ */
 function memberBaseDeps(overrides: Partial<GetTeamSkillProgressDeps> = {}): GetTeamSkillProgressDeps {
+  const authCollection =
+    overrides.authCollection ??
+    fakeAuthCollection({
+      teamStatus: { [TEAM_ID]: "active" },
+      memberships: { [`${MEMBER_UID}__${TEAM_ID}`]: { uid: MEMBER_UID, teamId: TEAM_ID } },
+    });
   return {
     verifyToken: verifyTokenReturning(memberIdentity()),
     allowList: [ADMIN_EMAIL],
-    authCollection: fakeAuthCollection({
-      teamStatus: { [TEAM_ID]: "active" },
-      memberships: { [`${MEMBER_UID}__${TEAM_ID}`]: { uid: MEMBER_UID, teamId: TEAM_ID } },
-    }),
+    authCollection,
+    membershipReader: authCollection,
+    teamStatusReader: authCollection,
     progressReader: fakeProgressReader([]),
     treeReader: fakeTreeReader({ [TREE_ID]: treeData() }),
     ...overrides,
@@ -203,7 +230,7 @@ describe("getTeamSkillProgress", () => {
     it("returns an empty list for a team tracking no skills, not an error", async () => {
       const result = await getTeamSkillProgress("token", TEAM_ID, memberBaseDeps({ progressReader: fakeProgressReader([]) }));
 
-      expect(result).toEqual({ ok: true, skills: [] });
+      expect(result).toEqual({ ok: true, skills: [], canReportProgress: true });
     });
 
     it("returns one tracked skill with the exact approved DTO shape", async () => {
@@ -226,6 +253,7 @@ describe("getTeamSkillProgress", () => {
             currentNodeId: "node-1",
           },
         ],
+        canReportProgress: true,
       });
     });
 
@@ -271,10 +299,11 @@ describe("getTeamSkillProgress", () => {
             currentNodeId: null,
           },
         ],
+        canReportProgress: true,
       });
     });
 
-    it("succeeds for a disabled team's existing skill progress (no team-active gate)", async () => {
+    it("succeeds for a disabled team's existing skill progress (no team-active gate), but reports canReportProgress: false (a member cannot currently self-report on a disabled team)", async () => {
       const deps = memberBaseDeps({
         authCollection: fakeAuthCollection({
           teamStatus: { [TEAM_ID]: "disabled" },
@@ -288,6 +317,7 @@ describe("getTeamSkillProgress", () => {
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.skills).toHaveLength(1);
+        expect(result.canReportProgress).toBe(false);
       }
     });
 
@@ -343,7 +373,7 @@ describe("getTeamSkillProgress", () => {
         memberBaseDeps({ progressReader: fakeProgressReader([crossTeamDoc]) }),
       );
 
-      expect(result).toEqual({ ok: true, skills: [] });
+      expect(result).toEqual({ ok: true, skills: [], canReportProgress: true });
     });
 
     it("excludes a record whose referenced SkillTree is malformed", async () => {
@@ -354,7 +384,7 @@ describe("getTeamSkillProgress", () => {
 
       const result = await getTeamSkillProgress("token", TEAM_ID, deps);
 
-      expect(result).toEqual({ ok: true, skills: [] });
+      expect(result).toEqual({ ok: true, skills: [], canReportProgress: true });
     });
 
     it("excludes a record whose referenced SkillTree no longer exists", async () => {
@@ -365,7 +395,7 @@ describe("getTeamSkillProgress", () => {
 
       const result = await getTeamSkillProgress("token", TEAM_ID, deps);
 
-      expect(result).toEqual({ ok: true, skills: [] });
+      expect(result).toEqual({ ok: true, skills: [], canReportProgress: true });
     });
 
     it("does not invalidate a currentNodeId absent from its resolved tree's nodes — SPEC defines no such check, and this is structurally unreachable via the write-side operations", async () => {
@@ -467,6 +497,194 @@ describe("getTeamSkillProgress", () => {
       logSpy.mockRestore();
       warnSpy.mockRestore();
       errorSpy.mockRestore();
+    });
+  });
+
+  /**
+   * `canReportProgress` (docs/features/skill-progress-self-report/SPEC.md —
+   * "Permission-UI correction"): a UI-capability signal, independent of the
+   * `skills` list above and of `authorizeTeamAccess`'s broader read result —
+   * re-derives the exact membership-then-team-status semantics
+   * `reportTeamSkillProgress` itself requires, via its own
+   * `membershipReader`/`teamStatusReader` deps.
+   */
+  describe("canReportProgress capability", () => {
+    it("is true for a genuine member of an active team", async () => {
+      const result = await getTeamSkillProgress("token", TEAM_ID, memberBaseDeps());
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.canReportProgress).toBe(true);
+      }
+    });
+
+    it("is true for an app admin who is also a genuine member of an active team", async () => {
+      const adminMemberUid = "admin-member-uid";
+      const authCollection = fakeAuthCollection({
+        teamStatus: { [TEAM_ID]: "active" },
+        memberships: { [`${adminMemberUid}__${TEAM_ID}`]: { uid: adminMemberUid, teamId: TEAM_ID } },
+      });
+      const deps = memberBaseDeps({
+        verifyToken: verifyTokenReturning(adminIdentity({ uid: adminMemberUid })),
+        authCollection,
+      });
+
+      const result = await getTeamSkillProgress("token", TEAM_ID, deps);
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.canReportProgress).toBe(true);
+      }
+    });
+
+    it("is false for an app admin with no real team membership, even though authorizeTeamAccess grants the read (never derived from admin/read-authorization status)", async () => {
+      const authCollection = fakeAuthCollection({ teamStatus: { [TEAM_ID]: "active" }, memberships: {} });
+      const deps = memberBaseDeps({
+        verifyToken: verifyTokenReturning(adminIdentity()),
+        authCollection,
+      });
+
+      const result = await getTeamSkillProgress("token", TEAM_ID, deps);
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.canReportProgress).toBe(false);
+      }
+    });
+
+    it("is false when the caller has no teamMemberships record at all", async () => {
+      const deps = memberBaseDeps({
+        membershipReader: { async getMembership() { return undefined; } },
+      });
+
+      const result = await getTeamSkillProgress("token", TEAM_ID, deps);
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.canReportProgress).toBe(false);
+      }
+    });
+
+    it("is false for a malformed membership record (wrong shape)", async () => {
+      const deps = memberBaseDeps({
+        membershipReader: { async getMembership() { return { unexpected: "shape" }; } },
+      });
+
+      const result = await getTeamSkillProgress("token", TEAM_ID, deps);
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.canReportProgress).toBe(false);
+      }
+    });
+
+    it("is false for a membership record belonging to a different team (wrong-team cross-check)", async () => {
+      const deps = memberBaseDeps({
+        membershipReader: {
+          async getMembership(uid) {
+            return { uid, teamId: OTHER_TEAM_ID };
+          },
+        },
+      });
+
+      const result = await getTeamSkillProgress("token", TEAM_ID, deps);
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.canReportProgress).toBe(false);
+      }
+    });
+
+    it("fails closed to false when the membership read itself throws", async () => {
+      const deps = memberBaseDeps({ membershipReader: failingMembershipReader() });
+
+      const result = await getTeamSkillProgress("token", TEAM_ID, deps);
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.canReportProgress).toBe(false);
+      }
+    });
+
+    it("is false for a genuine member of a disabled team", async () => {
+      const deps = memberBaseDeps({
+        teamStatusReader: { async getTeamStatus() { return "disabled"; } },
+      });
+
+      const result = await getTeamSkillProgress("token", TEAM_ID, deps);
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.canReportProgress).toBe(false);
+      }
+    });
+
+    it("is false when the team's status is missing (no teams document)", async () => {
+      const deps = memberBaseDeps({
+        teamStatusReader: { async getTeamStatus() { return undefined; } },
+      });
+
+      const result = await getTeamSkillProgress("token", TEAM_ID, deps);
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.canReportProgress).toBe(false);
+      }
+    });
+
+    it("is false when the team's status is malformed/unrecognized", async () => {
+      const deps = memberBaseDeps({
+        teamStatusReader: { async getTeamStatus() { return "not-a-real-status"; } },
+      });
+
+      const result = await getTeamSkillProgress("token", TEAM_ID, deps);
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.canReportProgress).toBe(false);
+      }
+    });
+
+    it("fails closed to false when the team-status read itself throws", async () => {
+      const deps = memberBaseDeps({ teamStatusReader: failingTeamStatusReader() });
+
+      const result = await getTeamSkillProgress("token", TEAM_ID, deps);
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.canReportProgress).toBe(false);
+      }
+    });
+
+    it("still returns readable skills data (read-only) even when canReportProgress is false — read and mutation-eligibility remain independent", async () => {
+      const deps = memberBaseDeps({
+        teamStatusReader: { async getTeamStatus() { return "disabled"; } },
+        progressReader: fakeProgressReader([progressDoc("p1")]),
+      });
+
+      const result = await getTeamSkillProgress("token", TEAM_ID, deps);
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.skills).toHaveLength(1);
+        expect(result.canReportProgress).toBe(false);
+      }
+    });
+
+    it("never calls the membership/team-status readers for a denied (non-member/non-admin) caller", async () => {
+      const membershipReader: MembershipReader = { getMembership: vi.fn() };
+      const teamStatusReader: TeamStatusReader = { getTeamStatus: vi.fn() };
+      const deps = memberBaseDeps({
+        authCollection: fakeAuthCollection({ teamStatus: { [TEAM_ID]: "active" }, memberships: {} }),
+        membershipReader,
+        teamStatusReader,
+      });
+
+      const result = await getTeamSkillProgress("token", TEAM_ID, deps);
+
+      expect(result).toEqual({ ok: false, error: "forbidden" });
+      expect(membershipReader.getMembership).not.toHaveBeenCalled();
+      expect(teamStatusReader.getTeamStatus).not.toHaveBeenCalled();
     });
   });
 });

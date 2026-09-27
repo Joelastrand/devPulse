@@ -171,16 +171,20 @@ function toForumSectionState(result: FetchTeamThreadsResult): ForumSectionState 
  * authorization race — never fabricated as "no skills yet" in either case.
  */
 type SkillSectionState =
-  | { status: "loaded"; skills: TeamSkillView[] }
+  | { status: "loaded"; skills: TeamSkillView[]; canReportProgress: boolean }
   | { status: "unavailable" };
 
 function toSkillSectionState(result: FetchTeamSkillsResult): SkillSectionState {
-  return result.status === "ok" ? { status: "loaded", skills: result.skills } : { status: "unavailable" };
+  return result.status === "ok"
+    ? { status: "loaded", skills: result.skills, canReportProgress: result.canReportProgress }
+    : { status: "unavailable" };
 }
 
 /** Adapts the already-resolved `SkillSectionState` to `TeamSkillSection`'s own state shape — "unavailable" always renders as "error", never a stale "loading" (the fetch has already completed by the time this component ever mounts). */
 function toTeamSkillSectionState(state: SkillSectionState): TeamSkillSectionState {
-  return state.status === "loaded" ? { status: "loaded", skills: state.skills } : { status: "error" };
+  return state.status === "loaded"
+    ? { status: "loaded", skills: state.skills, canReportProgress: state.canReportProgress }
+    : { status: "error" };
 }
 
 /**

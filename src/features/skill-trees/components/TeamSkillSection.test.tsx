@@ -63,14 +63,14 @@ describe("TeamSkillSection", () => {
   });
 
   it("shows a Norwegian empty state when the team tracks nothing", () => {
-    const state: TeamSkillSectionState = { status: "loaded", skills: [] };
+    const state: TeamSkillSectionState = { status: "loaded", skills: [], canReportProgress: true };
     render(<TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />);
 
     expect(screen.getByRole("status").textContent).toMatch(/ingen|sporer/i);
   });
 
   it("renders a single tracked tree's full ordered stage list", () => {
-    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL] };
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL], canReportProgress: true };
     render(<TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />);
 
     expect(screen.getByText("Containers")).toBeTruthy();
@@ -83,6 +83,7 @@ describe("TeamSkillSection", () => {
     const state: TeamSkillSectionState = {
       status: "loaded",
       skills: [CONTAINERS_SKILL, OBSERVABILITY_SKILL],
+      canReportProgress: true,
     };
     render(<TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />);
 
@@ -93,7 +94,7 @@ describe("TeamSkillSection", () => {
   });
 
   it("marks the current stage with both aria-current='step' and visible text — never color alone", () => {
-    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL] };
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL], canReportProgress: true };
     render(<TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />);
 
     const currentItem = stageListItemText("Evaluate alternatives").closest("li");
@@ -106,7 +107,7 @@ describe("TeamSkillSection", () => {
   });
 
   it("renders a distinct 'not started' state for a currentNodeId of null, with no current-stage marker", () => {
-    const state: TeamSkillSectionState = { status: "loaded", skills: [OBSERVABILITY_SKILL] };
+    const state: TeamSkillSectionState = { status: "loaded", skills: [OBSERVABILITY_SKILL], canReportProgress: true };
     render(<TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />);
 
     expect(screen.getByText(/ikke startet/i)).toBeTruthy();
@@ -117,7 +118,7 @@ describe("TeamSkillSection", () => {
   });
 
   it("renders as a semantic ordered list, never a graphical/canvas element", () => {
-    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL] };
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL], canReportProgress: true };
     const { container } = render(
       <TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />,
     );
@@ -128,7 +129,7 @@ describe("TeamSkillSection", () => {
   });
 
   it("never renders an identity-shaped value (uid/email/createdBy/updatedBy) anywhere in its output", () => {
-    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL, OBSERVABILITY_SKILL] };
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL, OBSERVABILITY_SKILL], canReportProgress: true };
     const { container } = render(
       <TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />,
     );
@@ -145,7 +146,7 @@ describe("TeamSkillSection", () => {
       ],
       currentNodeId: "node-0",
     };
-    const state: TeamSkillSectionState = { status: "loaded", skills: [maliciousSkill] };
+    const state: TeamSkillSectionState = { status: "loaded", skills: [maliciousSkill], canReportProgress: true };
     const { container } = render(
       <TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />,
     );
@@ -160,7 +161,7 @@ describe("TeamSkillSection", () => {
 
 describe("TeamSkillSection self-report control (docs/features/skill-progress-self-report/SPEC.md — TASK-002)", () => {
   it("renders a stage-select control and a save button for each already-tracked tree, for any authorized viewer (BR-10)", () => {
-    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL, OBSERVABILITY_SKILL] };
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL, OBSERVABILITY_SKILL], canReportProgress: true };
     render(<TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />);
 
     expect(stageSelect(/sett stadium.*containers/i)).toBeTruthy();
@@ -169,14 +170,14 @@ describe("TeamSkillSection self-report control (docs/features/skill-progress-sel
   });
 
   it("defaults the select to the current stage for a tracked tree", () => {
-    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL] };
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL], canReportProgress: true };
     render(<TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />);
 
     expect((stageSelect(/sett stadium/i) as HTMLSelectElement).value).toBe("node-1");
   });
 
   it("defaults the select to a valid node for a not-started tree, so the control remains usable", () => {
-    const state: TeamSkillSectionState = { status: "loaded", skills: [OBSERVABILITY_SKILL] };
+    const state: TeamSkillSectionState = { status: "loaded", skills: [OBSERVABILITY_SKILL], canReportProgress: true };
     render(<TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />);
 
     const select = stageSelect(/sett stadium/i) as HTMLSelectElement;
@@ -189,7 +190,7 @@ describe("TeamSkillSection self-report control (docs/features/skill-progress-sel
     vi.stubGlobal("fetch", fetchMock);
     const onReported = vi.fn();
     const user = userEvent.setup();
-    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL] };
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL], canReportProgress: true };
 
     render(<TeamSkillSection idToken="a-token" teamId="team-9" state={state} onReported={onReported} />);
     await user.selectOptions(stageSelect(/sett stadium/i), "node-2");
@@ -208,7 +209,7 @@ describe("TeamSkillSection self-report control (docs/features/skill-progress-sel
     vi.stubGlobal("fetch", fetchMock);
     const onReported = vi.fn();
     const user = userEvent.setup();
-    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL] };
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL], canReportProgress: true };
 
     render(<TeamSkillSection idToken="a-token" teamId="team-1" state={state} onReported={onReported} />);
     await user.selectOptions(stageSelect(/sett stadium/i), "node-0");
@@ -224,7 +225,7 @@ describe("TeamSkillSection self-report control (docs/features/skill-progress-sel
     vi.stubGlobal("fetch", fetchMock);
     const onReported = vi.fn();
     const user = userEvent.setup();
-    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL] };
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL], canReportProgress: true };
 
     render(<TeamSkillSection idToken="a-token" teamId="team-1" state={state} onReported={onReported} />);
     // No selection change — the select already shows the current stage (node-1).
@@ -246,7 +247,7 @@ describe("TeamSkillSection self-report control (docs/features/skill-progress-sel
     );
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
-    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL] };
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL], canReportProgress: true };
 
     render(<TeamSkillSection idToken="a-token" teamId="team-1" state={state} onReported={() => {}} />);
     await user.click(saveButton(/lagre/i));
@@ -261,7 +262,7 @@ describe("TeamSkillSection self-report control (docs/features/skill-progress-sel
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(403, { error: "forbidden" })));
     const onReported = vi.fn();
     const user = userEvent.setup();
-    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL] };
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL], canReportProgress: true };
 
     render(<TeamSkillSection idToken="a-token" teamId="team-1" state={state} onReported={onReported} />);
     await user.click(saveButton(/lagre/i));
@@ -279,7 +280,7 @@ describe("TeamSkillSection self-report control (docs/features/skill-progress-sel
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(400, { error: "team_disabled" })));
     const onReported = vi.fn();
     const user = userEvent.setup();
-    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL] };
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL], canReportProgress: true };
 
     render(<TeamSkillSection idToken="a-token" teamId="team-1" state={state} onReported={onReported} />);
     await user.click(saveButton(/lagre/i));
@@ -294,7 +295,7 @@ describe("TeamSkillSection self-report control (docs/features/skill-progress-sel
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(400, { error: "invalid_input" })));
     const onReported = vi.fn();
     const user = userEvent.setup();
-    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL] };
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL], canReportProgress: true };
 
     render(<TeamSkillSection idToken="a-token" teamId="team-1" state={state} onReported={onReported} />);
     await user.click(saveButton(/lagre/i));
@@ -308,7 +309,7 @@ describe("TeamSkillSection self-report control (docs/features/skill-progress-sel
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(500, { error: "persistence_failed" })));
     const onReported = vi.fn();
     const user = userEvent.setup();
-    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL] };
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL], canReportProgress: true };
 
     render(<TeamSkillSection idToken="a-token" teamId="team-1" state={state} onReported={onReported} />);
     await user.click(saveButton(/lagre/i));
@@ -326,7 +327,7 @@ describe("TeamSkillSection self-report control (docs/features/skill-progress-sel
     );
     const onReported = vi.fn();
     const user = userEvent.setup();
-    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL] };
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL], canReportProgress: true };
 
     render(<TeamSkillSection idToken="a-token" teamId="team-1" state={state} onReported={onReported} />);
     await user.click(saveButton(/lagre/i));
@@ -339,7 +340,7 @@ describe("TeamSkillSection self-report control (docs/features/skill-progress-sel
   it("keyboard-operates the select and the save button", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, { ok: true })));
     const user = userEvent.setup();
-    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL] };
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL], canReportProgress: true };
 
     render(<TeamSkillSection idToken="a-token" teamId="team-1" state={state} onReported={() => {}} />);
     const select = stageSelect(/sett stadium/i);
@@ -360,6 +361,7 @@ describe("TeamSkillSection self-report control (docs/features/skill-progress-sel
     const beforeReport: TeamSkillSectionState = {
       status: "loaded",
       skills: [{ ...CONTAINERS_SKILL, currentNodeId: null }],
+      canReportProgress: true,
     };
     const { unmount } = render(
       <TeamSkillSection idToken="token" teamId="team-1" state={beforeReport} onReported={() => {}} />,
@@ -370,6 +372,7 @@ describe("TeamSkillSection self-report control (docs/features/skill-progress-sel
     const afterReport: TeamSkillSectionState = {
       status: "loaded",
       skills: [{ ...CONTAINERS_SKILL, currentNodeId: "node-2" }],
+      canReportProgress: true,
     };
     render(<TeamSkillSection idToken="token" teamId="team-1" state={afterReport} onReported={() => {}} />);
 

@@ -35,13 +35,31 @@ describe("GET /api/teams/[teamId]/skills", () => {
         currentNodeId: "node-0",
       },
     ];
-    getTeamSkillProgressMock.mockResolvedValue({ ok: true, skills });
+    getTeamSkillProgressMock.mockResolvedValue({ ok: true, skills, canReportProgress: true });
 
     const response = await GET(getRequest("Bearer valid-token"), params());
     const payload = await response.json();
 
     expect(response.status).toBe(200);
-    expect(payload).toEqual({ status: "ok", skills });
+    expect(payload).toEqual({ status: "ok", skills, canReportProgress: true });
+  });
+
+  it("passes through canReportProgress: true exactly as getTeamSkillProgress returned it", async () => {
+    getTeamSkillProgressMock.mockResolvedValue({ ok: true, skills: [], canReportProgress: true });
+
+    const response = await GET(getRequest("Bearer valid-token"), params());
+    const payload = await response.json();
+
+    expect(payload.canReportProgress).toBe(true);
+  });
+
+  it("passes through canReportProgress: false exactly as getTeamSkillProgress returned it (docs/features/skill-progress-self-report/SPEC.md — 'Permission-UI correction')", async () => {
+    getTeamSkillProgressMock.mockResolvedValue({ ok: true, skills: [], canReportProgress: false });
+
+    const response = await GET(getRequest("Bearer valid-token"), params());
+    const payload = await response.json();
+
+    expect(payload.canReportProgress).toBe(false);
   });
 
   it("returns the team-scoped skill list for an authorized app admin (authorizeTeamAccess behavior delegated unchanged)", async () => {
