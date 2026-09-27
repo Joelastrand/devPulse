@@ -202,7 +202,7 @@ describe("TeamDetail", () => {
   it("shows a Norwegian loading state before auth resolves", () => {
     observeIdTokenMock.mockImplementation(() => () => {});
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     expect(screen.getByRole("status").textContent).toMatch(/laster/i);
   });
@@ -210,7 +210,7 @@ describe("TeamDetail", () => {
   it("prompts sign-in when the visitor is signed out, and never fetches", async () => {
     observeIdTokenMock.mockImplementation(subscribingWith(null));
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByRole("link", { name: /logg inn/i });
     expect(fetchTeamsOverviewMock).not.toHaveBeenCalled();
@@ -221,7 +221,7 @@ describe("TeamDetail", () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({ status: "unauthenticated" });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByRole("link", { name: /logg inn/i });
     expect(fetchTeamResultsMock).not.toHaveBeenCalled();
@@ -231,7 +231,7 @@ describe("TeamDetail", () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({ status: "read_failed" });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/noe gikk galt/i);
@@ -245,7 +245,7 @@ describe("TeamDetail", () => {
       teams: [{ teamId: "team-1", name: "Platform", relationship: "none" }],
     });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByText("Platform");
     await screen.findByRole("button", { name: /be om tilgang/i });
@@ -257,7 +257,7 @@ describe("TeamDetail", () => {
     fetchTeamsOverviewMock.mockResolvedValue({ status: "ok", teams: [] });
     fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
 
-    render(<TeamDetail teamId="disabled-team" />);
+    render(<TeamDetail teamId="disabled-team" forumEnabled={true} />);
 
     expect(await screen.findByText("7 svar")).toBeTruthy();
     expect(fetchTeamResultsMock).toHaveBeenCalledWith("a-token", "disabled-team");
@@ -269,7 +269,7 @@ describe("TeamDetail", () => {
     fetchTeamsOverviewMock.mockResolvedValue({ status: "ok", teams: [] });
     fetchTeamResultsMock.mockResolvedValue({ status: "forbidden" });
 
-    render(<TeamDetail teamId="some-team" />);
+    render(<TeamDetail teamId="some-team" forumEnabled={true} />);
 
     await screen.findByRole("button", { name: /be om tilgang/i });
     expect(fetchTeamResultsMock).toHaveBeenCalledWith("a-token", "some-team");
@@ -282,7 +282,7 @@ describe("TeamDetail", () => {
     fetchTeamsOverviewMock.mockResolvedValue({ status: "ok", teams: [] });
     fetchTeamResultsMock.mockResolvedValue({ status: "forbidden" });
 
-    render(<TeamDetail teamId="nonexistent-team" />);
+    render(<TeamDetail teamId="nonexistent-team" forumEnabled={true} />);
 
     const button = await screen.findByRole("button", { name: /be om tilgang/i });
     expect(button).toBeTruthy();
@@ -296,7 +296,7 @@ describe("TeamDetail", () => {
       teams: [{ teamId: "team-1", name: "Platform", relationship: "request_pending" }],
     });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByText(/venter på godkjenning/i);
     expect(screen.getByText("Platform")).toBeTruthy();
@@ -311,7 +311,7 @@ describe("TeamDetail", () => {
       teams: [{ teamId: "team-1", name: "Platform", relationship: "request_rejected" }],
     });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByRole("button", { name: /be om tilgang/i });
     expect(fetchTeamResultsMock).not.toHaveBeenCalled();
@@ -325,7 +325,7 @@ describe("TeamDetail", () => {
     });
     fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByText("Platform");
     expect(fetchTeamResultsMock).toHaveBeenCalledWith("a-token", "team-1");
@@ -352,7 +352,7 @@ describe("TeamDetail", () => {
     });
     fetchTeamResultsMock.mockResolvedValue(INSUFFICIENT_RESULTS);
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByText("Platform");
     expect(fetchTeamResultsMock).toHaveBeenCalledWith("a-token", "team-1");
@@ -367,7 +367,7 @@ describe("TeamDetail", () => {
     });
     fetchTeamResultsMock.mockResolvedValue(INSUFFICIENT_RESULTS);
 
-    const { container } = render(<TeamDetail teamId="team-1" />);
+    const { container } = render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findAllByText(/minst 5 personer har svart/i);
     expect(container.textContent).not.toMatch(/\d+ svar/);
@@ -381,7 +381,7 @@ describe("TeamDetail", () => {
     });
     fetchTeamResultsMock.mockResolvedValue({ status: "forbidden" });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByRole("button", { name: /be om tilgang/i });
     expect(screen.queryByText(/trend/i)).toBeNull();
@@ -395,7 +395,7 @@ describe("TeamDetail", () => {
     });
     fetchTeamResultsMock.mockResolvedValue({ status: "unauthenticated" });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByRole("link", { name: /logg inn/i });
   });
@@ -408,7 +408,7 @@ describe("TeamDetail", () => {
     });
     fetchTeamResultsMock.mockResolvedValue({ status: "read_failed" });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/teamets resultater/i);
@@ -429,7 +429,7 @@ describe("TeamDetail", () => {
       });
     requestTeamAccessMock.mockResolvedValue({ ok: true, outcome: "created" });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     const button = await screen.findByRole("button", { name: /be om tilgang/i });
     await user.click(button);
@@ -448,7 +448,7 @@ describe("TeamDetail", () => {
     });
     requestTeamAccessMock.mockResolvedValue({ ok: false, error: "team_disabled" });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     const button = await screen.findByRole("button", { name: /be om tilgang/i });
     await user.click(button);
@@ -466,7 +466,7 @@ describe("TeamDetail", () => {
     });
     fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
 
-    const { container } = render(<TeamDetail teamId="team-1" />);
+    const { container } = render(<TeamDetail teamId="team-1" forumEnabled={true} />);
     await screen.findByText("Platform");
 
     expect(container.textContent).not.toMatch(/@|uid|invited|ciphertext|\biv\b|\btag\b/i);
@@ -476,7 +476,7 @@ describe("TeamDetail", () => {
     const unsubscribe = vi.fn();
     observeIdTokenMock.mockImplementation(() => unsubscribe);
 
-    const { unmount } = render(<TeamDetail teamId="team-1" />);
+    const { unmount } = render(<TeamDetail teamId="team-1" forumEnabled={true} />);
     unmount();
 
     expect(unsubscribe).toHaveBeenCalled();
@@ -489,7 +489,7 @@ describe("TeamDetail", () => {
       teams: [{ teamId: "team-1", name: "Platform", relationship: "none" }],
     });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
     await screen.findByRole("button", { name: /be om tilgang/i });
 
     expect(screen.queryByText(/^sign in$/i)).toBeNull();
@@ -537,7 +537,7 @@ describe("TeamDetail current-survey section (TASK-010)", () => {
       },
     });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByText("Q3-puls");
     expect(screen.getByRole("heading", { name: /pågående undersøkelse/i })).toBeTruthy();
@@ -553,7 +553,7 @@ describe("TeamDetail current-survey section (TASK-010)", () => {
       survey: { surveyId: "survey-1", accessMode: "public", lifecycle: "scheduled" },
     });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByText("Undersøkelse");
     expect(screen.getByText(/planlagt/i)).toBeTruthy();
@@ -572,7 +572,7 @@ describe("TeamDetail current-survey section (TASK-010)", () => {
       },
     });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByRole("link", { name: /svar på undersøkelsen/i });
     expect(screen.getByText(/start:/i)).toBeTruthy();
@@ -582,7 +582,7 @@ describe("TeamDetail current-survey section (TASK-010)", () => {
   it("shows the non-sensitive empty state when there is no current survey", async () => {
     fetchCurrentTeamSurveyMock.mockResolvedValue({ status: "ok", survey: null });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByText(/ingen pågående undersøkelse/i);
     expect(screen.queryByRole("link", { name: /svar på undersøkelsen/i })).toBeNull();
@@ -591,7 +591,7 @@ describe("TeamDetail current-survey section (TASK-010)", () => {
   it("shows a distinct section-level error, without hiding the rest of the page, on a current-survey read failure", async () => {
     fetchCurrentTeamSurveyMock.mockResolvedValue({ status: "read_failed" });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByText("Platform");
     expect(screen.getByRole("heading", { name: /pågående undersøkelse/i })).toBeTruthy();
@@ -602,7 +602,7 @@ describe("TeamDetail current-survey section (TASK-010)", () => {
   it("treats a forbidden/unauthenticated current-survey race as unavailable, never as a fabricated empty state", async () => {
     fetchCurrentTeamSurveyMock.mockResolvedValue({ status: "forbidden" });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByText("Platform");
     expect(screen.queryByText(/ingen pågående undersøkelse/i)).toBeNull();
@@ -616,7 +616,7 @@ describe("TeamDetail current-survey section (TASK-010)", () => {
       survey: { surveyId: "survey-1", accessMode: "public", lifecycle: "open" },
     });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByRole("link", { name: /svar på undersøkelsen/i });
     expect(screen.getByText(/teamets resultater/i)).toBeTruthy();
@@ -628,7 +628,7 @@ describe("TeamDetail current-survey section (TASK-010)", () => {
       survey: { surveyId: "survey-1", accessMode: "public", lifecycle: "open" },
     });
 
-    const { container } = render(<TeamDetail teamId="team-1" />);
+    const { container } = render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByRole("link", { name: /svar på undersøkelsen/i });
     expect(container.textContent).not.toMatch(/\d+ svar/);
@@ -640,7 +640,7 @@ describe("TeamDetail current-survey section (TASK-010)", () => {
       teams: [{ teamId: "team-1", name: "Platform", relationship: "none" }],
     });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByRole("button", { name: /be om tilgang/i });
     expect(fetchCurrentTeamSurveyMock).not.toHaveBeenCalled();
@@ -652,7 +652,7 @@ describe("TeamDetail current-survey section (TASK-010)", () => {
       survey: { surveyId: "survey-1", accessMode: "public", lifecycle: "open" },
     });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByRole("link", { name: /svar på undersøkelsen/i });
     expect(screen.queryByText(/^answer the survey$/i)).toBeNull();
@@ -692,7 +692,7 @@ describe("TeamDetail current-survey section auth/route races (TASK-010)", () => 
     fetchTeamResultsMock.mockResolvedValue(INSUFFICIENT_RESULTS);
     const calls = queuedCalls(fetchCurrentTeamSurveyMock);
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
     observer.emit("token-a");
     await waitFor(() => expect(fetchCurrentTeamSurveyMock).toHaveBeenCalledTimes(1));
 
@@ -733,10 +733,10 @@ describe("TeamDetail current-survey section auth/route races (TASK-010)", () => 
       )
       .mockResolvedValue({ status: "ok", survey: null });
 
-    const { rerender } = render(<TeamDetail teamId="team-a" />);
+    const { rerender } = render(<TeamDetail teamId="team-a" forumEnabled={true} />);
     await waitFor(() => expect(fetchCurrentTeamSurveyMock).toHaveBeenCalledWith("a-token", "team-a"));
 
-    rerender(<TeamDetail teamId="team-b" />);
+    rerender(<TeamDetail teamId="team-b" forumEnabled={true} />);
     await screen.findByText("Team B");
 
     resolveTeamASurvey({
@@ -758,7 +758,7 @@ describe("TeamDetail current-survey section auth/route races (TASK-010)", () => 
     fetchTeamResultsMock.mockResolvedValue(INSUFFICIENT_RESULTS);
     const calls = queuedCalls(fetchCurrentTeamSurveyMock);
 
-    const { unmount } = render(<TeamDetail teamId="team-1" />);
+    const { unmount } = render(<TeamDetail teamId="team-1" forumEnabled={true} />);
     await waitFor(() => expect(fetchCurrentTeamSurveyMock).toHaveBeenCalledTimes(1));
 
     unmount();
@@ -804,7 +804,7 @@ describe("TeamDetail auth/route races", () => {
     const observer = capturingObserver();
     const calls = queuedCalls(fetchTeamsOverviewMock);
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
     observer.emit("token-a");
     await waitFor(() => expect(fetchTeamsOverviewMock).toHaveBeenCalledTimes(1));
 
@@ -825,7 +825,7 @@ describe("TeamDetail auth/route races", () => {
     const observer = capturingObserver();
     const calls = queuedCalls(fetchTeamsOverviewMock);
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
     observer.emit("token-a");
     await waitFor(() => expect(fetchTeamsOverviewMock).toHaveBeenCalledTimes(1));
 
@@ -852,7 +852,7 @@ describe("TeamDetail auth/route races", () => {
     const observer = capturingObserver();
     const calls = queuedCalls(fetchTeamsOverviewMock);
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
     observer.emit("token-a1");
     await waitFor(() => expect(fetchTeamsOverviewMock).toHaveBeenCalledTimes(1));
 
@@ -880,7 +880,7 @@ describe("TeamDetail auth/route races", () => {
     const calls = queuedCalls(fetchTeamsOverviewMock);
     requestTeamAccessMock.mockResolvedValue({ ok: true, outcome: "created" });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
     observer.emit("token-a");
     await waitFor(() => expect(fetchTeamsOverviewMock).toHaveBeenCalledTimes(1));
 
@@ -911,7 +911,7 @@ describe("TeamDetail auth/route races", () => {
     const observer = capturingObserver();
     const calls = queuedCalls(fetchTeamsOverviewMock);
 
-    const { unmount } = render(<TeamDetail teamId="team-1" />);
+    const { unmount } = render(<TeamDetail teamId="team-1" forumEnabled={true} />);
     observer.emit("token-a");
     await waitFor(() => expect(fetchTeamsOverviewMock).toHaveBeenCalledTimes(1));
 
@@ -949,10 +949,10 @@ describe("TeamDetail auth/route races", () => {
       results: INSUFFICIENT_RESULTS.results,
     });
 
-    const { rerender } = render(<TeamDetail teamId="team-a" />);
+    const { rerender } = render(<TeamDetail teamId="team-a" forumEnabled={true} />);
     await waitFor(() => expect(fetchTeamsOverviewMock).toHaveBeenCalledTimes(1));
 
-    rerender(<TeamDetail teamId="team-b" />);
+    rerender(<TeamDetail teamId="team-b" forumEnabled={true} />);
     await screen.findByText("Team B");
 
     resolveTeamA({
@@ -988,10 +988,10 @@ describe("TeamDetail auth/route races", () => {
         ],
       });
 
-    const { rerender } = render(<TeamDetail teamId="team-a" />);
+    const { rerender } = render(<TeamDetail teamId="team-a" forumEnabled={true} />);
     await waitFor(() => expect(fetchTeamResultsMock).toHaveBeenCalledWith("a-token", "team-a"));
 
-    rerender(<TeamDetail teamId="team-b" />);
+    rerender(<TeamDetail teamId="team-b" forumEnabled={true} />);
     await screen.findAllByText(/minst 5 personer har svart/i);
 
     // Team A's fallback results request resolves late as fully authorized —
@@ -1009,7 +1009,7 @@ describe("TeamDetail auth/route races", () => {
     const calls = queuedCalls(fetchTeamsOverviewMock);
     requestTeamAccessMock.mockResolvedValue({ ok: true, outcome: "created" });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
     observer.emit("token-a");
     await waitFor(() => expect(fetchTeamsOverviewMock).toHaveBeenCalledTimes(1));
 
@@ -1092,7 +1092,7 @@ describe("TeamDetail challenges section (TASK-005)", () => {
       canSubmit: true,
     });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     expect(await screen.findByRole("heading", { name: "Utfordringer" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Meld en utfordring" })).toBeTruthy();
@@ -1112,7 +1112,7 @@ describe("TeamDetail challenges section (TASK-005)", () => {
       canSubmit: false,
     });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     expect(await screen.findByRole("heading", { name: "Utfordringer" })).toBeTruthy();
     expect(screen.getByText(OPEN_CHALLENGE.text)).toBeTruthy();
@@ -1133,7 +1133,7 @@ describe("TeamDetail challenges section (TASK-005)", () => {
       canSubmit: true,
     });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     expect(await screen.findByRole("heading", { name: "Meld en utfordring" })).toBeTruthy();
   });
@@ -1145,7 +1145,7 @@ describe("TeamDetail challenges section (TASK-005)", () => {
     });
     fetchTeamChallengesMock.mockResolvedValue({ status: "ok", challenges: [], canSubmit: false });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByRole("heading", { name: "Utfordringer" });
     expect(screen.queryByRole("textbox", { name: "Utfordring" })).toBeNull();
@@ -1153,7 +1153,7 @@ describe("TeamDetail challenges section (TASK-005)", () => {
   });
 
   it("shows the Norwegian empty state when the team has no challenges", async () => {
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByRole("heading", { name: "Utfordringer" });
     expect(screen.getByText(/ingen utfordringer ennå/i)).toBeTruthy();
@@ -1163,7 +1163,7 @@ describe("TeamDetail challenges section (TASK-005)", () => {
     fetchTeamChallengesMock.mockResolvedValue({ status: "read_failed" });
     fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByText("7 svar");
     const alerts = screen.getAllByRole("alert");
@@ -1174,7 +1174,7 @@ describe("TeamDetail challenges section (TASK-005)", () => {
     fetchTeamResultsMock.mockResolvedValue({ status: "read_failed" });
     fetchTeamChallengesMock.mockResolvedValue({ status: "ok", challenges: [OPEN_CHALLENGE], canSubmit: true });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByText(/teamets resultater/i);
     expect(screen.getByText(OPEN_CHALLENGE.text)).toBeTruthy();
@@ -1184,7 +1184,7 @@ describe("TeamDetail challenges section (TASK-005)", () => {
     fetchCurrentTeamSurveyMock.mockResolvedValue({ status: "read_failed" });
     fetchTeamChallengesMock.mockResolvedValue({ status: "ok", challenges: [OPEN_CHALLENGE], canSubmit: true });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByText(OPEN_CHALLENGE.text);
     expect(screen.getByRole("heading", { name: /pågående undersøkelse/i })).toBeTruthy();
@@ -1196,7 +1196,7 @@ describe("TeamDetail challenges section (TASK-005)", () => {
       teams: [{ teamId: "team-1", name: "Platform", relationship: "none" }],
     });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByRole("button", { name: /be om tilgang/i });
     expect(fetchTeamChallengesMock).not.toHaveBeenCalled();
@@ -1209,7 +1209,7 @@ describe("TeamDetail challenges section (TASK-005)", () => {
       .mockResolvedValueOnce({ status: "ok", challenges: [OPEN_CHALLENGE], canSubmit: true });
     submitChallengeMock.mockResolvedValue({ status: "ok" });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
     await screen.findByRole("heading", { name: "Meld en utfordring" });
     expect(screen.getByText(/ingen utfordringer ennå/i)).toBeTruthy();
 
@@ -1241,7 +1241,7 @@ describe("TeamDetail challenges section (TASK-005)", () => {
           }),
       );
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
     observer.emit("a-token");
     await screen.findByRole("heading", { name: "Meld en utfordring" });
 
@@ -1281,14 +1281,14 @@ describe("TeamDetail challenges section (TASK-005)", () => {
       )
       .mockResolvedValue(NO_CHALLENGES);
 
-    const { rerender } = render(<TeamDetail teamId="team-a" />);
+    const { rerender } = render(<TeamDetail teamId="team-a" forumEnabled={true} />);
     await screen.findByRole("heading", { name: "Meld en utfordring" });
 
     await user.type(screen.getByRole("textbox", { name: "Utfordring" }), "Deploy process has no clear owner");
     await user.click(screen.getByRole("button", { name: /^send inn$/i }));
     await screen.findByText(/registrert/i);
 
-    rerender(<TeamDetail teamId="team-b" />);
+    rerender(<TeamDetail teamId="team-b" forumEnabled={true} />);
     await screen.findByText("Team B");
 
     resolveRefresh({ status: "ok", challenges: [OPEN_CHALLENGE], canSubmit: true });
@@ -1305,7 +1305,7 @@ describe("TeamDetail challenges section (TASK-005)", () => {
     });
     fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
 
-    const { container } = render(<TeamDetail teamId="team-1" />);
+    const { container } = render(<TeamDetail teamId="team-1" forumEnabled={true} />);
     await screen.findByText(OPEN_CHALLENGE.text);
 
     expect(container.textContent).not.toMatch(/@|uid|resolvedBy|archivedBy|ciphertext|\biv\b|\btag\b/i);
@@ -1318,7 +1318,7 @@ describe("TeamDetail challenges section (TASK-005)", () => {
       canSubmit: true,
     });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByText(OPEN_CHALLENGE.text);
     expect(screen.queryByText(/^report a challenge$/i)).toBeNull();
@@ -1368,7 +1368,7 @@ describe("TeamDetail forum section (TASK-005)", () => {
   it("renders the section heading, create-thread form, and existing threads for an authorized member", async () => {
     fetchTeamThreadsMock.mockResolvedValue({ status: "ok", threads: [THREAD_1] });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     expect(await screen.findByRole("heading", { name: "Forum" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Start en ny tråd" })).toBeTruthy();
@@ -1377,7 +1377,7 @@ describe("TeamDetail forum section (TASK-005)", () => {
   });
 
   it("shows the Norwegian empty state when the team has no threads", async () => {
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByRole("heading", { name: "Forum" });
     expect(screen.getByText(/ingen tråder ennå/i)).toBeTruthy();
@@ -1388,7 +1388,7 @@ describe("TeamDetail forum section (TASK-005)", () => {
     fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
     fetchTeamChallengesMock.mockResolvedValue({ status: "ok", challenges: [] });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByText("7 svar");
     const alerts = screen.getAllByRole("alert");
@@ -1399,7 +1399,7 @@ describe("TeamDetail forum section (TASK-005)", () => {
     fetchTeamResultsMock.mockResolvedValue({ status: "read_failed" });
     fetchTeamThreadsMock.mockResolvedValue({ status: "ok", threads: [THREAD_1] });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByText(/teamets resultater/i);
     expect(screen.getByText(THREAD_1.title)).toBeTruthy();
@@ -1411,7 +1411,7 @@ describe("TeamDetail forum section (TASK-005)", () => {
       teams: [{ teamId: "team-1", name: "Platform", relationship: "none" }],
     });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByRole("button", { name: /be om tilgang/i });
     expect(fetchTeamThreadsMock).not.toHaveBeenCalled();
@@ -1421,7 +1421,7 @@ describe("TeamDetail forum section (TASK-005)", () => {
     const user = userEvent.setup();
     createThreadMock.mockResolvedValue({ status: "ok", threadId: "thread-9" });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
     await screen.findByRole("heading", { name: "Start en ny tråd" });
 
     await user.type(screen.getByLabelText("Tittel"), "En helt ny tråd");
@@ -1453,7 +1453,7 @@ describe("TeamDetail forum section (TASK-005)", () => {
         }),
     );
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
     observer.emit("a-token");
     await screen.findByRole("heading", { name: "Start en ny tråd" });
 
@@ -1492,14 +1492,14 @@ describe("TeamDetail forum section (TASK-005)", () => {
         }),
     );
 
-    const { rerender } = render(<TeamDetail teamId="team-a" />);
+    const { rerender } = render(<TeamDetail teamId="team-a" forumEnabled={true} />);
     await screen.findByRole("heading", { name: "Start en ny tråd" });
 
     await user.type(screen.getByLabelText("Tittel"), "En helt ny tråd");
     await user.type(screen.getByLabelText("Innhold"), "Med et gyldig innhold i tråden.");
     await user.click(screen.getByRole("button", { name: /^opprett tråd$/i }));
 
-    rerender(<TeamDetail teamId="team-b" />);
+    rerender(<TeamDetail teamId="team-b" forumEnabled={true} />);
     await screen.findByText("Team B");
 
     resolveCreate({ status: "ok", threadId: "thread-9" });
@@ -1512,7 +1512,7 @@ describe("TeamDetail forum section (TASK-005)", () => {
     fetchTeamThreadsMock.mockResolvedValue({ status: "ok", threads: [THREAD_1] });
     fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
 
-    const { container } = render(<TeamDetail teamId="team-1" />);
+    const { container } = render(<TeamDetail teamId="team-1" forumEnabled={true} />);
     await screen.findByText(THREAD_1.title);
 
     expect(container.textContent).not.toMatch(/authorUid|ciphertext|deletedBy|\bkeyVersion\b/i);
@@ -1521,11 +1521,94 @@ describe("TeamDetail forum section (TASK-005)", () => {
   it("contains no leftover English copy in the forum section", async () => {
     fetchTeamThreadsMock.mockResolvedValue({ status: "ok", threads: [THREAD_1] });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByText(THREAD_1.title);
     expect(screen.queryByText(/^start a new thread$/i)).toBeNull();
     expect(screen.queryByText(/^no threads yet$/i)).toBeNull();
+  });
+});
+
+describe("TeamDetail forum feature flag (FEATURE_FORUM_ENABLED)", () => {
+  const THREAD_1 = {
+    threadId: "thread-1",
+    title: "Har noen løst dette?",
+    authorTag: "48D73D",
+    isOwnThread: false,
+    createdAt: "2026-01-10T10:00:00.000Z",
+  };
+
+  beforeEach(() => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "member" }],
+    });
+    fetchTeamResultsMock.mockResolvedValue(INSUFFICIENT_RESULTS);
+    fetchCurrentTeamSurveyMock.mockResolvedValue(NO_CURRENT_SURVEY);
+    fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
+    fetchTeamThreadsMock.mockResolvedValue({ status: "ok", threads: [THREAD_1] });
+    fetchTeamSkillsMock.mockResolvedValue(NO_SKILLS);
+  });
+
+  afterEach(() => {
+    cleanup();
+    observeIdTokenMock.mockReset();
+    fetchTeamsOverviewMock.mockReset();
+    requestTeamAccessMock.mockReset();
+    fetchTeamResultsMock.mockReset();
+    fetchCurrentTeamSurveyMock.mockReset();
+    fetchTeamChallengesMock.mockReset();
+    fetchTeamThreadsMock.mockReset();
+    fetchTeamSkillsMock.mockReset();
+    reportTeamSkillProgressMock.mockReset();
+    createThreadMock.mockReset();
+    routerPushMock.mockReset();
+  });
+
+  it("renders no Forum heading, create-thread form, or thread list when the flag is disabled (authorized branch)", async () => {
+    render(<TeamDetail teamId="team-1" forumEnabled={false} />);
+
+    await screen.findByText("Platform");
+    expect(screen.queryByRole("heading", { name: "Forum" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Start en ny tråd" })).toBeNull();
+    expect(screen.queryByText(THREAD_1.title)).toBeNull();
+  });
+
+  it("never fetches the team's threads when the flag is disabled (authorized branch)", async () => {
+    render(<TeamDetail teamId="team-1" forumEnabled={false} />);
+
+    await screen.findByText("Platform");
+    expect(fetchTeamThreadsMock).not.toHaveBeenCalled();
+  });
+
+  it("renders no Forum section, and never fetches threads, when the flag is disabled (results_unavailable branch)", async () => {
+    fetchTeamResultsMock.mockResolvedValue({ status: "read_failed" });
+
+    render(<TeamDetail teamId="team-1" forumEnabled={false} />);
+
+    await screen.findByText(/teamets resultater/i);
+    expect(screen.queryByRole("heading", { name: "Forum" })).toBeNull();
+    expect(fetchTeamThreadsMock).not.toHaveBeenCalled();
+  });
+
+  it("shows no Forum-related loading or error state while the flag is disabled", async () => {
+    fetchTeamThreadsMock.mockResolvedValue({ status: "read_failed" });
+
+    render(<TeamDetail teamId="team-1" forumEnabled={false} />);
+
+    await screen.findByText("Platform");
+    const alerts = screen.queryAllByRole("alert");
+    expect(alerts.some((alert) => /lasting av forumet/i.test(alert.textContent ?? ""))).toBe(false);
+  });
+
+  it("renders the Forum section and fetches threads exactly as before when the flag is enabled", async () => {
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
+
+    expect(await screen.findByRole("heading", { name: "Forum" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Start en ny tråd" })).toBeTruthy();
+    expect(screen.getByText(THREAD_1.title)).toBeTruthy();
+    expect(fetchTeamThreadsMock).toHaveBeenCalledWith("a-token", "team-1");
   });
 });
 
@@ -1578,7 +1661,7 @@ describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
   it("renders the section heading and every tracked tree's full ordered stage list for an authorized member", async () => {
     fetchTeamSkillsMock.mockResolvedValue({ status: "ok", skills: [TRACKED_SKILL] });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     expect(await screen.findByRole("heading", { name: "Kompetanseområder" })).toBeTruthy();
     expect(screen.getByText("Containers")).toBeTruthy();
@@ -1590,7 +1673,7 @@ describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
   it("shows the Norwegian empty state when the team tracks no SkillTree", async () => {
     fetchTeamSkillsMock.mockResolvedValue(NO_SKILLS);
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByRole("heading", { name: "Kompetanseområder" });
     expect(screen.getByText(/sporer ingen kompetanseområder/i)).toBeTruthy();
@@ -1599,7 +1682,7 @@ describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
   it("represents a currentNodeId of null with a distinct 'not started' state", async () => {
     fetchTeamSkillsMock.mockResolvedValue({ status: "ok", skills: [NOT_STARTED_SKILL] });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByText("Observability");
     expect(screen.getByText(/ikke startet/i)).toBeTruthy();
@@ -1608,7 +1691,7 @@ describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
   it("marks the current stage with visible text, never color alone", async () => {
     fetchTeamSkillsMock.mockResolvedValue({ status: "ok", skills: [TRACKED_SKILL] });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByText("Containers");
     expect(screen.getByText(/nåværende steg/i)).toBeTruthy();
@@ -1619,7 +1702,7 @@ describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
     fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
     fetchTeamChallengesMock.mockResolvedValue({ status: "ok", challenges: [] });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByText("7 svar");
     const alerts = screen.getAllByRole("alert");
@@ -1630,7 +1713,7 @@ describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
     fetchTeamResultsMock.mockResolvedValue({ status: "read_failed" });
     fetchTeamSkillsMock.mockResolvedValue({ status: "ok", skills: [TRACKED_SKILL] });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByText(/teamets resultater/i);
     expect(screen.getByText("Containers")).toBeTruthy();
@@ -1642,7 +1725,7 @@ describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
       teams: [{ teamId: "team-1", name: "Platform", relationship: "none" }],
     });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByRole("button", { name: /be om tilgang/i });
     expect(fetchTeamSkillsMock).not.toHaveBeenCalled();
@@ -1651,7 +1734,7 @@ describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
   it("renders a member self-report control (stage select + save button) alongside the read-only list (TASK-002, BR-10)", async () => {
     fetchTeamSkillsMock.mockResolvedValue({ status: "ok", skills: [TRACKED_SKILL] });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByText("Containers");
     expect(screen.queryByRole("button", { name: /start sporing|stopp sporing/i })).toBeNull();
@@ -1666,7 +1749,7 @@ describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
       .mockResolvedValueOnce({ status: "ok", skills: [{ ...TRACKED_SKILL, currentNodeId: "node-1" }] });
     reportTeamSkillProgressMock.mockResolvedValue({ ok: true });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
     await screen.findByText("Containers");
 
     await user.selectOptions(screen.getByRole("combobox", { name: /sett stadium/i }), "node-1");
@@ -1699,14 +1782,14 @@ describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
       )
       .mockResolvedValue(NO_SKILLS);
 
-    const { rerender } = render(<TeamDetail teamId="team-a" />);
+    const { rerender } = render(<TeamDetail teamId="team-a" forumEnabled={true} />);
     await screen.findByText("Containers");
 
     await user.selectOptions(screen.getByRole("combobox", { name: /sett stadium/i }), "node-1");
     await user.click(screen.getByRole("button", { name: /lagre/i }));
     await waitFor(() => expect(reportTeamSkillProgressMock).toHaveBeenCalledTimes(1));
 
-    rerender(<TeamDetail teamId="team-b" />);
+    rerender(<TeamDetail teamId="team-b" forumEnabled={true} />);
     await screen.findByText("Team B");
 
     resolveRefresh({ status: "ok", skills: [{ ...TRACKED_SKILL, currentNodeId: "node-1" }] });
@@ -1724,7 +1807,7 @@ describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
     fetchTeamSkillsMock.mockResolvedValue({ status: "ok", skills: [TRACKED_SKILL] });
     reportTeamSkillProgressMock.mockResolvedValue({ ok: false, error: "forbidden" });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
     await screen.findByText("Containers");
 
     await user.selectOptions(screen.getByRole("combobox", { name: /sett stadium/i }), "node-1");
@@ -1741,7 +1824,7 @@ describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
     fetchTeamSkillsMock.mockResolvedValue({ status: "ok", skills: [TRACKED_SKILL] });
     reportTeamSkillProgressMock.mockResolvedValue({ ok: false, error: "team_disabled" });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
     await screen.findByText("Containers");
 
     await user.selectOptions(screen.getByRole("combobox", { name: /sett stadium/i }), "node-1");
@@ -1758,7 +1841,7 @@ describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
   it("never renders member/admin identity data in the skill section", async () => {
     fetchTeamSkillsMock.mockResolvedValue({ status: "ok", skills: [TRACKED_SKILL] });
 
-    const { container } = render(<TeamDetail teamId="team-1" />);
+    const { container } = render(<TeamDetail teamId="team-1" forumEnabled={true} />);
     await screen.findByText("Containers");
 
     expect(container.textContent).not.toMatch(/@|uid|createdBy|updatedBy/i);
@@ -1773,7 +1856,7 @@ describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
     };
     fetchTeamSkillsMock.mockResolvedValue({ status: "ok", skills: [maliciousSkill] });
 
-    const { container } = render(<TeamDetail teamId="team-1" />);
+    const { container } = render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByText(maliciousSkill.name);
     expect(container.querySelector("script")).toBeNull();
@@ -1821,7 +1904,7 @@ describe("TeamDetail lazy TrendChart (TASK-003)", () => {
   it("renders no chart region and no chart-local loading state when there are no results to chart (BR-15)", async () => {
     fetchTeamResultsMock.mockResolvedValue({ status: "ok", teamId: "team-1", results: [] });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByText("Platform");
     expect(screen.queryByRole("heading", { name: /trendvisualisering/i })).toBeNull();
@@ -1838,7 +1921,7 @@ describe("TeamDetail lazy TrendChart (TASK-003)", () => {
     const callsBefore = trendChartModuleLoadedMock.mock.calls.length;
     fetchTeamResultsMock.mockResolvedValue({ status: "ok", teamId: "team-1", results: [] });
 
-    render(<TeamDetail teamId="team-1" />);
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByText("Platform");
     await flushMicrotasks();
@@ -1857,7 +1940,7 @@ describe("TeamDetail lazy TrendChart (TASK-003)", () => {
     });
     const { TeamDetail: FreshTeamDetail } = await import("./TeamDetail");
 
-    render(<FreshTeamDetail teamId="team-1" />);
+    render(<FreshTeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByText("Platform");
     // Surrounding sections (the table above the chart) are already rendered,
@@ -1912,7 +1995,7 @@ describe("TeamDetail lazy TrendChart (TASK-003)", () => {
     }));
     const { TeamDetail: FreshTeamDetail } = await import("./TeamDetail");
 
-    render(<FreshTeamDetail teamId="team-1" />);
+    render(<FreshTeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByText("Platform");
     const fallback = await screen.findByText(/trendvisualiseringen kunne ikke lastes/i);
@@ -1947,7 +2030,7 @@ describe("TeamDetail lazy TrendChart (TASK-003)", () => {
     }));
     const { TeamDetail: FreshTeamDetail } = await import("./TeamDetail");
 
-    render(<FreshTeamDetail teamId="team-1" />);
+    render(<FreshTeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByText("Platform");
     const fallback = await screen.findByText(/trendvisualiseringen kunne ikke lastes/i);

@@ -4,6 +4,22 @@
 Approved — Phase 6 v1 slice implemented (TASK-001 through TASK-006 Done;
 see `TASKS.md`).
 
+**Feature flag (current-state addendum).** The Forum feature described below
+remains fully implemented and unchanged, but its UI is now **hidden by
+default** on `/teams/[teamId]` and its standalone `/teams/[teamId]/forum/
+[threadId]` thread-detail page, behind a server-only product/UI-availability
+flag: `FEATURE_FORUM_ENABLED` (`src/features/forum/server/
+is-forum-enabled.ts`). Set it to exactly `"true"` to show the Forum UI again;
+a missing, `"false"`, or any other value hides it (fails closed). This is a
+**product/UI-availability decision, not a security control** — every
+guarantee described in this document (server-side authorization, encryption,
+attribution, deletion semantics) is unaffected, and `src/features/forum/
+server/*` and every `/api/teams/[teamId]/forum/...` route remain reachable
+and unchanged regardless of this flag's value; a caller who already knows a
+thread's API shape sees identical authorization behavior either way. See
+`docs/DEVELOPMENT.md`'s environment-variable table for the flag's exact
+semantics and where it is read.
+
 **Revision note (planning-review remediation pass).** An independent
 planning review found that this document's original two "Open questions"
 (member-visible email exposure; indefinite retention of unreadable deleted

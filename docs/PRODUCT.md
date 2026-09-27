@@ -164,6 +164,12 @@ until attrition, burnout, or delivery failure makes them obvious.
 
 ## Delivered: Team Forum (Phase 6)
 
+- **Current state**: the Forum UI described below is hidden by default,
+  behind a server-only product/UI-availability flag
+  (`FEATURE_FORUM_ENABLED`) — it is not a security control, and every
+  guarantee below is otherwise unaffected. See
+  `docs/features/team-forum/SPEC.md` ("Feature flag") and
+  `docs/DEVELOPMENT.md`'s environment-variable table.
 - Let a real member of a team start a titled discussion thread and reply to
   one, scoped to that team, with ordinary attribution — a reader can tell
   which posts share an author, without learning that author's real name,

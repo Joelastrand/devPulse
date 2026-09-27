@@ -239,7 +239,11 @@ type TeamDetailResult =
  * results endpoint — the only authoritative, `authorizeTeamAccess`-backed
  * decision — is always asked before anything is rendered as denied.
  */
-async function loadTeamDetail(idToken: string, teamId: string): Promise<TeamDetailResult> {
+async function loadTeamDetail(
+  idToken: string,
+  teamId: string,
+  forumEnabled: boolean,
+): Promise<TeamDetailResult> {
   const overview = await fetchTeamsOverview(idToken);
   if (overview.status === "unauthenticated") {
     return { status: "unauthenticated" };
@@ -262,13 +266,14 @@ async function loadTeamDetail(idToken: string, teamId: string): Promise<TeamDeta
   // Either a known "admin"/"member" relationship, or no overview entry at
   // all (the ambiguous case) — both resolve via the authoritative results
   // endpoint, never via the overview alone.
-  return resolveViaResults(idToken, teamId, entry?.name);
+  return resolveViaResults(idToken, teamId, entry?.name, forumEnabled);
 }
 
 async function resolveViaResults(
   idToken: string,
   teamId: string,
   name: string | undefined,
+  forumEnabled: boolean,
 ): Promise<TeamDetailResult> {
   // Fetched in parallel — separate server contracts (results, current-survey
   // discovery, member-visible challenges, the forum thread list, and the
@@ -277,11 +282,19 @@ async function resolveViaResults(
   // TASK-010; docs/features/anonymous-challenges/SPEC.md — TASK-005;
   // docs/features/team-forum/SPEC.md — TASK-005, BR-45; docs/features/
   // team-skill-tree/SPEC.md — TASK-007).
+  //
+  // `fetchTeamThreads` is called only when the Forum UI feature flag is
+  // enabled (docs/features/team-forum/SPEC.md — "Feature flag") — while
+  // disabled, no Forum fetch is ever initiated by this component; the
+  // placeholder result below is never rendered (`ForumSection` is not
+  // rendered at all in that case — see the JSX below).
   const [results, surveyResult, challengesResult, forumResult, skillsResult] = await Promise.all([
     fetchTeamResults(idToken, teamId),
     fetchCurrentTeamSurvey(idToken, teamId),
     fetchTeamChallenges(idToken, teamId),
-    fetchTeamThreads(idToken, teamId),
+    forumEnabled
+      ? fetchTeamThreads(idToken, teamId)
+      : Promise.resolve<FetchTeamThreadsResult>({ status: "read_failed" }),
     fetchTeamSkills(idToken, teamId),
   ]);
 
@@ -347,7 +360,7 @@ const RELATIONSHIP_MESSAGES: Record<DeniedRelationship, string> =
  * for team A can never render on team B's page, and Next.js route-instance
  * reuse is not relied on for this guarantee.
  */
-export function TeamDetail({ teamId }: { teamId: string }) {
+export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnabled: boolean }) {
   const router = useRouter();
   const [state, setState] = useState<ViewState>({ phase: "loading" });
   const [actionState, setActionState] = useState<RequestActionState>({ status: "idle" });
@@ -375,7 +388,7 @@ export function TeamDetail({ teamId }: { teamId: string }) {
    * route-change guard) lives inside `useAuthGatedResource`.
    */
   async function loadForGeneration(token: string, generation: number) {
-    const result = await loadTeamDetail(token, teamId);
+    const result = await loadTeamDetail(token, teamId, forumEnabled);
     if (isCurrentGeneration(generation)) {
       setState({ phase: "loaded", token, generation, result });
     }
@@ -505,12 +518,14 @@ export function TeamDetail({ teamId }: { teamId: string }) {
           state={result.challenges}
           onSubmitted={() => handleChallengeSubmitted(token, generation)}
         />
-        <ForumSection
-          teamId={teamId}
-          token={token}
-          state={result.forum}
-          onThreadCreated={(threadId) => handleThreadCreated(generation, threadId)}
-        />
+        {forumEnabled && (
+          <ForumSection
+            teamId={teamId}
+            token={token}
+            state={result.forum}
+            onThreadCreated={(threadId) => handleThreadCreated(generation, threadId)}
+          />
+        )}
         <TeamSkillSection
           idToken={token}
           teamId={teamId}
@@ -545,12 +560,14 @@ export function TeamDetail({ teamId }: { teamId: string }) {
           state={result.challenges}
           onSubmitted={() => handleChallengeSubmitted(token, generation)}
         />
-        <ForumSection
-          teamId={teamId}
-          token={token}
-          state={result.forum}
-          onThreadCreated={(threadId) => handleThreadCreated(generation, threadId)}
-        />
+        {forumEnabled && (
+          <ForumSection
+            teamId={teamId}
+            token={token}
+            state={result.forum}
+            onThreadCreated={(threadId) => handleThreadCreated(generation, threadId)}
+          />
+        )}
         <TeamSkillSection
           idToken={token}
           teamId={teamId}
