@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { cx } from "./class-names";
 
-export type PageShellWidth = "sm" | "lg" | "2xl" | "3xl";
+export type PageShellWidth = "sm" | "lg" | "2xl" | "3xl" | "wide";
 
 export interface PageShellProps {
   children: ReactNode;
@@ -12,11 +12,21 @@ export interface PageShellProps {
   className?: string;
 }
 
-const WIDTH_CLASSNAMES: Record<PageShellWidth, string> = {
+/**
+ * `"wide"` is a maximum, not a fixed width — like every other token here, it
+ * simply shrinks on a narrower viewport (docs/features/ui-refresh/SPEC.md —
+ * BR-3). Reserved for surfaces with genuinely list/section-dense content
+ * (currently the three admin routes, applied by their own tasks); no public,
+ * auth, or survey page uses it (BR-5). Exported so `SiteHeader` can share the
+ * exact same width value as its own outer bound (BR-4) without duplicating
+ * the literal Tailwind class string.
+ */
+export const WIDTH_CLASSNAMES: Record<PageShellWidth, string> = {
   sm: "max-w-sm",
   lg: "max-w-lg",
   "2xl": "max-w-2xl",
   "3xl": "max-w-3xl",
+  wide: "max-w-6xl",
 };
 
 /**

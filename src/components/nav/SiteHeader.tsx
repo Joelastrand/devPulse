@@ -7,6 +7,7 @@ import { signOut } from "../../features/auth/client/auth-client";
 import { useAuthGatedResource } from "../../features/auth/client/use-auth-gated-resource";
 import { fetchOwnAdminStatus } from "../../features/teams/client/own-admin-status-gateway";
 import { Button } from "../ui/Button";
+import { WIDTH_CLASSNAMES } from "../ui/PageShell";
 import { navCopy } from "./copy";
 
 type HeaderState =
@@ -93,7 +94,9 @@ export function SiteHeader() {
 
   return (
     <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-black">
-      <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-y-2 px-4 py-4 sm:px-8">
+      <div
+        className={`mx-auto flex ${WIDTH_CLASSNAMES.wide} flex-wrap items-center justify-between gap-y-2 px-4 py-4 sm:px-8`}
+      >
         <Link href="/" className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
           {navCopy.brand}
         </Link>

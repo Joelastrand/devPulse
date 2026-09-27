@@ -22,6 +22,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 const { SiteHeader } = await import("./SiteHeader");
+const { WIDTH_CLASSNAMES } = await import("../ui/PageShell");
 
 function subscribingWith(token: string | null) {
   return (callback: (token: string | null) => void) => {
@@ -217,6 +218,15 @@ describe("SiteHeader", () => {
       expect(link.tagName).toBe("A");
       expect(link.getAttribute("href")).toBeTruthy();
     }
+  });
+
+  it("shares the same outer width bound as PageShell's wide token (docs/features/ui-refresh/SPEC.md — BR-4)", () => {
+    observeIdTokenMock.mockImplementation(subscribingWith(null));
+
+    const { container } = render(<SiteHeader />);
+
+    const inner = container.querySelector("header > div");
+    expect(inner?.className).toContain(WIDTH_CLASSNAMES.wide);
   });
 
   it("unsubscribes from id token updates on unmount", () => {

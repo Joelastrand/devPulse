@@ -3,11 +3,12 @@
 Specification: [SPEC.md](./SPEC.md)
 
 ## Status
-Ready: 10  In Progress: 0  Done: 0
+Ready: 9  In Progress: 0  Done: 1
 
 `SPEC.md`'s Status is `Approved` (see `SPEC.md` → "Status"/"Approval gate").
-TASK-001 has no unresolved dependency and is the first task an
-`implement-task` session should pick up.
+TASK-001 is `Done`; TASK-002 through TASK-009 are now all unblocked (their
+only dependency, TASK-001, is satisfied) and independently eligible for the
+next `implement-task` session to pick up, in any order.
 
 ## Task graph
 
@@ -90,7 +91,7 @@ Every BR maps to at least one task. No task implements behavior outside
 
 ### TASK-001 — UI foundation
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-1, BR-2, BR-3, BR-4, BR-6
 **Depends on:** None
 
@@ -170,17 +171,72 @@ None yet (`TASK-010` performs the final `docs/UI-UX.md` sync once every
 surface is actually migrated).
 
 **Acceptance criteria**
-- [ ] `app/globals.css` no longer hardcodes Arial for `body`; Geist Sans
+- [x] `app/globals.css` no longer hardcodes Arial for `body`; Geist Sans
       renders (BR-1); Geist Mono config is untouched (BR-2).
-- [ ] `PageShell` accepts `width="wide"`; every existing width token is
+- [x] `PageShell` accepts `width="wide"`; every existing width token is
       unaffected (BR-3).
-- [ ] `SiteHeader`'s own width bound equals the new wide token (BR-4).
-- [ ] A text-input/textarea/select primitive exists, forwards
+- [x] `SiteHeader`'s own width bound equals the new wide token (BR-4).
+- [x] A text-input/textarea/select primitive exists, forwards
       `aria-invalid`/`aria-describedby`, and is not yet consumed by any
       feature file (BR-6).
-- [ ] A `Badge` primitive exists, always renders text, has no color-only
+- [x] A `Badge` primitive exists, always renders text, has no color-only
       mode.
-- [ ] Relevant tests, `pnpm lint`, `pnpm typecheck` pass.
+- [x] Relevant tests, `pnpm lint`, `pnpm typecheck` pass.
+
+**Notes**
+Implemented exactly as specified, with the following concrete choices:
+- `app/globals.css`: `body`'s `font-family` changed from the hardcoded
+  `Arial, Helvetica, sans-serif` to `var(--font-sans), ui-sans-serif,
+  sans-serif` — resolves through the already-existing `@theme inline`
+  mapping (`--font-sans: var(--font-geist-sans)`) to the Geist Sans already
+  configured in `app/layout.tsx`. `app/layout.tsx`'s Geist Sans/Mono setup
+  (`geistSans`/`geistMono`, both `variable` classes on `<html>`) is
+  byte-for-byte unchanged — confirmed via `git diff`, this file was never
+  touched.
+- `src/components/ui/PageShell.tsx`: `"wide"` added to `PageShellWidth`,
+  mapped to `max-w-6xl` (1152px — materially wider than `max-w-3xl`'s
+  768px). `WIDTH_CLASSNAMES` is now exported (was previously module-private)
+  specifically so `SiteHeader` can share the exact same class value as its
+  single source of truth, per BR-4's "no duplicated literal string" intent.
+- `src/components/nav/SiteHeader.tsx`: its previously hard-coded
+  `max-w-3xl` now reads `WIDTH_CLASSNAMES.wide` from `PageShell` — one
+  value, used identically on every route; no route-specific branching of
+  any kind was introduced. No auth/nav behavior, link, copy, or client
+  state changed.
+- Form-control primitives: three separate files (matching this codebase's
+  existing one-primitive-per-file convention —
+  `Button.tsx`/`Card.tsx`/`Alert.tsx`, etc.) — `TextField.tsx`,
+  `TextArea.tsx`, `Select.tsx`. Each requires an explicit `id`/`label`,
+  accepts optional `description`/`error`, forwards every other native
+  prop unchanged, and renders `error` through the existing `Alert`
+  component (preserving `role="alert"`) rather than a bare paragraph — so
+  a future migration never loses `Alert`'s existing role semantics by
+  adopting the primitive. A tiny shared `describedByIds()` helper and a
+  shared `FORM_CONTROL_CLASSNAME` constant were added to the existing
+  `class-names.ts` (alongside `cx()`) rather than duplicated three times.
+  No radio/rating abstraction, no form-state management, no schema
+  validation, no `"use client"` directive (none of the three has any
+  hook/state — each is a plain, presentational function component).
+- `src/components/ui/Badge.tsx`: a single visual treatment, no `tone`/
+  `variant` prop at all — every confirmed SPEC candidate call site
+  (`AdminTeams.tsx`, `TeamsOverview.tsx`, `ChallengeList.tsx`,
+  `TeamSkillTrackingSection.tsx`, `OrgSkillProgressOverview.tsx`) currently
+  renders its status as plain, uncolored text, so no color-differentiated
+  variant is justified yet; adding one speculatively would have been
+  exactly the "variants merely because they might be useful someday" this
+  task was told to avoid. `children` (the status text) is mandatory; there
+  is no way to render the component without visible text content.
+- Confirmed via `git diff`/`git status`: no file under `src/features/**`,
+  `app/api/**`, or any `app/admin/**`/`app/**/page.tsx` was touched; no
+  admin page was switched to `width="wide"` (that remains TASK-004/005/008's
+  own job); `package.json`/`pnpm-lock.yaml` are unchanged (no new
+  dependency); `app/layout.tsx` is unchanged.
+
+Verification: focused suite (`src/components/ui`, `src/components/nav`) —
+12 files / 68 tests passed. Full `pnpm test` — 173 files / 2440 tests
+passed. `pnpm typecheck`, `pnpm lint`, `git diff --check` all passed.
+`pnpm build` succeeded with an identical route manifest to before this
+task (no new/removed route). Nothing was pushed or deployed.
 
 ---
 
