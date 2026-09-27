@@ -34,7 +34,7 @@ export interface MemberChallengeView {
 type ReadErrorStatus = "unauthenticated" | "forbidden" | "read_failed";
 
 export type FetchTeamChallengesResult =
-  | { status: "ok"; challenges: MemberChallengeView[] }
+  | { status: "ok"; challenges: MemberChallengeView[]; canSubmit: boolean }
   | { status: ReadErrorStatus };
 
 const KNOWN_READ_ERRORS = new Set<ReadErrorStatus>(["unauthenticated", "forbidden", "read_failed"]);
@@ -92,7 +92,7 @@ function parseFetchTeamChallengesResult(value: unknown): FetchTeamChallengesResu
   }
   const record = value as Record<string, unknown>;
   if (record.status === "ok") {
-    if (!Array.isArray(record.challenges)) {
+    if (!Array.isArray(record.challenges) || typeof record.canSubmit !== "boolean") {
       return { status: "read_failed" };
     }
     const challenges: MemberChallengeView[] = [];
@@ -103,7 +103,7 @@ function parseFetchTeamChallengesResult(value: unknown): FetchTeamChallengesResu
       }
       challenges.push(view);
     }
-    return { status: "ok", challenges };
+    return { status: "ok", challenges, canSubmit: record.canSubmit };
   }
   return isKnownReadError(record.status) ? { status: record.status } : { status: "read_failed" };
 }

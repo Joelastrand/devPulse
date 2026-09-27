@@ -124,14 +124,23 @@ function toCurrentSurveySectionState(
  * covers both a genuine read failure and a rare authorization race, exactly
  * like `CurrentSurveySectionState` above — never fabricated as "no
  * challenges yet" in either case.
+ *
+ * `canSubmit` (debug fix — Challenge submission composition gap) carries
+ * `listTeamChallengesForMember`'s own server-derived signal for whether
+ * *this* caller holds a genuine current `teamMemberships` record, re-derived
+ * independently of `authorizeTeamAccess`'s broader "admin"/"member" result —
+ * an app-admin-only viewer (no real membership) gets `canSubmit: false` even
+ * though they can still read this list. Only ever used to decide whether to
+ * render the submission form; `submitChallenge`'s own server authorization
+ * is unchanged and remains authoritative regardless of what this value is.
  */
 type ChallengesSectionState =
-  | { status: "loaded"; challenges: MemberChallengeView[] }
+  | { status: "loaded"; challenges: MemberChallengeView[]; canSubmit: boolean }
   | { status: "unavailable" };
 
 function toChallengesSectionState(result: FetchTeamChallengesResult): ChallengesSectionState {
   return result.status === "ok"
-    ? { status: "loaded", challenges: result.challenges }
+    ? { status: "loaded", challenges: result.challenges, canSubmit: result.canSubmit }
     : { status: "unavailable" };
 }
 
@@ -615,13 +624,27 @@ function CurrentSurveySection({ state }: { state: CurrentSurveySectionState }) {
 /**
  * `/teams/[teamId]`'s "Utfordringer" section (docs/features/
  * anonymous-challenges/SPEC.md — TASK-005, BR-27). Composes the submission
- * panel and the read-only member challenge list — shown to any authorized
- * member/admin, independently of whether results/current-survey succeeded
- * (BR-27). Renders exactly what `fetchTeamChallenges` returned; no
- * archived-challenge or status-based filtering logic of any kind lives
- * here or in `ChallengeList` — TASK-003's `listTeamChallengesForMember`
- * already guarantees an archived challenge never reaches this component
- * (`.claude/rules/security.md`).
+ * panel and the read-only member challenge list — the read-only list is
+ * shown to any authorized member/admin, independently of whether
+ * results/current-survey succeeded (BR-27). Renders exactly what
+ * `fetchTeamChallenges` returned; no archived-challenge or status-based
+ * filtering logic of any kind lives here or in `ChallengeList` — TASK-003's
+ * `listTeamChallengesForMember` already guarantees an archived challenge
+ * never reaches this component (`.claude/rules/security.md`).
+ *
+ * The submission panel itself is gated on `state.canSubmit` (debug fix —
+ * Challenge submission composition gap: this section previously rendered
+ * `ChallengeSubmissionPanel` for any authorized viewer, including an
+ * app-admin-only viewer with no genuine team membership, who would always
+ * be rejected `forbidden` by `submitChallenge` on actual submission —
+ * BR-1). `canSubmit` is a server-derived signal re-using the same real-
+ * membership semantics `submitChallenge` itself requires; it is never
+ * inferred client-side from admin status or the broader
+ * `authorizeTeamAccess`-style relationship. While the list read itself is
+ * `"unavailable"` (including the rare admin-only-viewer edge case where
+ * `canSubmit` genuinely cannot be known yet), the submission form is not
+ * shown either — the existing read-only list/empty/error states are
+ * unaffected either way.
  */
 function ChallengesSection({
   teamId,
@@ -636,15 +659,18 @@ function ChallengesSection({
 }) {
   const listState: ChallengeListState =
     state.status === "loaded" ? { status: "loaded", challenges: state.challenges } : { status: "error" };
+  const canSubmit = state.status === "loaded" && state.canSubmit;
 
   return (
     <Card as="section" variant="bordered" padding="md" aria-labelledby="challenges-heading">
       <h2 id="challenges-heading" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
         {challengesCopy.list.sectionTitle}
       </h2>
-      <div className="mt-4">
-        <ChallengeSubmissionPanel idToken={token} teamId={teamId} onSubmitted={onSubmitted} />
-      </div>
+      {canSubmit && (
+        <div className="mt-4">
+          <ChallengeSubmissionPanel idToken={token} teamId={teamId} onSubmitted={onSubmitted} />
+        </div>
+      )}
       <div className="mt-6">
         <ChallengeList state={listState} />
       </div>

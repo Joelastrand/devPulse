@@ -18,16 +18,53 @@ describe("fetchTeamChallenges", () => {
       { challengeId: "c1", text: "Deploy process has no owner", status: "open", submittedAt: "2026-01-10" },
       { challengeId: "c2", text: "Code review is slow", status: "resolved", submittedAt: "2026-01-05" },
     ];
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { status: "ok", challenges }));
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, { status: "ok", challenges, canSubmit: true }),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await fetchTeamChallenges("token-1", "team-1");
 
-    expect(result).toEqual({ status: "ok", challenges });
+    expect(result).toEqual({ status: "ok", challenges, canSubmit: true });
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/teams/team-1/challenges",
       expect.objectContaining({ headers: { Authorization: "Bearer token-1" } }),
     );
+  });
+
+  it("forwards canSubmit: false for an app-admin-only viewer, without treating it as malformed", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(jsonResponse(200, { status: "ok", challenges: [], canSubmit: false })),
+    );
+
+    const result = await fetchTeamChallenges("token-1", "team-1");
+
+    expect(result).toEqual({ status: "ok", challenges: [], canSubmit: false });
+  });
+
+  it("rejects an ok response missing canSubmit as read_failed rather than trusting it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(jsonResponse(200, { status: "ok", challenges: [] })),
+    );
+
+    const result = await fetchTeamChallenges("token-1", "team-1");
+
+    expect(result).toEqual({ status: "read_failed" });
+  });
+
+  it("rejects an ok response whose canSubmit is not a boolean as read_failed", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(200, { status: "ok", challenges: [], canSubmit: "true" }),
+      ),
+    );
+
+    const result = await fetchTeamChallenges("token-1", "team-1");
+
+    expect(result).toEqual({ status: "read_failed" });
   });
 
   it("passes through a known read error", async () => {
@@ -99,7 +136,9 @@ describe("fetchTeamChallenges", () => {
     };
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(jsonResponse(200, { status: "ok", challenges: [rawChallenge] })),
+      vi.fn().mockResolvedValue(
+        jsonResponse(200, { status: "ok", challenges: [rawChallenge], canSubmit: true }),
+      ),
     );
 
     const result = await fetchTeamChallenges("token-1", "team-1");

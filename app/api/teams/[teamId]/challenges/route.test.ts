@@ -36,17 +36,27 @@ describe("GET /api/teams/[teamId]/challenges", () => {
     listTeamChallengesForMemberMock.mockReset();
   });
 
-  it("returns the member-scoped challenge list for an authorized caller", async () => {
+  it("returns the member-scoped challenge list and canSubmit for an authorized caller", async () => {
     const challenges = [
       { challengeId: "c1", text: "Deploy process needs an owner", status: "open", submittedAt: "2026-01-10" },
     ];
-    listTeamChallengesForMemberMock.mockResolvedValue({ ok: true, challenges });
+    listTeamChallengesForMemberMock.mockResolvedValue({ ok: true, challenges, canSubmit: true });
 
     const response = await GET(getRequest("Bearer valid-token"), params());
     const payload = await response.json();
 
     expect(response.status).toBe(200);
-    expect(payload).toEqual({ status: "ok", challenges });
+    expect(payload).toEqual({ status: "ok", challenges, canSubmit: true });
+  });
+
+  it("forwards canSubmit: false for an app-admin-only viewer with no genuine membership", async () => {
+    listTeamChallengesForMemberMock.mockResolvedValue({ ok: true, challenges: [], canSubmit: false });
+
+    const response = await GET(getRequest("Bearer valid-token"), params());
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload).toEqual({ status: "ok", challenges: [], canSubmit: false });
   });
 
   it("always calls listTeamChallengesForMember, never an admin-scoped operation", async () => {

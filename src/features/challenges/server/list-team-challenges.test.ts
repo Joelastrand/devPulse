@@ -9,6 +9,7 @@ import type {
   ChallengesReader,
   ListTeamChallengesForAdminDeps,
   ListTeamChallengesForMemberDeps,
+  MembershipReader,
   RawChallengeDoc,
 } from "./list-team-challenges";
 import { listTeamChallengesForAdmin, listTeamChallengesForMember } from "./list-team-challenges";
@@ -102,6 +103,14 @@ function fakeAuthCollection(state: {
   };
 }
 
+function fakeMembershipReader(memberships: Record<string, unknown> = {}): MembershipReader {
+  return {
+    async getMembership(uid, teamId) {
+      return memberships[`${uid}__${teamId}`];
+    },
+  };
+}
+
 function spyDecrypt(): ((payload: EncryptedPayload) => string) & { calls: EncryptedPayload[] } {
   const calls: EncryptedPayload[] = [];
   const fn = ((payload: EncryptedPayload) => {
@@ -123,6 +132,9 @@ function memberBaseDeps(
       memberships: { [`${MEMBER_UID}__${TEAM_ID}`]: { uid: MEMBER_UID, teamId: TEAM_ID } },
     }),
     reader: fakeReader([]),
+    membershipReader: fakeMembershipReader({
+      [`${MEMBER_UID}__${TEAM_ID}`]: { uid: MEMBER_UID, teamId: TEAM_ID },
+    }),
     ...overrides,
   };
 }
@@ -314,7 +326,7 @@ describe("listTeamChallengesForMember", () => {
       memberBaseDeps({ reader: fakeReader([]) }),
     );
 
-    expect(result).toEqual({ ok: true, challenges: [] });
+    expect(result).toEqual({ ok: true, challenges: [], canSubmit: true });
   });
 
   it("returns read_failed, not an empty list, when the underlying query fails", async () => {
@@ -608,6 +620,84 @@ describe("listTeamChallengesForAdmin", () => {
     expect(logSpy).not.toHaveBeenCalled();
     expect(warnSpy).not.toHaveBeenCalled();
     expect(errorSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("listTeamChallengesForMember: canSubmit (debug fix — Challenge submission composition gap)", () => {
+  beforeEach(() => {
+    vi.stubEnv("ENCRYPTION_KEY", randomBytes(32).toString("base64"));
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("is true for a genuine team member", async () => {
+    const result = await listTeamChallengesForMember("token", TEAM_ID, memberBaseDeps());
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.canSubmit).toBe(true);
+  });
+
+  it("is false for an app-admin-only viewer with no genuine membership record, while the challenge list itself still succeeds", async () => {
+    const reader = fakeReader([challengeDoc("open-1", OPEN_TEXT)]);
+    const deps = memberBaseDeps({
+      verifyToken: verifyTokenReturning(adminIdentity()),
+      authCollection: fakeAuthCollection({ teamStatus: { [TEAM_ID]: "active" }, memberships: {} }),
+      membershipReader: fakeMembershipReader({}),
+      reader,
+    });
+
+    const result = await listTeamChallengesForMember("token", TEAM_ID, deps);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.challenges.map((c) => c.challengeId)).toEqual(["open-1"]);
+    expect(result.canSubmit).toBe(false);
+  });
+
+  it("is true for an app admin who is also a genuine team member", async () => {
+    const deps = memberBaseDeps({
+      verifyToken: verifyTokenReturning(adminIdentity()),
+      authCollection: fakeAuthCollection({ teamStatus: { [TEAM_ID]: "active" }, memberships: {} }),
+      membershipReader: fakeMembershipReader({
+        [`${MEMBER_UID}__${TEAM_ID}`]: { uid: MEMBER_UID, teamId: TEAM_ID },
+      }),
+    });
+
+    const result = await listTeamChallengesForMember("token", TEAM_ID, deps);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.canSubmit).toBe(true);
+  });
+
+  it("fails closed to false for a malformed membership record (wrong uid/teamId)", async () => {
+    const deps = memberBaseDeps({
+      membershipReader: fakeMembershipReader({
+        [`${MEMBER_UID}__${TEAM_ID}`]: { uid: "someone-else", teamId: TEAM_ID },
+      }),
+    });
+
+    const result = await listTeamChallengesForMember("token", TEAM_ID, deps);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.canSubmit).toBe(false);
+  });
+
+  it("fails closed to false, without failing the whole read, when the membership check itself errors", async () => {
+    const deps = memberBaseDeps({
+      membershipReader: { getMembership: vi.fn().mockRejectedValue(new Error("simulated firestore outage")) },
+    });
+
+    const result = await listTeamChallengesForMember("token", TEAM_ID, deps);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.canSubmit).toBe(false);
   });
 });
 

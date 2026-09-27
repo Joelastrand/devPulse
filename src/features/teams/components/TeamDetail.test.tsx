@@ -78,8 +78,8 @@ const { TeamDetail } = await import("./TeamDetail");
 /** The no-current-survey outcome — the harmless default most tests want, since they aren't exercising this section. */
 const NO_CURRENT_SURVEY = { status: "ok", survey: null };
 
-/** The empty-challenge-list outcome — the harmless default most tests want, since they aren't exercising this section. */
-const NO_CHALLENGES = { status: "ok", challenges: [] };
+/** The empty-challenge-list outcome — the harmless default most tests want, since they aren't exercising this section. `canSubmit: true` matches these tests' default `relationship: "member"` fixture. */
+const NO_CHALLENGES = { status: "ok", challenges: [], canSubmit: true };
 
 /** The empty-thread-list outcome — the harmless default most tests want, since they aren't exercising the forum section. */
 const NO_THREADS = { status: "ok", threads: [] };
@@ -1089,6 +1089,7 @@ describe("TeamDetail challenges section (TASK-005)", () => {
     fetchTeamChallengesMock.mockResolvedValue({
       status: "ok",
       challenges: [OPEN_CHALLENGE, RESOLVED_CHALLENGE],
+      canSubmit: true,
     });
 
     render(<TeamDetail teamId="team-1" />);
@@ -1098,6 +1099,57 @@ describe("TeamDetail challenges section (TASK-005)", () => {
     expect(screen.getByText(OPEN_CHALLENGE.text)).toBeTruthy();
     expect(screen.getByText(RESOLVED_CHALLENGE.text)).toBeTruthy();
     expect(fetchTeamChallengesMock).toHaveBeenCalledWith("a-token", "team-1");
+  });
+
+  it("hides the submission panel, but keeps the read-only challenge list, for an app-admin-only viewer (no genuine team membership) — debug fix regression test", async () => {
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "admin" }],
+    });
+    fetchTeamChallengesMock.mockResolvedValue({
+      status: "ok",
+      challenges: [OPEN_CHALLENGE, RESOLVED_CHALLENGE],
+      canSubmit: false,
+    });
+
+    render(<TeamDetail teamId="team-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Utfordringer" })).toBeTruthy();
+    expect(screen.getByText(OPEN_CHALLENGE.text)).toBeTruthy();
+    expect(screen.getByText(RESOLVED_CHALLENGE.text)).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Meld en utfordring" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Utfordring" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^send inn$/i })).toBeNull();
+  });
+
+  it("shows the submission panel for an app admin who is also a genuine team member", async () => {
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "admin" }],
+    });
+    fetchTeamChallengesMock.mockResolvedValue({
+      status: "ok",
+      challenges: [OPEN_CHALLENGE],
+      canSubmit: true,
+    });
+
+    render(<TeamDetail teamId="team-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Meld en utfordring" })).toBeTruthy();
+  });
+
+  it("cannot submit a Challenge from the UI as an app-admin-only viewer, since no submission form is ever rendered", async () => {
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "admin" }],
+    });
+    fetchTeamChallengesMock.mockResolvedValue({ status: "ok", challenges: [], canSubmit: false });
+
+    render(<TeamDetail teamId="team-1" />);
+
+    await screen.findByRole("heading", { name: "Utfordringer" });
+    expect(screen.queryByRole("textbox", { name: "Utfordring" })).toBeNull();
+    expect(submitChallengeMock).not.toHaveBeenCalled();
   });
 
   it("shows the Norwegian empty state when the team has no challenges", async () => {
@@ -1120,7 +1172,7 @@ describe("TeamDetail challenges section (TASK-005)", () => {
 
   it("keeps the challenges section on a results read failure (results_unavailable branch)", async () => {
     fetchTeamResultsMock.mockResolvedValue({ status: "read_failed" });
-    fetchTeamChallengesMock.mockResolvedValue({ status: "ok", challenges: [OPEN_CHALLENGE] });
+    fetchTeamChallengesMock.mockResolvedValue({ status: "ok", challenges: [OPEN_CHALLENGE], canSubmit: true });
 
     render(<TeamDetail teamId="team-1" />);
 
@@ -1130,7 +1182,7 @@ describe("TeamDetail challenges section (TASK-005)", () => {
 
   it("keeps the challenges section on a current-survey read failure", async () => {
     fetchCurrentTeamSurveyMock.mockResolvedValue({ status: "read_failed" });
-    fetchTeamChallengesMock.mockResolvedValue({ status: "ok", challenges: [OPEN_CHALLENGE] });
+    fetchTeamChallengesMock.mockResolvedValue({ status: "ok", challenges: [OPEN_CHALLENGE], canSubmit: true });
 
     render(<TeamDetail teamId="team-1" />);
 
@@ -1154,7 +1206,7 @@ describe("TeamDetail challenges section (TASK-005)", () => {
     const user = userEvent.setup();
     fetchTeamChallengesMock
       .mockResolvedValueOnce(NO_CHALLENGES)
-      .mockResolvedValueOnce({ status: "ok", challenges: [OPEN_CHALLENGE] });
+      .mockResolvedValueOnce({ status: "ok", challenges: [OPEN_CHALLENGE], canSubmit: true });
     submitChallengeMock.mockResolvedValue({ status: "ok" });
 
     render(<TeamDetail teamId="team-1" />);
@@ -1200,7 +1252,7 @@ describe("TeamDetail challenges section (TASK-005)", () => {
     observer.emit(null);
     await screen.findByRole("link", { name: /logg inn/i });
 
-    resolveRefresh({ status: "ok", challenges: [OPEN_CHALLENGE] });
+    resolveRefresh({ status: "ok", challenges: [OPEN_CHALLENGE], canSubmit: true });
     await flushMicrotasks();
 
     expect(screen.queryByText(OPEN_CHALLENGE.text)).toBeNull();
@@ -1239,7 +1291,7 @@ describe("TeamDetail challenges section (TASK-005)", () => {
     rerender(<TeamDetail teamId="team-b" />);
     await screen.findByText("Team B");
 
-    resolveRefresh({ status: "ok", challenges: [OPEN_CHALLENGE] });
+    resolveRefresh({ status: "ok", challenges: [OPEN_CHALLENGE], canSubmit: true });
     await flushMicrotasks();
 
     expect(screen.queryByText(OPEN_CHALLENGE.text)).toBeNull();
@@ -1249,6 +1301,7 @@ describe("TeamDetail challenges section (TASK-005)", () => {
     fetchTeamChallengesMock.mockResolvedValue({
       status: "ok",
       challenges: [OPEN_CHALLENGE, RESOLVED_CHALLENGE],
+      canSubmit: true,
     });
     fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
 
@@ -1262,6 +1315,7 @@ describe("TeamDetail challenges section (TASK-005)", () => {
     fetchTeamChallengesMock.mockResolvedValue({
       status: "ok",
       challenges: [OPEN_CHALLENGE],
+      canSubmit: true,
     });
 
     render(<TeamDetail teamId="team-1" />);

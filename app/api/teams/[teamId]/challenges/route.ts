@@ -40,7 +40,10 @@ export async function GET(
     return NextResponse.json({ status: result.error }, { status });
   }
 
-  return NextResponse.json({ status: "ok", challenges: result.challenges }, { status: 200 });
+  return NextResponse.json(
+    { status: "ok", challenges: result.challenges, canSubmit: result.canSubmit },
+    { status: 200 },
+  );
 }
 
 /**

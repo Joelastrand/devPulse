@@ -9,6 +9,7 @@ import {
   type AuthorizeTeamAccessDeps,
 } from "../../teams/server/authorize-team-access";
 import { requireAppAdmin } from "../../teams/server/require-app-admin";
+import { isValidMembershipFor, membershipDocId } from "../../teams/domain/team-membership";
 import {
   effectiveChallengeStatus,
   isValidChallenge,
@@ -17,6 +18,7 @@ import {
 } from "../domain/challenge";
 
 const CHALLENGES_COLLECTION = "challenges";
+const MEMBERSHIPS_COLLECTION = "teamMemberships";
 
 /**
  * The statuses each public read operation may ever return — fixed here,
@@ -114,6 +116,70 @@ export type ListTeamChallengesResult =
   | { ok: false; error: "unauthenticated" | "forbidden" | "read_failed" };
 
 /**
+ * The read seam for a real `teamMemberships/{uid}__{teamId}` record, mirroring
+ * `submit-challenge.ts`'s identical seam (kept as its own local declaration,
+ * not a cross-module import, matching this codebase's existing per-operation
+ * dependency-seam convention — e.g. `TeamStatusReader` is similarly declared
+ * independently in both `submit-challenge.ts` and `create-survey.ts`). Used
+ * here only to compute `canSubmit` below; never influences which challenges
+ * are returned.
+ */
+export interface MembershipReader {
+  getMembership(uid: string, teamId: string): Promise<unknown>;
+}
+
+function getDefaultMembershipReader(): MembershipReader {
+  return {
+    async getMembership(uid, teamId) {
+      const snapshot = await getFirestoreDb()
+        .collection(MEMBERSHIPS_COLLECTION)
+        .doc(membershipDocId(uid, teamId))
+        .get();
+      return snapshot.exists ? snapshot.data() : undefined;
+    },
+  };
+}
+
+/**
+ * Independently re-derives "is this caller a genuine current team member,"
+ * using the exact same real-membership semantics `submitChallenge` requires
+ * (docs/features/anonymous-challenges/SPEC.md — BR-1) — never inferred from
+ * `authorizeTeamAccess`'s broader `"admin"`/`"member"` result, since an app
+ * admin short-circuits that check before membership is ever read
+ * (`authorize-team-access.ts`) — BR-1's "app-admin status alone is never
+ * sufficient" applies identically to *submission eligibility*, which this
+ * value exists to expose to the UI (debug investigation, Challenge
+ * submission composition gap). Fails closed (`false`) on any read error or
+ * malformed record — a transient failure to confirm membership must never
+ * present a submission affordance the server would then reject anyway.
+ */
+async function resolveCanSubmit(
+  uid: string,
+  teamId: string,
+  reader: MembershipReader,
+): Promise<boolean> {
+  try {
+    const rawMembership = await reader.getMembership(uid, teamId);
+    return isValidMembershipFor(rawMembership, { uid, teamId });
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * `listTeamChallengesForMember`'s own result shape — the same success shape
+ * as `ListTeamChallengesResult` plus `canSubmit`, a boolean-only capability
+ * signal for whether *this* caller may submit a new challenge for this team
+ * (never a uid, membership document, or any other identity-shaped value).
+ * `listTeamChallengesForAdmin` is unaffected and keeps returning the plain
+ * `ListTeamChallengesResult` above — the admin management page never renders
+ * a submission form, so it has no use for this field.
+ */
+export type ListTeamChallengesForMemberResult =
+  | { ok: true; challenges: TeamChallengeView[]; canSubmit: boolean }
+  | { ok: false; error: "unauthenticated" | "forbidden" | "read_failed" };
+
+/**
  * The private, unexported core both public operations below share, so
  * decryption/validation logic is not duplicated (SPEC — "Server
  * operations"). `allowedStatuses` is always a fixed constant supplied by
@@ -203,6 +269,7 @@ export interface ListTeamChallengesForMemberDeps {
   authCollection?: AuthorizeTeamAccessDeps["collection"];
   reader?: ChallengesReader;
   decryptText?: (payload: EncryptedPayload) => string;
+  membershipReader?: MembershipReader;
 }
 
 /**
@@ -220,12 +287,22 @@ export interface ListTeamChallengesForMemberDeps {
  *
  * No `teams/{teamId}.status` gate — a disabled team's existing challenges
  * remain listable (BR-14).
+ *
+ * Also returns `canSubmit`: whether *this* caller currently holds a genuine
+ * `teamMemberships/{uid}__{teamId}` record, re-derived independently via
+ * `resolveCanSubmit` using the exact membership semantics `submitChallenge`
+ * itself requires — an app admin with no such record gets `canSubmit: false`
+ * even though their broader `authorizeTeamAccess` result is `"admin"` (fixes
+ * the composition gap where `/teams/[teamId]` previously showed the "Meld en
+ * utfordring" submission form to any authorized viewer, including an
+ * app-admin-only viewer who would always be rejected `forbidden` on actual
+ * submission).
  */
 export async function listTeamChallengesForMember(
   idToken: string,
   teamId: string,
   deps: ListTeamChallengesForMemberDeps = {},
-): Promise<ListTeamChallengesResult> {
+): Promise<ListTeamChallengesForMemberResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
   if (!verified.ok) {
     return { ok: false, error: "unauthenticated" };
@@ -242,10 +319,21 @@ export async function listTeamChallengesForMember(
     return { ok: false, error: "forbidden" };
   }
 
-  return fetchTeamChallenges(teamId, MEMBER_ALLOWED_STATUSES, {
+  const listResult = await fetchTeamChallenges(teamId, MEMBER_ALLOWED_STATUSES, {
     reader: deps.reader ?? getDefaultChallengesReader(),
     decryptText: deps.decryptText ?? decrypt,
   });
+  if (!listResult.ok) {
+    return listResult;
+  }
+
+  const canSubmit = await resolveCanSubmit(
+    verified.identity.uid,
+    teamId,
+    deps.membershipReader ?? getDefaultMembershipReader(),
+  );
+
+  return { ok: true, challenges: listResult.challenges, canSubmit };
 }
 
 export interface ListTeamChallengesForAdminDeps {
