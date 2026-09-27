@@ -58,6 +58,28 @@ describe("SignUpForm", () => {
     expect(alert.textContent).toMatch(/noe gikk galt/i);
   });
 
+  it("marks both fields aria-invalid and associates them with the error via aria-describedby, exactly one alert exists", async () => {
+    signUpMock.mockResolvedValue({ ok: false, error: "sign_up_failed" });
+    const user = userEvent.setup();
+    render(<SignUpForm />);
+
+    const emailInput = screen.getByLabelText("E-post");
+    const passwordInput = screen.getByLabelText("Passord");
+    expect(emailInput.getAttribute("aria-invalid")).toBeNull();
+    expect(passwordInput.getAttribute("aria-invalid")).toBeNull();
+
+    await user.type(emailInput, "dev@example.com");
+    await user.type(passwordInput, "correct horse battery");
+    await user.click(screen.getByRole("button", { name: /opprett konto/i }));
+
+    const alert = await screen.findByRole("alert");
+    expect(emailInput.getAttribute("aria-invalid")).toBe("true");
+    expect(passwordInput.getAttribute("aria-invalid")).toBe("true");
+    expect(emailInput.getAttribute("aria-describedby")).toBe(alert.id);
+    expect(passwordInput.getAttribute("aria-describedby")).toBe(alert.id);
+    expect(alert.id).toBeTruthy();
+  });
+
   it("shows a pending label and marks the button aria-busy while submitting", async () => {
     let resolveSignUp: (value: { ok: true }) => void = () => {};
     signUpMock.mockImplementation(

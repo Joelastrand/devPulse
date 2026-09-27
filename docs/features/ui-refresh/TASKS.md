@@ -3,12 +3,12 @@
 Specification: [SPEC.md](./SPEC.md)
 
 ## Status
-Ready: 9  In Progress: 0  Done: 1
+Ready: 8  In Progress: 0  Done: 2
 
 `SPEC.md`'s Status is `Approved` (see `SPEC.md` → "Status"/"Approval gate").
-TASK-001 is `Done`; TASK-002 through TASK-009 are now all unblocked (their
-only dependency, TASK-001, is satisfied) and independently eligible for the
-next `implement-task` session to pick up, in any order.
+TASK-001 and TASK-002 are `Done`; TASK-003 through TASK-009 remain unblocked
+(their only dependency, TASK-001, is satisfied) and independently eligible
+for the next `implement-task` session to pick up, in any order.
 
 ## Task graph
 
@@ -242,7 +242,7 @@ task (no new/removed route). Nothing was pushed or deployed.
 
 ### TASK-002 — Public/auth/survey surfaces
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-7, BR-8, BR-9
 **Depends on:** TASK-001
 
@@ -286,12 +286,48 @@ No additional considerations.
 None expected yet (TASK-010).
 
 **Acceptance criteria**
-- [ ] Sign-in/sign-up inputs use the shared primitive; behavior unchanged
+- [x] Sign-in/sign-up inputs use the shared primitive; behavior unchanged
       (BR-8).
-- [ ] Sign-in/sign-up inputs expose `aria-invalid`/`aria-describedby` on
+- [x] Sign-in/sign-up inputs expose `aria-invalid`/`aria-describedby` on
       error (BR-9).
-- [ ] `SurveyResponseForm`'s radio scale is structurally unchanged (BR-7).
-- [ ] Relevant tests, `pnpm lint`, `pnpm typecheck` pass.
+- [x] `SurveyResponseForm`'s radio scale is structurally unchanged (BR-7).
+- [x] Relevant tests, `pnpm lint`, `pnpm typecheck` pass.
+
+**Notes**
+Implemented as specified, with one deliberate scope decision recorded here:
+- `SignInForm.tsx`/`SignUpForm.tsx`: both email/password `<input>`s migrated
+  to `TextField` (id/label/type/autoComplete/required/value/onChange all
+  preserved exactly). The combined credential/sign-up error is not
+  field-specific (Firebase Auth returns one message for the whole attempt,
+  never "which field"), so rather than rendering `TextField`'s own `error`
+  prop twice (which would have produced two `role="alert"` elements and
+  broken the existing single-`findByRole("alert")` tests), both fields
+  instead receive `aria-invalid`/`aria-describedby` directly as native props
+  — supported without any `TextField` change, since it forwards every
+  native ARIA attribute unchanged — pointing at the one existing `Alert`
+  (now given a stable `id`), which continues to render exactly once. No
+  `TextField`/`TextArea`/`Select`/`Badge` API change was needed or made.
+- `SurveyResponseForm.tsx`, `SurveyParticipationView.tsx`, `app/page.tsx`:
+  confirmed via inspection and left completely untouched. The radio scale's
+  focus-visible class already matched the shared treatment (nothing to
+  change); `SurveyParticipationView` already composes only existing shared
+  primitives (`PageHeader`/`Alert`/`LoadingState`) with no hand-rolled
+  control; Home has no form. Zero-diff confirmed via `git status` for all
+  three — no churn was introduced merely because a file was in this task's
+  named inventory.
+- No `PageShell` width changed on any public/auth/survey page (BR-5,
+  unaffected — none of these routes were ever assigned `"wide"`).
+- Confirmed via `git diff --stat`: no file under `src/components/ui/`,
+  `src/features/surveys/`, `src/features/teams/`, `src/features/challenges/`,
+  `src/features/forum/`, `src/features/skill-trees/`, any `app/**/page.tsx`,
+  `package.json`, or `pnpm-lock.yaml` was touched — only the two auth form
+  components and their tests changed.
+
+Verification: focused suite (`src/features/auth`, `src/features/surveys`) —
+23 files / 385 tests passed (383 pre-existing + 2 new accessibility
+assertions). Full `pnpm test` — 173 files / 2442 tests passed. `pnpm
+typecheck`, `pnpm lint`, `git diff --check` all passed. `pnpm build`
+succeeded with an identical route manifest. Nothing was pushed or deployed.
 
 ---
 

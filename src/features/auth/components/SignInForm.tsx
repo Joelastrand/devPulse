@@ -4,11 +4,14 @@ import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
+import { TextField } from "../../../components/ui/TextField";
 import { signIn } from "../client/auth-client";
 import { resolveSignInDestination } from "../domain/continuation";
 import { authCopy } from "../copy";
 
 type Status = "idle" | "submitting" | "success" | "error";
+
+const ERROR_ALERT_ID = "sign-in-error";
 
 interface SignInFormProps {
   /**
@@ -24,6 +27,7 @@ export function SignInForm({ continuation }: SignInFormProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<Status>("idle");
+  const hasError = status === "error";
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -55,48 +59,36 @@ export function SignInForm({ continuation }: SignInFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4" noValidate>
-      <div className="flex flex-col gap-2">
-        <label
-          htmlFor="sign-in-email"
-          className="text-sm font-medium text-zinc-900 dark:text-zinc-50"
-        >
-          {authCopy.signIn.emailLabel}
-        </label>
-        <input
-          id="sign-in-email"
-          type="email"
-          autoComplete="email"
-          required
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          className="rounded border border-zinc-300 px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:bg-zinc-900"
-        />
-      </div>
+      <TextField
+        id="sign-in-email"
+        label={authCopy.signIn.emailLabel}
+        type="email"
+        autoComplete="email"
+        required
+        value={email}
+        onChange={(event) => setEmail(event.target.value)}
+        aria-invalid={hasError || undefined}
+        aria-describedby={hasError ? ERROR_ALERT_ID : undefined}
+      />
 
-      <div className="flex flex-col gap-2">
-        <label
-          htmlFor="sign-in-password"
-          className="text-sm font-medium text-zinc-900 dark:text-zinc-50"
-        >
-          {authCopy.signIn.passwordLabel}
-        </label>
-        <input
-          id="sign-in-password"
-          type="password"
-          autoComplete="current-password"
-          required
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          className="rounded border border-zinc-300 px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:bg-zinc-900"
-        />
-      </div>
+      <TextField
+        id="sign-in-password"
+        label={authCopy.signIn.passwordLabel}
+        type="password"
+        autoComplete="current-password"
+        required
+        value={password}
+        onChange={(event) => setPassword(event.target.value)}
+        aria-invalid={hasError || undefined}
+        aria-describedby={hasError ? ERROR_ALERT_ID : undefined}
+      />
 
       <Button type="submit" pending={status === "submitting"}>
         {status === "submitting" ? authCopy.signIn.submitting : authCopy.signIn.submit}
       </Button>
 
-      {status === "error" && (
-        <Alert variant="error" className="text-sm">
+      {hasError && (
+        <Alert variant="error" id={ERROR_ALERT_ID} className="text-sm">
           {authCopy.signIn.error}
         </Alert>
       )}
