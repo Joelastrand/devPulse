@@ -135,6 +135,34 @@ function baseDeps(overrides: Partial<GetOrgSkillProgressOverviewDeps> = {}): Get
   };
 }
 
+/**
+ * Drains the microtask queue deep enough for a multi-layer `await` chain
+ * (`requireAppAdmin` → `verifyIdToken` → the mocked `verifyToken`) to fully
+ * settle before asserting on reader invocation — a fixed, generous number of
+ * microtask turns, never a real timer or elapsed-time assumption, so this
+ * stays deterministic (TASK-001 uses the same pattern).
+ */
+async function flushMicrotasks(turns = 20): Promise<void> {
+  for (let i = 0; i < turns; i++) {
+    await Promise.resolve();
+  }
+}
+
+/** A manually-resolvable/-rejectable promise, used to prove start-before-settle ordering without timers. */
+function deferredPromise<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (reason?: unknown) => void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 describe("getOrgSkillProgressOverview", () => {
   describe("authorization", () => {
     it("rejects an unauthenticated caller", async () => {
@@ -191,6 +219,146 @@ describe("getOrgSkillProgressOverview", () => {
       if (result.ok) {
         expect(result.trees).toHaveLength(1);
       }
+    });
+  });
+
+  describe("concurrency (BR-9/BR-10)", () => {
+    it("invokes none of the three reads while requireAppAdmin is still unresolved, then invokes all three once it succeeds", async () => {
+      const authGate = deferredPromise<{ uid: string; email: string; email_verified: boolean }>();
+      const listOrderedByCreatedAt = vi.fn().mockResolvedValue([]);
+      const listOrderedByUpdatedAtDesc = vi.fn().mockResolvedValue([]);
+      const listAll = vi.fn().mockResolvedValue([]);
+
+      const resultPromise = getOrgSkillProgressOverview(
+        "token",
+        baseDeps({
+          verifyToken: vi.fn().mockReturnValue(authGate.promise),
+          treesReader: { listOrderedByCreatedAt },
+          progressReader: { listOrderedByUpdatedAtDesc },
+          teamsReader: { listAll },
+        }),
+      );
+
+      await flushMicrotasks();
+
+      expect(listOrderedByCreatedAt).not.toHaveBeenCalled();
+      expect(listOrderedByUpdatedAtDesc).not.toHaveBeenCalled();
+      expect(listAll).not.toHaveBeenCalled();
+
+      authGate.resolve({ uid: MEMBER_UID, email: ADMIN_EMAIL, email_verified: true });
+      const result = await resultPromise;
+
+      expect(result.ok).toBe(true);
+      expect(listOrderedByCreatedAt).toHaveBeenCalledTimes(1);
+      expect(listOrderedByUpdatedAtDesc).toHaveBeenCalledTimes(1);
+      expect(listAll).toHaveBeenCalledTimes(1);
+    });
+
+    it("invokes zero reads for an unauthenticated caller", async () => {
+      const listOrderedByCreatedAt = vi.fn().mockResolvedValue([]);
+      const listOrderedByUpdatedAtDesc = vi.fn().mockResolvedValue([]);
+      const listAll = vi.fn().mockResolvedValue([]);
+
+      const result = await getOrgSkillProgressOverview(
+        "bad-token",
+        baseDeps({
+          verifyToken: vi.fn().mockRejectedValue(new Error("invalid token")),
+          treesReader: { listOrderedByCreatedAt },
+          progressReader: { listOrderedByUpdatedAtDesc },
+          teamsReader: { listAll },
+        }),
+      );
+
+      expect(result).toEqual({ ok: false, error: "unauthenticated" });
+      expect(listOrderedByCreatedAt).not.toHaveBeenCalled();
+      expect(listOrderedByUpdatedAtDesc).not.toHaveBeenCalled();
+      expect(listAll).not.toHaveBeenCalled();
+    });
+
+    it("invokes zero reads for an authenticated non-admin caller", async () => {
+      const listOrderedByCreatedAt = vi.fn().mockResolvedValue([]);
+      const listOrderedByUpdatedAtDesc = vi.fn().mockResolvedValue([]);
+      const listAll = vi.fn().mockResolvedValue([]);
+
+      const result = await getOrgSkillProgressOverview(
+        "token",
+        baseDeps({
+          verifyToken: verifyTokenReturning(verifiedIdentity()),
+          treesReader: { listOrderedByCreatedAt },
+          progressReader: { listOrderedByUpdatedAtDesc },
+          teamsReader: { listAll },
+        }),
+      );
+
+      expect(result).toEqual({ ok: false, error: "forbidden" });
+      expect(listOrderedByCreatedAt).not.toHaveBeenCalled();
+      expect(listOrderedByUpdatedAtDesc).not.toHaveBeenCalled();
+      expect(listAll).not.toHaveBeenCalled();
+    });
+
+    it("starts all three reads before any sibling has resolved, and the final DTO is unaffected by resolution order", async () => {
+      const treesGate = deferredPromise<RawSkillTreeDoc[]>();
+      const progressGate = deferredPromise<RawSkillProgressDoc[]>();
+      const teamsGate = deferredPromise<RawTeamDoc[]>();
+      const invoked: string[] = [];
+
+      const listOrderedByCreatedAt = vi.fn(() => {
+        invoked.push("trees");
+        return treesGate.promise;
+      });
+      const listOrderedByUpdatedAtDesc = vi.fn(() => {
+        invoked.push("progress");
+        return progressGate.promise;
+      });
+      const listAll = vi.fn(() => {
+        invoked.push("teams");
+        return teamsGate.promise;
+      });
+
+      const resultPromise = getOrgSkillProgressOverview(
+        "token",
+        baseDeps({
+          treesReader: { listOrderedByCreatedAt },
+          progressReader: { listOrderedByUpdatedAtDesc },
+          teamsReader: { listAll },
+        }),
+      );
+
+      await flushMicrotasks();
+
+      // All three must already be invoked even though none has resolved yet
+      // — a sequential implementation would still be awaiting only the
+      // first ("trees"), which is exactly what makes this assertion fail
+      // against the pre-TASK-002 implementation (RED evidence).
+      expect(invoked).toEqual(["trees", "progress", "teams"]);
+
+      // Resolve deliberately out of declared order.
+      teamsGate.resolve([teamDoc("team-1")]);
+      await flushMicrotasks();
+      progressGate.resolve([
+        progressDoc("p1", "team-1", "tree-1", new Date("2026-01-02T00:00:00Z")),
+      ]);
+      await flushMicrotasks();
+      treesGate.resolve([treeDoc("tree-1", new Date("2026-01-01T00:00:00Z"))]);
+
+      const result = await resultPromise;
+
+      expect(result).toEqual({
+        ok: true,
+        trees: [
+          {
+            treeId: "tree-1",
+            name: "Tree tree-1",
+            nodes: [
+              { nodeId: "node-0", label: "Stage A", order: 0 },
+              { nodeId: "node-1", label: "Stage B", order: 1 },
+            ],
+            teams: [
+              { teamId: "team-1", teamName: "Team team-1", teamStatus: "active", currentNodeId: "node-0" },
+            ],
+          },
+        ],
+      });
     });
   });
 

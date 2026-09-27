@@ -30,6 +30,19 @@ function fakeGetUser(emails: Record<string, string>) {
   });
 }
 
+/**
+ * Drains the microtask queue deep enough for a multi-layer `await` chain
+ * (`requireAppAdmin` → `verifyIdToken` → the mocked `verifyToken`, then the
+ * mocked Firestore read) to fully settle before the identity-lookup stage
+ * begins — a fixed, generous number of microtask turns, never a real timer
+ * or an elapsed-time assumption, so this stays deterministic.
+ */
+async function flushMicrotasks(turns = 20): Promise<void> {
+  for (let i = 0; i < turns; i++) {
+    await Promise.resolve();
+  }
+}
+
 describe("listTeamMembers", () => {
   it("returns each member's uid with email resolved live from Firebase Auth", async () => {
     const verifyToken = verifyTokenReturning(verifiedIdentity());
@@ -154,5 +167,92 @@ describe("listTeamMembers", () => {
     });
 
     expect(JSON.stringify(result)).not.toContain("other-admin@example.com");
+  });
+
+  it("resolves with zero identity lookups when the team has no members", async () => {
+    const collection = fakeCollection([]);
+    const getUser = vi.fn();
+
+    const result = await listTeamMembers("token", "team-1", {
+      verifyToken: verifyTokenReturning(verifiedIdentity()),
+      allowList: [ADMIN_EMAIL],
+      collection,
+      getUser,
+    });
+
+    expect(result).toEqual({ ok: true, members: [] });
+    expect(getUser).not.toHaveBeenCalled();
+  });
+
+  it("resolves identity lookups concurrently — a later lookup begins before an earlier one resolves — and returns members in input order regardless of resolution order", async () => {
+    const collection = fakeCollection([
+      { uid: "user-a", teamId: "team-1" },
+      { uid: "user-b", teamId: "team-1" },
+      { uid: "user-c", teamId: "team-1" },
+    ]);
+
+    const deferred: Record<string, (value: { email: string }) => void> = {};
+    const invoked: string[] = [];
+    const getUser = vi.fn((uid: string) => {
+      invoked.push(uid);
+      return new Promise<{ email: string }>((resolve) => {
+        deferred[uid] = resolve;
+      });
+    });
+
+    const resultPromise = listTeamMembers("token", "team-1", {
+      verifyToken: verifyTokenReturning(verifiedIdentity()),
+      allowList: [ADMIN_EMAIL],
+      collection,
+      getUser,
+    });
+
+    // Give the implementation's own async work (auth check, Firestore read)
+    // a chance to settle. A sequential `for...of` loop would still be
+    // awaiting "user-a" here, since we haven't resolved anything yet — this
+    // is the assertion that fails against that implementation.
+    await flushMicrotasks();
+
+    expect(invoked).toEqual(["user-a", "user-b", "user-c"]);
+
+    // Resolve deliberately out of input order.
+    deferred["user-c"]({ email: "c@example.com" });
+    deferred["user-a"]({ email: "a@example.com" });
+    deferred["user-b"]({ email: "b@example.com" });
+
+    const result = await resultPromise;
+
+    expect(result).toEqual({
+      ok: true,
+      members: [
+        { uid: "user-a", email: "a@example.com" },
+        { uid: "user-b", email: "b@example.com" },
+        { uid: "user-c", email: "c@example.com" },
+      ],
+    });
+  });
+
+  it("excludes only the failing lookup when one of several concurrent lookups rejects", async () => {
+    const collection = fakeCollection([
+      { uid: "user-a", teamId: "team-1" },
+      { uid: "user-b", teamId: "team-1" },
+      { uid: "user-c", teamId: "team-1" },
+    ]);
+    const getUser = fakeGetUser({ "user-a": "a@example.com", "user-c": "c@example.com" });
+
+    const result = await listTeamMembers("token", "team-1", {
+      verifyToken: verifyTokenReturning(verifiedIdentity()),
+      allowList: [ADMIN_EMAIL],
+      collection,
+      getUser,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      members: [
+        { uid: "user-a", email: "a@example.com" },
+        { uid: "user-c", email: "c@example.com" },
+      ],
+    });
   });
 });

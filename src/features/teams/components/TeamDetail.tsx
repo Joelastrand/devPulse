@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
+import { catchError } from "next/error";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
@@ -33,9 +35,9 @@ import {
 import { fetchTeamSkills, type FetchTeamSkillsResult, type TeamSkillView } from "../../skill-trees/client/skill-trees-gateway";
 import { TeamSkillSection, type TeamSkillSectionState } from "../../skill-trees/components/TeamSkillSection";
 import { PeriodSummary } from "../../results/components/PeriodSummary";
-import { TrendChart } from "../../results/components/TrendChart";
 import { TrendTable } from "../../results/components/TrendTable";
 import { formatSurveyDate } from "../../results/domain/format-survey-date";
+import { resultsCopy } from "../../results/copy";
 import {
   fetchCurrentTeamSurvey,
   type CurrentTeamSurveySummary,
@@ -48,6 +50,47 @@ import {
   requestTeamAccess,
 } from "../client/teams-overview-gateway";
 import { requestAccessErrorMessage } from "./request-access-messages";
+
+/**
+ * `TrendChart` code-split out of this page's eager client bundle
+ * (docs/features/performance-phase-a/SPEC.md — TASK-003, AD-3/AD-5):
+ * `recharts` (its single largest dependency) only enters the client bundle
+ * once this lazy component actually renders, never merely because
+ * `TeamDetail` mounts. `ssr: false` because `TeamDetail` is already a Client
+ * Component with no server-rendered data for this content to begin with.
+ * Declared at module scope (never inside the component body) — required for
+ * Next.js's webpack bundle matching/preloading, mirroring `next/dynamic`'s
+ * own `React.lazy()` requirement.
+ */
+const LazyTrendChart = dynamic<{ results: readonly SurveyResultSummary[] }>(
+  () => import("../../results/components/TrendChart").then((mod) => mod.TrendChart),
+  {
+    ssr: false,
+    loading: () => <LoadingState label={resultsCopy.trendChart.loading} />,
+  },
+);
+
+/**
+ * The chart-local error-boundary fallback (SPEC → AD-6): minimal, static,
+ * non-interactive, and containing no data fetching, auth, or product logic
+ * of its own — exactly what AD-6 constrains it to. Never renders
+ * `errorInfo.error`'s message (no sensitive/internal exception detail is
+ * ever shown to the user).
+ */
+function TrendChartFallback() {
+  return <Alert variant="error">{resultsCopy.trendChart.loadError}</Alert>;
+}
+
+/**
+ * Wraps only the dynamically-imported `TrendChart` region in an error
+ * boundary via Next.js's first-party `catchError` (`next/error`, stable
+ * since Next.js 16.3.0, callable from Client Components — verified against
+ * this repository's installed `next@16.3.4` types/docs) — SPEC → AD-6. A
+ * chunk-load failure or a render-time exception in `LazyTrendChart` is
+ * caught here and isolated to this region only; every sibling section on
+ * `/teams/[teamId]` is unaffected (BR-18).
+ */
+const TrendChartBoundary = catchError(TrendChartFallback);
 
 type DeniedRelationship = "none" | "request_pending" | "request_rejected";
 
@@ -481,7 +524,11 @@ export function TeamDetail({ teamId }: { teamId: string }) {
         <TeamHeading name={result.name} />
         <CurrentSurveySection state={result.currentSurvey} />
         <PeriodSummary result={latest} />
-        <TrendChart results={result.results} />
+        {result.results.length > 0 && (
+          <TrendChartBoundary>
+            <LazyTrendChart results={result.results} />
+          </TrendChartBoundary>
+        )}
         <TrendTable results={result.results} />
         <ChallengesSection
           teamId={teamId}

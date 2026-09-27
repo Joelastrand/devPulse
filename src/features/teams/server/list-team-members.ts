@@ -89,16 +89,24 @@ export async function listTeamMembers(
     .map(extractMemberUid)
     .filter((uid): uid is string => uid !== null);
 
-  const members: TeamMember[] = [];
-  for (const uid of uids) {
-    try {
-      const userRecord = await getUser(uid);
-      members.push({ uid, email: userRecord.email ?? null });
-    } catch {
-      // uid no longer resolves to a live Firebase account (e.g. the
-      // account was deleted) — exclude rather than fabricate a value.
-    }
-  }
+  // Concurrent, not sequential: each lookup keeps its own try/catch so one
+  // uid's failure never affects a sibling lookup or the overall result
+  // (`.map()`/`Promise.all` preserve `uids`' order in the resolved array
+  // regardless of which lookup settles first — never re-derived from
+  // resolution timing).
+  const lookups = await Promise.all(
+    uids.map(async (uid): Promise<TeamMember | null> => {
+      try {
+        const userRecord = await getUser(uid);
+        return { uid, email: userRecord.email ?? null };
+      } catch {
+        // uid no longer resolves to a live Firebase account (e.g. the
+        // account was deleted) — exclude rather than fabricate a value.
+        return null;
+      }
+    }),
+  );
+  const members = lookups.filter((member): member is TeamMember => member !== null);
 
   return { ok: true, members };
 }

@@ -271,22 +271,14 @@ export async function getOrgSkillProgressOverview(
   const teamsReader = deps.teamsReader ?? getDefaultOrgTeamsReader();
 
   let rawTrees: RawSkillTreeDoc[];
-  try {
-    rawTrees = await treesReader.listOrderedByCreatedAt(LIST_SKILL_TREES_LIMIT);
-  } catch {
-    return { ok: false, error: "read_failed" };
-  }
-
   let rawProgress: RawSkillProgressDoc[];
-  try {
-    rawProgress = await progressReader.listOrderedByUpdatedAtDesc(LIST_ORG_SKILL_PROGRESS_LIMIT);
-  } catch {
-    return { ok: false, error: "read_failed" };
-  }
-
   let rawTeams: RawTeamDoc[];
   try {
-    rawTeams = await teamsReader.listAll();
+    [rawTrees, rawProgress, rawTeams] = await Promise.all([
+      treesReader.listOrderedByCreatedAt(LIST_SKILL_TREES_LIMIT),
+      progressReader.listOrderedByUpdatedAtDesc(LIST_ORG_SKILL_PROGRESS_LIMIT),
+      teamsReader.listAll(),
+    ]);
   } catch {
     return { ok: false, error: "read_failed" };
   }

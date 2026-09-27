@@ -2,6 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { lazy, Suspense, type ComponentType, type ReactNode } from "react";
+import { teamsCopy } from "../copy";
 
 const observeIdTokenMock = vi.fn();
 const fetchTeamsOverviewMock = vi.fn();
@@ -14,6 +16,19 @@ const fetchTeamThreadsMock = vi.fn();
 const createThreadMock = vi.fn();
 const fetchTeamSkillsMock = vi.fn();
 const reportTeamSkillProgressMock = vi.fn();
+
+/**
+ * Records every time `TrendChart`'s module is actually loaded, without
+ * changing its real behavior (`importOriginal()` passthrough) — most tests
+ * exercise the real, unmocked `TrendChart` (docs/features/
+ * performance-phase-a/SPEC.md — TASK-003: "at least one validation path
+ * exercises the real production integration"). Module resolution is cached
+ * by the JS engine after the first successful `import()` for the lifetime of
+ * this file, so tests that care about "was this loaded" compare a
+ * before/after call count rather than asserting an absolute zero — robust
+ * regardless of which earlier test in this file already triggered the load.
+ */
+const trendChartModuleLoadedMock = vi.fn();
 
 vi.mock("../../auth/client/auth-client", () => ({
   observeIdToken: observeIdTokenMock,
@@ -46,6 +61,11 @@ vi.mock("../../skill-trees/client/skill-trees-gateway", () => ({
   fetchTeamSkills: fetchTeamSkillsMock,
   reportTeamSkillProgress: reportTeamSkillProgressMock,
 }));
+
+vi.mock("../../results/components/TrendChart", async (importOriginal) => {
+  trendChartModuleLoadedMock();
+  return importOriginal<typeof import("../../results/components/TrendChart")>();
+});
 
 const routerPushMock = vi.fn();
 
@@ -140,6 +160,15 @@ function queuedCalls(mock: ReturnType<typeof vi.fn>) {
       resolvers[callIndex](value);
     },
   };
+}
+
+/** A manually-resolvable/-rejectable promise, used to hold the chart module's dynamic import pending on demand — never a real timer. */
+function deferredPromise<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
 }
 
 function flushMicrotasks() {
@@ -307,8 +336,11 @@ describe("TeamDetail", () => {
     expect(screen.getByRole("heading", { name: /siste undersøkelser/i })).toBeTruthy();
     // The trend chart (TASK-012) renders alongside — not instead of — the
     // table above, sourced from the exact same already-fetched `results`
-    // array: no second `fetchTeamResults` call.
-    expect(screen.getByRole("heading", { name: /trendvisualisering/i })).toBeTruthy();
+    // array: no second `fetchTeamResults` call. It is now code-split
+    // (docs/features/performance-phase-a/SPEC.md — TASK-003), so its heading
+    // only appears once the dynamically-imported module has resolved —
+    // `findByRole` rather than `getByRole`.
+    expect(await screen.findByRole("heading", { name: /trendvisualisering/i })).toBeTruthy();
     expect(fetchTeamResultsMock).toHaveBeenCalledTimes(1);
   });
 
@@ -1692,5 +1724,187 @@ describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
     await screen.findByText(maliciousSkill.name);
     expect(container.querySelector("script")).toBeNull();
     expect(container.querySelector("img")).toBeNull();
+  });
+});
+
+/**
+ * `TrendChart` is code-split via `next/dynamic` and wrapped in a chart-local
+ * `catchError` boundary (docs/features/performance-phase-a/SPEC.md —
+ * TASK-003, BR-13 through BR-18). Most other tests above already exercise
+ * the real, unmocked `TrendChart` module end-to-end (e.g. "fetches and
+ * renders results for a member") — this block covers the parent-level
+ * behavior TASK-003 adds: the empty-results skip gate, the chart-local
+ * loading fallback, and chart-local failure isolation.
+ */
+describe("TeamDetail lazy TrendChart (TASK-003)", () => {
+  beforeEach(() => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "member" }],
+    });
+    fetchCurrentTeamSurveyMock.mockResolvedValue(NO_CURRENT_SURVEY);
+    fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
+    fetchTeamThreadsMock.mockResolvedValue(NO_THREADS);
+    fetchTeamSkillsMock.mockResolvedValue(NO_SKILLS);
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.resetModules();
+    // Restores next/dynamic's real implementation for later tests — only
+    // the module-load-failure test below narrowly mocks it.
+    vi.doUnmock("next/dynamic");
+    observeIdTokenMock.mockReset();
+    fetchTeamsOverviewMock.mockReset();
+    fetchTeamResultsMock.mockReset();
+    fetchCurrentTeamSurveyMock.mockReset();
+    fetchTeamChallengesMock.mockReset();
+    fetchTeamThreadsMock.mockReset();
+    fetchTeamSkillsMock.mockReset();
+  });
+
+  it("renders no chart region and no chart-local loading state when there are no results to chart (BR-15)", async () => {
+    fetchTeamResultsMock.mockResolvedValue({ status: "ok", teamId: "team-1", results: [] });
+
+    render(<TeamDetail teamId="team-1" />);
+
+    await screen.findByText("Platform");
+    expect(screen.queryByRole("heading", { name: /trendvisualisering/i })).toBeNull();
+    expect(screen.queryByText(/laster trendvisualisering/i)).toBeNull();
+
+    // Give any stray async work a chance to settle, then re-confirm nothing
+    // appeared afterward either — never merely a synchronous snapshot.
+    await flushMicrotasks();
+    expect(screen.queryByRole("heading", { name: /trendvisualisering/i })).toBeNull();
+    expect(screen.queryByText(/laster trendvisualisering/i)).toBeNull();
+  });
+
+  it("does not increase TrendChart module-load invocations when there are no results to chart (BR-15)", async () => {
+    const callsBefore = trendChartModuleLoadedMock.mock.calls.length;
+    fetchTeamResultsMock.mockResolvedValue({ status: "ok", teamId: "team-1", results: [] });
+
+    render(<TeamDetail teamId="team-1" />);
+
+    await screen.findByText("Platform");
+    await flushMicrotasks();
+
+    expect(trendChartModuleLoadedMock.mock.calls.length).toBe(callsBefore);
+  });
+
+  it("shows the chart-local LoadingState while the chart module is pending, without hiding surrounding sections (BR-16)", async () => {
+    fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
+    const gate = deferredPromise<void>();
+
+    vi.resetModules();
+    vi.doMock("../../results/components/TrendChart", async (importOriginal) => {
+      await gate.promise;
+      return importOriginal();
+    });
+    const { TeamDetail: FreshTeamDetail } = await import("./TeamDetail");
+
+    render(<FreshTeamDetail teamId="team-1" />);
+
+    await screen.findByText("Platform");
+    // Surrounding sections (the table above the chart) are already rendered,
+    // independent of the still-pending chart module.
+    expect(screen.getByRole("heading", { name: /siste undersøkelser/i })).toBeTruthy();
+    expect(await screen.findByText(/laster trendvisualisering/i)).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: /trendvisualisering/i })).toBeNull();
+
+    gate.resolve();
+
+    expect(await screen.findByRole("heading", { name: /trendvisualisering/i })).toBeTruthy();
+    expect(screen.queryByText(/laster trendvisualisering/i)).toBeNull();
+  });
+
+  it("isolates a chart module-load failure to the chart's own section, leaving every sibling section rendered (BR-18)", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
+    fetchTeamChallengesMock.mockResolvedValue({
+      status: "ok",
+      challenges: [{ challengeId: "c1", text: "Deploy process has no clear owner", status: "open", submittedAt: "2026-01-10" }],
+    });
+
+    vi.resetModules();
+    vi.doMock("../../results/components/TrendChart", () => {
+      throw new Error("simulated chunk-load failure");
+    });
+    // `next/dynamic` is documented as "a composite of React.lazy() and
+    // Suspense" (verified against the installed Next.js docs/types — SPEC →
+    // AD-6). Under jsdom/Vitest (no live Next.js App Router runtime),
+    // `next/dynamic`'s own internal wrapping does not reliably surface a
+    // rejected loader promise the way it does in a real Next.js render —
+    // this substitutes its documented, first-party-equivalent composition
+    // so the module-load rejection this test forces propagates
+    // deterministically. It changes none of `TeamDetail.tsx`'s production
+    // code: the real loader function and the real `catchError` boundary
+    // from `TeamDetail.tsx` are exercised unmodified — only `next/dynamic`'s
+    // own internal wiring is substituted, and only for this one test.
+    // `next/dynamic` itself is exercised for real by every other test in
+    // this file (e.g. the "fetches and renders results for a member" and
+    // loading-state tests above), and again by `pnpm build`.
+    vi.doMock("next/dynamic", () => ({
+      default: (loader: () => Promise<ComponentType<unknown>>, options: { loading?: () => ReactNode }) => {
+        const Lazy = lazy(() => loader().then((Component) => ({ default: Component })));
+        return function DynamicStub(props: object) {
+          return (
+            <Suspense fallback={options?.loading ? options.loading() : null}>
+              <Lazy {...props} />
+            </Suspense>
+          );
+        };
+      },
+    }));
+    const { TeamDetail: FreshTeamDetail } = await import("./TeamDetail");
+
+    render(<FreshTeamDetail teamId="team-1" />);
+
+    await screen.findByText("Platform");
+    const fallback = await screen.findByText(/trendvisualiseringen kunne ikke lastes/i);
+    expect(fallback.getAttribute("role")).toBe("alert");
+
+    // No sensitive/internal exception detail is ever shown.
+    expect(document.body.textContent).not.toMatch(/simulated chunk-load failure/);
+
+    // Every sibling section remains rendered — never a page-level failure.
+    expect(screen.queryByText(teamsCopy.detail.error)).toBeNull();
+    expect(screen.getByText("7 svar")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /siste undersøkelser/i })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Utfordringer" })).toBeTruthy();
+    expect(screen.getByText("Deploy process has no clear owner")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Forum" })).toBeTruthy();
+
+    // The boundary triggers no data fetching of its own.
+    expect(fetchTeamResultsMock).toHaveBeenCalledTimes(1);
+
+    errorSpy.mockRestore();
+  });
+
+  it("isolates a chart render failure (once the module has loaded) to the chart's own section, leaving every sibling section rendered (BR-18)", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
+
+    vi.resetModules();
+    vi.doMock("../../results/components/TrendChart", () => ({
+      TrendChart: () => {
+        throw new Error("simulated render failure");
+      },
+    }));
+    const { TeamDetail: FreshTeamDetail } = await import("./TeamDetail");
+
+    render(<FreshTeamDetail teamId="team-1" />);
+
+    await screen.findByText("Platform");
+    const fallback = await screen.findByText(/trendvisualiseringen kunne ikke lastes/i);
+    expect(fallback.getAttribute("role")).toBe("alert");
+    expect(document.body.textContent).not.toMatch(/simulated render failure/);
+
+    expect(screen.queryByText(teamsCopy.detail.error)).toBeNull();
+    expect(screen.getByText("7 svar")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /siste undersøkelser/i })).toBeTruthy();
+    expect(fetchTeamResultsMock).toHaveBeenCalledTimes(1);
+
+    errorSpy.mockRestore();
   });
 });

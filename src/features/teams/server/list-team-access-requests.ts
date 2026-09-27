@@ -96,20 +96,28 @@ export async function listTeamAccessRequests(
 
   const candidates = rawDocs.filter((doc) => isValidPendingAccessRequestForTeam(doc, teamId));
 
-  const requests: PendingAccessRequest[] = [];
-  for (const candidate of candidates) {
-    try {
-      const userRecord = await getUser(candidate.uid);
-      requests.push({
-        uid: candidate.uid,
-        email: userRecord.email ?? null,
-        createdAt: candidate.createdAt,
-      });
-    } catch {
-      // uid no longer resolves to a live Firebase account — exclude rather
-      // than fabricate a value.
-    }
-  }
+  // Concurrent, not sequential: each lookup keeps its own try/catch so one
+  // uid's failure never affects a sibling lookup or the overall result
+  // (`.map()`/`Promise.all` preserve `candidates`' order in the resolved
+  // array regardless of which lookup settles first — never re-derived from
+  // resolution timing).
+  const lookups = await Promise.all(
+    candidates.map(async (candidate): Promise<PendingAccessRequest | null> => {
+      try {
+        const userRecord = await getUser(candidate.uid);
+        return {
+          uid: candidate.uid,
+          email: userRecord.email ?? null,
+          createdAt: candidate.createdAt,
+        };
+      } catch {
+        // uid no longer resolves to a live Firebase account — exclude
+        // rather than fabricate a value.
+        return null;
+      }
+    }),
+  );
+  const requests = lookups.filter((request): request is PendingAccessRequest => request !== null);
 
   return { ok: true, requests };
 }

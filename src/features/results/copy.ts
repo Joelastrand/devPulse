@@ -45,6 +45,8 @@ export const resultsCopy = {
     heading: "Trendvisualisering",
     description:
       "Visuell fremstilling av de samme tallene som i tabellen under. Undersøkelser uten nok svar vises som et brudd i linjen, aldri som verdien null.",
+    loading: "Laster trendvisualisering…",
+    loadError: "Trendvisualiseringen kunne ikke lastes.",
   },
   redirect: {
     redirecting: "Omdirigerer…",
