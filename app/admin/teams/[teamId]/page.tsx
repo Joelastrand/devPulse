@@ -9,7 +9,7 @@ export default async function AdminTeamDetailPage({
   const { teamId } = await params;
 
   return (
-    <PageShell width="3xl">
+    <PageShell width="wide">
       <AdminTeamDetail teamId={teamId} />
     </PageShell>
   );

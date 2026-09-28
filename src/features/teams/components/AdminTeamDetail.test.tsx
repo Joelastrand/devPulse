@@ -254,6 +254,36 @@ describe("AdminTeamDetail", () => {
     expect(screen.getByLabelText(/e-postadresse/i)).toHaveProperty("value", "new@example.com");
   });
 
+  it("wires aria-invalid and aria-describedby on the invite-email field's error state (docs/features/ui-refresh/SPEC.md — BR-9)", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk();
+    inviteTeamMemberMock.mockResolvedValue({ ok: false, error: "team_disabled" });
+
+    render(<AdminTeamDetail teamId="team-1" />);
+    await screen.findByText(/ingen ventende invitasjoner/i);
+
+    const emailField = screen.getByLabelText(/e-postadresse/i);
+    await user.type(emailField, "new@example.com");
+    await user.click(screen.getByRole("button", { name: /^inviter$/i }));
+
+    const alert = await screen.findByRole("alert");
+    expect(emailField.getAttribute("aria-invalid")).toBe("true");
+    expect(emailField.getAttribute("aria-describedby")).toBe(alert.id);
+  });
+
+  it("never introduces a progressive-disclosure toggle for the invite form (BR-13)", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk();
+
+    const { container } = render(<AdminTeamDetail teamId="team-1" />);
+    // The invite field is reachable immediately, with no prior "expand"
+    // interaction (docs/features/ui-refresh/SPEC.md — BR-13).
+    await screen.findByLabelText(/e-postadresse/i);
+
+    expect(container.querySelector("[aria-expanded]")).toBeNull();
+  });
+
   it("removes a member and refreshes the authoritative view", async () => {
     const user = userEvent.setup();
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));

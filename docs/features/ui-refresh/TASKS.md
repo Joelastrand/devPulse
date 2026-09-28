@@ -3,10 +3,10 @@
 Specification: [SPEC.md](./SPEC.md)
 
 ## Status
-Ready: 6  In Progress: 0  Done: 4
+Ready: 5  In Progress: 0  Done: 5
 
 `SPEC.md`'s Status is `Approved` (see `SPEC.md` → "Status"/"Approval gate").
-TASK-001 through TASK-004 are `Done`; TASK-005 through TASK-009 remain
+TASK-001 through TASK-005 are `Done`; TASK-006 through TASK-009 remain
 unblocked (their only dependency, TASK-001, is satisfied) and independently
 eligible for the next `implement-task` session to pick up, in any order.
 
@@ -601,7 +601,7 @@ no Blocking or Important findings. Nothing was pushed or deployed.
 
 ### TASK-005 — `AdminTeamDetail`: members, invitations, access requests
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-5, BR-8, BR-9, BR-10, BR-13
 **Depends on:** TASK-001
 
@@ -644,13 +644,85 @@ and gateway calls are untouched.
 None expected yet (TASK-010).
 
 **Acceptance criteria**
-- [ ] `/admin/teams/[teamId]` renders at `width="wide"` (BR-5).
-- [ ] Invite-email field uses the shared primitive with
+- [x] `/admin/teams/[teamId]` renders at `width="wide"` (BR-5).
+- [x] Invite-email field uses the shared primitive with
       `aria-invalid`/`aria-describedby` wired (BR-8, BR-9).
-- [ ] Any status text in this section renders via Badge (BR-10).
-- [ ] No member/invitation/access-request action gains a
+- [x] Any status text in this section renders via Badge (BR-10).
+- [x] No member/invitation/access-request action gains a
       progressive-disclosure toggle (BR-13).
-- [ ] Relevant tests, `pnpm lint`, `pnpm typecheck` pass.
+- [x] Relevant tests, `pnpm lint`, `pnpm typecheck` pass.
+
+**Notes**
+Implemented exactly as specified, with one scope finding recorded here:
+- `app/admin/teams/[teamId]/page.tsx`: `PageShell width="3xl"` changed to
+  `width="wide"` — the only change to this file, and the only task of
+  TASK-005/006/007 that touches it (BR-5).
+- `src/features/teams/components/AdminTeamDetail.tsx`: only the invite-email
+  `<form>` inside the members/invitations/access-requests region was
+  changed. The email `<input>` was migrated to the shared `TextField`
+  primitive (`id`/`type="email"`/`value`/`onChange` preserved exactly);
+  `inviteState`'s existing error message now passes through `TextField`'s
+  `error` prop, which wires `aria-invalid`/`aria-describedby` automatically
+  and renders the message via the existing `Alert` (`role="alert"`
+  preserved) — the previously separate, manually-conditioned `Alert` block
+  was removed so no duplicate alert is rendered (BR-8, BR-9). `handleInvite`
+  itself, `inviteTeamMember`'s call signature, and every pending/error/
+  success/refresh behavior are byte-for-byte unchanged.
+- **Badge finding (BR-10)**: inspected the members, invitations, and
+  access-requests sections in full — none renders a status/relationship
+  *word* anywhere (a member row shows only email/uid + a "Fjern" button; an
+  invitation row shows only email + "Avbryt invitasjon"; a request row
+  shows only email/uid + approve/reject — the "pending" state is conveyed
+  structurally, by which list the row appears in and its own section
+  heading, never as inline status text). `SPEC.md`'s BR-10 confirmed-
+  candidate list does not name this section either. No Badge was added
+  here, consistent with BR-10's own edge case ("not every muted label ...
+  is mechanically converted to a Badge") — inventing one would have been
+  speculative. The page header's own "Aktivt/Deaktivert · Team-ID: …" team-
+  status line (`AdminTeamDetail.tsx` — the page-level shell, not the
+  members/invitations/requests region) was deliberately left as plain text:
+  it is not named as a TASK-005 candidate (BR-10's confirmed list scopes
+  team active/disabled specifically to `AdminTeams.tsx`, already Badged by
+  TASK-004) and converting it here would have been unrelated churn outside
+  this task's own Implementation notes.
+- No progressive disclosure was added anywhere in this task (BR-13): the
+  invite form, member rows, invitation rows, and access-request rows all
+  remain exactly as always-visible as before. A new regression test asserts
+  no element in the rendered tree carries an `aria-expanded` attribute.
+- `loadTeamDetail`'s `Promise.all` batch (including `fetchTeamMembers`'s and
+  `fetchTeamAccessRequests`'s own concurrent identity lookups inside their
+  respective server operations) and every other handler
+  (`handleRemoveMember`, `handleCancelInvitation`, `handleResolveRequest`)
+  are untouched — confirmed via `git diff`, the only hunk inside
+  `AdminTeamDetail.tsx` is the invite-form JSX plus the new `TextField`
+  import.
+- The survey (TASK-006), challenge, and skill-tracking (TASK-007) sections
+  are untouched — confirmed via `git diff`, no hunk appears outside the
+  invite-form JSX.
+- New tests: `AdminTeamDetail.test.tsx` gained an `aria-invalid`/
+  `aria-describedby` assertion on the invite-email error state and a
+  regression test asserting no `[aria-expanded]` element exists anywhere in
+  the render (BR-13). A new `app/admin/teams/[teamId]/page.test.tsx`
+  (mirroring TASK-004's `app/admin/teams/page.test.tsx` precedent) asserts
+  the page renders at `PageShell`'s `wide` width via the same structural
+  `WIDTH_CLASSNAMES.wide` check.
+
+Verification: the three TASK-005-touched test files (`AdminTeamDetail.test.tsx`,
+`app/admin/teams/page.test.tsx`, `app/admin/teams/[teamId]/page.test.tsx`) —
+69/69 tests passed, run in isolation. The full suite showed intermittent,
+non-deterministic timeouts under this machine's default full worker
+parallelism (175 isolated workers spawned per run) — different, unrelated
+files/tests failed on each of several repeated runs, never once in a file
+this task touched; running the same full suite with `--no-file-parallelism`
+(serialized, reducing worker contention) passed cleanly and reproducibly:
+175 files / 2453 tests passed (2450 pre-existing + 3 new). This matches
+TASK-010's own already-documented "resource-contention behavior under
+parallel heavyweight commands" from prior sessions — not a regression from
+this task's 3-file diff. `pnpm typecheck`, `pnpm lint`, `git diff --check`
+all passed (only expected CRLF/LF line-ending warnings). `pnpm build`
+succeeded with an identical route manifest to before this task. `review-
+change` outcome: PASS, no Blocking or Important findings. Nothing was
+pushed or deployed.
 
 ---
 

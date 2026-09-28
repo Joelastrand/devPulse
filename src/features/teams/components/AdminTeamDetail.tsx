@@ -8,6 +8,7 @@ import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { LoadingState } from "../../../components/ui/LoadingState";
 import { PageHeader } from "../../../components/ui/PageHeader";
+import { TextField } from "../../../components/ui/TextField";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import {
   archiveAdminChallenge,
@@ -888,31 +889,21 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
         </h2>
         <form
           onSubmit={(event) => handleInvite(event, token, generation)}
-          className="flex flex-col gap-2"
+          className="flex flex-col gap-3"
         >
-          <label
-            htmlFor="admin-invite-email"
-            className="text-sm font-medium text-zinc-900 dark:text-zinc-50"
-          >
-            {adminCopy.detail.emailLabel}
-          </label>
-          <div className="flex gap-2">
-            <input
-              id="admin-invite-email"
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="flex-1 rounded border border-zinc-300 px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:bg-zinc-900"
-            />
+          <TextField
+            id="admin-invite-email"
+            label={adminCopy.detail.emailLabel}
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            error={inviteState.status === "error" ? inviteState.message : undefined}
+          />
+          <div>
             <Button type="submit" className="shrink-0" pending={inviteState.status === "pending"}>
               {inviteState.status === "pending" ? adminCopy.detail.invitingButton : adminCopy.detail.inviteButton}
             </Button>
           </div>
-          {inviteState.status === "error" && (
-            <Alert variant="error" className="text-sm">
-              {inviteState.message}
-            </Alert>
-          )}
         </form>
       </section>
 
