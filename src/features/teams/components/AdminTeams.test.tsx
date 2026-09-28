@@ -105,7 +105,7 @@ describe("AdminTeams", () => {
     expect(alert.textContent).toMatch(/noe gikk galt/i);
   });
 
-  it("shows a zero-teams state for an admin with no teams yet, while still offering create", async () => {
+  it("shows a zero-teams state for an admin with no teams yet, while still offering a way to create one", async () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchAdminTeamsMock.mockResolvedValue({ status: "ok", teams: [] });
 
@@ -113,7 +113,7 @@ describe("AdminTeams", () => {
 
     const status = await screen.findByText(/ingen team/i);
     expect(status).toBeTruthy();
-    expect(screen.getByRole("button", { name: /opprett team/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /nytt team/i })).toBeTruthy();
   });
 
   it("shows both active and disabled teams for an admin", async () => {
@@ -130,10 +130,30 @@ describe("AdminTeams", () => {
 
     await screen.findByText("Platform");
     expect(screen.getByText("Legacy")).toBeTruthy();
-    expect(screen.getByText(/^Aktivt/)).toBeTruthy();
-    expect(screen.getByText(/^Deaktivert/)).toBeTruthy();
+    expect(screen.getByText("Aktivt")).toBeTruthy();
+    expect(screen.getByText("Deaktivert")).toBeTruthy();
     expect(screen.getByRole("button", { name: /deaktiver team/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /^aktiver team/i })).toBeTruthy();
+  });
+
+  it("renders team status via the Badge primitive, and the admin summary count from already-loaded data", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchAdminTeamsMock.mockResolvedValue({
+      status: "ok",
+      teams: [
+        { teamId: "team-1", name: "Platform", status: "active" },
+        { teamId: "team-2", name: "Legacy", status: "disabled" },
+        { teamId: "team-3", name: "Mobile", status: "active" },
+      ],
+    });
+
+    render(<AdminTeams />);
+
+    await screen.findByText("Platform");
+    const activeBadge = screen.getAllByText("Aktivt")[0];
+    expect(activeBadge.tagName).toBe("SPAN");
+    expect(fetchAdminTeamsMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("2 aktive · 1 deaktiverte")).toBeTruthy();
   });
 
   it("labels each team's opaque Firestore ID clearly instead of showing it bare", async () => {
@@ -146,7 +166,8 @@ describe("AdminTeams", () => {
     render(<AdminTeams />);
 
     await screen.findByText("Platform");
-    expect(screen.getByText("Aktivt · Team-ID: team-1")).toBeTruthy();
+    expect(screen.getByText("Aktivt")).toBeTruthy();
+    expect(screen.getByText(/Team-ID: team-1/)).toBeTruthy();
   });
 
   it("never renders survey/aggregate data, member/invitation identities, or internal Firebase metadata", async () => {
@@ -176,6 +197,7 @@ describe("AdminTeams", () => {
     render(<AdminTeams />);
     await screen.findByText(/ingen team/i);
 
+    await user.click(screen.getByRole("button", { name: /nytt team/i }));
     await user.type(screen.getByLabelText(/nytt teamnavn/i), "Mobile");
     await user.click(screen.getByRole("button", { name: /opprett team/i }));
 
@@ -183,6 +205,8 @@ describe("AdminTeams", () => {
     await screen.findByText("Mobile");
     expect(screen.getByText(/server-generated-id/)).toBeTruthy();
     expect(fetchAdminTeamsMock).toHaveBeenCalledTimes(2);
+    // Successful creation collapses the form again (BR-14).
+    expect(screen.queryByLabelText(/nytt teamnavn/i)).toBeNull();
   });
 
   it("shows a controlled Norwegian error and does not fabricate a team when create fails", async () => {
@@ -194,11 +218,14 @@ describe("AdminTeams", () => {
     render(<AdminTeams />);
     await screen.findByText(/ingen team/i);
 
+    await user.click(screen.getByRole("button", { name: /nytt team/i }));
     await user.click(screen.getByRole("button", { name: /opprett team/i }));
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/skriv inn et teamnavn/i);
     expect(screen.getByText(/ingen team/i)).toBeTruthy();
+    // Failed creation leaves the form available so the user can recover (BR-14).
+    expect(screen.getByLabelText(/nytt teamnavn/i)).toBeTruthy();
   });
 
   it("does not fire a second create request from repeated clicks while one is already in flight", async () => {
@@ -216,6 +243,7 @@ describe("AdminTeams", () => {
     render(<AdminTeams />);
     await screen.findByText(/ingen team/i);
 
+    await user.click(screen.getByRole("button", { name: /nytt team/i }));
     const button = screen.getByRole("button", { name: /opprett team/i });
     await user.click(button);
     expect(button.hasAttribute("disabled")).toBe(true);
@@ -229,6 +257,47 @@ describe("AdminTeams", () => {
 
     resolveCreate({ ok: true, teamId: "team-x" });
     await flushMicrotasks();
+  });
+
+  it("keeps the creation form collapsed by default, with the toggle exposing aria-expanded", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchAdminTeamsMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Platform", status: "active" }],
+    });
+
+    render(<AdminTeams />);
+    await screen.findByText("Platform");
+
+    expect(screen.queryByLabelText(/nytt teamnavn/i)).toBeNull();
+    const toggle = screen.getByRole("button", { name: /nytt team/i });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+
+    const user = userEvent.setup();
+    await user.click(toggle);
+
+    expect(screen.getByLabelText(/nytt teamnavn/i)).toBeTruthy();
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    // Opening the form triggers no fetch of any kind (BR-14).
+    expect(fetchAdminTeamsMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes the creation form via Cancel without creating anything or fetching again", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchAdminTeamsMock.mockResolvedValue({ status: "ok", teams: [] });
+
+    render(<AdminTeams />);
+    await screen.findByText(/ingen team/i);
+
+    await user.click(screen.getByRole("button", { name: /nytt team/i }));
+    await user.type(screen.getByLabelText(/nytt teamnavn/i), "Mobile");
+    await user.click(screen.getByRole("button", { name: /avbryt/i }));
+
+    expect(screen.queryByLabelText(/nytt teamnavn/i)).toBeNull();
+    expect(screen.getByRole("button", { name: /nytt team/i }).getAttribute("aria-expanded")).toBe("false");
+    expect(createAdminTeamMock).not.toHaveBeenCalled();
+    expect(fetchAdminTeamsMock).toHaveBeenCalledTimes(1);
   });
 
   it("disables an active team and refreshes the authoritative list", async () => {
@@ -456,6 +525,7 @@ describe("AdminTeams auth races", () => {
     observer.emit("token-a");
     await screen.findByText(/ingen team/i);
 
+    await user.click(screen.getByRole("button", { name: /nytt team/i }));
     await user.type(screen.getByLabelText(/nytt teamnavn/i), "Mobile");
     await user.click(screen.getByRole("button", { name: /opprett team/i }));
 
@@ -487,6 +557,7 @@ describe("AdminTeams auth races", () => {
     observer.emit("token-a");
     await waitFor(() => expect(fetchAdminTeamsMock).toHaveBeenCalledTimes(1));
 
+    await user.click(screen.getByRole("button", { name: /nytt team/i }));
     await user.type(screen.getByLabelText(/nytt teamnavn/i), "Mobile");
     await user.click(screen.getByRole("button", { name: /opprett team/i }));
 

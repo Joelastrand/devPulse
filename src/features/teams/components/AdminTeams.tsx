@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { Alert } from "../../../components/ui/Alert";
+import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { LoadingState } from "../../../components/ui/LoadingState";
+import { TextField } from "../../../components/ui/TextField";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import { adminCopy } from "../copy";
 import {
@@ -62,6 +64,7 @@ export function AdminTeams() {
   const [state, setState] = useState<ViewState>({ phase: "loading" });
   const [createState, setCreateState] = useState<CreateState>({ status: "idle" });
   const [name, setName] = useState("");
+  const [formOpen, setFormOpen] = useState(false);
   const [statusActions, setStatusActions] = useState<Record<string, StatusActionState>>({});
 
   const { isCurrentGeneration } = useAuthGatedResource((token, generation) => {
@@ -70,6 +73,7 @@ export function AdminTeams() {
     setCreateState({ status: "idle" });
     setStatusActions({});
     setName("");
+    setFormOpen(false);
 
     if (!token) {
       setState({ phase: "signed_out" });
@@ -122,10 +126,24 @@ export function AdminTeams() {
 
     setCreateState({ status: "idle" });
     setName("");
+    setFormOpen(false);
     // Re-fetch the authoritative list rather than fabricating the new team
     // client-side — the server is the only source of truth for its final
     // shape (and for whether it actually persisted).
     await loadForGeneration(token, generation);
+  }
+
+  /**
+   * Closes the creation form without creating anything (docs/features/
+   * ui-refresh/SPEC.md — BR-14). Unmounting the form on collapse is
+   * acceptable per `SkillTreeCorrectionForm`'s existing precedent — any
+   * in-progress, unsubmitted name is discarded, never any already-submitted
+   * server state.
+   */
+  function handleCancel() {
+    setFormOpen(false);
+    setName("");
+    setCreateState({ status: "idle" });
   }
 
   async function handleSetStatus(
@@ -195,37 +213,55 @@ export function AdminTeams() {
   }
 
   const { teams } = result;
+  const activeCount = teams.filter((team) => team.status === "active").length;
+  const disabledCount = teams.length - activeCount;
 
   return (
     <div className="flex flex-col gap-8">
-      <form
-        onSubmit={(event) => handleCreate(event, token, generation)}
-        className="flex flex-col gap-2"
-      >
-        <label
-          htmlFor="admin-new-team-name"
-          className="text-sm font-medium text-zinc-900 dark:text-zinc-50"
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          {teams.length > 0 && (
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              {adminCopy.teams.summary(activeCount, disabledCount)}
+            </p>
+          )}
+        </div>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="shrink-0"
+          aria-expanded={formOpen}
+          aria-controls="admin-team-create-form"
+          onClick={() => setFormOpen((prev) => !prev)}
         >
-          {adminCopy.teams.newTeamNameLabel}
-        </label>
-        <div className="flex gap-2">
-          <input
+          {adminCopy.teams.newTeamButton}
+        </Button>
+      </div>
+
+      {formOpen && (
+        <form
+          id="admin-team-create-form"
+          onSubmit={(event) => handleCreate(event, token, generation)}
+          className="flex flex-col gap-3"
+        >
+          <TextField
             id="admin-new-team-name"
-            type="text"
+            label={adminCopy.teams.newTeamNameLabel}
             value={name}
             onChange={(event) => setName(event.target.value)}
-            className="flex-1 rounded border border-zinc-300 px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:bg-zinc-900"
+            error={createState.status === "error" ? createState.message : undefined}
           />
-          <Button type="submit" className="shrink-0" pending={createState.status === "pending"}>
-            {createState.status === "pending" ? adminCopy.teams.creatingButton : adminCopy.teams.createButton}
-          </Button>
-        </div>
-        {createState.status === "error" && (
-          <Alert variant="error" className="text-sm">
-            {createState.message}
-          </Alert>
-        )}
-      </form>
+          <div className="flex gap-2">
+            <Button type="submit" className="shrink-0" pending={createState.status === "pending"}>
+              {createState.status === "pending" ? adminCopy.teams.creatingButton : adminCopy.teams.createButton}
+            </Button>
+            <Button type="button" variant="secondary" className="shrink-0" onClick={handleCancel}>
+              {adminCopy.teams.cancelButton}
+            </Button>
+          </div>
+        </form>
+      )}
 
       {teams.length === 0 ? (
         <EmptyState>{adminCopy.teams.empty}</EmptyState>
@@ -251,9 +287,13 @@ export function AdminTeams() {
                   >
                     {team.name}
                   </Link>
-                  <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                    {team.status === "active" ? adminCopy.teams.statusActive : adminCopy.teams.statusDisabled}{" "}
-                    · {adminCopy.teams.teamIdLabel} {team.teamId}
+                  <p className="mt-1 flex flex-wrap items-center gap-1 text-sm text-zinc-600 dark:text-zinc-400">
+                    <Badge>
+                      {team.status === "active" ? adminCopy.teams.statusActive : adminCopy.teams.statusDisabled}
+                    </Badge>
+                    <span>
+                      · {adminCopy.teams.teamIdLabel} {team.teamId}
+                    </span>
                   </p>
                   {action.status === "error" && (
                     <Alert variant="error" className="mt-1 text-sm">

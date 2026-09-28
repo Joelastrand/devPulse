@@ -6,7 +6,7 @@ import { AdminTeams } from "../../../src/features/teams/components/AdminTeams";
 
 export default function AdminTeamsPage() {
   return (
-    <PageShell width="3xl">
+    <PageShell width="wide">
       <PageHeader title={adminCopy.teams.pageTitle} description={adminCopy.teams.pageDescription} />
       <p className="mt-2">
         <Link href="/admin/skills" className="font-medium text-zinc-900 underline dark:text-zinc-50">

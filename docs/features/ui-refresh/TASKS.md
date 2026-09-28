@@ -3,10 +3,10 @@
 Specification: [SPEC.md](./SPEC.md)
 
 ## Status
-Ready: 7  In Progress: 0  Done: 3
+Ready: 6  In Progress: 0  Done: 4
 
 `SPEC.md`'s Status is `Approved` (see `SPEC.md` → "Status"/"Approval gate").
-TASK-001 through TASK-003 are `Done`; TASK-004 through TASK-009 remain
+TASK-001 through TASK-004 are `Done`; TASK-005 through TASK-009 remain
 unblocked (their only dependency, TASK-001, is satisfied) and independently
 eligible for the next `implement-task` session to pick up, in any order.
 
@@ -484,7 +484,7 @@ to before this task (no new/removed route). Nothing was pushed or deployed.
 
 ### TASK-004 — Admin teams overview
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-5, BR-8, BR-9, BR-10, BR-12, BR-14, BR-19
 **Depends on:** TASK-001
 
@@ -533,14 +533,69 @@ No additional considerations — `requireAppAdmin`/`createAdminTeam`/
 None expected yet (TASK-010).
 
 **Acceptance criteria**
-- [ ] `/admin/teams` renders at `width="wide"` (BR-5).
-- [ ] Team status renders via Badge (BR-10).
-- [ ] Creation form is hidden by default, toggled via an `aria-expanded`
+- [x] `/admin/teams` renders at `width="wide"` (BR-5).
+- [x] Team status renders via Badge (BR-10).
+- [x] Creation form is hidden by default, toggled via an `aria-expanded`
       control, list is the default view (BR-12).
-- [ ] Toggling adds no network request; successful creation collapses the
+- [x] Toggling adds no network request; successful creation collapses the
       form (BR-14).
-- [ ] Any summary shown uses only already-loaded state (BR-19).
-- [ ] Relevant tests, `pnpm lint`, `pnpm typecheck` pass.
+- [x] Any summary shown uses only already-loaded state (BR-19).
+- [x] Relevant tests, `pnpm lint`, `pnpm typecheck` pass.
+
+**Notes**
+Implemented exactly as specified:
+- `app/admin/teams/page.tsx`: `PageShell width="3xl"` changed to
+  `width="wide"` — the only production-file change to this route (BR-5).
+- `src/features/teams/components/AdminTeams.tsx`: the always-visible
+  creation form was replaced with a persistent toggle `Button`
+  (`aria-expanded={formOpen}`, `aria-controls="admin-team-create-form"`,
+  accessible name "Nytt team") that mounts/unmounts the creation form —
+  extending `SkillTreeCorrectionForm.tsx`/`SkillTreeCatalogList.tsx`'s
+  existing open/close precedent, now with `aria-expanded` wired on the
+  trigger itself (that precedent didn't yet expose it). The form gained an
+  explicit "Avbryt" (Cancel) `Button` that resets `name`/`createState` and
+  collapses the form without calling `createAdminTeam` (BR-14). A
+  successful `handleCreate` now also collapses the form
+  (`setFormOpen(false)`) before the existing authoritative-list refresh;
+  a failed create leaves `formOpen` untouched, so the form (and its error)
+  stays visible and recoverable, unchanged from the prior behavior. Neither
+  opening nor closing the form calls any gateway function — verified by the
+  new tests asserting `fetchAdminTeamsMock` call counts are unchanged
+  across toggle/cancel.
+- The name `<input>` was migrated to the shared `TextField` primitive
+  (`id`/`value`/`onChange` preserved exactly; native `type="text"` is
+  `TextField`'s own default, byte-identical to the previous explicit
+  `type="text"`); `createState`'s existing error message now passes through
+  `TextField`'s `error` prop, which renders it via the existing `Alert`
+  (preserving `role="alert"`) and wires `aria-invalid`/`aria-describedby`
+  automatically — no duplicate `Alert` is rendered (BR-8, BR-9).
+- Each team's plain-text status line was split: the status word
+  ("Aktivt"/"Deaktivert") now renders via the shared `Badge` primitive; the
+  "Team-ID: …" text stays plain, unchanged text next to it (BR-10) — the
+  per-team status-action `Button`/error `Alert`/refresh behavior is
+  byte-for-byte unchanged.
+- An optional summary line ("N aktive · M deaktiverte") was added above the
+  list, computed via `Array.prototype.filter`/`.length` over the already-
+  fetched `teams` array already in this component's state — no new fetch,
+  gateway call, or DTO field (BR-19); omitted entirely when the list is
+  empty.
+- Confirmed via `git diff --stat`: no file under `src/features/teams/server/`,
+  `src/features/teams/client/`, `app/api/**`, any other feature's
+  components, `AdminTeamDetail.tsx`, `/admin/skills`, `package.json`, or
+  `pnpm-lock.yaml` was touched — only `app/admin/teams/page.tsx`,
+  `AdminTeams.tsx`, `AdminTeams.test.tsx`, and `copy.ts` changed, plus one
+  new `app/admin/teams/page.test.tsx` asserting the page-level `wide` width
+  (mirroring `SiteHeader.test.tsx`'s structural width-class assertion, not
+  a hardcoded literal).
+
+Verification: focused suite (`src/features/teams`, `app/admin/teams`) and
+full `pnpm test` — 174 files / 2450 tests passed (2446 pre-existing + 4
+new: two `AdminTeams` progressive-disclosure tests, one Badge/summary test,
+one page-level width test). `pnpm typecheck`, `pnpm lint`, `git diff
+--check` all passed (only expected CRLF/LF line-ending warnings, no actual
+whitespace errors). `pnpm build` succeeded with an identical route manifest
+to before this task (no new/removed route). `review-change` outcome: PASS,
+no Blocking or Important findings. Nothing was pushed or deployed.
 
 ---
 

@@ -82,13 +82,17 @@ export const adminCopy = {
     forbidden: "Du har ikke tilgang til denne siden.",
     error: "Noe gikk galt under lasting av team. Prøv igjen senere.",
     empty: "Ingen team ennå.",
+    newTeamButton: "Nytt team",
     newTeamNameLabel: "Nytt teamnavn",
     createButton: "Opprett team",
     creatingButton: "Oppretter…",
+    cancelButton: "Avbryt",
     createError: {
       invalidName: "Skriv inn et teamnavn.",
       generic: "Noe gikk galt under opprettelsen av teamet. Prøv igjen.",
     },
+    /** Purely derived from the already-loaded team list — no new fetch (docs/features/ui-refresh/SPEC.md — BR-19). */
+    summary: (active: number, disabled: number) => `${active} aktive · ${disabled} deaktiverte`,
     statusActive: "Aktivt",
     statusDisabled: "Deaktivert",
     /**
