@@ -42,6 +42,17 @@ describe("ReplyForm", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("wires aria-invalid/aria-describedby on the body field to the validation alert", async () => {
+    const user = userEvent.setup();
+    render(<ReplyForm idToken="token-1" teamId="team-1" threadId="thread-1" onSubmitted={() => {}} />);
+    await user.type(bodyField(), "hi");
+    await user.click(submitButton());
+
+    const alert = await screen.findByRole("alert");
+    expect(bodyField().getAttribute("aria-invalid")).toBe("true");
+    expect(bodyField().getAttribute("aria-describedby")).toBe(alert.id);
+  });
+
   it("sends only the body field to the thread-scoped replies route", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(201, { ok: true }));
     vi.stubGlobal("fetch", fetchMock);

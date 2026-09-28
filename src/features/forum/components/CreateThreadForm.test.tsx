@@ -49,6 +49,20 @@ describe("CreateThreadForm", () => {
     expect(titleField().getAttribute("aria-invalid")).toBe("true");
   });
 
+  it("wires aria-invalid/aria-describedby on both fields to the single validation alert, never a duplicate alert", async () => {
+    const user = userEvent.setup();
+    render(<CreateThreadForm idToken="token-1" teamId="team-1" onCreated={() => {}} />);
+    await user.type(titleField(), "hi");
+    await user.click(submitButton());
+
+    const alert = await screen.findByRole("alert");
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(titleField().getAttribute("aria-invalid")).toBe("true");
+    expect(bodyField().getAttribute("aria-invalid")).toBe("true");
+    expect(titleField().getAttribute("aria-describedby")).toBe(alert.id);
+    expect(bodyField().getAttribute("aria-describedby")).toBe(alert.id);
+  });
+
   it("sends only title/body — never an identity/scope/lifecycle field", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(201, { ok: true, threadId: "thread-1" }));
     vi.stubGlobal("fetch", fetchMock);

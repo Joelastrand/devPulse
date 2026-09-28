@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
+import { TextArea } from "../../../components/ui/TextArea";
 import { createReply } from "../client/forum-gateway";
 import { forumCopy } from "../copy";
 import { REPLY_BODY_MAX_LENGTH, REPLY_BODY_MIN_LENGTH } from "../domain/reply-content";
@@ -102,21 +103,16 @@ export function ReplyForm({ idToken, teamId, threadId, onSubmitted }: ReplyFormP
     <form onSubmit={handleSubmit} className="flex flex-col gap-3" noValidate>
       <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">{forumCopy.replyForm.heading}</h3>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="forum-reply-body" className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
-          {forumCopy.replyForm.bodyLabel}
-        </label>
-        <textarea
-          id="forum-reply-body"
-          value={body}
-          onChange={(event) => setBody(event.target.value)}
-          placeholder={forumCopy.replyForm.bodyPlaceholder}
-          rows={3}
-          aria-describedby={phase === "validation_error" ? "forum-reply-validation-error" : undefined}
-          aria-invalid={phase === "validation_error" || undefined}
-          className="rounded-lg border border-zinc-300 bg-transparent p-3 text-sm text-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:text-zinc-50"
-        />
-      </div>
+      <TextArea
+        id="forum-reply-body"
+        label={forumCopy.replyForm.bodyLabel}
+        value={body}
+        onChange={(event) => setBody(event.target.value)}
+        placeholder={forumCopy.replyForm.bodyPlaceholder}
+        rows={3}
+        aria-describedby={phase === "validation_error" ? "forum-reply-validation-error" : undefined}
+        aria-invalid={phase === "validation_error" || undefined}
+      />
 
       {phase === "validation_error" && (
         <Alert variant="error" id="forum-reply-validation-error">

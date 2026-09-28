@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
+import { TextArea } from "../../../components/ui/TextArea";
+import { TextField } from "../../../components/ui/TextField";
 import { createThread } from "../client/forum-gateway";
 import { forumCopy } from "../copy";
 import {
@@ -105,36 +107,26 @@ export function CreateThreadForm({ idToken, teamId, onCreated }: CreateThreadFor
     <form onSubmit={handleSubmit} className="flex flex-col gap-3" noValidate>
       <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">{forumCopy.createThread.heading}</h3>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="forum-thread-title" className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
-          {forumCopy.createThread.titleLabel}
-        </label>
-        <input
-          id="forum-thread-title"
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          placeholder={forumCopy.createThread.titlePlaceholder}
-          aria-describedby={phase === "validation_error" ? "forum-thread-validation-error" : undefined}
-          aria-invalid={phase === "validation_error" || undefined}
-          className="rounded-lg border border-zinc-300 bg-transparent p-3 text-sm text-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:text-zinc-50"
-        />
-      </div>
+      <TextField
+        id="forum-thread-title"
+        label={forumCopy.createThread.titleLabel}
+        value={title}
+        onChange={(event) => setTitle(event.target.value)}
+        placeholder={forumCopy.createThread.titlePlaceholder}
+        aria-describedby={phase === "validation_error" ? "forum-thread-validation-error" : undefined}
+        aria-invalid={phase === "validation_error" || undefined}
+      />
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="forum-thread-body" className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
-          {forumCopy.createThread.bodyLabel}
-        </label>
-        <textarea
-          id="forum-thread-body"
-          value={body}
-          onChange={(event) => setBody(event.target.value)}
-          placeholder={forumCopy.createThread.bodyPlaceholder}
-          rows={4}
-          aria-describedby={phase === "validation_error" ? "forum-thread-validation-error" : undefined}
-          aria-invalid={phase === "validation_error" || undefined}
-          className="rounded-lg border border-zinc-300 bg-transparent p-3 text-sm text-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:text-zinc-50"
-        />
-      </div>
+      <TextArea
+        id="forum-thread-body"
+        label={forumCopy.createThread.bodyLabel}
+        value={body}
+        onChange={(event) => setBody(event.target.value)}
+        placeholder={forumCopy.createThread.bodyPlaceholder}
+        rows={4}
+        aria-describedby={phase === "validation_error" ? "forum-thread-validation-error" : undefined}
+        aria-invalid={phase === "validation_error" || undefined}
+      />
 
       {phase === "validation_error" && (
         <Alert variant="error" id="forum-thread-validation-error">

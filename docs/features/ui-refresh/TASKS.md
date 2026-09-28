@@ -3,13 +3,11 @@
 Specification: [SPEC.md](./SPEC.md)
 
 ## Status
-Ready: 2  In Progress: 0  Done: 8
+Ready: 1  In Progress: 0  Done: 9
 
 `SPEC.md`'s Status is `Approved` (see `SPEC.md` → "Status"/"Approval gate").
-TASK-001 through TASK-008 are `Done`; TASK-009 remains unblocked (its only
-dependency, TASK-001, is satisfied) and eligible for the next
-`implement-task` session; TASK-010 depends on every other task and remains
-blocked until TASK-009 is also `Done`.
+TASK-001 through TASK-009 are `Done`; TASK-010 depends on every other task
+and is now unblocked and eligible for the next `implement-task` session.
 
 ## Task graph
 
@@ -1198,7 +1196,7 @@ Nothing was pushed or deployed.
 
 ### TASK-009 — Forum visual consistency
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-8, BR-9, BR-13, BR-18
 **Depends on:** TASK-001
 
@@ -1246,14 +1244,52 @@ considering this task complete.
 None expected yet (TASK-010).
 
 **Acceptance criteria**
-- [ ] Forum components adopt shared styling; `createThread`/`createReply`
+- [x] Forum components adopt shared styling; `createThread`/`createReply`
       validation/submission unchanged (BR-8).
-- [ ] Thread/reply creation forms keep correct `aria-invalid`/
+- [x] Thread/reply creation forms keep correct `aria-invalid`/
       `aria-describedby` wiring (BR-9).
-- [ ] Neither creation form gains a progressive-disclosure toggle (BR-13).
-- [ ] `is-forum-enabled.ts`, every forum API route, and both
+- [x] Neither creation form gains a progressive-disclosure toggle (BR-13).
+- [x] `is-forum-enabled.ts`, every forum API route, and both
       `forumEnabled`/`isForumEnabled()` gate sites are unchanged (BR-18).
-- [ ] Relevant tests, `pnpm lint`, `pnpm typecheck` pass.
+- [x] Relevant tests, `pnpm lint`, `pnpm typecheck` pass.
+
+**Notes**
+Implemented exactly as specified, scoped to `CreateThreadForm.tsx` and
+`ReplyForm.tsx` only:
+- `CreateThreadForm.tsx`: the title `<input>` migrated to the shared
+  `TextField` primitive, the body `<textarea>` migrated to the shared
+  `TextArea` primitive. `ReplyForm.tsx`: the body `<textarea>` migrated to
+  `TextArea`. `ThreadList.tsx`, `ThreadDetail.tsx`, and
+  `DeleteConfirmation.tsx` needed no change — each already composes only
+  existing shared primitives with no hand-rolled text input to migrate;
+  confirmed via inspection and zero diff.
+- Both forms deliberately pass native `aria-invalid`/`aria-describedby`
+  through to `TextField`/`TextArea` (rather than using the primitives' own
+  `error`/`description` props), pointing at the forms' single existing
+  shared validation `Alert`. This is legitimate: both primitives spread
+  `{...props}` after their own internally-computed `aria-invalid`/
+  `aria-describedby` (which are `undefined` here, since no `error`/
+  `description` prop is passed), so the caller's native values win and
+  reach the underlying `<input>`/`<textarea>` unchanged. This avoids
+  rendering a second `role="alert"` element, preserving each form's
+  existing single-`Alert` semantics. No primitive API change was needed or
+  made.
+- `isValidLength`/`createThread`/`createReply`'s validation and submission
+  behavior, the request payload (title/body only), and success-state
+  clearing are byte-for-byte unchanged — confirmed via `git diff`. Neither
+  form gained a progressive-disclosure toggle (BR-13).
+- Confirmed via `git diff`/`git status`: `is-forum-enabled.ts`, every Forum
+  `route.ts`, `TeamDetail.tsx`'s `forumEnabled` composition, and the
+  standalone Forum route's `isForumEnabled()`/`notFound()` gate are
+  byte-for-byte untouched; no encryption/schema/query/authorization file
+  changed; no new dependency or env var.
+
+Verification: focused suite (`src/features/forum`) — 324/324 passed (322
+pre-existing + 2 new `aria-invalid`/`aria-describedby`-to-single-alert
+regression tests). `pnpm typecheck`, `pnpm lint` passed. `git diff --check`
+passed (only expected CRLF/LF line-ending warnings). `review-change`
+outcome: PASS, no Blocking/Important/Suggestion findings. Nothing was
+pushed or deployed.
 
 ---
 
