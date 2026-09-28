@@ -344,6 +344,36 @@ describe("TeamDetail", () => {
     expect(fetchTeamResultsMock).toHaveBeenCalledTimes(1);
   });
 
+  it("groups the authorized view's sections into distinct, labeled 'Resultater'/'Teamaktivitet' zones (BR-15)", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "member" }],
+    });
+    fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
+    fetchTeamChallengesMock.mockResolvedValue({
+      status: "ok",
+      challenges: [{ challengeId: "c1", text: "Deploy owner unclear", status: "open", submittedAt: "2026-01-10" }],
+      canSubmit: true,
+    });
+
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
+
+    const resultaterHeading = await screen.findByRole("heading", { name: "Resultater" });
+    const teamaktivitetHeading = screen.getByRole("heading", { name: "Teamaktivitet" });
+    expect(resultaterHeading).toBeTruthy();
+    expect(teamaktivitetHeading).toBeTruthy();
+
+    // "Resultater" is the results zone: it contains the survey-count text but
+    // not the challenge text; "Teamaktivitet" is the reverse.
+    const resultaterZone = resultaterHeading.closest("section");
+    const teamaktivitetZone = teamaktivitetHeading.closest("section");
+    expect(resultaterZone?.textContent).toMatch(/7 svar/);
+    expect(resultaterZone?.textContent).not.toMatch(/Deploy owner unclear/);
+    expect(teamaktivitetZone?.textContent).toMatch(/Deploy owner unclear/);
+    expect(teamaktivitetZone?.textContent).not.toMatch(/7 svar/);
+  });
+
   it("fetches and renders results for an app admin", async () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({
@@ -413,6 +443,26 @@ describe("TeamDetail", () => {
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/teamets resultater/i);
     expect(screen.getByText("Platform")).toBeTruthy();
+  });
+
+  it("still groups the results_unavailable view's activity sections under a 'Teamaktivitet' zone heading (BR-15)", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "member" }],
+    });
+    fetchTeamResultsMock.mockResolvedValue({ status: "read_failed" });
+    fetchTeamChallengesMock.mockResolvedValue({
+      status: "ok",
+      challenges: [{ challengeId: "c1", text: "Deploy owner unclear", status: "open", submittedAt: "2026-01-10" }],
+      canSubmit: true,
+    });
+
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
+
+    await screen.findByRole("alert");
+    const teamaktivitetHeading = screen.getByRole("heading", { name: "Teamaktivitet" });
+    expect(teamaktivitetHeading.closest("section")?.textContent).toMatch(/Deploy owner unclear/);
   });
 
   it("submits a request-access action via the existing TASK-005 gateway and refreshes to the resulting state", async () => {

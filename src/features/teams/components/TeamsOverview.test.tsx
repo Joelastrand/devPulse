@@ -135,6 +135,19 @@ describe("TeamsOverview", () => {
     expect(screen.getByText("Ikke medlem")).toBeTruthy();
   });
 
+  it("renders each team's relationship label via the shared Badge primitive, not a bare paragraph (BR-10)", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "member" }],
+    });
+
+    render(<TeamsOverview />);
+
+    const label = await screen.findByText("Medlem");
+    expect(label.tagName).toBe("SPAN");
+  });
+
   it("links a member's or admin's team name to its detail page, but not a non-member's", async () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({

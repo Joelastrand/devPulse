@@ -3,12 +3,12 @@
 Specification: [SPEC.md](./SPEC.md)
 
 ## Status
-Ready: 8  In Progress: 0  Done: 2
+Ready: 7  In Progress: 0  Done: 3
 
 `SPEC.md`'s Status is `Approved` (see `SPEC.md` → "Status"/"Approval gate").
-TASK-001 and TASK-002 are `Done`; TASK-003 through TASK-009 remain unblocked
-(their only dependency, TASK-001, is satisfied) and independently eligible
-for the next `implement-task` session to pick up, in any order.
+TASK-001 through TASK-003 are `Done`; TASK-004 through TASK-009 remain
+unblocked (their only dependency, TASK-001, is satisfied) and independently
+eligible for the next `implement-task` session to pick up, in any order.
 
 ## Task graph
 
@@ -333,7 +333,7 @@ succeeded with an identical route manifest. Nothing was pushed or deployed.
 
 ### TASK-003 — Teams overview + TeamDetail visual hierarchy
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-8, BR-9, BR-10, BR-11, BR-13, BR-15, BR-16, BR-17, BR-25
 **Depends on:** TASK-001
 
@@ -415,21 +415,70 @@ tests while touching this file.
 None expected yet (TASK-010).
 
 **Acceptance criteria**
-- [ ] `TeamsOverview` relationship label renders via Badge, text unchanged
+- [x] `TeamsOverview` relationship label renders via Badge, text unchanged
       (BR-10).
-- [ ] `TeamDetail` visually groups into two zones with no Card-in-Card
+- [x] `TeamDetail` visually groups into two zones with no Card-in-Card
       nesting (BR-15).
-- [ ] `TeamDetail`'s fetch order, generation guards, and every capability
+- [x] `TeamDetail`'s fetch order, generation guards, and every capability
       computation are unchanged (BR-16).
-- [ ] No capability-gated control is revealed where it wasn't before
+- [x] No capability-gated control is revealed where it wasn't before
       (BR-17).
-- [ ] Challenge submission panel remains always-visible when capable
+- [x] Challenge submission panel remains always-visible when capable
       (BR-13).
-- [ ] `TeamSkillSection`'s stage list/current-stage presentation is
+- [x] `TeamSkillSection`'s stage list/current-stage presentation is
       unchanged beyond incidental shared styling (BR-11).
-- [ ] `TrendChart` remains lazy with its `catchError` boundary intact
+- [x] `TrendChart` remains lazy with its `catchError` boundary intact
       (BR-25).
-- [ ] Relevant tests, `pnpm lint`, `pnpm typecheck` pass.
+- [x] Relevant tests, `pnpm lint`, `pnpm typecheck` pass.
+
+**Notes**
+Implemented exactly as specified:
+- `TeamDetail.tsx`: added two presentation-only wrapper components,
+  `ResultaterZone`/`TeamaktivitetZone` (plain `<section
+  aria-labelledby>` + `<h2>` + `children`, no `Card`, no state, no fetch,
+  no capability logic) and used them to visually regroup the `authorized`
+  and `results_unavailable` branches' already-rendered sections in place.
+  Confirmed via `git diff`: `loadTeamDetail`/`resolveViaResults`'s
+  `Promise.all` composition, `useAuthGatedResource`/generation-guard code,
+  and the `canSubmit`/`FEATURE_FORUM_ENABLED`/`canReportProgress` gating
+  conditions are byte-for-byte unchanged — only the JSX arrangement around
+  already-computed `result` data changed. The `denied` branch (no
+  results/activity content today) is left unwrapped, per the instruction
+  not to force a zone to render content that didn't previously exist
+  there. `LazyTrendChart`'s `next/dynamic` call and `TrendChartBoundary`'s
+  `catchError` wrapping are unmoved — only now nested one level deeper
+  inside `ResultaterZone`, never re-declared or relocated (BR-25).
+- `TeamsOverview.tsx` / `ChallengeList.tsx`: the relationship label and
+  challenge status label now render via the existing `Badge` primitive
+  (`src/components/ui/Badge.tsx`, from TASK-001) in place of the previous
+  bare text — label text, submitted date, and surrounding
+  navigation/capability logic unchanged.
+- `TeamSkillSection.tsx`: left untouched. It already uses the shared
+  `Card`/typography treatment from TASK-001, so no incidental styling was
+  needed; its "ikke startet" text was deliberately not converted to Badge,
+  consistent with BR-11's stage/progression exclusion and the same
+  treatment TASK-008's own notes already record for the identical string
+  in `OrgSkillProgressOverview.tsx`.
+- `copy.ts`: added `resultaterHeading`/`teamaktivitetHeading` ("Resultater"
+  / "Teamaktivitet") to `teamsCopy.detail`, per the existing copy-module
+  convention.
+- Tests added: `TeamDetail.test.tsx` — two new tests asserting the
+  "Resultater"/"Teamaktivitet" headings are real headings and that each
+  zone's `<section>` contains only its own content (results vs. activity),
+  for both the `authorized` and `results_unavailable` branches.
+  `TeamsOverview.test.tsx`/`ChallengeList.test.tsx` — one test each
+  confirming the relevant status/relationship label now renders inside the
+  Badge primitive (`tagName === "SPAN"`), not a bare paragraph. All
+  pre-existing behavioral/regression tests (capability-gating, fetch call
+  counts, `TrendChart` lazy-load/`catchError` isolation) were left
+  unmodified and continue to pass — they already query by role/text, not
+  DOM order, so the new zone wrapping required no assertion changes.
+
+Verification: focused suite (`src/features/teams`, `src/features/challenges`,
+`src/features/skill-trees`) and full `pnpm test` — 173 files / 2446 tests
+passed (2442 pre-existing + 4 new). `pnpm typecheck`, `pnpm lint`, `git diff
+--check` all passed. `pnpm build` succeeded with an identical route manifest
+to before this task (no new/removed route). Nothing was pushed or deployed.
 
 ---
 

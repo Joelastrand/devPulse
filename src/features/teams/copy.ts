@@ -28,6 +28,14 @@ export const teamsCopy = {
     resultsUnavailable:
       "Noe gikk galt under lasting av teamets resultater. Prøv igjen senere.",
     fallbackName: "Team",
+    /**
+     * The two presentation-only visual zones `TeamDetail` groups its
+     * already-rendered sections into (docs/features/ui-refresh/SPEC.md —
+     * BR-15) — purely a heading/grouping label, never a new data concept,
+     * route, or fetch boundary.
+     */
+    resultaterHeading: "Resultater",
+    teamaktivitetHeading: "Teamaktivitet",
     relationshipMessages: {
       none: "Du har ikke tilgang til dette teamets resultater ennå.",
       request_pending:

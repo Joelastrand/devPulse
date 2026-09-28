@@ -1,7 +1,8 @@
+import { Alert } from "../../../components/ui/Alert";
+import { Badge } from "../../../components/ui/Badge";
 import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { LoadingState } from "../../../components/ui/LoadingState";
-import { Alert } from "../../../components/ui/Alert";
 import { formatSurveyDate } from "../../results/domain/format-survey-date";
 import type { MemberChallengeView } from "../client/challenges-gateway";
 import { challengesCopy } from "../copy";
@@ -50,9 +51,9 @@ function ChallengeCard({ challenge }: { challenge: MemberChallengeView }) {
   return (
     <Card as="li" variant="bordered" padding="sm" className="flex flex-col gap-1">
       <p className="whitespace-pre-wrap break-words text-zinc-900 dark:text-zinc-50">{challenge.text}</p>
-      <p className="text-sm text-zinc-600 dark:text-zinc-400">
-        {challengesCopy.list.statusLabels[challenge.status]} ·{" "}
-        {formatSurveyDate(new Date(challenge.submittedAt))}
+      <p className="flex flex-wrap items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+        <Badge>{challengesCopy.list.statusLabels[challenge.status]}</Badge>
+        <span>{formatSurveyDate(new Date(challenge.submittedAt))}</span>
       </p>
     </Card>
   );

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
+import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
@@ -162,8 +163,8 @@ export function TeamsOverview() {
               ) : (
                 <p className="break-words font-medium text-zinc-900 dark:text-zinc-50">{team.name}</p>
               )}
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                {RELATIONSHIP_LABELS[team.relationship]}
+              <p className="mt-1">
+                <Badge>{RELATIONSHIP_LABELS[team.relationship]}</Badge>
               </p>
               {action.status === "error" && (
                 <Alert variant="error" className="mt-1 text-sm">

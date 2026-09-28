@@ -4,7 +4,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { catchError } from "next/error";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
@@ -515,27 +515,31 @@ export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnab
       <div className="flex flex-col gap-4">
         <TeamHeading name={result.name} />
         <Alert variant="error">{teamsCopy.detail.resultsUnavailable}</Alert>
-        <CurrentSurveySection state={result.currentSurvey} />
-        <ChallengesSection
-          teamId={teamId}
-          token={token}
-          state={result.challenges}
-          onSubmitted={() => handleChallengeSubmitted(token, generation)}
-        />
-        {forumEnabled && (
-          <ForumSection
+        <ResultaterZone>
+          <CurrentSurveySection state={result.currentSurvey} />
+        </ResultaterZone>
+        <TeamaktivitetZone>
+          <ChallengesSection
             teamId={teamId}
             token={token}
-            state={result.forum}
-            onThreadCreated={(threadId) => handleThreadCreated(generation, threadId)}
+            state={result.challenges}
+            onSubmitted={() => handleChallengeSubmitted(token, generation)}
           />
-        )}
-        <TeamSkillSection
-          idToken={token}
-          teamId={teamId}
-          state={toTeamSkillSectionState(result.skills)}
-          onReported={() => handleSkillReported(token, generation)}
-        />
+          {forumEnabled && (
+            <ForumSection
+              teamId={teamId}
+              token={token}
+              state={result.forum}
+              onThreadCreated={(threadId) => handleThreadCreated(generation, threadId)}
+            />
+          )}
+          <TeamSkillSection
+            idToken={token}
+            teamId={teamId}
+            state={toTeamSkillSectionState(result.skills)}
+            onReported={() => handleSkillReported(token, generation)}
+          />
+        </TeamaktivitetZone>
       </div>
     );
   }
@@ -550,34 +554,38 @@ export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnab
     return (
       <div className="flex flex-col gap-8">
         <TeamHeading name={result.name} />
-        <CurrentSurveySection state={result.currentSurvey} />
-        <PeriodSummary result={latest} />
-        {result.results.length > 0 && (
-          <TrendChartBoundary>
-            <LazyTrendChart results={result.results} />
-          </TrendChartBoundary>
-        )}
-        <TrendTable results={result.results} />
-        <ChallengesSection
-          teamId={teamId}
-          token={token}
-          state={result.challenges}
-          onSubmitted={() => handleChallengeSubmitted(token, generation)}
-        />
-        {forumEnabled && (
-          <ForumSection
+        <ResultaterZone>
+          <CurrentSurveySection state={result.currentSurvey} />
+          <PeriodSummary result={latest} />
+          {result.results.length > 0 && (
+            <TrendChartBoundary>
+              <LazyTrendChart results={result.results} />
+            </TrendChartBoundary>
+          )}
+          <TrendTable results={result.results} />
+        </ResultaterZone>
+        <TeamaktivitetZone>
+          <ChallengesSection
             teamId={teamId}
             token={token}
-            state={result.forum}
-            onThreadCreated={(threadId) => handleThreadCreated(generation, threadId)}
+            state={result.challenges}
+            onSubmitted={() => handleChallengeSubmitted(token, generation)}
           />
-        )}
-        <TeamSkillSection
-          idToken={token}
-          teamId={teamId}
-          state={toTeamSkillSectionState(result.skills)}
-          onReported={() => handleSkillReported(token, generation)}
-        />
+          {forumEnabled && (
+            <ForumSection
+              teamId={teamId}
+              token={token}
+              state={result.forum}
+              onThreadCreated={(threadId) => handleThreadCreated(generation, threadId)}
+            />
+          )}
+          <TeamSkillSection
+            idToken={token}
+            teamId={teamId}
+            state={toTeamSkillSectionState(result.skills)}
+            onReported={() => handleSkillReported(token, generation)}
+          />
+        </TeamaktivitetZone>
       </div>
     );
   }
@@ -608,6 +616,44 @@ export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnab
 
 function TeamHeading({ name }: { name?: string }) {
   return <PageHeader title={name ?? teamsCopy.detail.fallbackName} />;
+}
+
+/**
+ * Presentation-only visual grouping for the "results" half of `TeamDetail`
+ * (docs/features/ui-refresh/SPEC.md — BR-15, BR-16): a plain `<section>` +
+ * heading around already-rendered children, never a `Card` — every child
+ * section already renders its own `Card as="section"`, so wrapping them in
+ * another `Card` would nest cards rather than merely group them. Carries no
+ * fetch, state, or capability logic of its own; it only arranges JSX the
+ * caller has already fully computed.
+ */
+function ResultaterZone({ children }: { children: ReactNode }) {
+  return (
+    <section aria-labelledby="team-detail-resultater-heading" className="flex flex-col gap-6">
+      <h2
+        id="team-detail-resultater-heading"
+        className="text-xl font-semibold text-zinc-900 dark:text-zinc-50"
+      >
+        {teamsCopy.detail.resultaterHeading}
+      </h2>
+      {children}
+    </section>
+  );
+}
+
+/** The "team activity" counterpart to `ResultaterZone` — identical rationale. */
+function TeamaktivitetZone({ children }: { children: ReactNode }) {
+  return (
+    <section aria-labelledby="team-detail-teamaktivitet-heading" className="flex flex-col gap-6">
+      <h2
+        id="team-detail-teamaktivitet-heading"
+        className="text-xl font-semibold text-zinc-900 dark:text-zinc-50"
+      >
+        {teamsCopy.detail.teamaktivitetHeading}
+      </h2>
+      {children}
+    </section>
+  );
 }
 
 /**

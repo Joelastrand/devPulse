@@ -55,6 +55,13 @@ describe("ChallengeList", () => {
     expect(screen.getByText(/løst/i)).toBeTruthy();
   });
 
+  it("renders the status label via the shared Badge primitive, not a bare paragraph (BR-10)", () => {
+    render(<ChallengeList state={{ status: "loaded", challenges: [OPEN_CHALLENGE] }} />);
+
+    const label = screen.getByText(/åpen/i);
+    expect(label.tagName).toBe("SPAN");
+  });
+
   it("renders items in exactly the order received, never re-sorting client-side", () => {
     render(
       <ChallengeList
