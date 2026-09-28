@@ -10,6 +10,7 @@ import {
 import { adminSkillsCopy } from "../copy";
 import { useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
+import { Button } from "../../../components/ui/Button";
 import { LoadingState } from "../../../components/ui/LoadingState";
 import { SkillTreeCreationForm } from "./SkillTreeCreationForm";
 import { SkillTreeCatalogList, type SkillTreeCatalogState } from "./SkillTreeCatalogList";
@@ -32,8 +33,13 @@ type ViewState =
 export function AdminSkills() {
   const [state, setState] = useState<ViewState>({ phase: "loading" });
   const [overviewState, setOverviewState] = useState<OrgSkillProgressOverviewState>({ status: "loading" });
+  const [formOpen, setFormOpen] = useState(false);
 
   const { isCurrentGeneration } = useAuthGatedResource((token, generation) => {
+    // A new auth state starts clean: no stale open-form state from a
+    // previous identity can carry over.
+    setFormOpen(false);
+
     if (!token) {
       setState({ phase: "signed_out" });
       return;
@@ -95,7 +101,38 @@ export function AdminSkills() {
 
   return (
     <div className="flex flex-col gap-8">
-      <SkillTreeCreationForm token={token} onCreated={() => loadForGeneration(token, generation)} />
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          {catalogState.status === "loaded" && catalogState.trees.length > 0 && (
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              {adminSkillsCopy.summary(catalogState.trees.length)}
+            </p>
+          )}
+        </div>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="shrink-0"
+          aria-expanded={formOpen}
+          aria-controls="skill-tree-create-form"
+          onClick={() => setFormOpen((prev) => !prev)}
+        >
+          {adminSkillsCopy.creation.toggleButton}
+        </Button>
+      </div>
+
+      {formOpen && (
+        <SkillTreeCreationForm
+          token={token}
+          onCreated={() => {
+            setFormOpen(false);
+            loadForGeneration(token, generation);
+          }}
+          onCancel={() => setFormOpen(false)}
+        />
+      )}
+
       <SkillTreeCatalogList
         state={catalogState}
         token={token}

@@ -5,7 +5,7 @@ import { AdminSkills } from "../../../src/features/skill-trees/components/AdminS
 
 export default function AdminSkillsPage() {
   return (
-    <PageShell width="3xl">
+    <PageShell width="wide">
       <PageHeader title={adminSkillsCopy.pageTitle} description={adminSkillsCopy.pageDescription} />
       <div className="mt-6">
         <AdminSkills />

@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
+import { TextField } from "../../../components/ui/TextField";
 import { correctAdminSkillTree, type AdminSkillTreeEntry } from "../client/skill-trees-gateway";
 import { adminSkillsCopy } from "../copy";
 import {
@@ -87,39 +88,22 @@ export function SkillTreeCorrectionForm({
 
   return (
     <form onSubmit={handleSubmit} className="mt-3 flex flex-col gap-4" aria-label={`Rett opp ${tree.name}`}>
-      <div className="flex flex-col gap-2">
-        <label
-          htmlFor={`skill-tree-correction-name-${tree.treeId}`}
-          className="text-sm font-medium text-zinc-900 dark:text-zinc-50"
-        >
-          {adminSkillsCopy.correction.nameLabel}
-        </label>
-        <input
-          id={`skill-tree-correction-name-${tree.treeId}`}
-          type="text"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          className="rounded border border-zinc-300 px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:bg-zinc-900"
-        />
-      </div>
+      <TextField
+        id={`skill-tree-correction-name-${tree.treeId}`}
+        label={adminSkillsCopy.correction.nameLabel}
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+      />
 
       <div className="flex flex-col gap-3">
         {labels.map((label, index) => (
-          <div key={tree.nodes[index]?.nodeId ?? index} className="flex flex-col gap-2">
-            <label
-              htmlFor={`skill-tree-correction-stage-${tree.treeId}-${index}`}
-              className="text-sm font-medium text-zinc-900 dark:text-zinc-50"
-            >
-              {adminSkillsCopy.correction.stageLabelPrefix} {index + 1}
-            </label>
-            <input
-              id={`skill-tree-correction-stage-${tree.treeId}-${index}`}
-              type="text"
-              value={label}
-              onChange={(event) => updateLabel(index, event.target.value)}
-              className="rounded border border-zinc-300 px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:bg-zinc-900"
-            />
-          </div>
+          <TextField
+            key={tree.nodes[index]?.nodeId ?? index}
+            id={`skill-tree-correction-stage-${tree.treeId}-${index}`}
+            label={`${adminSkillsCopy.correction.stageLabelPrefix} ${index + 1}`}
+            value={label}
+            onChange={(event) => updateLabel(index, event.target.value)}
+          />
         ))}
       </div>
 

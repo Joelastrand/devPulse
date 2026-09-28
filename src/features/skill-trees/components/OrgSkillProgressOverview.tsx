@@ -1,4 +1,5 @@
 import { Alert } from "../../../components/ui/Alert";
+import { Badge } from "../../../components/ui/Badge";
 import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { LoadingState } from "../../../components/ui/LoadingState";
@@ -79,9 +80,7 @@ function OrgSkillProgressTreeCard({ tree }: { tree: OrgSkillProgressTreeView }) 
           <li key={team.teamId} className="break-words text-sm text-zinc-700 dark:text-zinc-300">
             <span className="font-medium text-zinc-900 dark:text-zinc-50">{team.teamName}</span>
             {team.teamStatus === "disabled" && (
-              <span className="ml-1 text-zinc-600 dark:text-zinc-400">
-                ({orgSkillProgressOverviewCopy.disabledLabel})
-              </span>
+              <Badge className="ml-2">{orgSkillProgressOverviewCopy.disabledLabel}</Badge>
             )}
             {" — "}
             {stageLabel(tree, team.currentNodeId)}

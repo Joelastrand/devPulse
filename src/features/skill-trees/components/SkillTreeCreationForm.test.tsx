@@ -18,7 +18,7 @@ describe("SkillTreeCreationForm", () => {
   });
 
   it("starts with exactly two stage-label rows", () => {
-    render(<SkillTreeCreationForm token="token" onCreated={vi.fn()} />);
+    render(<SkillTreeCreationForm token="token" onCreated={vi.fn()} onCancel={vi.fn()} />);
 
     expect(screen.getByLabelText("Stadium 1")).toBeTruthy();
     expect(screen.getByLabelText("Stadium 2")).toBeTruthy();
@@ -27,7 +27,7 @@ describe("SkillTreeCreationForm", () => {
 
   it("adds a stage row via the add-stage button, up to the 20-node boundary", async () => {
     const user = userEvent.setup();
-    render(<SkillTreeCreationForm token="token" onCreated={vi.fn()} />);
+    render(<SkillTreeCreationForm token="token" onCreated={vi.fn()} onCancel={vi.fn()} />);
 
     await user.click(screen.getByRole("button", { name: /legg til stadium/i }));
 
@@ -46,7 +46,7 @@ describe("SkillTreeCreationForm", () => {
 
   it("removes a stage row via its remove button, never going below the 2-node boundary", async () => {
     const user = userEvent.setup();
-    render(<SkillTreeCreationForm token="token" onCreated={vi.fn()} />);
+    render(<SkillTreeCreationForm token="token" onCreated={vi.fn()} onCancel={vi.fn()} />);
 
     const removeButtons = screen.getAllByRole("button", { name: /fjern stadium/i });
     expect(removeButtons).toHaveLength(2);
@@ -63,7 +63,7 @@ describe("SkillTreeCreationForm", () => {
 
   it("shows a client-side validation error for fewer than 2 valid labels, without calling the server", async () => {
     const user = userEvent.setup();
-    render(<SkillTreeCreationForm token="token" onCreated={vi.fn()} />);
+    render(<SkillTreeCreationForm token="token" onCreated={vi.fn()} onCancel={vi.fn()} />);
 
     await user.type(screen.getByLabelText(/navn på kompetanseområdet/i), "Containers");
     await user.type(screen.getByLabelText("Stadium 1"), "ab"); // below 3-char minimum
@@ -81,7 +81,7 @@ describe("SkillTreeCreationForm", () => {
     const onCreated = vi.fn();
     createAdminSkillTreeMock.mockResolvedValue({ ok: true, treeId: "tree-1" });
 
-    render(<SkillTreeCreationForm token="a-token" onCreated={onCreated} />);
+    render(<SkillTreeCreationForm token="a-token" onCreated={onCreated} onCancel={vi.fn()} />);
 
     await user.type(screen.getByLabelText(/navn på kompetanseområdet/i), "Containere");
     await user.type(screen.getByLabelText("Stadium 1"), "Fundamentals");
@@ -102,7 +102,7 @@ describe("SkillTreeCreationForm", () => {
     const onCreated = vi.fn();
     createAdminSkillTreeMock.mockResolvedValue({ ok: false, error: "persistence_failed" });
 
-    render(<SkillTreeCreationForm token="a-token" onCreated={onCreated} />);
+    render(<SkillTreeCreationForm token="a-token" onCreated={onCreated} onCancel={vi.fn()} />);
 
     await user.type(screen.getByLabelText(/navn på kompetanseområdet/i), "Containere");
     await user.type(screen.getByLabelText("Stadium 1"), "Fundamentals");
@@ -124,7 +124,7 @@ describe("SkillTreeCreationForm", () => {
         }),
     );
 
-    render(<SkillTreeCreationForm token="a-token" onCreated={vi.fn()} />);
+    render(<SkillTreeCreationForm token="a-token" onCreated={vi.fn()} onCancel={vi.fn()} />);
     await user.type(screen.getByLabelText(/navn på kompetanseområdet/i), "Containere");
     await user.type(screen.getByLabelText("Stadium 1"), "Fundamentals");
     await user.type(screen.getByLabelText("Stadium 2"), "Pilotdrift");
@@ -137,5 +137,18 @@ describe("SkillTreeCreationForm", () => {
     expect(createAdminSkillTreeMock).toHaveBeenCalledTimes(1);
 
     resolveCreate({ ok: true, treeId: "tree-1" });
+  });
+
+  it("calls onCancel without submitting when the cancel button is clicked (docs/features/ui-refresh/SPEC.md — BR-14)", async () => {
+    const user = userEvent.setup();
+    const onCancel = vi.fn();
+
+    render(<SkillTreeCreationForm token="a-token" onCreated={vi.fn()} onCancel={onCancel} />);
+
+    await user.type(screen.getByLabelText(/navn på kompetanseområdet/i), "Containere");
+    await user.click(screen.getByRole("button", { name: /avbryt/i }));
+
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(createAdminSkillTreeMock).not.toHaveBeenCalled();
   });
 });

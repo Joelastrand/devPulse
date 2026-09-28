@@ -83,6 +83,20 @@ describe("OrgSkillProgressOverview", () => {
     expect(charlieRow?.textContent).toContain("Deaktivert");
   });
 
+  it("renders the disabled-team label via the shared Badge primitive (docs/features/ui-refresh/SPEC.md — BR-10)", () => {
+    render(<OrgSkillProgressOverview state={{ status: "loaded", trees: [MULTI_TEAM_TREE] }} />);
+
+    const badge = screen.getByText("Deaktivert");
+    expect(badge.tagName).toBe("SPAN");
+  });
+
+  it("leaves the stage/progression label as plain text, never Badged (docs/features/ui-refresh/SPEC.md — BR-11)", () => {
+    render(<OrgSkillProgressOverview state={{ status: "loaded", trees: [MULTI_TEAM_TREE] }} />);
+
+    const stageLabel = screen.getByText(/fundamentals/i);
+    expect(stageLabel.tagName).not.toBe("SPAN");
+  });
+
   it("preserves the DTO's tree ordering without re-sorting", () => {
     const { container } = render(
       <OrgSkillProgressOverview state={{ status: "loaded", trees: [MULTI_TEAM_TREE, ONE_TEAM_TREE] }} />,

@@ -3,12 +3,13 @@
 Specification: [SPEC.md](./SPEC.md)
 
 ## Status
-Ready: 3  In Progress: 0  Done: 7
+Ready: 2  In Progress: 0  Done: 8
 
 `SPEC.md`'s Status is `Approved` (see `SPEC.md` → "Status"/"Approval gate").
-TASK-001 through TASK-005 are `Done`; TASK-006 through TASK-009 remain
-unblocked (their only dependency, TASK-001, is satisfied) and independently
-eligible for the next `implement-task` session to pick up, in any order.
+TASK-001 through TASK-008 are `Done`; TASK-009 remains unblocked (its only
+dependency, TASK-001, is satisfied) and eligible for the next
+`implement-task` session; TASK-010 depends on every other task and remains
+blocked until TASK-009 is also `Done`.
 
 ## Task graph
 
@@ -1028,7 +1029,7 @@ route). Nothing was pushed or deployed.
 
 ### TASK-008 — Admin skills
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-5, BR-8, BR-9, BR-10, BR-11, BR-12, BR-14, BR-19
 **Depends on:** TASK-001
 
@@ -1090,17 +1091,108 @@ calls are untouched.
 None expected yet (TASK-010).
 
 **Acceptance criteria**
-- [ ] `/admin/skills` renders at `width="wide"` (BR-5).
-- [ ] SkillTree creation form is hidden by default, toggled via
+- [x] `/admin/skills` renders at `width="wide"` (BR-5).
+- [x] SkillTree creation form is hidden by default, toggled via
       `aria-expanded`, catalog is the default view (BR-12).
-- [ ] Toggling adds no request; successful creation collapses the form
+- [x] Toggling adds no request; successful creation collapses the form
       (BR-14).
-- [ ] `SkillTreeCorrectionForm`'s existing disclosure/fixed-row precedent
+- [x] `SkillTreeCorrectionForm`'s existing disclosure/fixed-row precedent
       is unchanged.
-- [ ] "Deaktivert" renders via Badge; every stage/progression label stays
+- [x] "Deaktivert" renders via Badge; every stage/progression label stays
       plain text (BR-10, BR-11).
-- [ ] Any summary shown uses only already-loaded state (BR-19).
-- [ ] Relevant tests, `pnpm lint`, `pnpm typecheck` pass.
+- [x] Any summary shown uses only already-loaded state (BR-19).
+- [x] Relevant tests, `pnpm lint`, `pnpm typecheck` pass.
+
+**Notes**
+Implemented exactly as specified:
+- `app/admin/skills/page.tsx`: `PageShell width="3xl"` changed to
+  `width="wide"` — the only change to this file (BR-5). New
+  `app/admin/skills/page.test.tsx` mirrors TASK-004/005's own page-level
+  `WIDTH_CLASSNAMES.wide` structural assertion.
+- `src/features/skill-trees/components/AdminSkills.tsx`: gained a
+  `formOpen` state and a persistent toggle `Button`
+  (`aria-expanded={formOpen}`, `aria-controls="skill-tree-create-form"`,
+  accessible name "Nytt kompetanseområde") that mounts/unmounts
+  `SkillTreeCreationForm` — the catalog list and cross-team overview remain
+  the default-visible view underneath it, unchanged. Neither opening nor
+  closing the form calls any gateway function (verified by new tests
+  asserting `fetchAdminSkillTreesMock` call counts are unchanged across
+  toggle/cancel). A successful creation now also collapses the form
+  (`setFormOpen(false)`) before the existing authoritative-catalog
+  refresh; a failed creation leaves the form open with its error intact,
+  unchanged from prior recovery behavior. A new auth generation resets
+  `formOpen` to `false`, consistent with `AdminTeams`' existing
+  generation-reset precedent. An optional summary line ("N
+  kompetanseområder") was added beside the toggle, computed via
+  `catalogState.trees.length` over the already-fetched catalog array
+  already in this component's state — no new fetch, gateway call, or DTO
+  field (BR-19); omitted when the catalog is empty.
+- `src/features/skill-trees/components/SkillTreeCreationForm.tsx`: gained
+  a required `onCancel` prop and an explicit "Avbryt" Cancel `Button`
+  beside the submit button, calling `onCancel` directly without invoking
+  `createAdminSkillTree` (BR-14) — the form component unmounts when the
+  parent collapses it, discarding its local `name`/`labels`/`submitState`
+  the same way `SkillTreeCorrectionForm`'s existing open/close precedent
+  already does (TASK-001's documented precedent), so no explicit
+  field-reset code was needed. The name and per-stage-label `<input>`s
+  were migrated to the shared `TextField` primitive (`id`/`value`/
+  `onChange` preserved exactly; `isClientValid`/`createAdminSkillTree`'s
+  validation/submission timing, rules, and error copy are byte-for-byte
+  unchanged — confirmed via the existing, still-passing behavioral tests).
+  No field-specific error exists (validation is form-level and generic, not
+  per-field), so — same reasoning TASK-006 already established for the
+  survey-creation inputs — no `aria-invalid`/error prop was wired to these
+  fields, compliant with BR-9's "where a field-specific error or
+  description exists" condition. The outer `Card` gained
+  `id="skill-tree-create-form"`, the `aria-controls` target for
+  `AdminSkills`' toggle button.
+- `src/features/skill-trees/components/SkillTreeCorrectionForm.tsx`: only
+  its name/stage-label `<input>`s were migrated to `TextField` (styling
+  only) — its own already-shipped `SkillTreeCatalogList`-driven open/close
+  precedent, fixed-row-count guarantee, and every submission/validation
+  behavior are untouched; all of its existing tests pass unmodified.
+- `src/features/skill-trees/components/SkillTreeCatalogList.tsx`: left
+  completely untouched — confirmed via `git diff`, no hunk exists in this
+  file. It renders no status string beyond the stage list itself, so no
+  Badge was added (per this task's own instruction to verify before
+  inventing one).
+- `src/features/skill-trees/components/OrgSkillProgressOverview.tsx`: the
+  "(Deaktivert)" plain-text parenthesized suffix was replaced with the
+  shared `Badge` primitive (BR-10); the per-team stage label ("Ikke
+  startet" or a resolved node label) is unchanged, still plain text — BR-11
+  excludes SkillTree stage/progression presentation from Badge treatment
+  even in this cross-team view. New tests assert the disabled label
+  renders via `Badge` (a `<span>`) and that the stage label does not
+  (BR-10, BR-11 regression coverage).
+- Confirmed via `git diff --stat`: no file under
+  `src/features/skill-trees/server/`, `src/features/skill-trees/domain/`,
+  `src/features/skill-trees/client/`, `app/api/**`, `AdminTeamDetail.tsx`,
+  `TeamDetail.tsx`, any Forum file, `package.json`, or `pnpm-lock.yaml` was
+  touched — only `app/admin/skills/page.tsx` (+ its new test),
+  `AdminSkills.tsx`, `SkillTreeCreationForm.tsx`,
+  `SkillTreeCorrectionForm.tsx`, `OrgSkillProgressOverview.tsx`, their
+  test files, and `copy.ts` changed. A `git diff | grep -iE
+  "SkillProgressPath|completed|future|connector|progress bar|level|
+  achievement"` search over the full diff returned no matches.
+
+Verification: focused suite (`src/features/skill-trees`,
+`app/admin/skills`) — 23 files / 407 tests passed (398 pre-existing + 9
+new: page-width, toggle-collapsed-by-default, toggle-opens/aria-expanded,
+cancel-closes-without-creating, collapses-on-success, summary-count, Cancel
+button on the creation form itself, and two Badge/plain-text regression
+assertions on the overview). The full suite under this machine's default
+parallel workers showed the same intermittent, non-deterministic timeout
+pattern already documented in TASK-005/006/007's notes (5 unrelated files —
+`SignInForm`/`SignUpForm`/`CreateThreadForm`/`TeamDetail`, plus this task's
+own `SkillTreeCreationForm.test.tsx` — failed only under contention, never
+once with a genuine assertion mismatch); each of those files, run
+independently, passed cleanly. Running the full suite serialized
+(`--no-file-parallelism`) passed cleanly and reproducibly: 176 files / 2467
+tests passed (2467 total, no new regressions). `pnpm typecheck`, `pnpm
+lint`, `git diff --check` all passed (only expected CRLF/LF line-ending
+warnings, no actual whitespace errors). `pnpm build` succeeded with an
+identical route manifest to before this task (no new/removed route).
+Nothing was pushed or deployed.
 
 ---
 

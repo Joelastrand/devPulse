@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
+import { TextField } from "../../../components/ui/TextField";
 import { createAdminSkillTree } from "../client/skill-trees-gateway";
 import { adminSkillsCopy } from "../copy";
 import {
@@ -41,9 +42,12 @@ function isClientValid(name: string, labels: string[]): boolean {
 export function SkillTreeCreationForm({
   token,
   onCreated,
+  onCancel,
 }: {
   token: string;
   onCreated: () => void;
+  /** Closes the form without creating anything (docs/features/ui-refresh/SPEC.md — BR-14). */
+  onCancel: () => void;
 }) {
   const [name, setName] = useState("");
   const [labels, setLabels] = useState<string[]>(["", ""]);
@@ -91,40 +95,33 @@ export function SkillTreeCreationForm({
   }
 
   return (
-    <Card as="section" variant="elevated" padding="lg" aria-labelledby="skill-tree-creation-heading">
+    <Card
+      as="section"
+      variant="elevated"
+      padding="lg"
+      id="skill-tree-create-form"
+      aria-labelledby="skill-tree-creation-heading"
+    >
       <h2 id="skill-tree-creation-heading" className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
         {adminSkillsCopy.creation.sectionTitle}
       </h2>
       <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-4">
-        <div className="flex flex-col gap-2">
-          <label htmlFor="skill-tree-name" className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
-            {adminSkillsCopy.creation.nameLabel}
-          </label>
-          <input
-            id="skill-tree-name"
-            type="text"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            className="rounded border border-zinc-300 px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:bg-zinc-900"
-          />
-        </div>
+        <TextField
+          id="skill-tree-name"
+          label={adminSkillsCopy.creation.nameLabel}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+        />
 
         <div className="flex flex-col gap-3">
           {labels.map((label, index) => (
             <div key={index} className="flex items-end gap-2">
-              <div className="flex flex-1 flex-col gap-2">
-                <label
-                  htmlFor={`skill-tree-stage-${index}`}
-                  className="text-sm font-medium text-zinc-900 dark:text-zinc-50"
-                >
-                  {adminSkillsCopy.creation.stageLabelPrefix} {index + 1}
-                </label>
-                <input
+              <div className="flex-1">
+                <TextField
                   id={`skill-tree-stage-${index}`}
-                  type="text"
+                  label={`${adminSkillsCopy.creation.stageLabelPrefix} ${index + 1}`}
                   value={label}
                   onChange={(event) => updateLabel(index, event.target.value)}
-                  className="rounded border border-zinc-300 px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:bg-zinc-900"
                 />
               </div>
               <Button
@@ -153,11 +150,16 @@ export function SkillTreeCreationForm({
 
         {submitState.status === "error" && <Alert variant="error">{submitState.message}</Alert>}
 
-        <Button type="submit" className="self-start" pending={submitState.status === "pending"}>
-          {submitState.status === "pending"
-            ? adminSkillsCopy.creation.submittingButton
-            : adminSkillsCopy.creation.submitButton}
-        </Button>
+        <div className="flex gap-2">
+          <Button type="submit" pending={submitState.status === "pending"}>
+            {submitState.status === "pending"
+              ? adminSkillsCopy.creation.submittingButton
+              : adminSkillsCopy.creation.submitButton}
+          </Button>
+          <Button type="button" variant="secondary" onClick={onCancel}>
+            {adminSkillsCopy.creation.cancelButton}
+          </Button>
+        </div>
       </form>
     </Card>
   );

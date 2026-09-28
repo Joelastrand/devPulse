@@ -18,7 +18,11 @@ export const adminSkillsCopy = {
   forbidden: "Du har ikke tilgang til denne siden.",
   error: "Noe gikk galt under lasting av kompetanseområder. Prøv igjen senere.",
   empty: "Ingen kompetanseområder ennå.",
+  /** Purely derived from the already-loaded catalog list — no new fetch (docs/features/ui-refresh/SPEC.md — BR-19). */
+  summary: (count: number) => `${count} kompetanseområder`,
   creation: {
+    /** Accessible name for the progressive-disclosure toggle that reveals this form (docs/features/ui-refresh/SPEC.md — BR-12), mirroring `adminCopy.teams.newTeamButton`'s "Nytt X" convention. */
+    toggleButton: "Nytt kompetanseområde",
     sectionTitle: "Nytt kompetanseområde",
     nameLabel: "Navn på kompetanseområdet",
     stageLabelPrefix: "Stadium",
@@ -26,6 +30,8 @@ export const adminSkillsCopy = {
     removeStageButton: "Fjern stadium",
     submitButton: "Opprett kompetanseområde",
     submittingButton: "Oppretter…",
+    /** Closes the form without creating anything (docs/features/ui-refresh/SPEC.md — BR-14). */
+    cancelButton: "Avbryt",
     error: {
       invalidInput: "Kontroller navnet og alle stadienavn (3–100 tegn hver, 2–20 stadier totalt).",
       generic: "Noe gikk galt under opprettelsen. Prøv igjen.",
