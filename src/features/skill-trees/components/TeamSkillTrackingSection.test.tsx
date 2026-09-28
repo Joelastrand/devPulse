@@ -198,6 +198,29 @@ describe("TeamSkillTrackingSection", () => {
     expect(screen.getAllByText(/ikke startet/i).length).toBeGreaterThan(0);
   });
 
+  it("the stage select is a real, labeled form control migrated to the shared Select primitive (BR-8)", () => {
+    render(
+      <TeamSkillTrackingSection
+        catalogState={{ status: "loaded", trees: TREES }}
+        tracking={{ "tree-1": { status: "tracked", currentNodeId: "node-0" } }}
+        actions={NO_ACTIONS}
+        teamDisabled={false}
+        onStart={vi.fn()}
+        onSetStage={vi.fn()}
+        onStop={vi.fn()}
+      />,
+    );
+
+    // The row-disambiguating aria-label ("Sett stadium – Containere") is the
+    // accessible name, but the shared Select primitive also renders a real,
+    // visible <label> with the plain field label text, associated via
+    // htmlFor — this is what BR-8/BR-9's shared-primitive migration adds.
+    const select = screen.getByRole("combobox", { name: /sett stadium – containere/i });
+    const visibleLabel = screen.getAllByText("Sett stadium").find((el) => el.tagName === "LABEL");
+    expect(visibleLabel).toBeTruthy();
+    expect(visibleLabel?.getAttribute("for")).toBe(select.id);
+  });
+
   it("the stage select offers every node, including one earlier than the current stage", () => {
     render(
       <TeamSkillTrackingSection

@@ -5,6 +5,7 @@ import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { LoadingState } from "../../../components/ui/LoadingState";
+import { Select } from "../../../components/ui/Select";
 import type { AdminSkillTreeEntry } from "../client/skill-trees-gateway";
 import { teamSkillTrackingCopy } from "../copy";
 
@@ -194,14 +195,9 @@ function TrackedSkillTreeRow({ tree, currentNodeId, action, onSetStage, onStop }
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <label
-          htmlFor={`skill-tree-stage-${tree.treeId}`}
-          className="text-sm font-medium text-zinc-900 dark:text-zinc-50"
-        >
-          {teamSkillTrackingCopy.tracked.stageSelectLabel}
-        </label>
-        <select
+        <Select
           id={`skill-tree-stage-${tree.treeId}`}
+          label={teamSkillTrackingCopy.tracked.stageSelectLabel}
           aria-label={`${teamSkillTrackingCopy.tracked.stageSelectLabel} – ${tree.name}`}
           value={currentNodeId ?? ""}
           disabled={isPending}
@@ -211,7 +207,6 @@ function TrackedSkillTreeRow({ tree, currentNodeId, action, onSetStage, onStop }
               onSetStage(nodeId);
             }
           }}
-          className="rounded border border-zinc-300 px-2 py-1 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:bg-zinc-900"
         >
           {currentNodeId === null && (
             <option value="" disabled>
@@ -223,7 +218,7 @@ function TrackedSkillTreeRow({ tree, currentNodeId, action, onSetStage, onStop }
               {node.label}
             </option>
           ))}
-        </select>
+        </Select>
         {isStagePending && (
           <span role="status" className="text-sm text-zinc-600 dark:text-zinc-400">
             …

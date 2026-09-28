@@ -3,7 +3,7 @@
 Specification: [SPEC.md](./SPEC.md)
 
 ## Status
-Ready: 4  In Progress: 0  Done: 6
+Ready: 3  In Progress: 0  Done: 7
 
 `SPEC.md`'s Status is `Approved` (see `SPEC.md` → "Status"/"Approval gate").
 TASK-001 through TASK-005 are `Done`; TASK-006 through TASK-009 remain
@@ -873,7 +873,7 @@ open), no Blocking/Important findings. Nothing was pushed or deployed.
 
 ### TASK-007 — `AdminTeamDetail`: challenges and skill tracking
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-8, BR-9, BR-10, BR-11, BR-13
 **Depends on:** TASK-001
 
@@ -918,12 +918,111 @@ authorization/gateway calls are untouched.
 None expected yet (TASK-010).
 
 **Acceptance criteria**
-- [ ] Challenge/skill-tracking status text renders via Badge where
+- [x] Challenge/skill-tracking status text renders via Badge where
       applicable (BR-10).
-- [ ] Skill-tracking stage list/current-stage presentation is unchanged
+- [x] Skill-tracking stage list/current-stage presentation is unchanged
       (BR-11).
-- [ ] No action in this section gains progressive disclosure (BR-13).
-- [ ] Relevant tests, `pnpm lint`, `pnpm typecheck` pass.
+- [x] No action in this section gains progressive disclosure (BR-13).
+- [x] Relevant tests, `pnpm lint`, `pnpm typecheck` pass.
+
+**Notes**
+Implemented exactly as specified, with one scope finding recorded here:
+- `app/admin/teams/[teamId]/page.tsx` was not touched — TASK-005 alone owns
+  this file's `PageShell` width, per `TASKS.md`'s own build-order note.
+- `src/features/teams/components/AdminTeamDetail.tsx` itself needed no
+  change: its challenge-management and skill-tracking sections are thin
+  `<section>` wrappers (a heading plus `<AdminChallengeList>`/
+  `<TeamSkillTrackingSection>`) with no hand-rolled form control or status
+  text of their own — all of TASK-007's actual presentation lives inside
+  those two child components, which is where this task's diff is confined
+  (confirmed via `git diff --stat`: this file does not appear in the diff
+  at all). The members/invitations/access-requests (TASK-005) and surveys
+  (TASK-006) sections were never touched.
+- `src/features/challenges/components/AdminChallengeList.tsx`: the
+  plain-text `"{status} · {date}"` line was replaced with the shared
+  `Badge` primitive around the status word plus a separate `<span>` for the
+  date — byte-for-byte the same pattern TASK-003 already shipped in the
+  sibling member-facing `ChallengeList.tsx` (`<Badge>{...}</Badge>` +
+  `<span>{formatSurveyDate(...)}</span>`), so both challenge surfaces now
+  render status identically (BR-10). The `"confirming_deletion"` explicit
+  two-step delete confirmation (prompt + confirm/cancel buttons) was not
+  touched at all — it already uses the same `rounded border border-red-300
+  ... p-3` destructive-confirmation treatment `AdminTeamDetail.tsx`'s own
+  survey-removal confirmation uses, so no restyling was needed or done.
+  `resolveAdminChallenge`/`archiveAdminChallenge`/`deleteAdminChallenge`
+  call signatures, lifecycle button visibility rules, and per-row
+  pending/error state are byte-for-byte unchanged (confirmed via `git
+  diff` — only the status-text markup and one new import changed).
+- **Badge finding (BR-10 vs. BR-11 — the ABSOLUTE EXCLUSION)**: `SPEC.md`'s
+  own "Problem" section cites `TeamSkillTrackingSection.tsx:186-188` as a
+  BR-10 confirmed Badge candidate; those exact lines are `{currentNodeId
+  === null && <p>{teamSkillTrackingCopy.tracked.notStarted}</p>}` — the
+  paragraph rendered directly below the ordered stage `<ol>` showing "Ikke
+  startet" when a tracked tree has no current stage set yet. This is
+  literally the same "current-stage marker/text" BR-11 names as protected
+  ("the ordered stage `<ol>`, the current-stage marker/text, and per-node
+  presentation in `TeamSkillSection.tsx`, `TeamSkillTrackingSection.tsx`,
+  and `OrgSkillProgressOverview.tsx` remain visually and structurally
+  exactly as they are today") — the same string TASK-003 already declined
+  to Badge in the sibling `TeamSkillSection.tsx` for the identical reason.
+  Resolved the same way here, for consistency: **not** Badged. The
+  `untracked.disabledHint` text ("Teamet er deaktivert. Sporing kan først
+  startes når teamet er aktivt igjen.") is the section's other BR-10-named
+  candidate; it is a full two-sentence explanation already rendered via
+  `<Alert variant="info">` (preserving its `role="status"` semantics per
+  BR-23), not a short status word/phrase — `SPEC.md`'s own Badge definition
+  ("a short status word/phrase") and BR-10's edge case ("not every muted
+  label ... is mechanically converted to a Badge") both cover this case.
+  Not Badged; the `Alert` is unchanged. No genuine SPEC contradiction
+  remained once resolved this way (BR-11 — an explicit, named protection —
+  controls over BR-10's more general candidate list for this exact text),
+  so this was recorded as a scope finding rather than a stop-and-report.
+- Instead, TASK-007's actual BR-6/BR-8/BR-9 form-control-migration
+  obligation for `TeamSkillTrackingSection.tsx` (one of the 12 files
+  `SPEC.md`'s "Problem" names) was satisfied by migrating the per-tree
+  stage `<select>` in `TrackedSkillTreeRow` to the shared `Select`
+  primitive: `id`, `value`, `disabled`, `onChange`, every `<option>`
+  (including the disabled `"Ikke startet"` placeholder), and the row-
+  disambiguating `aria-label` override (`"Sett stadium – {tree.name}"`,
+  needed because every row shares the same visible label text) are all
+  preserved exactly — `Select` forwards `aria-label` through untouched via
+  its own prop spread. The previously separate, manually-associated
+  `<label htmlFor>` element is now `Select`'s own internal label (identical
+  visible text, identical `htmlFor`/`id` association), so nothing was lost.
+  No field-specific `error`/`aria-describedby` was wired to this select:
+  the row's existing error state (`action.status === "error"`) can result
+  from start, set-stage, *or* stop, so — same reasoning `AdminTeams.tsx`/
+  `AdminTeamDetail.tsx`'s survey fields already established in TASK-004/
+  TASK-006 — it stays a row-level `Alert`, not a per-field one.
+  `startAdminTeamSkillTracking`/`updateAdminTeamSkillProgress`/
+  `stopAdminTeamSkillTracking` call signatures and every pending/disabled
+  rule are byte-for-byte unchanged.
+- No progressive disclosure was added anywhere in this task (BR-13): the
+  challenge resolve/archive/delete actions and the skill start/set-stage/
+  stop actions all remain exactly as always-visible as before.
+- Confirmed via `git diff --stat`: no file under
+  `app/admin/teams/[teamId]/page.tsx`, `app/admin/skills/page.tsx`,
+  `AdminTeamDetail.tsx`, `AdminSkills.tsx`, `SkillTreeCatalogList.tsx`,
+  `SkillTreeCorrectionForm.tsx`, `SkillTreeCreationForm.tsx`,
+  `OrgSkillProgressOverview.tsx`, any `server/`/`app/api/**` path,
+  `package.json`, or `pnpm-lock.yaml` was touched — only
+  `AdminChallengeList.tsx`, `TeamSkillTrackingSection.tsx`, their two test
+  files, and this `TASKS.md` entry changed.
+
+Verification: the two directly-touched test files
+(`AdminChallengeList.test.tsx`, `TeamSkillTrackingSection.test.tsx`) plus
+`AdminTeamDetail.test.tsx` and `ChallengeList.test.tsx` (regression
+coverage for the shared surfaces) — 115/115 tests passed, run together.
+The full suite showed the same intermittent, non-deterministic timeout
+pattern already documented in TASK-005's notes under this machine's
+default full worker parallelism (unrelated `SignInForm`/`SignUpForm`
+tests, confirmed passing independently: 18/18); running the full suite
+serialized (`--no-file-parallelism`) passed cleanly and reproducibly: 175
+files / 2459 tests passed (2457 pre-existing + 2 new). `pnpm typecheck`,
+`pnpm lint`, `git diff --check` all passed (only expected CRLF/LF
+line-ending warnings, no actual whitespace errors). `pnpm build` succeeded
+with an identical route manifest to before this task (no new/removed
+route). Nothing was pushed or deployed.
 
 ---
 

@@ -103,6 +103,23 @@ describe("AdminChallengeList", () => {
     expect(within(active).queryByText(ARCHIVED_CHALLENGE.text)).toBeNull();
   });
 
+  it("renders each challenge's status label via the shared Badge primitive, not a bare paragraph (BR-10)", () => {
+    render(
+      <AdminChallengeList
+        state={{ status: "loaded", challenges: [OPEN_CHALLENGE] }}
+        actions={{}}
+        onResolve={noop}
+        onArchive={noop}
+        onRequestDelete={noop}
+        onCancelDelete={noop}
+        onConfirmDelete={noop}
+      />,
+    );
+
+    const label = screen.getByText(/^åpen$/i);
+    expect(label.tagName).toBe("SPAN");
+  });
+
   it("shows a no-archived empty state when only active challenges exist", () => {
     render(
       <AdminChallengeList
