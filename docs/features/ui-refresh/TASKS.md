@@ -3,7 +3,7 @@
 Specification: [SPEC.md](./SPEC.md)
 
 ## Status
-Ready: 5  In Progress: 0  Done: 5
+Ready: 4  In Progress: 0  Done: 6
 
 `SPEC.md`'s Status is `Approved` (see `SPEC.md` → "Status"/"Approval gate").
 TASK-001 through TASK-005 are `Done`; TASK-006 through TASK-009 remain
@@ -728,7 +728,7 @@ pushed or deployed.
 
 ### TASK-006 — `AdminTeamDetail`: surveys
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-8, BR-9, BR-12, BR-14, BR-21, BR-22
 **Depends on:** TASK-001
 
@@ -779,15 +779,95 @@ authorization and gateway calls are untouched.
 None expected yet (TASK-010).
 
 **Acceptance criteria**
-- [ ] Survey-creation form is hidden by default, toggled via
+- [x] Survey-creation form is hidden by default, toggled via
       `aria-expanded`, lists are the default view (BR-12).
-- [ ] Toggling adds no request; successful creation collapses the form
+- [x] Toggling adds no request; successful creation collapses the form
       (BR-14).
-- [ ] Migrated survey-form text/number inputs preserve behavior and gain
+- [x] Migrated survey-form text/number inputs preserve behavior and gain
       `aria-invalid`/`aria-describedby` (BR-8, BR-9).
-- [ ] `minimumResponses` hint is `aria-describedby`-linked (BR-21).
-- [ ] A failed clipboard copy shows a visible failure state (BR-22).
-- [ ] Relevant tests, `pnpm lint`, `pnpm typecheck` pass.
+- [x] `minimumResponses` hint is `aria-describedby`-linked (BR-21).
+- [x] A failed clipboard copy shows a visible failure state (BR-22).
+- [x] Relevant tests, `pnpm lint`, `pnpm typecheck` pass.
+
+**Notes**
+Implemented exactly as specified, with two scope findings recorded here:
+- `app/admin/teams/[teamId]/page.tsx` was not touched — TASK-005 alone owns
+  this file's `PageShell` width, per `TASKS.md`'s own build-order note.
+- `src/features/teams/components/AdminTeamDetail.tsx`: only the survey-
+  management `<section>` was changed. A persistent toggle `Button`
+  (`aria-expanded={surveyFormOpen}`, `aria-controls="admin-survey-create-
+  form"`, accessible name "Ny undersøkelse") now sits beside the section
+  heading and mounts/unmounts the creation form — the active/archived
+  survey lists remain the default-visible view underneath it, unchanged.
+  The form gained an explicit "Avbryt" Cancel `Button` that resets the
+  same in-progress fields a successful create already resets, without
+  calling `createAdminSurvey` (BR-14). A successful `handleCreateSurvey`
+  now also collapses the form (`setSurveyFormOpen(false)`) before the
+  existing authoritative-list refresh; a failed create leaves the form
+  open with its error and values intact, unchanged from prior recovery
+  behavior. Neither opening nor closing the form calls any gateway
+  function — verified by a new test asserting `fetchAdminSurveysMock`'s
+  call count is unchanged across the toggle.
+- The title, `minimumResponses`, start-at, and end-at inputs were migrated
+  to the shared `TextField` primitive (`id`/`type`/`value`/`onChange`/
+  `min`/`max`/`step` preserved exactly); none carries a field-specific
+  validation error (survey creation only ever fails with one generic,
+  already-existing form-level error, unchanged, still rendered via the
+  single bottom `Alert`), so no `aria-invalid`/error wiring was added to
+  these fields — compliant with BR-9's "where a field-specific error or
+  description exists" condition. `minimumResponses` now passes its
+  existing hint text through `TextField`'s own `description` prop, which
+  wires `aria-describedby` automatically (BR-21) — the previously bare
+  `<span>` hint is gone, replaced by `TextField`'s own associated hint
+  paragraph, with no duplicate Alert and no change to the minimum/maximum/
+  default values or server-side validation. The access-mode radio group
+  (`fieldset`/`legend`/two `input[type=radio]`s) was deliberately left
+  completely native — same reasoning as `SurveyResponseForm`'s BR-7
+  exemption — not itself a numbered BR since `SPEC.md` didn't need to call
+  this one out separately, but explicitly noted in this task's own
+  Implementation notes.
+- **Badge finding (BR-10)**: TASK-006's own `Covers` list does not include
+  BR-10, and `SPEC.md`'s BR-10 confirmed-candidate list (team active/
+  disabled, a team's relationship, challenge status, skill-tracking
+  labels) does not name survey lifecycle/access-mode text. No Badge was
+  added to survey status in this task — inventing one would have been
+  exactly the "not every muted label is mechanically converted" case
+  BR-10's own edge case warns against, and out of this task's assigned
+  scope.
+- `handleCopySurveyLink`'s catch branch now sets a visible, non-sensitive
+  failure state (BR-22) reusing the exact same transient-then-cleared
+  timing mechanism the existing success case already used (generalized
+  from a single `copiedSurveyId: string | null` to a
+  `{ surveyId, status: "success" | "failure" } | null` shape) — the
+  underlying clipboard-API error/exception detail is never rendered or
+  logged; a new test asserts the shown text and that it excludes the
+  underlying error message.
+- One pre-existing test in this same file needed a scope correction, not a
+  behavior change: `AdminTeamDetail.test.tsx`'s BR-13 regression test
+  ("never introduces a progressive-disclosure toggle for the invite form")
+  previously asserted no `[aria-expanded]` element existed *anywhere on
+  the page* — true only because no other section had one yet. TASK-006
+  legitimately adds one for survey creation, so the assertion was narrowed
+  to the invite `<section>` specifically, which is what BR-13 actually
+  guarantees for that form; the invite form itself is otherwise untouched.
+- The members/invitations/access-requests (TASK-005) and challenges/skill-
+  tracking (TASK-007) sections are untouched — confirmed via `git diff`,
+  every hunk in `AdminTeamDetail.tsx` falls inside the survey-management
+  `<section>` or its module-level state/handlers/`SurveyRow` component.
+
+Verification: focused suite (`AdminTeamDetail.test.tsx`) — 71/71 tests
+passed (67 pre-existing, 3 of which were updated in place for the new
+open-form step or renamed to state their new assertions, plus 4 new:
+progressive-disclosure collapsed-by-default/toggle, cancel-closes-without-
+creating, `minimumResponses` `aria-describedby` association, and
+clipboard-copy-failure). Full `pnpm test` — 175 files / 2457 tests passed
+(2453 pre-existing + 4 new). `pnpm typecheck`, `pnpm lint`, `git diff
+--check` all passed (only expected CRLF/LF line-ending warnings). `pnpm
+build` succeeded with an identical route manifest to before this task (no
+new/removed route). `review-change` outcome: PASS WITH SUGGESTIONS — one
+non-blocking accessible-name-duplication suggestion (two "Avbryt" buttons
+could coexist if the create form and a row's remove-confirmation are both
+open), no Blocking/Important findings. Nothing was pushed or deployed.
 
 ---
 

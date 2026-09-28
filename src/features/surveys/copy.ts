@@ -62,6 +62,8 @@ export const surveysCopy = {
       authenticated: "Kun medlemmer av teamet",
     },
     create: {
+      /** Accessible name for the progressive-disclosure toggle that reveals this form (docs/features/ui-refresh/SPEC.md — BR-12), mirroring `adminCopy.teams.newTeamButton`'s "Nytt X" convention. */
+      toggleButton: "Ny undersøkelse",
       sectionTitle: "Opprett ny undersøkelse",
       accessModeLegend: "Hvem kan svare?",
       accessModePublicHint: "Alle som har lenken kan svare anonymt uten å logge inn.",
@@ -73,6 +75,8 @@ export const surveysCopy = {
       endAtLabel: "Slutt (valgfritt)",
       submit: "Opprett undersøkelse",
       submitting: "Oppretter…",
+      /** Closes the form without creating anything (docs/features/ui-refresh/SPEC.md — BR-14). */
+      cancelButton: "Avbryt",
       error: "Noe gikk galt under opprettelsen av undersøkelsen. Prøv igjen.",
     },
     /** e.g. "Minst 5 svar" — the configured threshold is not sensitive (docs/features/managed-surveys/SPEC.md — "Per-survey result threshold"). */
@@ -80,6 +84,8 @@ export const surveysCopy = {
     linkLabel: "Lenke:",
     copyLinkButton: "Kopier lenke",
     linkCopied: "Lenke kopiert",
+    /** Shown when `navigator.clipboard.writeText` rejects (docs/features/ui-refresh/SPEC.md — BR-22) — never exposes the underlying clipboard-API error detail, and the user can simply try again. */
+    linkCopyError: "Kunne ikke kopiere lenken. Prøv igjen.",
     openButton: "Åpne",
     openingButton: "Åpner…",
     openError: "Kunne ikke åpne undersøkelsen. Prøv igjen.",

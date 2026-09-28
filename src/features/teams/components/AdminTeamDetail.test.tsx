@@ -276,12 +276,18 @@ describe("AdminTeamDetail", () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     mockOk();
 
-    const { container } = render(<AdminTeamDetail teamId="team-1" />);
+    render(<AdminTeamDetail teamId="team-1" />);
     // The invite field is reachable immediately, with no prior "expand"
     // interaction (docs/features/ui-refresh/SPEC.md — BR-13).
-    await screen.findByLabelText(/e-postadresse/i);
+    const emailField = await screen.findByLabelText(/e-postadresse/i);
 
-    expect(container.querySelector("[aria-expanded]")).toBeNull();
+    // Scoped to the invite section itself (`section > form`, not the whole
+    // page) — TASK-006 legitimately adds an `aria-expanded` toggle
+    // elsewhere on this same page (survey creation, BR-12), so a page-wide
+    // assertion would no longer isolate what BR-13 actually guarantees:
+    // the invite form specifically never gains one.
+    const inviteSection = emailField.closest("section") as HTMLElement;
+    expect(inviteSection.querySelector("[aria-expanded]")).toBeNull();
   });
 
   it("removes a member and refreshes the authoritative view", async () => {
@@ -611,6 +617,50 @@ describe("AdminTeamDetail survey management", () => {
     expect(within(archivedRow).getByRole("link", { name: "/survey/survey-archived" })).toBeTruthy();
   });
 
+  it("keeps the survey-creation form collapsed by default, with the toggle exposing aria-expanded", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({ surveys: [] });
+
+    render(<AdminTeamDetail teamId="team-1" />);
+    await screen.findByText(/ingen undersøkelser/i);
+
+    // The active/archived survey lists remain the default-visible view
+    // while the creation form is collapsed (docs/features/ui-refresh/
+    // SPEC.md — BR-12).
+    expect(screen.queryByLabelText(/tittel/i)).toBeNull();
+    const toggle = screen.getByRole("button", { name: /ny undersøkelse/i });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+
+    const user = userEvent.setup();
+    await user.click(toggle);
+
+    expect(screen.getByLabelText(/tittel/i)).toBeTruthy();
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    // Opening the form triggers no fetch of any kind (BR-14).
+    expect(fetchAdminSurveysMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes the survey-creation form via Cancel without creating anything or fetching again", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({ surveys: [] });
+
+    render(<AdminTeamDetail teamId="team-1" />);
+    await screen.findByText(/ingen undersøkelser/i);
+
+    await user.click(screen.getByRole("button", { name: /ny undersøkelse/i }));
+    await user.click(screen.getByLabelText(/alle med lenken/i));
+    await user.type(screen.getByLabelText(/tittel/i), "Q3 pulse");
+    await user.click(screen.getByRole("button", { name: /^avbryt$/i }));
+
+    expect(screen.queryByLabelText(/tittel/i)).toBeNull();
+    expect(screen.getByRole("button", { name: /ny undersøkelse/i }).getAttribute("aria-expanded")).toBe(
+      "false",
+    );
+    expect(createAdminSurveyMock).not.toHaveBeenCalled();
+    expect(fetchAdminSurveysMock).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps the create-survey submit button disabled until an access mode is chosen", async () => {
     const user = userEvent.setup();
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
@@ -618,6 +668,7 @@ describe("AdminTeamDetail survey management", () => {
 
     render(<AdminTeamDetail teamId="team-1" />);
     await screen.findByText(/ingen undersøkelser/i);
+    await user.click(screen.getByRole("button", { name: /ny undersøkelse/i }));
 
     const submit = screen.getByRole("button", { name: /opprett undersøkelse/i });
     expect(submit.hasAttribute("disabled")).toBe(true);
@@ -627,13 +678,31 @@ describe("AdminTeamDetail survey management", () => {
   });
 
   it("pre-fills the minimum-responses field with 5", async () => {
+    const user = userEvent.setup();
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     mockOk({ surveys: [] });
 
     render(<AdminTeamDetail teamId="team-1" />);
     await screen.findByText(/ingen undersøkelser/i);
+    await user.click(screen.getByRole("button", { name: /ny undersøkelse/i }));
 
     expect(screen.getByLabelText(/minste antall svar/i)).toHaveProperty("value", "5");
+  });
+
+  it("associates the minimum-responses hint with its input via aria-describedby (docs/features/ui-refresh/SPEC.md — BR-21)", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({ surveys: [] });
+
+    render(<AdminTeamDetail teamId="team-1" />);
+    await screen.findByText(/ingen undersøkelser/i);
+    await user.click(screen.getByRole("button", { name: /ny undersøkelse/i }));
+
+    const minimumResponsesInput = screen.getByLabelText(/minste antall svar/i);
+    const describedBy = minimumResponsesInput.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    const hint = document.getElementById(describedBy as string);
+    expect(hint?.textContent).toMatch(/resultater vises først/i);
   });
 
   it("sends a custom minimum-responses value chosen by the admin", async () => {
@@ -644,6 +713,7 @@ describe("AdminTeamDetail survey management", () => {
 
     render(<AdminTeamDetail teamId="team-1" />);
     await screen.findByText(/ingen undersøkelser/i);
+    await user.click(screen.getByRole("button", { name: /ny undersøkelse/i }));
 
     await user.click(screen.getByLabelText(/alle med lenken/i));
     const minimumResponsesInput = screen.getByLabelText(/minste antall svar/i);
@@ -657,7 +727,7 @@ describe("AdminTeamDetail survey management", () => {
     });
   });
 
-  it("creates a public survey and refreshes the authoritative list", async () => {
+  it("creates a public survey, collapses the form, and refreshes the authoritative list", async () => {
     const user = userEvent.setup();
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     mockOk({ surveys: [] });
@@ -665,6 +735,7 @@ describe("AdminTeamDetail survey management", () => {
 
     render(<AdminTeamDetail teamId="team-1" />);
     await screen.findByText(/ingen undersøkelser/i);
+    await user.click(screen.getByRole("button", { name: /ny undersøkelse/i }));
 
     await user.click(screen.getByLabelText(/alle med lenken/i));
     await user.type(screen.getByLabelText(/tittel/i), "Q3 pulse");
@@ -676,6 +747,12 @@ describe("AdminTeamDetail survey management", () => {
       title: "Q3 pulse",
     });
     expect(fetchAdminSurveysMock).toHaveBeenCalledTimes(2);
+    // A successful creation collapses the form again (BR-14).
+    await screen.findByText(/ingen undersøkelser/i);
+    expect(screen.queryByLabelText(/tittel/i)).toBeNull();
+    expect(screen.getByRole("button", { name: /ny undersøkelse/i }).getAttribute("aria-expanded")).toBe(
+      "false",
+    );
   });
 
   it("creates an authenticated survey with optional start/end dates", async () => {
@@ -686,6 +763,7 @@ describe("AdminTeamDetail survey management", () => {
 
     render(<AdminTeamDetail teamId="team-1" />);
     await screen.findByText(/ingen undersøkelser/i);
+    await user.click(screen.getByRole("button", { name: /ny undersøkelse/i }));
 
     await user.click(screen.getByLabelText(/kun medlemmer av teamet/i));
     await user.type(screen.getByLabelText(/start/i), "2026-10-01T09:00");
@@ -700,7 +778,7 @@ describe("AdminTeamDetail survey management", () => {
     });
   });
 
-  it("shows a controlled error and does not clear the create form when creation fails", async () => {
+  it("shows a controlled error, keeps the create form open, and does not clear it when creation fails", async () => {
     const user = userEvent.setup();
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     mockOk({ surveys: [] });
@@ -708,6 +786,7 @@ describe("AdminTeamDetail survey management", () => {
 
     render(<AdminTeamDetail teamId="team-1" />);
     await screen.findByText(/ingen undersøkelser/i);
+    await user.click(screen.getByRole("button", { name: /ny undersøkelse/i }));
 
     await user.click(screen.getByLabelText(/alle med lenken/i));
     await user.type(screen.getByLabelText(/tittel/i), "Q3 pulse");
@@ -715,7 +794,11 @@ describe("AdminTeamDetail survey management", () => {
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/noe gikk galt/i);
+    // The form remains open and recoverable on failure (BR-14).
     expect(screen.getByLabelText(/tittel/i)).toHaveProperty("value", "Q3 pulse");
+    expect(screen.getByRole("button", { name: /ny undersøkelse/i }).getAttribute("aria-expanded")).toBe(
+      "true",
+    );
   });
 
   it("copies the survey link and shows accessible feedback", async () => {
@@ -747,6 +830,40 @@ describe("AdminTeamDetail survey management", () => {
 
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("/survey/survey-1"));
     await screen.findByText(/lenke kopiert/i);
+  });
+
+  it("shows a visible, non-sensitive failure state when copying the survey link fails (docs/features/ui-refresh/SPEC.md — BR-22)", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({
+      surveys: [
+        {
+          surveyId: "survey-1",
+          accessMode: "public",
+          minimumResponses: 5,
+          lifecycle: "scheduled",
+          archived: false,
+          createdBy: "admin-1",
+          createdAt: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+    });
+    const writeText = vi.fn().mockRejectedValue(new Error("denied"));
+    Object.defineProperty(window.navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+
+    render(<AdminTeamDetail teamId="team-1" />);
+    await screen.findByRole("link", { name: "/survey/survey-1" });
+
+    await user.click(screen.getByRole("button", { name: /kopier lenke/i }));
+
+    const alert = await screen.findByRole("alert");
+    // Never exposes the underlying clipboard-API error detail.
+    expect(alert.textContent).toMatch(/kunne ikke kopiere/i);
+    expect(alert.textContent).not.toMatch(/denied/i);
+    expect(screen.queryByText(/lenke kopiert/i)).toBeNull();
   });
 
   it("opens a scheduled survey and refreshes the authoritative list", async () => {

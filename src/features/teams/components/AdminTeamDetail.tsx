@@ -283,6 +283,15 @@ type SurveyRowActionState =
   | { status: "error"; message: string };
 
 /**
+ * The survey-link "copy" affordance's own transient feedback state
+ * (docs/features/ui-refresh/SPEC.md — BR-22): a successful copy and a
+ * failed one (e.g. a denied clipboard permission) share the same
+ * transient-then-cleared mechanism, keyed to one survey row at a time —
+ * only which outcome to render differs.
+ */
+type SurveyLinkCopyState = { surveyId: string; status: "success" | "failure" };
+
+/**
  * Approve and Reject share one guard per request (only one of the two may
  * be in flight at a time — an approve and a reject for the same request
  * must never both fire), but the UI still needs to know *which* of the two
@@ -360,6 +369,7 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
   const [memberActions, setMemberActions] = useState<Record<string, RowActionState>>({});
   const [invitationActions, setInvitationActions] = useState<Record<string, RowActionState>>({});
   const [requestActions, setRequestActions] = useState<Record<string, RequestActionState>>({});
+  const [surveyFormOpen, setSurveyFormOpen] = useState(false);
   const [surveyCreateState, setSurveyCreateState] = useState<SurveyCreateState>({ status: "idle" });
   const [surveyAccessMode, setSurveyAccessMode] = useState<SurveyAccessMode | null>(null);
   const [surveyTitle, setSurveyTitle] = useState("");
@@ -369,7 +379,7 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
   const [surveyStartAt, setSurveyStartAt] = useState("");
   const [surveyEndAt, setSurveyEndAt] = useState("");
   const [surveyActions, setSurveyActions] = useState<Record<string, SurveyRowActionState>>({});
-  const [copiedSurveyId, setCopiedSurveyId] = useState<string | null>(null);
+  const [surveyLinkCopyState, setSurveyLinkCopyState] = useState<SurveyLinkCopyState | null>(null);
   const [challengeActions, setChallengeActions] = useState<Record<string, AdminChallengeRowActionState>>({});
   const [skillTracking, setSkillTracking] = useState<Record<string, TeamSkillTrackingState>>({});
   const [skillActions, setSkillActions] = useState<Record<string, TeamSkillRowActionState>>({});
@@ -381,13 +391,14 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
       setMemberActions({});
       setInvitationActions({});
       setRequestActions({});
+      setSurveyFormOpen(false);
       setSurveyCreateState({ status: "idle" });
       setSurveyAccessMode(null);
       setSurveyTitle("");
       setSurveyStartAt("");
       setSurveyEndAt("");
       setSurveyActions({});
-      setCopiedSurveyId(null);
+      setSurveyLinkCopyState(null);
       setChallengeActions({});
       setSkillTracking({});
       setSkillActions({});
@@ -563,7 +574,24 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
     setSurveyMinimumResponses(String(DEFAULT_MINIMUM_RESPONSES));
     setSurveyStartAt("");
     setSurveyEndAt("");
+    setSurveyFormOpen(false);
     await loadForGeneration(token, generation);
+  }
+
+  /**
+   * Closes the survey-creation form without creating anything
+   * (docs/features/ui-refresh/SPEC.md — BR-14), resetting the same
+   * in-progress fields a successful create already resets — no
+   * already-submitted server state (there is none yet) is ever discarded.
+   */
+  function handleCancelCreateSurvey() {
+    setSurveyFormOpen(false);
+    setSurveyAccessMode(null);
+    setSurveyTitle("");
+    setSurveyMinimumResponses(String(DEFAULT_MINIMUM_RESPONSES));
+    setSurveyStartAt("");
+    setSurveyEndAt("");
+    setSurveyCreateState({ status: "idle" });
   }
 
   async function handleOpenSurvey(token: string, generation: number, surveyId: string) {
@@ -654,10 +682,26 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
     try {
       await navigator.clipboard.writeText(url);
     } catch {
+      // Never exposes the underlying clipboard-API error detail — only a
+      // generic, non-sensitive failure indication (BR-22).
+      setSurveyLinkCopyState({ surveyId, status: "failure" });
+      setTimeout(
+        () =>
+          setSurveyLinkCopyState((current) =>
+            current?.surveyId === surveyId && current.status === "failure" ? null : current,
+          ),
+        2000,
+      );
       return;
     }
-    setCopiedSurveyId(surveyId);
-    setTimeout(() => setCopiedSurveyId((current) => (current === surveyId ? null : current)), 2000);
+    setSurveyLinkCopyState({ surveyId, status: "success" });
+    setTimeout(
+      () =>
+        setSurveyLinkCopyState((current) =>
+          current?.surveyId === surveyId && current.status === "success" ? null : current,
+        ),
+      2000,
+    );
   }
 
   /**
@@ -1057,137 +1101,127 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
       </section>
 
       <section className="flex flex-col gap-4">
-        <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
-          {surveysCopy.admin.sectionTitle}
-        </h2>
-
-        <form
-          onSubmit={(event) => handleCreateSurvey(event, token, generation)}
-          className="flex flex-col gap-3"
-          aria-label={surveysCopy.admin.create.sectionTitle}
-        >
-          <fieldset className="flex flex-col gap-2">
-            <legend className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
-              {surveysCopy.admin.create.accessModeLegend}
-            </legend>
-            <label className="flex items-start gap-2 text-sm text-zinc-900 dark:text-zinc-50">
-              <input
-                type="radio"
-                name="survey-access-mode"
-                value="public"
-                checked={surveyAccessMode === "public"}
-                onChange={() => setSurveyAccessMode("public")}
-                className="mt-1"
-              />
-              <span>
-                {surveysCopy.admin.accessModeLabels.public}
-                <span className="block text-zinc-600 dark:text-zinc-400">
-                  {surveysCopy.admin.create.accessModePublicHint}
-                </span>
-              </span>
-            </label>
-            <label className="flex items-start gap-2 text-sm text-zinc-900 dark:text-zinc-50">
-              <input
-                type="radio"
-                name="survey-access-mode"
-                value="authenticated"
-                checked={surveyAccessMode === "authenticated"}
-                onChange={() => setSurveyAccessMode("authenticated")}
-                className="mt-1"
-              />
-              <span>
-                {surveysCopy.admin.accessModeLabels.authenticated}
-                <span className="block text-zinc-600 dark:text-zinc-400">
-                  {surveysCopy.admin.create.accessModeAuthenticatedHint}
-                </span>
-              </span>
-            </label>
-          </fieldset>
-
-          <label
-            htmlFor="admin-survey-title"
-            className="text-sm font-medium text-zinc-900 dark:text-zinc-50"
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
+            {surveysCopy.admin.sectionTitle}
+          </h2>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="shrink-0"
+            aria-expanded={surveyFormOpen}
+            aria-controls="admin-survey-create-form"
+            onClick={() => setSurveyFormOpen((prev) => !prev)}
           >
-            {surveysCopy.admin.create.titleLabel}
-          </label>
-          <input
-            id="admin-survey-title"
-            type="text"
-            value={surveyTitle}
-            onChange={(event) => setSurveyTitle(event.target.value)}
-            className="rounded border border-zinc-300 px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:bg-zinc-900"
-          />
+            {surveysCopy.admin.create.toggleButton}
+          </Button>
+        </div>
 
-          <label
-            htmlFor="admin-survey-minimum-responses"
-            className="text-sm font-medium text-zinc-900 dark:text-zinc-50"
+        {surveyFormOpen && (
+          <form
+            id="admin-survey-create-form"
+            onSubmit={(event) => handleCreateSurvey(event, token, generation)}
+            className="flex flex-col gap-3"
+            aria-label={surveysCopy.admin.create.sectionTitle}
           >
-            {surveysCopy.admin.create.minimumResponsesLabel}
-          </label>
-          <input
-            id="admin-survey-minimum-responses"
-            type="number"
-            min={MINIMUM_RESPONSES_MIN}
-            max={MINIMUM_RESPONSES_MAX}
-            step={1}
-            value={surveyMinimumResponses}
-            onChange={(event) => setSurveyMinimumResponses(event.target.value)}
-            className="w-24 rounded border border-zinc-300 px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:bg-zinc-900"
-          />
-          <span className="text-sm text-zinc-600 dark:text-zinc-400">
-            {surveysCopy.admin.create.minimumResponsesHint}
-          </span>
-
-          <div className="flex flex-wrap gap-4">
-            <div className="flex flex-col gap-1">
-              <label
-                htmlFor="admin-survey-start-at"
-                className="text-sm font-medium text-zinc-900 dark:text-zinc-50"
-              >
-                {surveysCopy.admin.create.startAtLabel}
+            <fieldset className="flex flex-col gap-2">
+              <legend className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                {surveysCopy.admin.create.accessModeLegend}
+              </legend>
+              <label className="flex items-start gap-2 text-sm text-zinc-900 dark:text-zinc-50">
+                <input
+                  type="radio"
+                  name="survey-access-mode"
+                  value="public"
+                  checked={surveyAccessMode === "public"}
+                  onChange={() => setSurveyAccessMode("public")}
+                  className="mt-1"
+                />
+                <span>
+                  {surveysCopy.admin.accessModeLabels.public}
+                  <span className="block text-zinc-600 dark:text-zinc-400">
+                    {surveysCopy.admin.create.accessModePublicHint}
+                  </span>
+                </span>
               </label>
-              <input
+              <label className="flex items-start gap-2 text-sm text-zinc-900 dark:text-zinc-50">
+                <input
+                  type="radio"
+                  name="survey-access-mode"
+                  value="authenticated"
+                  checked={surveyAccessMode === "authenticated"}
+                  onChange={() => setSurveyAccessMode("authenticated")}
+                  className="mt-1"
+                />
+                <span>
+                  {surveysCopy.admin.accessModeLabels.authenticated}
+                  <span className="block text-zinc-600 dark:text-zinc-400">
+                    {surveysCopy.admin.create.accessModeAuthenticatedHint}
+                  </span>
+                </span>
+              </label>
+            </fieldset>
+
+            <TextField
+              id="admin-survey-title"
+              label={surveysCopy.admin.create.titleLabel}
+              type="text"
+              value={surveyTitle}
+              onChange={(event) => setSurveyTitle(event.target.value)}
+            />
+
+            <TextField
+              id="admin-survey-minimum-responses"
+              label={surveysCopy.admin.create.minimumResponsesLabel}
+              type="number"
+              min={MINIMUM_RESPONSES_MIN}
+              max={MINIMUM_RESPONSES_MAX}
+              step={1}
+              value={surveyMinimumResponses}
+              onChange={(event) => setSurveyMinimumResponses(event.target.value)}
+              description={surveysCopy.admin.create.minimumResponsesHint}
+              className="w-24"
+            />
+
+            <div className="flex flex-wrap gap-4">
+              <TextField
                 id="admin-survey-start-at"
+                label={surveysCopy.admin.create.startAtLabel}
                 type="datetime-local"
                 value={surveyStartAt}
                 onChange={(event) => setSurveyStartAt(event.target.value)}
-                className="rounded border border-zinc-300 px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:bg-zinc-900"
               />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label
-                htmlFor="admin-survey-end-at"
-                className="text-sm font-medium text-zinc-900 dark:text-zinc-50"
-              >
-                {surveysCopy.admin.create.endAtLabel}
-              </label>
-              <input
+              <TextField
                 id="admin-survey-end-at"
+                label={surveysCopy.admin.create.endAtLabel}
                 type="datetime-local"
                 value={surveyEndAt}
                 onChange={(event) => setSurveyEndAt(event.target.value)}
-                className="rounded border border-zinc-300 px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:bg-zinc-900"
               />
             </div>
-          </div>
 
-          <div>
-            <Button
-              type="submit"
-              disabled={surveyAccessMode === null}
-              pending={surveyCreateState.status === "pending"}
-            >
-              {surveyCreateState.status === "pending"
-                ? surveysCopy.admin.create.submitting
-                : surveysCopy.admin.create.submit}
-            </Button>
-          </div>
-          {surveyCreateState.status === "error" && (
-            <Alert variant="error" className="text-sm">
-              {surveyCreateState.message}
-            </Alert>
-          )}
-        </form>
+            <div className="flex gap-2">
+              <Button
+                type="submit"
+                disabled={surveyAccessMode === null}
+                pending={surveyCreateState.status === "pending"}
+              >
+                {surveyCreateState.status === "pending"
+                  ? surveysCopy.admin.create.submitting
+                  : surveysCopy.admin.create.submit}
+              </Button>
+              <Button type="button" variant="secondary" onClick={handleCancelCreateSurvey}>
+                {surveysCopy.admin.create.cancelButton}
+              </Button>
+            </div>
+            {surveyCreateState.status === "error" && (
+              <Alert variant="error" className="text-sm">
+                {surveyCreateState.message}
+              </Alert>
+            )}
+          </form>
+        )}
 
         {surveys.length === 0 ? (
           <EmptyState>{surveysCopy.admin.empty}</EmptyState>
@@ -1206,7 +1240,9 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
                       key={entry.surveyId}
                       entry={entry}
                       action={surveyActions[entry.surveyId] ?? { status: "idle" as const }}
-                      isCopied={copiedSurveyId === entry.surveyId}
+                      copyState={
+                        surveyLinkCopyState?.surveyId === entry.surveyId ? surveyLinkCopyState.status : "idle"
+                      }
                       onOpen={() => handleOpenSurvey(token, generation, entry.surveyId)}
                       onClose={() => handleCloseSurvey(token, generation, entry.surveyId)}
                       onRequestRemove={() => handleRequestRemoveSurvey(entry.surveyId)}
@@ -1232,7 +1268,9 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
                       key={entry.surveyId}
                       entry={entry}
                       action={surveyActions[entry.surveyId] ?? { status: "idle" as const }}
-                      isCopied={copiedSurveyId === entry.surveyId}
+                      copyState={
+                        surveyLinkCopyState?.surveyId === entry.surveyId ? surveyLinkCopyState.status : "idle"
+                      }
                       onOpen={() => handleOpenSurvey(token, generation, entry.surveyId)}
                       onClose={() => handleCloseSurvey(token, generation, entry.surveyId)}
                       onRequestRemove={() => handleRequestRemoveSurvey(entry.surveyId)}
@@ -1295,7 +1333,7 @@ function SignInPrompt() {
 interface SurveyRowProps {
   entry: AdminSurveyEntry;
   action: SurveyRowActionState;
-  isCopied: boolean;
+  copyState: "idle" | "success" | "failure";
   onOpen: () => void;
   onClose: () => void;
   onRequestRemove: () => void;
@@ -1314,7 +1352,7 @@ interface SurveyRowProps {
 function SurveyRow({
   entry,
   action,
-  isCopied,
+  copyState,
   onOpen,
   onClose,
   onRequestRemove,
@@ -1358,10 +1396,15 @@ function SurveyRow({
           >
             {surveysCopy.admin.copyLinkButton}
           </Button>
-          {isCopied && (
+          {copyState === "success" && (
             <span role="status" className="text-sm text-zinc-600 dark:text-zinc-400">
               {surveysCopy.admin.linkCopied}
             </span>
+          )}
+          {copyState === "failure" && (
+            <Alert variant="error" className="text-sm">
+              {surveysCopy.admin.linkCopyError}
+            </Alert>
           )}
           {entry.lifecycle === "scheduled" && !entry.archived && (
             <Button
