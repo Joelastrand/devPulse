@@ -3,7 +3,7 @@
 Specification: [SPEC.md](./SPEC.md)
 
 ## Status
-Ready: 2  In Progress: 0  Done: 2
+Ready: 1  In Progress: 0  Done: 3
 
 `SPEC.md` is `Approved`. Presentation-only
 feature: no task may touch `app/api/**`, `src/features/**/server/`,
@@ -147,7 +147,7 @@ and isolated `pnpm build` pass; review-change: PASS. No browser inspection was r
 
 ### TASK-003 — Admin team surface: path in tracked rows
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-8, BR-11, BR-12, BR-18 (surface diff limits); BR-9/10 verified
 **Depends on:** TASK-001
 
@@ -175,8 +175,18 @@ Admin authority and disabled-team semantics unchanged; no new data/request.
 None expected.
 
 **Acceptance criteria**
-- [ ] BR-8 satisfied; start/update/stop behavior unchanged.
-- [ ] Diff limited to `TeamSkillTrackingSection.tsx` and its test (no overview/catalog/forms/server/API/domain/gateway/package change).
+- [x] BR-8 satisfied; start/update/stop behavior unchanged.
+- [x] Diff limited to `TeamSkillTrackingSection.tsx` and its test (no overview/catalog/forms/server/API/domain/gateway/package change).
+
+**Evidence:** `TeamSkillTrackingSection.tsx` `TrackedSkillTreeRow` now renders `SkillProgressPath`
+(tree name, `tree.nodes`, `currentNodeId` passed unchanged) in place of the decimal `<ol>` and
+separate "Ikke startet" paragraph; `sortedNodes` kept only for the Select options. Untracked rows,
+Select, start/update/stop handlers and `AdminTeamDetail` untouched. `TeamSkillTrackingSection.test.tsx`
+updated (+ path/summary, null, unknown id, untracked, backward recompute, non-interactive, option
+order, disabled team). `AdminTeamDetail.test.tsx` needed no change. Typecheck, lint,
+`git diff --check`, full `pnpm vitest run` (2502 tests) and isolated `pnpm build` pass;
+review-change: PASS. Unused `teamSkillTrackingCopy.tracked.currentStageLabel` (and TASK-002's
+`teamSkillSectionCopy.currentStageLabel`) left for TASK-004. No browser inspection was run.
 
 ---
 

@@ -8,6 +8,7 @@ import { LoadingState } from "../../../components/ui/LoadingState";
 import { Select } from "../../../components/ui/Select";
 import type { AdminSkillTreeEntry } from "../client/skill-trees-gateway";
 import { teamSkillTrackingCopy } from "../copy";
+import { SkillProgressPath } from "./SkillProgressPath";
 
 export type TeamSkillCatalogState =
   | { status: "loading" }
@@ -52,10 +53,11 @@ export interface TeamSkillTrackingSectionProps {
  * TASK-005 catalog (`catalogState`, reused unchanged) split into two groups
  * by this session's own `tracking` state: trees not yet tracked by this
  * team offer a "start tracking" action; already-tracked trees show their
- * full ordered stage list with the current stage marked
- * (`aria-current="step"` plus visible text, never color alone — BR-29) and
- * controls to change the stage (forward or backward, BR-13) or stop
- * tracking.
+ * full ordered stage list with the current stage marked, rendered by the
+ * shared presentational `SkillProgressPath` (docs/features/gamified-skill-tree/
+ * SPEC.md — BR-8; `aria-current="step"` plus visible text, never color alone
+ * — BR-29; never a control), and controls to change the stage (forward or
+ * backward, BR-13) or stop tracking.
  *
  * **The start-tracking picker is hidden when `teamDisabled` is true**
  * (`startTeamSkillTracking` genuinely rejects a disabled team server-side —
@@ -169,24 +171,7 @@ function TrackedSkillTreeRow({ tree, currentNodeId, action, onSetStage, onStop }
   return (
     <Card as="li" variant="bordered" padding="sm" className="flex flex-col gap-2">
       <p className="font-medium text-zinc-900 dark:text-zinc-50">{tree.name}</p>
-      <ol className="ml-5 list-decimal text-sm text-zinc-700 dark:text-zinc-300">
-        {sortedNodes(tree).map((node) => {
-          const isCurrent = node.nodeId === currentNodeId;
-          return (
-            <li key={node.nodeId} aria-current={isCurrent ? "step" : undefined}>
-              {node.label}
-              {isCurrent && (
-                <span className="ml-2 font-medium text-zinc-900 dark:text-zinc-50">
-                  ({teamSkillTrackingCopy.tracked.currentStageLabel})
-                </span>
-              )}
-            </li>
-          );
-        })}
-      </ol>
-      {currentNodeId === null && (
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">{teamSkillTrackingCopy.tracked.notStarted}</p>
-      )}
+      <SkillProgressPath name={tree.name} nodes={tree.nodes} currentNodeId={currentNodeId} />
 
       {action.status === "error" && (
         <Alert variant="error" className="text-sm">

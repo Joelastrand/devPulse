@@ -171,14 +171,122 @@ describe("TeamSkillTrackingSection", () => {
     expect(screen.getByRole("combobox", { name: /sett stadium – containere/i })).toBeTruthy();
   });
 
-  it("shows a tracked tree's full ordered stage list with the current stage marked, and a not-started note when currentNodeId is null", () => {
+  function renderTracked(currentNodeId: string | null, tracking?: Record<string, TeamSkillTrackingState>) {
+    const props = {
+      catalogState: { status: "loaded" as const, trees: TREES },
+      tracking: tracking ?? { "tree-1": { status: "tracked" as const, currentNodeId } },
+      actions: NO_ACTIONS,
+      teamDisabled: false,
+      onStart: vi.fn(),
+      onSetStage: vi.fn(),
+      onStop: vi.fn(),
+    };
+    const result = render(<TeamSkillTrackingSection {...props} />);
+    return { ...result, props };
+  }
+
+  function pathList(treeName: string) {
+    return screen.getByRole("list", { name: treeName });
+  }
+
+  it("renders a tracked tree as a SkillProgressPath with the current stage marked and a single summary", () => {
+    renderTracked("node-1");
+
+    const list = pathList("Containere");
+    const items = within(list).getAllByRole("listitem");
+    expect(items.map((li) => li.getAttribute("aria-current"))).toEqual([null, "step", null]);
+    expect(within(items[1]).getByText("Pilotdrift")).toBeTruthy();
+    expect(screen.getAllByText(/teamets nåværende steg/i)).toHaveLength(1);
+    expect(screen.getByText(/pilotdrift \(steg 2 av 3\)/i)).toBeTruthy();
+    // Old plain-list presentation is gone: no "(Nåværende steg)" suffix, no decimal list.
+    expect(screen.queryByText("(Nåværende steg)")).toBeNull();
+    expect(document.querySelector("ol.list-decimal")).toBeNull();
+    expect(document.querySelectorAll("ol")).toHaveLength(1);
+  });
+
+  it("renders tracked currentNodeId=null as all-upcoming with a single 'Ikke startet' summary and no aria-current", () => {
+    renderTracked(null);
+
+    const items = within(pathList("Containere")).getAllByRole("listitem");
+    expect(items.some((li) => li.hasAttribute("aria-current"))).toBe(false);
+    expect(screen.getByText(/teamets nåværende steg/i).textContent).toMatch(/ikke startet/i);
+    // The Select's disabled placeholder option is the only other "Ikke startet".
+    expect(screen.getAllByText(/ikke startet/i)).toHaveLength(2);
+    const select = screen.getByRole("combobox", { name: /sett stadium – containere/i }) as HTMLSelectElement;
+    expect(select.value).toBe("");
+  });
+
+  it("does not invent a current stage or 'Ikke startet' for an unknown non-null currentNodeId", () => {
+    renderTracked("node-unknown");
+
+    const items = within(pathList("Containere")).getAllByRole("listitem");
+    expect(items.some((li) => li.hasAttribute("aria-current"))).toBe(false);
+    expect(screen.queryByText(/teamets nåværende steg/i)).toBeNull();
+    expect(screen.queryByText(/ikke startet/i)).toBeNull();
+  });
+
+  it("shows no path for an untracked tree and keeps its start-tracking UI", () => {
+    renderTracked(null, { "tree-1": { status: "tracked", currentNodeId: "node-0" } });
+
+    expect(screen.queryByRole("list", { name: "Observability" })).toBeNull();
+    expect(screen.getByRole("button", { name: /start sporing – observability/i })).toBeTruthy();
+  });
+
+  it("recomputes the path after a backward move (C -> B): earlier A, current B, later upcoming", () => {
+    const { rerender, props } = renderTracked("node-2");
+    expect(
+      within(pathList("Containere"))
+        .getAllByRole("listitem")
+        .map((li) => li.getAttribute("aria-current")),
+    ).toEqual([null, null, "step"]);
+
+    rerender(
+      <TeamSkillTrackingSection {...props} tracking={{ "tree-1": { status: "tracked", currentNodeId: "node-1" } }} />,
+    );
+
+    const items = within(pathList("Containere")).getAllByRole("listitem");
+    expect(items.map((li) => li.getAttribute("aria-current"))).toEqual([null, "step", null]);
+    expect(screen.getByText(/pilotdrift \(steg 2 av 3\)/i)).toBeTruthy();
+    expect(screen.getAllByText(/teamets nåværende steg/i)).toHaveLength(1);
+  });
+
+  it("path stages are not mutation controls: only the select and stop button are interactive", () => {
+    renderTracked("node-1");
+
+    const list = pathList("Containere");
+    expect(within(list).queryAllByRole("button")).toHaveLength(0);
+    expect(within(list).queryAllByRole("link")).toHaveLength(0);
+    expect(within(list).queryAllByRole("combobox")).toHaveLength(0);
+    expect(list.querySelectorAll("[tabindex], button, a, select, input").length).toBe(0);
+    expect(screen.getAllByRole("combobox")).toHaveLength(1);
+    expect(screen.getAllByRole("button")).toHaveLength(2); // stop (Containere) + start (Observability)
+  });
+
+  it("does not call onSetStage when a path stage is clicked", async () => {
+    const user = userEvent.setup();
+    const { props } = renderTracked("node-1");
+
+    await user.click(within(pathList("Containere")).getByText("Produksjon"));
+
+    expect(props.onSetStage).not.toHaveBeenCalled();
+  });
+
+  it("keeps the select order by node order, independent of input array order", () => {
+    const shuffled: AdminSkillTreeEntry[] = [
+      {
+        treeId: "tree-1",
+        name: "Containere",
+        nodes: [
+          { nodeId: "node-2", label: "Produksjon", order: 2 },
+          { nodeId: "node-0", label: "Fundamentals", order: 0 },
+          { nodeId: "node-1", label: "Pilotdrift", order: 1 },
+        ],
+      },
+    ];
     render(
       <TeamSkillTrackingSection
-        catalogState={{ status: "loaded", trees: TREES }}
-        tracking={{
-          "tree-1": { status: "tracked", currentNodeId: "node-1" },
-          "tree-2": { status: "tracked", currentNodeId: null },
-        }}
+        catalogState={{ status: "loaded", trees: shuffled }}
+        tracking={{ "tree-1": { status: "tracked", currentNodeId: "node-1" } }}
         actions={NO_ACTIONS}
         teamDisabled={false}
         onStart={vi.fn()}
@@ -187,15 +295,34 @@ describe("TeamSkillTrackingSection", () => {
       />,
     );
 
-    expect(screen.getAllByText("Fundamentals").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Produksjon").length).toBeGreaterThan(0);
-    const currentItem = screen
-      .getAllByText("Pilotdrift")
-      .map((el) => el.closest("li"))
-      .find((li): li is HTMLLIElement => li !== null);
-    expect(currentItem?.getAttribute("aria-current")).toBe("step");
+    const select = screen.getByRole("combobox", { name: /sett stadium – containere/i });
+    expect(within(select).getAllByRole("option").map((o) => (o as HTMLOptionElement).value)).toEqual([
+      "node-0",
+      "node-1",
+      "node-2",
+    ]);
+    expect(
+      within(pathList("Containere"))
+        .getAllByRole("listitem")
+        .map((li) => li.getAttribute("aria-current")),
+    ).toEqual([null, "step", null]);
+  });
 
-    expect(screen.getAllByText(/ikke startet/i).length).toBeGreaterThan(0);
+  it("keeps the path and admin controls on a disabled team", () => {
+    render(
+      <TeamSkillTrackingSection
+        catalogState={{ status: "loaded", trees: TREES }}
+        tracking={{ "tree-1": { status: "tracked", currentNodeId: "node-1" } }}
+        actions={NO_ACTIONS}
+        teamDisabled={true}
+        onStart={vi.fn()}
+        onSetStage={vi.fn()}
+        onStop={vi.fn()}
+      />,
+    );
+
+    expect(pathList("Containere")).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: /sett stadium – containere/i }).hasAttribute("disabled")).toBe(false);
   });
 
   it("the stage select is a real, labeled form control migrated to the shared Select primitive (BR-8)", () => {
