@@ -3,7 +3,7 @@
 Specification: [SPEC.md](./SPEC.md)
 
 ## Status
-Ready: 4  In Progress: 0  Done: 0
+Ready: 3  In Progress: 0  Done: 1
 
 `SPEC.md` is `Approved`. Presentation-only
 feature: no task may touch `app/api/**`, `src/features/**/server/`,
@@ -44,7 +44,7 @@ flowchart LR
 
 ### TASK-001 — SkillProgressPath component and stage-state derivation
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-1, BR-2, BR-3, BR-4, BR-5, BR-6, BR-9, BR-10, BR-13, BR-14, BR-15, BR-16, BR-17, BR-18, BR-19, BR-20
 **Depends on:** None
 
@@ -86,10 +86,15 @@ fields). No fetch/Firebase/auth import.
 None expected (closeout in TASK-004).
 
 **Acceptance criteria**
-- [ ] Derivation table verified, including backward recomputation, null vs unknown id, and non-mutation.
-- [ ] Accessibility/non-color/decorative semantics verified.
-- [ ] No production file outside the component, its tests and `copy.ts`.
-- [ ] Relevant tests, typecheck and lint pass.
+- [x] Derivation table verified, including backward recomputation, null vs unknown id, and non-mutation.
+- [x] Accessibility/non-color/decorative semantics verified.
+- [x] No production file outside the component, its tests and `copy.ts`.
+- [x] Relevant tests, typecheck and lint pass.
+
+**Evidence:** `SkillProgressPath.tsx` (component + `deriveSkillProgressPath`),
+`SkillProgressPath.test.tsx` (16 tests), `skillProgressPathCopy` in `copy.ts`.
+Typecheck, lint, full `pnpm vitest run` (2488 tests) and isolated `pnpm build`
+pass; review-change: PASS. No call sites yet (TASK-002/003).
 
 ---
 

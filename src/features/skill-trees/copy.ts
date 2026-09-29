@@ -142,3 +142,22 @@ export const teamSkillSectionCopy = {
     genericError: "Noe gikk galt. Prøv igjen.",
   },
 } as const;
+
+/**
+ * Norwegian copy for `SkillProgressPath` (docs/features/gamified-skill-tree/
+ * SPEC.md — BR-9, BR-10, BR-15). State labels are positional relative to the
+ * team's *current* step; "Fullført" is deliberately not used because
+ * `SkillProgress` stores no history. `notStarted` reuses the exact "Ikke
+ * startet" string the other surfaces already use.
+ */
+export const skillProgressPathCopy = {
+  state: {
+    earlier: "Tidligere steg",
+    current: "Nåværende steg",
+    upcoming: "Kommende steg",
+  },
+  summaryLabel: "Teamets nåværende steg",
+  notStarted: "Ikke startet",
+  /** e.g. "Pilotdrift (steg 2 av 4)". */
+  summaryPosition: (label: string, position: number, total: number) => `${label} (steg ${position} av ${total})`,
+} as const;
