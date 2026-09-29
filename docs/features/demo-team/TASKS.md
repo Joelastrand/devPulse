@@ -3,7 +3,7 @@
 Specification: [SPEC.md](./SPEC.md) (**Approved**, no open design questions)
 
 ## Status
-Ready: 6  In Progress: 0  Done: 0
+Ready: 5  In Progress: 0  Done: 1
 
 Feature-wide constraints for every task: **no Firebase write, no seed
 execution and no network call against a real project** during implementation
@@ -67,7 +67,7 @@ Every BR-1…BR-34 has at least one owner.
 
 ### TASK-001 — Deterministic dataset: fixtures, manifest and plan builder
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-7, BR-8, BR-9, BR-10, BR-11, BR-12, BR-13, BR-14, BR-15, BR-17, BR-18, BR-19, BR-20, BR-21
 **Depends on:** None
 
@@ -121,10 +121,25 @@ individual skill data; synthetic-only (invariants 1, 5, 6, 7, 15).
 None.
 
 **Acceptance criteria**
-- [ ] BR-7–BR-15, BR-17–BR-21 (fixture side) verified by tests.
-- [ ] Plan is pure (no Firebase import, no network, no `Math.random`).
-- [ ] Relevant tests, typecheck and lint pass.
-- [ ] No conflict with `docs/SECURITY.md`.
+- [x] BR-7–BR-15, BR-17–BR-21 (fixture side) verified by tests.
+- [x] Plan is pure (no Firebase import, no network, no `Math.random`).
+- [x] Relevant tests, typecheck and lint pass.
+- [x] No conflict with `docs/SECURITY.md`.
+
+**Evidence:** `src/features/demo-team/fixtures.ts` (logical fixtures, date
+formulas, RNG-free responses), `plan.ts` (manifest, allow-list guards,
+`PlannedOperation`/`WriteClass` types, `buildDemoSeedPlan`), `plan.test.ts`
+(28 tests, real validators + real `computeSurveyAggregate`). Typecheck, lint,
+full `pnpm vitest run` (2530 tests) and isolated `pnpm build` pass;
+review-change: PASS WITH SUGGESTIONS. No Firebase import or access.
+Notes for later tasks: persisted `surveys`/`challenges` documents carry no
+`surveyId`/`challengeId` field (the id is the document id, as in the existing
+server operations; validators are fed the id separately). The SPEC's delivery
+`currentNodeId` is `node-4`, which the UI renders as "stage 5 of 6" (the
+zero-based index differs from a 1-based "stage 4 of 6" reading); implemented as
+specified. Period-3 target means are not in the SPEC and interpolate between
+periods 2 and 4. Challenge `resolvedAt`/`archivedAt` are as-of-relative
+(−18d / −30d).
 
 ---
 
