@@ -93,6 +93,8 @@ export function SkillTreeCorrectionForm({
         label={adminSkillsCopy.correction.nameLabel}
         value={name}
         onChange={(event) => setName(event.target.value)}
+        aria-invalid={submitState.status === "error" || undefined}
+        aria-describedby={submitState.status === "error" ? `skill-tree-correction-error-${tree.treeId}` : undefined}
       />
 
       <div className="flex flex-col gap-3">
@@ -103,11 +105,19 @@ export function SkillTreeCorrectionForm({
             label={`${adminSkillsCopy.correction.stageLabelPrefix} ${index + 1}`}
             value={label}
             onChange={(event) => updateLabel(index, event.target.value)}
+            aria-invalid={submitState.status === "error" || undefined}
+            aria-describedby={
+              submitState.status === "error" ? `skill-tree-correction-error-${tree.treeId}` : undefined
+            }
           />
         ))}
       </div>
 
-      {submitState.status === "error" && <Alert variant="error">{submitState.message}</Alert>}
+      {submitState.status === "error" && (
+        <Alert variant="error" id={`skill-tree-correction-error-${tree.treeId}`}>
+          {submitState.message}
+        </Alert>
+      )}
 
       <div className="flex gap-2">
         <Button type="submit" size="sm" pending={submitState.status === "pending"}>

@@ -5,6 +5,17 @@ Approved — implemented (TASK-001 through TASK-011 Done; see
 [TASKS.md](./TASKS.md)). Feature-level user review and a security/privacy
 regression review both completed; see TASKS.md's TASK-011 closeout note.
 
+**Revision note (App-Wide UI/UX Refresh, `docs/features/ui-refresh/
+SPEC.md`).** The BR-8 through BR-12 primitive set this document originally
+recorded (`Button`, `Card`, `Alert`, `EmptyState`, `LoadingState`, page
+shell) is extended, not replaced, by that later feature: a shared
+text-input/textarea/select form-control primitive set, a `Badge`/
+status-text primitive, and a `"wide"` `PageShell` width token. The original
+decisions recorded below remain accurate as the state this feature shipped;
+see `docs/features/ui-refresh/SPEC.md` for the extension's own requirements
+and `docs/UI-UX.md`'s "Shared primitives (added at UI-refresh closeout)"
+section for the as-built result.
+
 ## Problem
 The implemented product (pulse survey, auth, teams, team results, admin) is
 functionally complete through `docs/features/team-management/SPEC.md`, but

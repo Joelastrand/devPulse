@@ -3,11 +3,10 @@
 Specification: [SPEC.md](./SPEC.md)
 
 ## Status
-Ready: 1  In Progress: 0  Done: 9
+Ready: 0  In Progress: 0  Done: 10
 
 `SPEC.md`'s Status is `Approved` (see `SPEC.md` → "Status"/"Approval gate").
-TASK-001 through TASK-009 are `Done`; TASK-010 depends on every other task
-and is now unblocked and eligible for the next `implement-task` session.
+TASK-001 through TASK-010 are `Done`; the feature is complete.
 
 ## Task graph
 
@@ -1295,7 +1294,7 @@ pushed or deployed.
 
 ### TASK-010 — Final responsive/accessibility/performance pass
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-20 (confirmation), BR-23, BR-24, BR-25 (confirmation), BR-26
 **Depends on:** TASK-002, TASK-003, TASK-004, TASK-005, TASK-006, TASK-007, TASK-008, TASK-009
 
@@ -1362,18 +1361,41 @@ current diff, not by trusting each task's own self-report.
 above.
 
 **Acceptance criteria**
-- [ ] `AdminTeamDetail.tsx`'s refresh spans TASK-005/006/007, confirmed via
+- [x] `AdminTeamDetail.tsx`'s refresh spans TASK-005/006/007, confirmed via
       diff (BR-20).
-- [ ] No existing loading/empty/error role semantics changed anywhere in
+- [x] No existing loading/empty/error role semantics changed anywhere in
       the full diff (BR-23).
-- [ ] No new page-level horizontal scroll exists on any touched surface
+- [x] No new page-level horizontal scroll exists on any touched surface
       (BR-24).
-- [ ] `TrendChart` lazy-loading/`catchError` boundary confirmed
+- [x] `TrendChart` lazy-loading/`catchError` boundary confirmed
       structurally unchanged; `recharts` confirmed not eager (BR-25).
-- [ ] No new dependency, API route, Firestore access, environment
+- [x] No new dependency, API route, Firestore access, environment
       variable, or authorization change exists in the complete diff
       (BR-26).
-- [ ] `docs/UI-UX.md` and `docs/features/product-ux-shell/SPEC.md` are
+- [x] `docs/UI-UX.md` and `docs/features/product-ux-shell/SPEC.md` are
       synchronized.
-- [ ] `pnpm typecheck`, `pnpm lint`, `git diff --check`, full `pnpm test`,
+- [x] `pnpm typecheck`, `pnpm lint`, `git diff --check`, full `pnpm test`,
       and `pnpm build` all pass.
+
+**Completion evidence**
+- One concrete BR-9 gap found in the final sweep: the SkillTree
+  creation/correction forms and the `AdminTeamDetail` survey-creation form
+  showed a validation `Alert` without `aria-invalid`/`aria-describedby` on
+  their fields. Fixed with an `id` on each `Alert` and field wiring (the
+  minimum-responses hint stays associated alongside the error); one focused
+  regression test added per form. No other production change.
+- Final sweep confirmed: `aria-expanded` appears in exactly three sites
+  (`AdminTeams`, `AdminSkills`, `AdminTeamDetail`); `TrendChart` remains
+  the only `recharts` importer, behind `next/dynamic` with `ssr: false`;
+  the `TeamDetail`, `AdminTeamDetail` and org-skill-overview `Promise.all`
+  fetches are intact; `verifyIdToken(..., true)` unchanged.
+- BR-26: no commit from `d6dcbf4` through `7abf0f5`, nor the TASK-010 diff,
+  touches `app/api/**`, `server/`, `domain/`, `client/` gateways,
+  `package.json` or the lockfile.
+- Docs: `docs/UI-UX.md` ("Shared primitives") and the
+  `product-ux-shell/SPEC.md` revision note describe the as-built result;
+  the Badge sites listed are only those that actually ship. `ROADMAP.md`
+  does not track this feature.
+- After the last code change: `pnpm typecheck`, `pnpm lint`, full
+  `pnpm test` (176 files / 2472 tests) and `pnpm build` (run in
+  isolation) all pass. Nothing was pushed or deployed.

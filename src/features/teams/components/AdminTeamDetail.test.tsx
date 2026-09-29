@@ -801,6 +801,32 @@ describe("AdminTeamDetail survey management", () => {
     );
   });
 
+  it("wires aria-invalid/aria-describedby on the survey-creation fields to the create-error alert (docs/features/ui-refresh/SPEC.md — BR-9)", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({ surveys: [] });
+    createAdminSurveyMock.mockResolvedValue({ ok: false, error: "persistence_failed" });
+
+    render(<AdminTeamDetail teamId="team-1" />);
+    await screen.findByText(/ingen undersøkelser/i);
+    await user.click(screen.getByRole("button", { name: /ny undersøkelse/i }));
+
+    await user.click(screen.getByLabelText(/alle med lenken/i));
+    await user.type(screen.getByLabelText(/tittel/i), "Q3 pulse");
+    await user.click(screen.getByRole("button", { name: /opprett undersøkelse/i }));
+
+    const alert = await screen.findByRole("alert");
+    const titleField = screen.getByLabelText(/tittel/i);
+    const minimumResponsesField = screen.getByLabelText(/minste antall svar/i);
+
+    expect(titleField.getAttribute("aria-invalid")).toBe("true");
+    expect(titleField.getAttribute("aria-describedby")).toBe(alert.id);
+    expect(minimumResponsesField.getAttribute("aria-invalid")).toBe("true");
+    expect(minimumResponsesField.getAttribute("aria-describedby")).toContain(alert.id);
+    // The minimum-responses hint (BR-21) is still associated alongside the error.
+    expect(minimumResponsesField.getAttribute("aria-describedby")).toMatch(/-description/);
+  });
+
   it("copies the survey link and shows accessible feedback", async () => {
     const user = userEvent.setup();
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));

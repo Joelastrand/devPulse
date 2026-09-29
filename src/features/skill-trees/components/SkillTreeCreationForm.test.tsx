@@ -139,6 +139,24 @@ describe("SkillTreeCreationForm", () => {
     resolveCreate({ ok: true, treeId: "tree-1" });
   });
 
+  it("wires aria-invalid/aria-describedby on the name/stage fields to the validation alert (docs/features/ui-refresh/SPEC.md — BR-9)", async () => {
+    const user = userEvent.setup();
+    render(<SkillTreeCreationForm token="token" onCreated={vi.fn()} onCancel={vi.fn()} />);
+
+    await user.type(screen.getByLabelText(/navn på kompetanseområdet/i), "Containers");
+    await user.type(screen.getByLabelText("Stadium 1"), "ab"); // below 3-char minimum
+    await user.click(screen.getByRole("button", { name: /opprett kompetanseområde/i }));
+
+    const alert = await screen.findByRole("alert");
+    const nameField = screen.getByLabelText(/navn på kompetanseområdet/i);
+    const stageField = screen.getByLabelText("Stadium 1");
+
+    expect(nameField.getAttribute("aria-invalid")).toBe("true");
+    expect(nameField.getAttribute("aria-describedby")).toBe(alert.id);
+    expect(stageField.getAttribute("aria-invalid")).toBe("true");
+    expect(stageField.getAttribute("aria-describedby")).toBe(alert.id);
+  });
+
   it("calls onCancel without submitting when the cancel button is clicked (docs/features/ui-refresh/SPEC.md — BR-14)", async () => {
     const user = userEvent.setup();
     const onCancel = vi.fn();

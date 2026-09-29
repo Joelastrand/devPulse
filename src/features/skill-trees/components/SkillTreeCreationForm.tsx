@@ -111,6 +111,8 @@ export function SkillTreeCreationForm({
           label={adminSkillsCopy.creation.nameLabel}
           value={name}
           onChange={(event) => setName(event.target.value)}
+          aria-invalid={submitState.status === "error" || undefined}
+          aria-describedby={submitState.status === "error" ? "skill-tree-create-error" : undefined}
         />
 
         <div className="flex flex-col gap-3">
@@ -122,6 +124,8 @@ export function SkillTreeCreationForm({
                   label={`${adminSkillsCopy.creation.stageLabelPrefix} ${index + 1}`}
                   value={label}
                   onChange={(event) => updateLabel(index, event.target.value)}
+                  aria-invalid={submitState.status === "error" || undefined}
+                  aria-describedby={submitState.status === "error" ? "skill-tree-create-error" : undefined}
                 />
               </div>
               <Button
@@ -148,7 +152,11 @@ export function SkillTreeCreationForm({
           {adminSkillsCopy.creation.addStageButton}
         </Button>
 
-        {submitState.status === "error" && <Alert variant="error">{submitState.message}</Alert>}
+        {submitState.status === "error" && (
+          <Alert variant="error" id="skill-tree-create-error">
+            {submitState.message}
+          </Alert>
+        )}
 
         <div className="flex gap-2">
           <Button type="submit" pending={submitState.status === "pending"}>

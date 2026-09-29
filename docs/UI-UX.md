@@ -113,6 +113,51 @@ admin screens:
 - Empty states
 - Loading states
 
+### Shared primitives (added at UI-refresh closeout)
+
+**Added at the App-Wide UI/UX Refresh closeout
+(`docs/features/ui-refresh/SPEC.md` — TASK-001 through TASK-010),
+documenting the conventions that shipped**, in the same format as "Forum
+UX"/"Skill Tree UX" above — this section describes the as-built refresh,
+not a pre-implementation direction. It extends, rather than replaces, the
+"Components" list above.
+
+- Body text renders in Geist Sans (the application's already-configured
+  typeface, now actually applied); Geist Mono remains configured for future
+  monospace use, unused today.
+- The standard single-line text input, textarea, and simple single-select
+  patterns share one visual/focus/label/error treatment
+  (`src/components/ui/TextField.tsx`, `TextArea.tsx`, `Select.tsx`) — every
+  migrated control keeps its own existing validation/submission behavior
+  and gains `aria-invalid`/`aria-describedby` wiring to its own error
+  state. A control with genuinely different semantics (`SurveyResponseForm`'s
+  1–5 radio scale, the survey-creation access-mode radio group) is
+  deliberately left native, not forced into these primitives.
+- A calm, operational Badge primitive (`src/components/ui/Badge.tsx`)
+  presents an existing status/relationship value as visible text — never
+  color alone, never a gamified "chip." Shipped sites: the team
+  active/disabled label (`AdminTeams`), a team's relationship
+  (`TeamsOverview`), challenge status (`ChallengeList`,
+  `AdminChallengeList`), and the disabled-team label in
+  `OrgSkillProgressOverview`. It is not applied to the SkillTree
+  stage/progression list, nor to `TeamSkillTrackingSection`'s current-stage
+  or "Ikke startet" presentation, which remain plain text.
+- `PageShell` gained a `"wide"` width token (`max-w-6xl`), applied only to
+  `/admin/teams`, `/admin/teams/[teamId]`, and `/admin/skills` — the three
+  list/section-dense admin surfaces. Every public, auth, and
+  survey-participation page keeps its existing, narrower width.
+  `SiteHeader`'s own outer bound matches the same `"wide"` token on every
+  route, so the header remains one coherent outer shell bound.
+- Exactly three creation forms sit behind an explicit `aria-expanded`
+  toggle, extending `SkillTreeCorrectionForm`'s already-shipped open/close
+  precedent: admin team creation, SkillTree creation, and survey creation.
+  Every other form (challenge submission, Forum thread/reply creation,
+  member invitation, access-request actions) stays always-visible — this
+  refresh did not generalize the toggle pattern beyond those three.
+- `/teams/[teamId]` groups its already-rendered sections into two
+  presentation-only zones — "Resultater" and "Teamaktivitet" — with no
+  change to fetch order, generation guards, or any capability computation.
+
 ## Interaction states
 
 Every screen that fetches or mutates server data defines, at minimum:
@@ -385,10 +430,13 @@ identifier (see `docs/features/team-skill-tree/SPEC.md` — Owner decision 4).
 ## Responsive behavior
 
 - Every screen in scope (public survey, auth, `/teams`, `/teams/
-  [teamId]`, `/admin/teams`, `/admin/teams/[teamId]`) works at common
-  phone widths as well as desktop — navigation collapses sensibly, no
-  horizontal scrolling of the page itself, tables/charts scroll within
-  their own container if they must.
+  [teamId]`, `/admin/teams`, `/admin/teams/[teamId]`, `/admin/skills`)
+  works at common phone widths as well as desktop — navigation collapses
+  sensibly, no horizontal scrolling of the page itself, tables/charts
+  scroll within their own container if they must. `PageShell`'s `"wide"`
+  token (`docs/features/ui-refresh/SPEC.md`) is a maximum, not a fixed
+  width — the three admin surfaces that use it still shrink below it on a
+  narrower viewport.
 
 ## Privacy-aware design
 

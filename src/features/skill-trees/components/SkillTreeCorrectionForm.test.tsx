@@ -129,4 +129,22 @@ describe("SkillTreeCorrectionForm", () => {
     expect(alert.textContent).toMatch(/kontroller navnet/i);
     expect(correctAdminSkillTreeMock).not.toHaveBeenCalled();
   });
+
+  it("wires aria-invalid/aria-describedby on the name/stage fields to the validation alert (docs/features/ui-refresh/SPEC.md — BR-9)", async () => {
+    const user = userEvent.setup();
+    render(<SkillTreeCorrectionForm tree={TREE} token="a-token" onSuccess={vi.fn()} onCancel={vi.fn()} />);
+
+    const stage1 = screen.getByLabelText("Stadium 1");
+    await user.clear(stage1);
+    await user.type(stage1, "ab");
+    await user.click(screen.getByRole("button", { name: /lagre rettelse/i }));
+
+    const alert = await screen.findByRole("alert");
+    const nameField = screen.getByLabelText(/navn på kompetanseområdet/i);
+
+    expect(nameField.getAttribute("aria-invalid")).toBe("true");
+    expect(nameField.getAttribute("aria-describedby")).toBe(alert.id);
+    expect(stage1.getAttribute("aria-invalid")).toBe("true");
+    expect(stage1.getAttribute("aria-describedby")).toBe(alert.id);
+  });
 });

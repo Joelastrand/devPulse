@@ -1169,6 +1169,8 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
               type="text"
               value={surveyTitle}
               onChange={(event) => setSurveyTitle(event.target.value)}
+              aria-invalid={surveyCreateState.status === "error" || undefined}
+              aria-describedby={surveyCreateState.status === "error" ? "admin-survey-create-error" : undefined}
             />
 
             <TextField
@@ -1182,6 +1184,12 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
               onChange={(event) => setSurveyMinimumResponses(event.target.value)}
               description={surveysCopy.admin.create.minimumResponsesHint}
               className="w-24"
+              aria-invalid={surveyCreateState.status === "error" || undefined}
+              aria-describedby={
+                surveyCreateState.status === "error"
+                  ? "admin-survey-minimum-responses-description admin-survey-create-error"
+                  : "admin-survey-minimum-responses-description"
+              }
             />
 
             <div className="flex flex-wrap gap-4">
@@ -1191,6 +1199,8 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
                 type="datetime-local"
                 value={surveyStartAt}
                 onChange={(event) => setSurveyStartAt(event.target.value)}
+                aria-invalid={surveyCreateState.status === "error" || undefined}
+                aria-describedby={surveyCreateState.status === "error" ? "admin-survey-create-error" : undefined}
               />
               <TextField
                 id="admin-survey-end-at"
@@ -1198,6 +1208,8 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
                 type="datetime-local"
                 value={surveyEndAt}
                 onChange={(event) => setSurveyEndAt(event.target.value)}
+                aria-invalid={surveyCreateState.status === "error" || undefined}
+                aria-describedby={surveyCreateState.status === "error" ? "admin-survey-create-error" : undefined}
               />
             </div>
 
@@ -1216,7 +1228,7 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
               </Button>
             </div>
             {surveyCreateState.status === "error" && (
-              <Alert variant="error" className="text-sm">
+              <Alert variant="error" id="admin-survey-create-error" className="text-sm">
                 {surveyCreateState.message}
               </Alert>
             )}
