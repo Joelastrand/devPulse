@@ -8,6 +8,7 @@ import { EmptyState } from "../../../components/ui/EmptyState";
 import { LoadingState } from "../../../components/ui/LoadingState";
 import { reportTeamSkillProgress, type TeamSkillView } from "../client/skill-trees-gateway";
 import { teamSkillSectionCopy } from "../copy";
+import { SkillProgressPath } from "./SkillProgressPath";
 
 export type TeamSkillSectionState =
   | { status: "loading" }
@@ -35,11 +36,11 @@ export interface TeamSkillSectionProps {
  * docs/features/skill-progress-self-report/SPEC.md — TASK-002, BR-10
  * through BR-12). Renders exactly what `fetchTeamSkills` (→
  * `getTeamSkillProgress`) returned — every tree the team is tracking, its
- * full ordered stage list as a semantic `<ol>`, and the current stage
- * marked with both `aria-current="step"` and visible text (never color
- * alone, unchanged from Phase 7). A tree with `currentNodeId: null` renders
- * a distinct "ikke startet" state rather than silently showing no marker at
- * all.
+ * full ordered stage list and the current stage, rendered by the shared,
+ * presentational `SkillProgressPath` (docs/features/gamified-skill-tree/
+ * SPEC.md — BR-7), which owns ordering, the earlier/current/upcoming
+ * derivation, the summary line and the "ikke startet" state for
+ * `currentNodeId: null`. The path is never a control.
  *
  * Each already-tracked tree also gets a stage-setting control — but **only
  * when `state.canReportProgress` is true** (docs/features/
@@ -171,24 +172,7 @@ function TrackedSkillRow({
   return (
     <Card as="li" variant="bordered" padding="sm" className="flex flex-col gap-2">
       <p className="break-words font-medium text-zinc-900 dark:text-zinc-50">{skill.name}</p>
-      {skill.currentNodeId === null && (
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">{teamSkillSectionCopy.notStarted}</p>
-      )}
-      <ol className="ml-5 list-decimal text-sm text-zinc-700 dark:text-zinc-300">
-        {nodes.map((node) => {
-          const isCurrent = node.nodeId === skill.currentNodeId;
-          return (
-            <li key={node.nodeId} aria-current={isCurrent ? "step" : undefined}>
-              {node.label}
-              {isCurrent && (
-                <span className="ml-2 font-medium text-zinc-900 dark:text-zinc-50">
-                  ({teamSkillSectionCopy.currentStageLabel})
-                </span>
-              )}
-            </li>
-          );
-        })}
-      </ol>
+      <SkillProgressPath name={skill.name} nodes={skill.nodes} currentNodeId={skill.currentNodeId} />
 
       {canReportProgress && phase === "validation_error" && (
         <Alert variant="error" className="text-sm">

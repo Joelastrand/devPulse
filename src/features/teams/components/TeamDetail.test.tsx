@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { lazy, Suspense, type ComponentType, type ReactNode } from "react";
 import { teamsCopy } from "../copy";
@@ -1673,6 +1673,16 @@ describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
     currentNodeId: "node-0",
   };
 
+  /** A stage inside the "Containers" SkillProgressPath list (the same label also appears in the stage-select option). */
+  function pathStageItem(label: string) {
+    return within(screen.getByRole("list", { name: "Containers" })).getByText(label);
+  }
+
+  function currentPathStage(label: string) {
+    const item = pathStageItem(label).closest("li");
+    return item?.getAttribute("aria-current") === "step" ? item : null;
+  }
+
   const NOT_STARTED_SKILL = {
     treeId: "tree-2",
     name: "Observability",
@@ -1715,8 +1725,8 @@ describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
 
     expect(await screen.findByRole("heading", { name: "Kompetanseområder" })).toBeTruthy();
     expect(screen.getByText("Containers")).toBeTruthy();
-    expect(screen.getByText("Fundamentals", { selector: "li" })).toBeTruthy();
-    expect(screen.getByText("Pilot", { selector: "li" })).toBeTruthy();
+    expect(pathStageItem("Fundamentals")).toBeTruthy();
+    expect(pathStageItem("Pilot")).toBeTruthy();
     expect(fetchTeamSkillsMock).toHaveBeenCalledWith("a-token", "team-1");
   });
 
@@ -1744,7 +1754,7 @@ describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
     render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
     await screen.findByText("Containers");
-    expect(screen.getByText(/nåværende steg/i)).toBeTruthy();
+    expect(currentPathStage("Fundamentals")?.textContent).toMatch(/nåværende steg/i);
   });
 
   it("shows a distinct skill-section error without hiding results/challenges/forum (independent section failures)", async () => {
@@ -1811,7 +1821,7 @@ describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
 
     await waitFor(() => expect(fetchTeamSkillsMock).toHaveBeenCalledTimes(2));
     expect(reportTeamSkillProgressMock).toHaveBeenCalledWith("a-token", "team-1", "tree-1", "node-1");
-    await screen.findByText("Pilot", { selector: "li[aria-current='step']" });
+    await waitFor(() => expect(currentPathStage("Pilot")).toBeTruthy());
   });
 
   it("discards a stale post-report skill refresh once the route has changed to a different team", async () => {
@@ -1875,7 +1885,7 @@ describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
     await user.click(screen.getByRole("button", { name: /lagre/i }));
 
     await waitFor(() => expect(fetchTeamSkillsMock).toHaveBeenCalledTimes(2));
-    await screen.findByText("Pilot", { selector: "li[aria-current='step']" });
+    await waitFor(() => expect(currentPathStage("Pilot")).toBeTruthy());
     expect(screen.queryByRole("combobox", { name: /sett stadium/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /lagre/i })).toBeNull();
   });
@@ -1890,8 +1900,8 @@ describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
     render(<TeamDetail teamId="team-1" forumEnabled={true} />);
     await screen.findByText("Containers");
 
-    expect(screen.getByText("Fundamentals", { selector: "li" })).toBeTruthy();
-    expect(screen.getByText("Pilot", { selector: "li" })).toBeTruthy();
+    expect(pathStageItem("Fundamentals")).toBeTruthy();
+    expect(pathStageItem("Pilot")).toBeTruthy();
     expect(screen.queryByRole("combobox", { name: /sett stadium/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /lagre/i })).toBeNull();
     expect(reportTeamSkillProgressMock).not.toHaveBeenCalled();
@@ -1903,7 +1913,7 @@ describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
     render(<TeamDetail teamId="team-1" forumEnabled={true} />);
     await screen.findByText("Containers");
 
-    expect(screen.getByText("Fundamentals", { selector: "li[aria-current='step']" })).toBeTruthy();
+    expect(currentPathStage("Fundamentals")).toBeTruthy();
     expect(screen.queryByRole("combobox", { name: /sett stadium/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /lagre/i })).toBeNull();
   });

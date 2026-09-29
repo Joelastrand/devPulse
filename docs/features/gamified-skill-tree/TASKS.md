@@ -3,7 +3,7 @@
 Specification: [SPEC.md](./SPEC.md)
 
 ## Status
-Ready: 3  In Progress: 0  Done: 1
+Ready: 2  In Progress: 0  Done: 2
 
 `SPEC.md` is `Approved`. Presentation-only
 feature: no task may touch `app/api/**`, `src/features/**/server/`,
@@ -100,7 +100,7 @@ pass; review-change: PASS. No call sites yet (TASK-002/003).
 
 ### TASK-002 — Member surface: path on `/teams/[teamId]`
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-7, BR-11, BR-12, BR-18 (surface diff limits); BR-9/10 verified
 **Depends on:** TASK-001
 
@@ -131,9 +131,17 @@ and disabled-team behavior unchanged; no new data or request.
 None expected.
 
 **Acceptance criteria**
-- [ ] BR-7 satisfied; loading/error/empty unchanged.
-- [ ] Capability-gating tests still pass unmodified in intent.
-- [ ] Diff limited to `TeamSkillSection.tsx` and its test (no overview/catalog/forms/server/API/domain/gateway/package change).
+- [x] BR-7 satisfied; loading/error/empty unchanged.
+- [x] Capability-gating tests still pass unmodified in intent.
+- [x] Diff limited to `TeamSkillSection.tsx` and its tests (no overview/catalog/forms/server/API/domain/gateway/package change).
+
+**Evidence:** `TeamSkillSection.tsx` now renders `SkillProgressPath` (name, `skill.nodes`,
+`skill.currentNodeId` passed unchanged) in place of the decimal `<ol>` and "ikke startet"
+paragraph; `sortedNodes` kept only for the select. `TeamSkillSection.test.tsx` updated
+(+ read-only/reportable, null, unknown id, non-interactive, order, refetch-recompute tests);
+`TeamDetail.test.tsx` selectors updated because it asserts the same rendered markup (no
+behavior change). Typecheck, lint, `git diff --check`, full `pnpm vitest run` (2494 tests)
+and isolated `pnpm build` pass; review-change: PASS. No browser inspection was run.
 
 ---
 

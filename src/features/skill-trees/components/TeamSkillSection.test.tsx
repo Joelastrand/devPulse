@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { TeamSkillSection, type TeamSkillSectionState } from "./TeamSkillSection";
 
@@ -42,9 +42,14 @@ function saveButton(name: string | RegExp) {
   return screen.getByRole("button", { name });
 }
 
-/** Scopes a stage-label lookup to the read-only `<ol>` marker, since the same label text also appears in the stage-select `<option>`. */
-function stageListItemText(text: string | RegExp) {
-  return screen.getByText(text, { selector: "li" });
+/** The SkillProgressPath list for one tree, named by the tree's name. */
+function pathList(treeName: string) {
+  return screen.getByRole("list", { name: treeName });
+}
+
+/** Scopes a stage-label lookup to the tree's path list, since the same label text also appears in the stage-select `<option>`. */
+function pathStage(treeName: string, label: string | RegExp) {
+  return within(pathList(treeName)).getByText(label).closest("li") as HTMLElement;
 }
 
 describe("TeamSkillSection", () => {
@@ -74,9 +79,9 @@ describe("TeamSkillSection", () => {
     render(<TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />);
 
     expect(screen.getByText("Containers")).toBeTruthy();
-    expect(stageListItemText("Fundamentals")).toBeTruthy();
-    expect(stageListItemText("Evaluate alternatives")).toBeTruthy();
-    expect(stageListItemText("Production rollout")).toBeTruthy();
+    expect(pathStage("Containers", "Fundamentals")).toBeTruthy();
+    expect(pathStage("Containers", "Evaluate alternatives")).toBeTruthy();
+    expect(pathStage("Containers", "Production rollout")).toBeTruthy();
   });
 
   it("renders multiple tracked trees, each with its own stage list", () => {
@@ -89,43 +94,131 @@ describe("TeamSkillSection", () => {
 
     expect(screen.getByText("Containers")).toBeTruthy();
     expect(screen.getByText("Observability")).toBeTruthy();
-    expect(stageListItemText("Basic logging")).toBeTruthy();
-    expect(stageListItemText("Full tracing")).toBeTruthy();
+    expect(pathStage("Observability", "Basic logging")).toBeTruthy();
+    expect(pathStage("Observability", "Full tracing")).toBeTruthy();
   });
 
   it("marks the current stage with both aria-current='step' and visible text — never color alone", () => {
     const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL], canReportProgress: true };
     render(<TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />);
 
-    const currentItem = stageListItemText("Evaluate alternatives").closest("li");
-    expect(currentItem?.getAttribute("aria-current")).toBe("step");
-    expect(currentItem?.textContent).toMatch(/nåværende steg/i);
+    const currentItem = pathStage("Containers", "Evaluate alternatives");
+    expect(currentItem.getAttribute("aria-current")).toBe("step");
+    expect(currentItem.textContent).toMatch(/nåværende steg/i);
 
-    const otherItem = stageListItemText("Fundamentals").closest("li");
-    expect(otherItem?.getAttribute("aria-current")).toBeNull();
-    expect(otherItem?.textContent).not.toMatch(/nåværende steg/i);
+    const earlierItem = pathStage("Containers", "Fundamentals");
+    expect(earlierItem.getAttribute("aria-current")).toBeNull();
+    expect(earlierItem.textContent).toMatch(/tidligere steg/i);
+    expect(pathStage("Containers", "Production rollout").textContent).toMatch(/kommende steg/i);
+    const marked = within(pathList("Containers"))
+      .getAllByRole("listitem")
+      .filter((li) => li.getAttribute("aria-current"));
+    expect(marked.length).toBe(1);
   });
 
   it("renders a distinct 'not started' state for a currentNodeId of null, with no current-stage marker", () => {
     const state: TeamSkillSectionState = { status: "loaded", skills: [OBSERVABILITY_SKILL], canReportProgress: true };
     render(<TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />);
 
-    expect(screen.getByText(/ikke startet/i)).toBeTruthy();
-    expect(screen.queryByText(/nåværende steg/i)).toBeNull();
-    for (const item of screen.getAllByRole("listitem")) {
+    expect(screen.getByText(/teamets nåværende steg/i).textContent).toMatch(/ikke startet/i);
+    expect(screen.getAllByText(/ikke startet/i).length).toBe(1);
+    for (const item of within(pathList("Observability")).getAllByRole("listitem")) {
       expect(item.getAttribute("aria-current")).toBeNull();
+      expect(item.textContent).toMatch(/kommende steg/i);
     }
   });
 
-  it("renders as a semantic ordered list, never a graphical/canvas element", () => {
+  it("renders each tree through SkillProgressPath — one summary and one ordered list, and no legacy decimal list or suffix", () => {
     const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL], canReportProgress: true };
     const { container } = render(
       <TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />,
     );
 
-    expect(container.querySelector("ol")).toBeTruthy();
+    expect(container.querySelectorAll("ol").length).toBe(1);
+    expect(container.querySelector("ol.list-decimal")).toBeNull();
+    expect(container.textContent).not.toMatch(/\(Nåværende steg\)/);
+    expect(screen.getAllByText(/teamets nåværende steg/i).length).toBe(1);
+    expect(screen.getByText(/steg 2 av 3/i)).toBeTruthy();
     expect(container.querySelector("canvas")).toBeNull();
     expect(container.querySelector("svg")).toBeNull();
+  });
+
+  it("renders the path in the stored order, not array order", () => {
+    const [n0, n1, n2] = CONTAINERS_SKILL.nodes;
+    const shuffled = { ...CONTAINERS_SKILL, nodes: [n2, n0, n1] };
+    const state: TeamSkillSectionState = { status: "loaded", skills: [shuffled], canReportProgress: false };
+    render(<TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />);
+
+    const items = within(pathList("Containers")).getAllByRole("listitem");
+    expect(items[0].textContent).toMatch(/Fundamentals/);
+    expect(items[1].textContent).toMatch(/Evaluate alternatives/);
+    expect(items[2].textContent).toMatch(/Production rollout/);
+  });
+
+  it("passes an unknown currentNodeId through unchanged: all upcoming, no current marker, no summary", () => {
+    const state: TeamSkillSectionState = {
+      status: "loaded",
+      skills: [{ ...CONTAINERS_SKILL, currentNodeId: "node-gone" }],
+      canReportProgress: false,
+    };
+    const { container } = render(
+      <TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />,
+    );
+
+    expect(container.querySelector("[aria-current]")).toBeNull();
+    expect(screen.queryByText(/teamets nåværende steg/i)).toBeNull();
+    expect(screen.queryByText(/ikke startet/i)).toBeNull();
+  });
+
+  it("keeps the path non-interactive: stages are not buttons, links or other controls", () => {
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL], canReportProgress: true };
+    render(<TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />);
+
+    const path = within(pathList("Containers"));
+    expect(path.queryAllByRole("button")).toEqual([]);
+    expect(path.queryAllByRole("link")).toEqual([]);
+    expect(path.queryAllByRole("combobox")).toEqual([]);
+    expect(pathList("Containers").querySelector("[tabindex], button, a, select, input")).toBeNull();
+  });
+
+  it("read-only view (canReportProgress=false): path visible, no stage select and no Lagre button", () => {
+    const state: TeamSkillSectionState = {
+      status: "loaded",
+      skills: [CONTAINERS_SKILL, OBSERVABILITY_SKILL],
+      canReportProgress: false,
+    };
+    render(<TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />);
+
+    expect(pathList("Containers")).toBeTruthy();
+    expect(pathList("Observability")).toBeTruthy();
+    expect(pathStage("Containers", "Evaluate alternatives").getAttribute("aria-current")).toBe("step");
+    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.queryByRole("button", { name: /lagre/i })).toBeNull();
+  });
+
+  it("reportable view (canReportProgress=true): path visible alongside the select and Lagre button", () => {
+    const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL], canReportProgress: true };
+    render(<TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />);
+
+    expect(pathList("Containers")).toBeTruthy();
+    expect(stageSelect(/sett stadium/i)).toBeTruthy();
+    expect(saveButton(/lagre/i)).toBeTruthy();
+  });
+
+  it("a refetch with a new currentNodeId, including a backward move, recomputes the path", () => {
+    const at = (currentNodeId: string): TeamSkillSectionState => ({
+      status: "loaded",
+      skills: [{ ...CONTAINERS_SKILL, currentNodeId }],
+      canReportProgress: true,
+    });
+    const { rerender } = render(
+      <TeamSkillSection idToken="token" teamId="team-1" state={at("node-2")} onReported={() => {}} />,
+    );
+    expect(pathStage("Containers", "Production rollout").getAttribute("aria-current")).toBe("step");
+
+    rerender(<TeamSkillSection idToken="token" teamId="team-1" state={at("node-0")} onReported={() => {}} />);
+    expect(pathStage("Containers", "Fundamentals").getAttribute("aria-current")).toBe("step");
+    expect(pathStage("Containers", "Production rollout").textContent).toMatch(/kommende steg/i);
   });
 
   it("never renders an identity-shaped value (uid/email/createdBy/updatedBy) anywhere in its output", () => {
@@ -153,7 +246,7 @@ describe("TeamSkillSection", () => {
 
     // Rendered as literal text content, never parsed as markup.
     expect(screen.getByText(maliciousSkill.name)).toBeTruthy();
-    expect(stageListItemText(/Stage One/)).toBeTruthy();
+    expect(within(pathList(maliciousSkill.name)).getByText(/Stage One/)).toBeTruthy();
     expect(container.querySelector("script")).toBeNull();
     expect(container.querySelector("img")).toBeNull();
   });
@@ -272,8 +365,7 @@ describe("TeamSkillSection self-report control (docs/features/skill-progress-sel
     expect(alert.textContent?.toLowerCase()).not.toMatch(/medlem/);
     expect(onReported).not.toHaveBeenCalled();
     // The previously-displayed current stage remains marked — no false success.
-    const currentItem = stageListItemText("Evaluate alternatives").closest("li");
-    expect(currentItem?.getAttribute("aria-current")).toBe("step");
+    expect(pathStage("Containers", "Evaluate alternatives").getAttribute("aria-current")).toBe("step");
   });
 
   it("shows the same generic message for a disabled-team (team_disabled) response — no distinct team-status wording", async () => {
@@ -366,7 +458,7 @@ describe("TeamSkillSection self-report control (docs/features/skill-progress-sel
     const { unmount } = render(
       <TeamSkillSection idToken="token" teamId="team-1" state={beforeReport} onReported={() => {}} />,
     );
-    expect(screen.getByText(/ikke startet/i)).toBeTruthy();
+    expect(screen.getByText(/teamets nåværende steg/i).textContent).toMatch(/ikke startet/i);
     unmount();
 
     const afterReport: TeamSkillSectionState = {
@@ -377,7 +469,6 @@ describe("TeamSkillSection self-report control (docs/features/skill-progress-sel
     render(<TeamSkillSection idToken="token" teamId="team-1" state={afterReport} onReported={() => {}} />);
 
     expect(screen.queryByText(/ikke startet/i)).toBeNull();
-    const currentItem = stageListItemText("Production rollout").closest("li");
-    expect(currentItem?.getAttribute("aria-current")).toBe("step");
+    expect(pathStage("Containers", "Production rollout").getAttribute("aria-current")).toBe("step");
   });
 });
