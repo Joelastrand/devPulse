@@ -3,7 +3,7 @@
 Specification: [SPEC.md](./SPEC.md)
 
 ## Status
-Ready: 1  In Progress: 0  Done: 3
+Ready: 0  In Progress: 0  Done: 4
 
 `SPEC.md` is `Approved`. Presentation-only
 feature: no task may touch `app/api/**`, `src/features/**/server/`,
@@ -192,7 +192,7 @@ review-change: PASS. Unused `teamSkillTrackingCopy.tracked.currentStageLabel` (a
 
 ### TASK-004 — Final regression, responsive/a11y confirmation and docs
 
-**Status:** Ready
+**Status:** Done
 **Verifies (confirmation only; ownership above):** BR-11, BR-12, BR-18, BR-19, BR-20
 **Depends on:** TASK-002, TASK-003
 
@@ -221,6 +221,18 @@ Re-verify from the actual diff that no authorization or data boundary changed.
 `docs/UI-UX.md`; possibly `docs/ROADMAP.md`.
 
 **Acceptance criteria**
-- [ ] All BR confirmations recorded with evidence.
-- [ ] Docs synchronized; deferred features still unimplemented.
-- [ ] Typecheck, lint, tests and build pass.
+- [x] All BR confirmations recorded with evidence.
+- [x] Docs synchronized; deferred features still unimplemented.
+- [x] Typecheck, lint, tests and build pass.
+
+**Evidence:** BR-1..BR-20 audited against code and tests; all satisfied, no gaps and no
+production behavior change. Only the two adopting surfaces import `SkillProgressPath`; the
+feature diff (`2d51d81..HEAD`) touches no `app/api`, server, domain, gateway, Firestore,
+`package.json` or `pnpm-lock.yaml`, and no overview/catalog/authoring component. Removed proven-dead
+copy keys `teamSkillSectionCopy.currentStageLabel`, `teamSkillSectionCopy.notStarted` and
+`teamSkillTrackingCopy.tracked.currentStageLabel` (`tracked.notStarted` is live and kept).
+`docs/UI-UX.md` updated with the as-built path and the Badge note corrected; `docs/ROADMAP.md`
+has no per-feature entry for UI features, so it is unchanged. Typecheck, lint, `git diff --check`,
+focused tests (5 files, 236 tests), full `pnpm vitest run` (177 files, 2502 tests) and isolated
+`pnpm build` pass; review-change: PASS. No browser inspection was run (requires an authenticated
+Firebase session); responsive/a11y verified structurally and by tests.

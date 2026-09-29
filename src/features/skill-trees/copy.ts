@@ -71,7 +71,6 @@ export const teamSkillTrackingCopy = {
   tracked: {
     sectionTitle: "Sporede kompetanseområder",
     empty: "Teamet sporer ingen kompetanseområder ennå.",
-    currentStageLabel: "Nåværende steg",
     notStarted: "Ikke startet",
     stageSelectLabel: "Sett stadium",
     stopButton: "Stopp sporing",
@@ -131,8 +130,6 @@ export const teamSkillSectionCopy = {
   loading: "Laster kompetanseområder…",
   error: "Noe gikk galt under lasting av kompetanseområder. Prøv igjen senere.",
   empty: "Teamet sporer ingen kompetanseområder ennå.",
-  currentStageLabel: "Nåværende steg",
-  notStarted: "Ikke startet",
   report: {
     stageSelectLabel: "Sett stadium",
     submitButton: "Lagre",

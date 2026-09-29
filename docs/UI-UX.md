@@ -140,8 +140,8 @@ not a pre-implementation direction. It extends, rather than replaces, the
   (`TeamsOverview`), challenge status (`ChallengeList`,
   `AdminChallengeList`), and the disabled-team label in
   `OrgSkillProgressOverview`. It is not applied to the SkillTree
-  stage/progression list, nor to `TeamSkillTrackingSection`'s current-stage
-  or "Ikke startet" presentation, which remain plain text.
+  stage/progression path (see "Skill Tree UX" — progression path), which
+  states its positional state as plain text.
 - `PageShell` gained a `"wide"` width token (`max-w-6xl`), applied only to
   `/admin/teams`, `/admin/teams/[teamId]`, and `/admin/skills` — the three
   list/section-dense admin surfaces. Every public, auth, and
@@ -338,6 +338,28 @@ identifier (see `docs/features/team-skill-tree/SPEC.md` — Owner decision 4).
   used — never an optimistic/local-only update — so a fresh page load always
   reconstructs the persisted stage, and the currently-shown capability, the
   same way, whether the value was last set by a member or an admin.
+- **Progression path (as-built, `docs/features/gamified-skill-tree/SPEC.md`).**
+  Supersedes the plain `<ol>` stage lists described for `/teams/[teamId]`
+  and `/admin/teams/[teamId]` above: both tracked-tree surfaces render one
+  shared, presentational `SkillProgressPath` (vertical at every breakpoint;
+  CSS-drawn numbered markers and rail, no icon, image, canvas/SVG, animation
+  or dependency). It is a semantic `<ol>` named by the tree name, with the
+  stage marker/rail `aria-hidden`. Every stage states its state as visible text —
+  "Tidligere steg", "Nåværende steg", "Kommende steg" — and only the current
+  stage's `<li>` has `aria-current="step"`. State is purely positional,
+  derived at render time from the ordered nodes and the team's
+  `currentNodeId`; "Tidligere steg" means only "before the team's current
+  step", never a completion claim (no history is stored, and moving the
+  stage backward simply re-derives). `currentNodeId: null` shows "Ikke
+  startet" with every stage "Kommende steg"; a non-null id matching no stage
+  is a defensive fallback (all "Kommende steg", no summary). A summary line
+  reads "Teamets nåværende steg: <label> (steg N av M)". Nodes are never
+  controls; the existing select/buttons remain the only controls, and
+  `canReportProgress`/admin/`teamDisabled` gating is unchanged. The
+  cross-team `OrgSkillProgressOverview` and the `/admin/skills`
+  catalog/creation/correction surfaces are intentionally unchanged
+  (compact text and authoring respectively). The path is team-level only —
+  no points, XP, achievements, streaks, rankings or individual framing.
 - A tree's name and every stage's label are untrusted, admin-authored
   display strings, rendered as ordinary text on every surface — never
   `dangerouslySetInnerHTML`, never passed through an HTML/Markdown parser.
