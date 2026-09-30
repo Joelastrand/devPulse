@@ -10,7 +10,8 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "seed:demo-team": "node --conditions=react-server --import ./src/features/demo-team/register-ts-resolver.mjs --env-file-if-exists=.env.local src/features/demo-team/cli.ts"
   },
   "dependencies": {
     "firebase": "^12.18.0",

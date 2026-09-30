@@ -65,8 +65,8 @@ invention; Phase 10; Performance Phase B.
    the seed must not inherit). Not reusable by a script as-is.
 3. **Project selection** has independent representations, none authoritative
    for a script: `.firebaserc` (git-ignored, per-clone; the local copy
-   currently names `devpulse-ac26e` as `default` — an *observed local
-   reference only, not an approved target*), `FIREBASE_PROJECT_ID`,
+   may name a project as `default` — a local
+   reference only, not an approved target), `FIREBASE_PROJECT_ID`,
    `NEXT_PUBLIC_FIREBASE_PROJECT_ID`. `firebase.json` has no project id and
    no emulators. The seed never reads `.firebaserc` or shells out to a CLI.
 4. **No emulator support** and no destructive/reset script exists.
@@ -156,8 +156,8 @@ by any planning document.**
    4. only then the first `--write --confirm <id>`.
    `--confirm` matching `--project` is a typo guard, **not** approval. An
    agent never infers approval from an earlier step or from the fact that a
-   project is the observed local one. `devpulse-ac26e` is only the currently
-   observed local reference and carries no approval.
+   project is the one named in a local `.firebaserc`. That project is only a
+   local reference and carries no approval.
 5. The dataset is visible to every user/admin of whatever project is chosen
    (finding 11); the online dry-run report repeats this as a warning.
 
@@ -423,7 +423,7 @@ v1 has **no deletion path**: no `delete()`, no collection query, no wildcard;
 the reader/writer seams expose no delete or query method. Removing demo data
 is a manual act outside this feature; retiring an id needs a new spec.
 
-## Execution interface (proposed — not yet implemented)
+## Execution interface (implemented; documented in `docs/DEVELOPMENT.md`)
 ```
 pnpm seed:demo-team -- --project <id> --presenter-uid <uid> [--as-of YYYY-MM-DD] [--offline]
 pnpm seed:demo-team -- --project <id> --presenter-uid <uid> --write --confirm <id>
@@ -512,8 +512,8 @@ On implementation: `docs/DEVELOPMENT.md` gains a "Demo Team seed" section
 kept, `ENCRYPTION_KEY` must match the target app, visibility caveat,
 presenter/`APP_ADMIN_EMAILS` prerequisite). Not expected: `DATA-MODEL.md` (no
 schema/ownership field), `.env.local.example` (no new variable),
-`ROADMAP.md` (tooling). The command is **proposed** until TASK-005 lands;
-`DEVELOPMENT.md` must not describe it earlier.
+`ROADMAP.md` (tooling). The command was proposed until TASK-005 landed and is
+now documented.
 
 ## Behavioral requirements
 **Target & execution safety**
@@ -681,21 +681,21 @@ schema/ownership field), `.env.local.example` (no new variable),
 ## Acceptance criteria
 - [ ] Missing/mismatched project, credentials, presenter, key, or unknown flag
       aborts before any network/write.
-- [ ] Dry-run default; offline mode uses no network/reads; both perform zero
+- [x] Dry-run default; offline mode uses no network/reads; both perform zero
       writes.
-- [ ] Plan is 82 documents (1/1/9/59/5/4/3) and validates against the real
+- [x] Plan is 82 documents (1/1/9/59/5/4/3) and validates against the real
       domain validators and real aggregation (7 published periods, 1
       insufficient, latest published, scheduled survey with 0 responses).
-- [ ] Every path is manifest-enumerated; nothing outside the seven collections
+- [x] Every path is manifest-enumerated; nothing outside the seven collections
       is written; no delete/query exists.
-- [ ] Any CONFLICT (incl. undecryptable existing demo ciphertext) aborts with
+- [x] Any CONFLICT (incl. undecryptable existing demo ciphertext) aborts with
       zero writes; second run (fake store) yields the same logical documents
       with no duplicates; `C` records are not overwritten.
-- [ ] Local crypto round-trip precedes any write.
-- [ ] No plaintext sensitive content or forbidden output anywhere.
-- [ ] `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build` pass; no new
+- [x] Local crypto round-trip precedes any write.
+- [x] No plaintext sensitive content or forbidden output anywhere.
+- [x] `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build` pass; no new
       dependency; no schema/API/UI/rules/index diff.
-- [ ] `DEVELOPMENT.md` documents the tool, execution gate and admin
+- [x] `DEVELOPMENT.md` documents the tool, execution gate and admin
       prerequisite.
 - [ ] No live Firebase write occurred during implementation, and no `--write`
       ran without explicit coordinator approval of the exact project id.

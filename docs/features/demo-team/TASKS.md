@@ -3,7 +3,7 @@
 Specification: [SPEC.md](./SPEC.md) (**Approved**, no open design questions)
 
 ## Status
-Ready: 5  In Progress: 0  Done: 1
+Ready: 0  In Progress: 0  Done: 6
 
 Feature-wide constraints for every task: **no Firebase write, no seed
 execution and no network call against a real project** during implementation
@@ -145,7 +145,7 @@ periods 2 and 4. Challenge `resolvedAt`/`archivedAt` are as-of-relative
 
 ### TASK-002 — Arguments, environment and target-project safety
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-1, BR-2, BR-3, BR-5, BR-6
 **Depends on:** None
 
@@ -183,16 +183,19 @@ Fail-closed target proof; secrets never in messages.
 None.
 
 **Acceptance criteria**
-- [ ] BR-1, BR-2, BR-3 (parsing), BR-5 (input), BR-6 (config) verified.
-- [ ] No pre-approved project anywhere in code or fixtures (tests use fake ids).
-- [ ] Relevant tests, typecheck and lint pass.
-- [ ] No conflict with `docs/SECURITY.md`.
+- [x] BR-1, BR-2, BR-3 (parsing), BR-5 (input), BR-6 (config) verified.
+- [x] No pre-approved project anywhere in code or fixtures (tests use fake ids).
+- [x] Relevant tests, typecheck and lint pass.
+- [x] No conflict with `docs/SECURITY.md`.
+
+**Evidence:** `src/features/demo-team/config.ts` (`resolveDemoSeedConfig({argv, env, now})` → discriminated `ok` result; `DemoSeedConfig` with `mode`, `network`, `writesAllowed`, `credentials`), `config.test.ts` (73 tests: table-driven arg/env failures, as-of edge cases, no-secret-echo, purity, static slice checks). Typecheck, lint and full `pnpm test` (2603 tests) pass. No Firebase import, network or write.
+Notes for later tasks: errors are `{category, subject?}` with fixed flag/variable names only; `--project` must match the GCP project-id shape; blank env values count as unset; a bare `--` separator is rejected as an unknown flag, so TASK-005 must check how `pnpm seed:demo-team -- …` forwards arguments; the private key is passed through as-is (any `\n` unescaping is adapter work in TASK-005).
 
 ---
 
 ### TASK-003 — Guarded single-batch writer
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-16, BR-22, BR-25, BR-30
 **Depends on:** TASK-001
 
@@ -225,16 +228,19 @@ The structural Forum/collection guard is enforced here (BR-16).
 None.
 
 **Acceptance criteria**
-- [ ] BR-16, BR-22, BR-25, BR-30 (writer side) verified.
-- [ ] No `firebase-admin` import (seam only).
-- [ ] Relevant tests, typecheck and lint pass.
-- [ ] No conflict with `docs/SECURITY.md`.
+- [x] BR-16, BR-22, BR-25, BR-30 (writer side) verified.
+- [x] No `firebase-admin` import (seam only).
+- [x] Relevant tests, typecheck and lint pass.
+- [x] No conflict with `docs/SECURITY.md`.
+
+**Evidence:** `src/features/demo-team/writer.ts` (`writeDemoOperations({operations, manifest, createBatch})`, `DemoWriteBatch` seam with only `create`/`set`/`commit`, `DemoWriteError` carrying a category only: `invalid_operations` / `too_many_operations` / `write_failed`), `writer.test.ts` (fake atomic batch/store; Forum and other non-allow-listed collections, non-manifest paths, wrong class/collection, duplicates, empty list, > 400, commit failure, `C` collision, static no-delete/no-query/no-Firebase checks). Typecheck, lint and full `pnpm test` (2628 tests) pass. No Firebase import or access.
+Notes for later tasks: `createBatch()` is called only after the whole list validates. The writer accepts any manifest-owned *subset* (so compatible `C` records can be dropped upstream) and does not require full manifest coverage; an empty list is rejected, so the runner must not call the writer when nothing is planned. The seam is path-based (`{collection}/{docId}`); the TASK-005 Admin adapter maps it to a document reference.
 
 ---
 
 ### TASK-004 — Preflight, manifest classification and dry-run model
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-4, BR-5, BR-6, BR-12, BR-21, BR-23, BR-24, BR-26, BR-27, BR-28, BR-29, BR-31
 **Depends on:** TASK-001, TASK-002
 
@@ -287,16 +293,19 @@ overwritten if undecryptable; redaction.
 None.
 
 **Acceptance criteria**
-- [ ] BR-4, BR-5, BR-6, BR-12, BR-21, BR-23, BR-24, BR-26–BR-29, BR-31 verified.
-- [ ] No arbitrary non-demo record is read or decrypted.
-- [ ] Relevant tests, typecheck and lint pass.
-- [ ] No conflict with `docs/SECURITY.md`.
+- [x] BR-4, BR-5, BR-6, BR-12, BR-21, BR-23, BR-24, BR-26–BR-29, BR-31 verified.
+- [x] No arbitrary non-demo record is read or decrypted.
+- [x] Relevant tests, typecheck and lint pass.
+- [x] No conflict with `docs/SECURITY.md`.
+
+**Evidence:** `src/features/demo-team/preflight.ts` (`runDemoPreflight`, `runLocalCryptoPreflight`, `formatDemoDryRunReport`; seams `DemoReader.get(path)`, `DemoPresenterLookup.userExists(uid)` → boolean, `DemoCrypto`), `preflight.test.ts` (59 tests with in-memory fakes and a throwaway key: empty/correct/partial targets, compatible-but-edited records, 28 conflict cases incl. undecryptable/key-mismatch, offline zero reads, presenter/read/crypto failures, no mutation, report content and redaction, static no-writer/no-Firebase/no-removal checks). Typecheck, lint and full `pnpm test` (2687 tests) pass. No Firebase import or access.
+Notes for later tasks: a conflict yields `{ok: false, error: {category: "conflict"}, classifications}` with no planned operations; success yields `plannedOperations` (only `create`/`set` actions — compatible `C` records dropped), which TASK-005 passes to `writeDemoOperations` together with the manifest. Offline returns all operations with `existingStateChecked: false` and no classifications. The reader adapter must return persisted data with Firestore `Timestamp`s mapped to `Date`, and must return `{exists:false}` for absent documents. `formatDemoDryRunReport` takes only `mode/projectId/presenterUid/asOf`, so credentials can never reach output; TASK-005 prints the returned lines. Conflict reasons are fixed categories (`malformed-shape`, `scope-mismatch`, `foreign-creator`, `team-disabled`, `membership-mismatch`, `structure-mismatch`, `undecryptable`). The preflight does not check `--confirm`/mode gating — that is TASK-005 wiring.
 
 ---
 
 ### TASK-005 — Runner, CLI entry, Admin adapters, package script and runtime
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-3, BR-29, BR-30, BR-32, BR-33
 **Depends on:** TASK-002, TASK-003, TASK-004
 
@@ -344,16 +353,22 @@ No secrets in the script line or repo; `--env-file` reads the git-ignored
 None yet (TASK-006).
 
 **Acceptance criteria**
-- [ ] BR-3, BR-29, BR-30, BR-32, BR-33 satisfied; offline dry-run verified under real Node.
-- [ ] No dependency/tsconfig change (or stopped and approved first).
-- [ ] Typecheck, lint, tests and build pass.
-- [ ] No Firebase contact occurred.
+- [x] BR-3, BR-29, BR-30, BR-32, BR-33 satisfied; offline dry-run verified under real Node.
+- [x] No dependency/tsconfig change (or stopped and approved first).
+- [x] Typecheck, lint, tests and build pass.
+- [x] No Firebase contact occurred.
+
+**Evidence:** `runner.ts` (`runDemoSeed`, `stripForwardedSeparator`; returns redacted lines + exit code 0/1/2, never prints), `cli.ts` (process boundary), `adapters.ts` (injected-SDK Admin adapters: named app with explicit `projectId` + `cert()`, bound-project check, `get(path)`-only reader with Timestamp→Date, boolean presenter lookup, create/set/commit-only batch, `loadFirebaseAdminSdk()` via dynamic import so offline never loads `firebase-admin`), `crypto.ts` (real `encrypt`/`decrypt`), `register-ts-resolver.mjs` (native-Node `.ts` resolution hook), `package.json` script `seed:demo-team`, tests `runner.test.ts`, `adapters.test.ts`, `cli.test.ts` (incl. real-Node offline smoke). One small TASK-004 touch: `formatDemoDryRunReport` header reads "preflight before write" in write mode instead of "dry-run (no writes)". Typecheck, lint, full `pnpm test` (2737 tests) and `pnpm build` pass. No dependency, `tsconfig` or lockfile change; no Firebase contact, no `--write`.
+Runtime: Node 24.20 type stripping cannot resolve the app's extensionless relative imports, so the script adds `--import ./src/features/demo-team/register-ts-resolver.mjs` (a `module.registerHooks` resolve hook retrying extensionless relative specifiers with `.ts`); with `--conditions=react-server` (for `server-only`) the repo's own `encryption.ts` and domain validators load unchanged. `--env-file-if-exists=.env.local` does not override variables already set in the shell. Node ≥ 24 is required; the repo does not pin a Node version.
+pnpm forwarding (verified, pnpm 10.33.2): `pnpm seed:demo-team -- --project …` delivers a leading bare `--` in `process.argv`; without `--` the flags arrive directly. The parser is unchanged; `cli.ts` strips exactly one leading `--` (`stripForwardedSeparator`), so any other positional/second `--` is still rejected.
+Private key: `FIREBASE_PRIVATE_KEY` is passed through by config; `adapters.ts` replaces literal `\n` with newlines only at the `cert()` boundary (same as `src/lib/firebase/admin.ts`). A test with a throwaway generated key confirms real `cert()` rejects the escaped form and accepts the normalized one.
+Write gates (all required): `--write` + `--confirm` equal to `--project` (config) · no `--offline` · target proof (env trio ↔ `--project`) · local crypto round-trip · plan build/encrypt · adapters bound to the proven project · presenter exists · reads of every manifest path with zero CONFLICT · at least one planned operation · writer re-validates allow-list/manifest before one batch. Notes for TASK-006: a same-as-of rerun writes 79 documents (3 compatible `C` records skipped); not checked by tests: real `firebase-admin` Firestore/Auth behavior (only fakes and the real `cert()`/`Timestamp` were exercised); the preflight-to-commit race remains documented residual risk.
 
 ---
 
 ### TASK-006 — Documentation and feature closeout
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-4, BR-34; re-verification of BR-16, BR-25, BR-31, BR-32
 **Depends on:** TASK-005
 
@@ -386,7 +401,10 @@ authorization change, no pre-approved project.
 confirms it exists.
 
 **Acceptance criteria**
-- [ ] All BR confirmations recorded with evidence.
-- [ ] Docs synchronized; no undocumented command.
-- [ ] Typecheck, lint, tests and build pass.
-- [ ] Confirmed: no Firebase write occurred during the feature.
+- [x] All BR confirmations recorded with evidence.
+- [x] Docs synchronized; no undocumented command.
+- [x] Typecheck, lint, tests and build pass.
+- [x] Confirmed: no Firebase write occurred during the feature.
+
+**Evidence:** `docs/DEVELOPMENT.md` "Demo Team seed" (invocation, env/credentials, modes, execution gate, write gates, conflicts/reruns, guardrails, residual risks); SPEC "Execution interface" no longer "proposed". CLI syntax verified by running the real script offline with a fake project id, a throwaway key and shell-set fake env: both `pnpm seed:demo-team -- --project …` and without `--` work; `--write --offline` and `--write` without `--confirm` exit 2. Note: a real `.env.local` is loaded if present, so a leftover `NEXT_PUBLIC_FIREBASE_PROJECT_ID` for another project correctly aborts (documented). `docs/SECURITY.md` needed no change (no statement contradicted).
+BR audit (implementation evidence): BR-1/2/3/5/6 `config.ts` + `config.test.ts`; BR-7–15, 17–21 `plan.ts`/`fixtures.ts` + `plan.test.ts`; BR-16/22/25/30 `writer.ts` + `writer.test.ts`, `runner.test.ts`; BR-4/12/23/24/26–29/31 `preflight.ts` + `preflight.test.ts`, `runner.test.ts`; BR-32/33 `package.json` diff (script only), no tsconfig/dependency/lockfile change, `cli.test.ts` real-Node offline smoke; BR-34/BR-4 gate `DEVELOPMENT.md`. Typecheck, lint, `git diff --check`, full `pnpm vitest run` (2737 tests) and `pnpm build` pass. No Firebase contact and no `--write` during the feature. A `security-review`/`review-change` pass over the whole feature was not run in this task. Unrelated pre-existing working-tree changes (`vitest.config.ts` `maxWorkers`, `SkillTreeCreationForm.test.tsx`) are not part of this feature.
