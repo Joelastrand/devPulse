@@ -26,7 +26,9 @@ describe("SkillTreeCreationForm", () => {
   });
 
   it("adds a stage row via the add-stage button, up to the 20-node boundary", async () => {
-    const user = userEvent.setup();
+    // 18 sequential clicks: skip user-event's per-action setTimeout(0) yield so
+    // the test's wall time is not multiplied by event-loop starvation.
+    const user = userEvent.setup({ delay: null });
     render(<SkillTreeCreationForm token="token" onCreated={vi.fn()} onCancel={vi.fn()} />);
 
     await user.click(screen.getByRole("button", { name: /legg til stadium/i }));
