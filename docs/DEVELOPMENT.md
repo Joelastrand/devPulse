@@ -137,13 +137,14 @@ firebase deploy --only firestore:rules,firestore:indexes
   `surveyResponses`, and `surveyParticipations`
   (`docs/features/managed-surveys/SPEC.md`), `challenges`
   (`docs/features/anonymous-challenges/SPEC.md`), `forumThreads`/
-  `forumReplies` (`docs/features/team-forum/SPEC.md`), and `skillTrees`/
-  `skillProgress` (`docs/features/team-skill-tree/SPEC.md`) collections each
+  `forumReplies` (`docs/features/team-forum/SPEC.md`), `skillTrees`/
+  `skillProgress` (`docs/features/team-skill-tree/SPEC.md`), and `userProfiles`
+  (`docs/features/member-identity-and-team-roles/SPEC.md`) collections each
   have the same explicit deny block, for the same defense-in-depth/
   documentation reason — all access happens server-side via
   `src/features/teams/server/`, `src/features/surveys/server/`,
-  `src/features/challenges/server/`, `src/features/forum/server/`, or
-  `src/features/skill-trees/server/`, which use the Admin SDK and bypass
+  `src/features/challenges/server/`, `src/features/forum/server/`,
+  `src/features/skill-trees/server/`, or `src/features/profiles/server/`, which use the Admin SDK and bypass
   these rules entirely.
 - **`firestore.indexes.json`** declares:
   - The composite index on `teamInvitations` (`email` ascending, `status`

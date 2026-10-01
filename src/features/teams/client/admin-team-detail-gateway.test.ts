@@ -7,6 +7,7 @@ import {
   inviteTeamMember,
   removeAdminTeamMember,
   resolveAccessRequest,
+  setAdminTeamMemberRole,
 } from "./admin-team-detail-gateway";
 
 describe("fetchTeamMembers default gateway", () => {
@@ -21,7 +22,10 @@ describe("fetchTeamMembers default gateway", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/admin/teams/team-1/members", {
       headers: { Authorization: "Bearer an-id-token" },
     });
-    expect(result).toEqual({ status: "ok", members: [{ uid: "uid-1", email: "a@example.com" }] });
+    expect(result).toEqual({
+      status: "ok",
+      members: [{ uid: "uid-1", email: "a@example.com", displayName: null, role: "member" }],
+    });
 
     vi.unstubAllGlobals();
   });
@@ -241,6 +245,129 @@ describe("resolveAccessRequest default gateway", () => {
 
     expect(result).toEqual({ ok: false, error: "persistence_failed" });
 
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("fetchTeamMembers — additive displayName/role fields", () => {
+  function respondWith(members: unknown[]) {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ json: async () => ({ members }) })));
+  }
+
+  it("parses the new shape: display name and a lead role", async () => {
+    respondWith([{ uid: "uid-1", email: "a@example.com", displayName: "Anna Berg", role: "lead" }]);
+
+    const result = await fetchTeamMembers("t", "team-1");
+
+    expect(result).toEqual({
+      status: "ok",
+      members: [{ uid: "uid-1", email: "a@example.com", displayName: "Anna Berg", role: "lead" }],
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps an explicit null displayName and an explicit member role", async () => {
+    respondWith([{ uid: "uid-1", email: null, displayName: null, role: "member" }]);
+
+    const result = await fetchTeamMembers("t", "team-1");
+
+    expect(result).toEqual({ status: "ok", members: [{ uid: "uid-1", email: null, displayName: null, role: "member" }] });
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    ["an unknown string", "admin"],
+    ["a differently-cased string", "Lead"],
+    ["a number", 1],
+    ["null", null],
+    ["an object", { lead: true }],
+  ])("treats a malformed role (%s) as member, never as lead", async (_label, role) => {
+    respondWith([{ uid: "uid-1", email: "a@example.com", displayName: null, role }]);
+
+    const result = await fetchTeamMembers("t", "team-1");
+
+    expect(result.status === "ok" && result.members[0].role).toBe("member");
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    ["a number", 7],
+    ["an empty string", ""],
+    ["an object", { name: "x" }],
+  ])("treats a malformed displayName (%s) as null without failing the row", async (_label, displayName) => {
+    respondWith([{ uid: "uid-1", email: "a@example.com", displayName, role: "lead" }]);
+
+    const result = await fetchTeamMembers("t", "team-1");
+
+    expect(result).toEqual({
+      status: "ok",
+      members: [{ uid: "uid-1", email: "a@example.com", displayName: null, role: "lead" }],
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it("still rejects the whole list when uid or email is malformed (existing strictness)", async () => {
+    respondWith([{ uid: "uid-1", email: "a@example.com", displayName: "Ok", role: "lead" }, { uid: 5, email: null }]);
+
+    expect(await fetchTeamMembers("t", "team-1")).toEqual({ status: "read_failed" });
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("setAdminTeamMemberRole default gateway", () => {
+  it("PATCHes the existing member endpoint with exactly {role} and the Authorization header", async () => {
+    const fetchMock = vi.fn(async () => ({ status: 200, json: async () => ({ ok: true, role: "lead" }) }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await setAdminTeamMemberRole("an-id-token", "team-1", "uid 1/x", "lead");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/admin/teams/team-1/members/uid%201%2Fx", {
+      method: "PATCH",
+      headers: { Authorization: "Bearer an-id-token", "Content-Type": "application/json" },
+      body: JSON.stringify({ role: "lead" }),
+    });
+    expect(result).toEqual({ ok: true, role: "lead" });
+    vi.unstubAllGlobals();
+  });
+
+  it("supports returning a member to the ordinary role", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ json: async () => ({ ok: true, role: "member" }) })));
+
+    expect(await setAdminTeamMemberRole("t", "team-1", "uid-1", "member")).toEqual({ ok: true, role: "member" });
+    vi.unstubAllGlobals();
+  });
+
+  it.each(["unauthenticated", "forbidden", "invalid_input", "not_a_member", "team_disabled", "persistence_failed"])(
+    "maps the known server error %s",
+    async (error) => {
+      vi.stubGlobal("fetch", vi.fn(async () => ({ json: async () => ({ error }) })));
+
+      expect(await setAdminTeamMemberRole("t", "team-1", "uid-1", "lead")).toEqual({ ok: false, error });
+      vi.unstubAllGlobals();
+    },
+  );
+
+  it.each([
+    ["an unknown error code", { error: "weird" }],
+    ["an ok body with an invalid role", { ok: true, role: "admin" }],
+    ["a non-object body", "nope"],
+    ["an empty body", {}],
+  ])("maps %s to unknown, never to success", async (_label, body) => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ json: async () => body })));
+
+    expect(await setAdminTeamMemberRole("t", "team-1", "uid-1", "lead")).toEqual({ ok: false, error: "unknown" });
+    vi.unstubAllGlobals();
+  });
+
+  it("maps a thrown fetch to unknown", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("network");
+      }),
+    );
+
+    expect(await setAdminTeamMemberRole("t", "team-1", "uid-1", "lead")).toEqual({ ok: false, error: "unknown" });
     vi.unstubAllGlobals();
   });
 });

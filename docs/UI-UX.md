@@ -51,8 +51,13 @@ from `SPEC.md`'s recorded implementation decisions.
 Auth-aware header/navigation, driven by resolved auth and admin state:
 
 - **Signed out**: Hjem, Logg inn, Opprett konto
-- **Signed in**: Hjem, Team, Logg ut
+- **Signed in**: Hjem, Team, Min profil, Logg ut
 - **Signed in, app admin**: the signed-in set, plus Admin
+
+**Updated by `docs/features/member-identity-and-team-roles/SPEC.md` (F0):**
+signed-in users also get a **Min profil** link (to `/me/profile`, see
+"Profile UX" below), placed right after Team and before Admin; it is never
+shown to a signed-out visitor or before the first auth event.
 
 **Updated by `docs/features/managed-surveys/SPEC.md` (TASK-013):** the
 original Phase 3 nav set above included a "Pulsundersøkelse" entry linking
@@ -205,6 +210,53 @@ Every screen that fetches or mutates server data defines, at minimum:
   non-sensitive request-access state — the page must never attempt to
   render result or current-survey content it isn't authorized to have
   fetched (`docs/features/managed-surveys/SPEC.md` — BR-30/BR-31/BR-32).
+
+### Member roster (F0)
+
+**Added by `docs/features/member-identity-and-team-roles/SPEC.md`.** As-built:
+
+- `/teams/[teamId]` shows, inside the "Teamaktivitet" zone and only to a
+  caller who may view the team (member or app admin), a **"Medlemmer"**
+  section that is **collapsed by default**. A single "Medlemsliste" toggle
+  (`aria-expanded`/`aria-controls`, keyboard-operable) opens it; the
+  roster is fetched **lazily on the first expand** only, so the page makes no
+  roster request on load. Collapsing and re-expanding reuses the loaded list;
+  it is not live — a page reload or the retry action refreshes it.
+- It is a read-only, plain list: each row shows the member's display name,
+  or **"Medlem uten navn"** when none is set (never an e-mail, `uid` or other
+  fallback), plus visible text badges — **"Teamlead"** for an effective lead
+  and **"Deg"** for the caller's own row (both can appear on one row). Two
+  members with the same name are two rows. Rows have no links, buttons,
+  menus, avatars or actions.
+- It has its own loading ("Laster medlemmer…"), empty ("Ingen medlemmer å
+  vise."), error (generic, with "Prøv igjen") and no-access states, and a
+  failure never affects any other section. When the server reports the list
+  as truncated, a notice says the list shows only the first members and is
+  not complete; there is no pagination or "load more".
+- Names are rendered as inert text. The UI reads only `displayName`,
+  `isLead` and `isSelf` from the roster endpoint and makes no other request.
+
+## Profile UX (F0)
+
+**Added by `docs/features/member-identity-and-team-roles/SPEC.md`.** As-built:
+
+- **`/me/profile`** ("Min profil", signed-in users; a signed-out visitor gets
+  the usual sign-in prompt) holds one field, **"Visningsnavn"**. The help text
+  says the name is shown to other members of teams the user belongs to and to
+  administrators (not their e-mail address), need not be unique, and can be
+  changed or removed at any time — it promises neither secrecy nor anonymity.
+- A user with no name sees an **empty field** (never pre-filled from e-mail)
+  and a note that others will see "Medlem uten navn". "Lagre" saves; afterwards
+  the field and the "Nåværende visningsnavn" line show the **server's
+  canonical (normalised) value**, not the raw input. "Fjern visningsnavn"
+  (shown only while a name exists, no confirmation dialog) removes only the
+  name and states that the account and team memberships are unaffected.
+- The client only rejects an empty value; length and character rules are the
+  server's (code-point counting), with plain-Norwegian messages and no
+  `maxLength` attribute. Save and remove block each other while pending, no
+  optimistic state is shown, and there are loading, retry, generic-error and
+  session-expired states. Labels, `aria-describedby`, `role="alert"`/
+  `"status"` and text (never colour alone) carry the states.
 
 ## Forum UX
 
@@ -401,6 +453,21 @@ identifier (see `docs/features/team-skill-tree/SPEC.md` — Owner decision 4).
   confirmation or clearly-labeled irreversible-vs-reversible affordance,
   consistent with the underlying model (e.g. team disable is reversible;
   see `docs/features/team-management/SPEC.md`).
+- `/admin/teams/[teamId]` member rows (F0, `docs/features/member-identity-and-
+  team-roles/SPEC.md`) show the member's display name as the primary line
+  (**"Medlem uten navn"** if none) with the e-mail as a separate admin
+  identity line, a **"Teamlead"** text marker for the **stored** lead role (on
+  a disabled team it reads "Teamlead (lagret rolle, ikke aktiv mens teamet er
+  deaktivert)"), and a per-row toggle "Gjør til teamlead" / "Gjør til vanlig
+  medlem". A team can have several leads and each row is administered
+  independently; nothing replaces or demotes another lead. On a disabled team
+  the promote action is disabled in the UI (a hint — the server rejects it
+  regardless) while demotion and removal stay available. The row's two
+  mutations block each other while one is pending, errors (including
+  "team disabled" and "no longer a member") appear in the row, and the list is
+  re-read from the server after a change. A short note states that lead is a
+  role on the membership that gives no extra access yet; the UI promises no
+  capability.
 - `/admin/teams/[teamId]` also manages that team's surveys, in the same
   dense, operational style: a creation form (access mode required, no
   pre-selected default; `minimumResponses` pre-filled `5`; optional title/

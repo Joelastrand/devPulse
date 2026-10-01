@@ -3,6 +3,7 @@ import {
   extractMemberUid,
   isValidMembershipFor,
   membershipDocId,
+  membershipRoleOf,
 } from "./team-membership";
 
 describe("membershipDocId", () => {
@@ -91,5 +92,48 @@ describe("extractMemberUid", () => {
     expect(extractMemberUid(null)).toBeNull();
     expect(extractMemberUid("not an object")).toBeNull();
     expect(extractMemberUid(undefined)).toBeNull();
+  });
+});
+
+describe("membershipRoleOf", () => {
+  it("treats a membership without a role field as an ordinary member (pre-existing documents)", () => {
+    expect(membershipRoleOf({ uid: "user-1", teamId: "team-1" })).toBe("member");
+  });
+
+  it('returns "lead" only for exactly role: "lead"', () => {
+    expect(membershipRoleOf({ uid: "user-1", teamId: "team-1", role: "lead" })).toBe("lead");
+  });
+
+  it.each([
+    ["an explicit \"member\"", "member"],
+    ["an unknown string", "admin"],
+    ["a differently-cased string", "Lead"],
+    ["a padded string", " lead"],
+    ["a number", 1],
+    ["a boolean", true],
+    ["null", null],
+    ["an object", { lead: true }],
+    ["an array", ["lead"]],
+  ])("fails safe to member for %s", (_label, role) => {
+    expect(membershipRoleOf({ uid: "user-1", teamId: "team-1", role })).toBe("member");
+  });
+
+  it("never throws and returns member for non-object input", () => {
+    expect(membershipRoleOf(null)).toBe("member");
+    expect(membershipRoleOf(undefined)).toBe("member");
+    expect(membershipRoleOf("lead")).toBe("member");
+    expect(membershipRoleOf(["lead"])).toBe("member");
+  });
+
+  it("ignores the roleUpdated* audit fields", () => {
+    expect(
+      membershipRoleOf({ uid: "user-1", teamId: "team-1", roleUpdatedAt: new Date(), roleUpdatedBy: "admin-1" }),
+    ).toBe("member");
+  });
+
+  it("does not change isValidMembershipFor: a membership with any role value is still a valid grant", () => {
+    const expected = { uid: "user-1", teamId: "team-1" };
+    expect(isValidMembershipFor({ ...expected, role: "lead" }, expected)).toBe(true);
+    expect(isValidMembershipFor({ ...expected, role: "garbage" }, expected)).toBe(true);
   });
 });

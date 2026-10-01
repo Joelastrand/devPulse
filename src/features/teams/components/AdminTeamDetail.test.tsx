@@ -10,6 +10,7 @@ const fetchTeamInvitationsMock = vi.fn();
 const fetchTeamAccessRequestsMock = vi.fn();
 const inviteTeamMemberMock = vi.fn();
 const removeAdminTeamMemberMock = vi.fn();
+const setAdminTeamMemberRoleMock = vi.fn();
 const cancelTeamInvitationMock = vi.fn();
 const resolveAccessRequestMock = vi.fn();
 const fetchAdminSurveysMock = vi.fn();
@@ -41,6 +42,7 @@ vi.mock("../client/admin-team-detail-gateway", () => ({
   fetchTeamAccessRequests: fetchTeamAccessRequestsMock,
   inviteTeamMember: inviteTeamMemberMock,
   removeAdminTeamMember: removeAdminTeamMemberMock,
+  setAdminTeamMemberRole: setAdminTeamMemberRoleMock,
   cancelTeamInvitation: cancelTeamInvitationMock,
   resolveAccessRequest: resolveAccessRequestMock,
 }));
@@ -92,7 +94,7 @@ function mockOk({
   teamSkills = [],
 }: {
   teams?: { teamId: string; name: string; status: "active" | "disabled" }[];
-  members?: { uid: string; email: string | null }[];
+  members?: { uid: string; email: string | null; displayName?: string | null; role?: "lead" | "member" }[];
   invitations?: { email: string; invitedBy: string; createdAt: string }[];
   requests?: { uid: string; email: string | null; createdAt: string }[];
   surveys?: unknown[];
@@ -120,6 +122,7 @@ describe("AdminTeamDetail", () => {
     fetchTeamAccessRequestsMock.mockReset();
     inviteTeamMemberMock.mockReset();
     removeAdminTeamMemberMock.mockReset();
+    setAdminTeamMemberRoleMock.mockReset();
     cancelTeamInvitationMock.mockReset();
     resolveAccessRequestMock.mockReset();
     fetchAdminSurveysMock.mockReset();
@@ -1982,5 +1985,236 @@ describe("AdminTeamDetail skill tracking (TASK-006)", () => {
 
     await screen.findByRole("alert");
     expect(screen.queryByRole("heading", { name: "Kompetanseområder" })).toBeNull();
+  });
+});
+
+describe("AdminTeamDetail — member display names and team lead role", () => {
+  afterEach(() => {
+    cleanup();
+    observeIdTokenMock.mockReset();
+    setAdminTeamMemberRoleMock.mockReset();
+    removeAdminTeamMemberMock.mockReset();
+    fetchTeamMembersMock.mockReset();
+  });
+
+  async function renderWith(members: Parameters<typeof mockOk>[0] extends infer T ? (T extends { members?: infer M } ? M : never) : never, team: "active" | "disabled" = "active") {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({ teams: [{ teamId: "team-1", name: "Platform", status: team }], members });
+    render(<AdminTeamDetail teamId="team-1" />);
+    await screen.findByText("Medlemmer");
+  }
+
+  function rowOf(email: string): HTMLElement {
+    return screen.getByText(email).closest("li") as HTMLElement;
+  }
+
+  it("shows the self-set display name as the primary text with the e-mail beside it", async () => {
+    await renderWith([{ uid: "uid-1", email: "anna@example.com", displayName: "Anna Berg", role: "member" }]);
+
+    const row = rowOf("anna@example.com");
+    expect(within(row).getByText("Anna Berg")).toBeTruthy();
+    expect(within(row).getByText("anna@example.com")).toBeTruthy();
+  });
+
+  it("shows the neutral 'Medlem uten navn' — never the e-mail as a name — when no display name is set", async () => {
+    await renderWith([{ uid: "uid-1", email: "anna@example.com", displayName: null, role: "member" }]);
+
+    const row = rowOf("anna@example.com");
+    expect(within(row).getByText("Medlem uten navn")).toBeTruthy();
+    // e-mail appears exactly once (as the admin identity line), not as a name
+    expect(within(row).getAllByText("anna@example.com")).toHaveLength(1);
+  });
+
+  it("marks a lead with visible text and leaves an ordinary member unmarked", async () => {
+    await renderWith([
+      { uid: "uid-1", email: "lead@example.com", displayName: "Lea", role: "lead" },
+      { uid: "uid-2", email: "plain@example.com", displayName: "Per", role: "member" },
+    ]);
+
+    expect(within(rowOf("lead@example.com")).getByText("Teamlead")).toBeTruthy();
+    expect(within(rowOf("plain@example.com")).queryByText("Teamlead")).toBeNull();
+  });
+
+  it("states neutrally that the lead role grants no extra access yet, promising no capability", async () => {
+    await renderWith([{ uid: "uid-1", email: "a@example.com", displayName: null, role: "member" }]);
+
+    expect(screen.getByText(/gir foreløpig ingen ekstra tilganger/i)).toBeTruthy();
+  });
+
+  it("promotes a member with exactly role 'lead' and re-reads the authoritative list, which then shows the lead", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({ members: [{ uid: "uid-1", email: "a@example.com", displayName: null, role: "member" }] });
+    setAdminTeamMemberRoleMock.mockResolvedValue({ ok: true, role: "lead" });
+    render(<AdminTeamDetail teamId="team-1" />);
+    await screen.findByText("a@example.com");
+    fetchTeamMembersMock.mockResolvedValue({
+      status: "ok",
+      members: [{ uid: "uid-1", email: "a@example.com", displayName: null, role: "lead" }],
+    });
+
+    await user.click(screen.getByRole("button", { name: "Gjør til teamlead" }));
+
+    expect(setAdminTeamMemberRoleMock).toHaveBeenCalledWith("a-token", "team-1", "uid-1", "lead");
+    expect(await screen.findByText("Teamlead")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Gjør til vanlig medlem" })).toBeTruthy();
+  });
+
+  it("demotes a lead with exactly role 'member'", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({ members: [{ uid: "uid-1", email: "a@example.com", displayName: "Lea", role: "lead" }] });
+    setAdminTeamMemberRoleMock.mockResolvedValue({ ok: true, role: "member" });
+    render(<AdminTeamDetail teamId="team-1" />);
+    await screen.findByText("a@example.com");
+    fetchTeamMembersMock.mockResolvedValue({
+      status: "ok",
+      members: [{ uid: "uid-1", email: "a@example.com", displayName: "Lea", role: "member" }],
+    });
+
+    await user.click(screen.getByRole("button", { name: "Gjør til vanlig medlem" }));
+
+    expect(setAdminTeamMemberRoleMock).toHaveBeenCalledWith("a-token", "team-1", "uid-1", "member");
+    expect(await screen.findByRole("button", { name: "Gjør til teamlead" })).toBeTruthy();
+    expect(screen.queryByText("Teamlead")).toBeNull();
+  });
+
+  it("blocks a second mutation on the same row while one is pending, and never calls the server twice", async () => {
+    const user = userEvent.setup();
+    let resolveRole: (value: unknown) => void = () => {};
+    setAdminTeamMemberRoleMock.mockImplementation(() => new Promise((resolve) => { resolveRole = resolve; }));
+    await renderWith([{ uid: "uid-1", email: "a@example.com", displayName: null, role: "member" }]);
+    const row = rowOf("a@example.com");
+
+    await user.click(within(row).getByRole("button", { name: "Gjør til teamlead" }));
+    const saving = within(row).getByRole("button", { name: "Lagrer…" }) as HTMLButtonElement;
+    await user.click(saving);
+    await user.click(within(row).getByRole("button", { name: "Fjern" }));
+
+    expect(setAdminTeamMemberRoleMock).toHaveBeenCalledTimes(1);
+    expect(removeAdminTeamMemberMock).not.toHaveBeenCalled();
+    expect(saving.disabled).toBe(true);
+    expect((within(row).getByRole("button", { name: "Fjern" }) as HTMLButtonElement).disabled).toBe(true);
+
+    resolveRole({ ok: false, error: "persistence_failed" });
+    await flushMicrotasks();
+  });
+
+  it("shows the existing generic row error for a server failure and keeps the member unchanged", async () => {
+    const user = userEvent.setup();
+    setAdminTeamMemberRoleMock.mockResolvedValue({ ok: false, error: "persistence_failed" });
+    await renderWith([{ uid: "uid-1", email: "a@example.com", displayName: null, role: "member" }]);
+
+    await user.click(screen.getByRole("button", { name: "Gjør til teamlead" }));
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(/noe gikk galt/i);
+    expect(screen.queryByText("Teamlead")).toBeNull();
+    expect(fetchTeamMembersMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("explains team_disabled when the server refuses a promotion the view did not anticipate (stale state)", async () => {
+    const user = userEvent.setup();
+    setAdminTeamMemberRoleMock.mockResolvedValue({ ok: false, error: "team_disabled" });
+    await renderWith([{ uid: "uid-1", email: "a@example.com", displayName: null, role: "member" }]);
+
+    await user.click(screen.getByRole("button", { name: "Gjør til teamlead" }));
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(/aktiver det på nytt før du utnevner en teamlead/i);
+  });
+
+  it("explains not_a_member when the person has meanwhile been removed", async () => {
+    const user = userEvent.setup();
+    setAdminTeamMemberRoleMock.mockResolvedValue({ ok: false, error: "not_a_member" });
+    await renderWith([{ uid: "uid-1", email: "a@example.com", displayName: null, role: "member" }]);
+
+    await user.click(screen.getByRole("button", { name: "Gjør til teamlead" }));
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(/ikke lenger medlem/i);
+  });
+
+  it("on a disabled team disables promotion but leaves demotion (and removal) available", async () => {
+    const user = userEvent.setup();
+    setAdminTeamMemberRoleMock.mockResolvedValue({ ok: true, role: "member" });
+    await renderWith(
+      [
+        { uid: "uid-1", email: "lead@example.com", displayName: "Lea", role: "lead" },
+        { uid: "uid-2", email: "plain@example.com", displayName: "Per", role: "member" },
+      ],
+      "disabled",
+    );
+
+    expect((within(rowOf("plain@example.com")).getByRole("button", { name: "Gjør til teamlead" }) as HTMLButtonElement).disabled).toBe(true);
+    const demote = within(rowOf("lead@example.com")).getByRole("button", { name: "Gjør til vanlig medlem" }) as HTMLButtonElement;
+    expect(demote.disabled).toBe(false);
+
+    await user.click(demote);
+
+    expect(setAdminTeamMemberRoleMock).toHaveBeenCalledWith("a-token", "team-1", "uid-1", "member");
+  });
+
+  it("on a disabled team labels a stored lead as a stored, currently inactive role — and explains why promotion is off", async () => {
+    await renderWith([{ uid: "uid-1", email: "lead@example.com", displayName: "Lea", role: "lead" }], "disabled");
+
+    expect(within(rowOf("lead@example.com")).getByText("Teamlead (lagret rolle, ikke aktiv mens teamet er deaktivert)")).toBeTruthy();
+    expect(screen.getByText(/kan nye teamledere ikke utnevnes/i)).toBeTruthy();
+  });
+
+  it("supports several leads: promoting one member never changes or hides another lead", async () => {
+    const user = userEvent.setup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({
+      members: [
+        { uid: "uid-1", email: "lead1@example.com", displayName: "Lea", role: "lead" },
+        { uid: "uid-2", email: "plain@example.com", displayName: "Per", role: "member" },
+        { uid: "uid-3", email: "lead3@example.com", displayName: "Leo", role: "lead" },
+      ],
+    });
+    setAdminTeamMemberRoleMock.mockResolvedValue({ ok: true, role: "lead" });
+    render(<AdminTeamDetail teamId="team-1" />);
+    await screen.findByText("plain@example.com");
+    fetchTeamMembersMock.mockResolvedValue({
+      status: "ok",
+      members: [
+        { uid: "uid-1", email: "lead1@example.com", displayName: "Lea", role: "lead" },
+        { uid: "uid-2", email: "plain@example.com", displayName: "Per", role: "lead" },
+        { uid: "uid-3", email: "lead3@example.com", displayName: "Leo", role: "lead" },
+      ],
+    });
+
+    await user.click(within(rowOf("plain@example.com")).getByRole("button", { name: "Gjør til teamlead" }));
+
+    expect(setAdminTeamMemberRoleMock).toHaveBeenCalledTimes(1);
+    expect(setAdminTeamMemberRoleMock).toHaveBeenCalledWith("a-token", "team-1", "uid-2", "lead");
+    await vi.waitFor(() => expect(screen.getAllByText("Teamlead")).toHaveLength(3));
+  });
+
+  it("does not offer to 'replace' or demote other leads when promoting (no singleton-manager behaviour)", async () => {
+    await renderWith([
+      { uid: "uid-1", email: "lead1@example.com", displayName: "Lea", role: "lead" },
+      { uid: "uid-2", email: "plain@example.com", displayName: "Per", role: "member" },
+    ]);
+
+    expect(screen.queryByText(/erstatt|bytt teamlead|replace/i)).toBeNull();
+    expect(within(rowOf("lead1@example.com")).getByRole("button", { name: "Gjør til vanlig medlem" })).toBeTruthy();
+    expect(within(rowOf("plain@example.com")).getByRole("button", { name: "Gjør til teamlead" })).toBeTruthy();
+  });
+
+  it("renders a hostile display name as inert text", async () => {
+    await renderWith([{ uid: "uid-1", email: "a@example.com", displayName: "<img src=x onerror=alert(1)> Anna", role: "member" }]);
+
+    const row = rowOf("a@example.com");
+    expect(within(row).getByText("<img src=x onerror=alert(1)> Anna")).toBeTruthy();
+    expect(row.querySelector("img")).toBeNull();
+  });
+
+  it("keeps the existing removal flow working for a lead (removal ends the membership, not just the role)", async () => {
+    const user = userEvent.setup();
+    removeAdminTeamMemberMock.mockResolvedValue({ ok: true });
+    await renderWith([{ uid: "uid-1", email: "lead@example.com", displayName: "Lea", role: "lead" }]);
+
+    await user.click(within(rowOf("lead@example.com")).getByRole("button", { name: "Fjern" }));
+
+    expect(removeAdminTeamMemberMock).toHaveBeenCalledWith("a-token", "team-1", "uid-1");
+    expect(setAdminTeamMemberRoleMock).not.toHaveBeenCalled();
   });
 });

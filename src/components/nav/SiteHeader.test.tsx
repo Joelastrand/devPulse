@@ -50,7 +50,7 @@ function flushMicrotasks() {
 }
 
 const SIGNED_OUT_LINK_NAMES = [/hjem/i, /logg inn/i, /opprett konto/i];
-const SIGNED_IN_LINK_NAMES = [/hjem/i, /^team$/i];
+const SIGNED_IN_LINK_NAMES = [/hjem/i, /^team$/i, /^min profil$/i];
 
 function navLinkNames() {
   const nav = screen.getByRole("navigation");
@@ -125,6 +125,41 @@ describe("SiteHeader", () => {
     expect(navLinkNames()).toHaveLength(SIGNED_IN_LINK_NAMES.length);
     expect(screen.getByRole("button", { name: /logg ut/i })).toBeTruthy();
     expect(screen.queryByRole("link", { name: /^admin$/i })).toBeNull();
+  });
+
+  it("links 'Min profil' to /me/profile for a signed-in user, right after Team and before any Admin link", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchOwnAdminStatusMock.mockResolvedValue({ ok: true, isAdmin: true });
+
+    render(<SiteHeader />);
+
+    const profileLink = await screen.findByRole("link", { name: /^min profil$/i });
+    expect(profileLink.getAttribute("href")).toBe("/me/profile");
+    await screen.findByRole("link", { name: /^admin$/i });
+    expect(navLinkNames()).toEqual(["Hjem", "Team", "Min profil", "Admin"]);
+  });
+
+  it("never shows 'Min profil' to a signed-out visitor, nor before the first auth event", () => {
+    observeIdTokenMock.mockImplementation(subscribingWith(null));
+    render(<SiteHeader />);
+    expect(screen.queryByRole("link", { name: /min profil/i })).toBeNull();
+    cleanup();
+
+    observeIdTokenMock.mockImplementation(() => () => {});
+    render(<SiteHeader />);
+    expect(screen.queryByRole("link", { name: /min profil/i })).toBeNull();
+  });
+
+  it("marks 'Min profil' as the current page on /me/profile without touching other links", async () => {
+    usePathnameMock.mockReturnValue("/me/profile");
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchOwnAdminStatusMock.mockResolvedValue({ ok: true, isAdmin: false });
+
+    render(<SiteHeader />);
+
+    expect((await screen.findByRole("link", { name: /^min profil$/i })).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("link", { name: /^team$/i }).getAttribute("aria-current")).toBeNull();
+    usePathnameMock.mockReturnValue("/");
   });
 
   it("adds the Admin link only once the own-admin-status read confirms it", async () => {

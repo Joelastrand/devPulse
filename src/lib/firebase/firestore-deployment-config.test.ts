@@ -89,6 +89,22 @@ describe("Firestore deployment configuration", () => {
     );
   });
 
+  it("denies all client-SDK access to userProfiles unconditionally", () => {
+    const rules = readRepoFile("firestore.rules");
+
+    expect(rules).toMatch(
+      /match\s+\/userProfiles\/\{document=\*\*\}\s*\{\s*allow read, write: if false;/,
+    );
+  });
+
+  it("declares no composite index for userProfiles — every access is a direct document operation by uid", () => {
+    const indexes = JSON.parse(readRepoFile("firestore.indexes.json")) as {
+      indexes: Array<{ collectionGroup: string }>;
+    };
+
+    expect(indexes.indexes.filter((index) => index.collectionGroup === "userProfiles")).toHaveLength(0);
+  });
+
   it("has no unconditional allow anywhere in the rules file (denies by default)", () => {
     const rules = readRepoFile("firestore.rules");
 

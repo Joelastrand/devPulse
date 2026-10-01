@@ -10,10 +10,18 @@
  * or partially rendering untrusted data.
  */
 
-/** One team member row — email resolved live server-side, never persisted. */
+/**
+ * One team member row — email resolved live server-side, never persisted;
+ * `displayName` is the member's self-set name (`null` when none, never an
+ * e-mail fallback); `role` is the **stored** team role, `"member"` for
+ * anything but exactly `"lead"`. Admin-only shape (it carries the `uid`
+ * admin operations need) — unrelated to the member-facing roster.
+ */
 export interface AdminTeamMemberEntry {
   uid: string;
   email: string | null;
+  displayName: string | null;
+  role: "lead" | "member";
 }
 
 /** One pending invitation row (BR-30). */
@@ -60,19 +68,36 @@ export type FetchTeamMembersResult =
   | { status: "ok"; members: AdminTeamMemberEntry[] }
   | { status: ListErrorStatus };
 
-function isAdminTeamMemberEntry(value: unknown): value is AdminTeamMemberEntry {
+/**
+ * Parses one member row defensively. `uid`/`email` keep their existing strict
+ * validation. The additive fields fail safe rather than failing the row: a
+ * missing/malformed `displayName` is `null`, and a missing/unknown `role` is
+ * `"member"` — never `"lead"` — so an older response shape stays readable.
+ */
+function parseAdminTeamMemberEntry(value: unknown): AdminTeamMemberEntry | null {
   if (typeof value !== "object" || value === null) {
-    return false;
+    return null;
   }
-  const { uid, email } = value as Record<string, unknown>;
-  return isNonEmptyString(uid) && isNullableString(email);
+  const { uid, email, displayName, role } = value as Record<string, unknown>;
+  if (!isNonEmptyString(uid) || !isNullableString(email)) {
+    return null;
+  }
+  return {
+    uid,
+    email,
+    displayName: isNonEmptyString(displayName) ? displayName : null,
+    role: role === "lead" ? "lead" : "member",
+  };
 }
 
 function parseFetchTeamMembersResponse(body: unknown): FetchTeamMembersResult {
   if (typeof body === "object" && body !== null) {
     const record = body as Record<string, unknown>;
-    if (Array.isArray(record.members) && record.members.every(isAdminTeamMemberEntry)) {
-      return { status: "ok", members: record.members };
+    if (Array.isArray(record.members)) {
+      const members = record.members.map(parseAdminTeamMemberEntry);
+      if (members.every((member): member is AdminTeamMemberEntry => member !== null)) {
+        return { status: "ok", members };
+      }
     }
     if (isKnownListError(record.error)) {
       return { status: record.error };
@@ -172,6 +197,92 @@ export async function removeAdminTeamMember(
 ): Promise<RemoveAdminTeamMemberResult> {
   const gateway = deps.gateway ?? getDefaultRemoveMemberGateway();
   return gateway.removeAdminTeamMember(idToken, teamId, uid);
+}
+
+// --- Member role ---------------------------------------------------------
+
+export type SetAdminTeamMemberRoleError =
+  | "unauthenticated"
+  | "forbidden"
+  | "invalid_input"
+  | "not_a_member"
+  | "team_disabled"
+  | "persistence_failed"
+  | "unknown";
+
+export type SetAdminTeamMemberRoleResult =
+  | { ok: true; role: "lead" | "member" }
+  | { ok: false; error: SetAdminTeamMemberRoleError };
+
+const KNOWN_SET_ROLE_ERRORS = new Set<string>([
+  "unauthenticated",
+  "forbidden",
+  "invalid_input",
+  "not_a_member",
+  "team_disabled",
+  "persistence_failed",
+]);
+
+function parseSetRoleResponse(body: unknown): SetAdminTeamMemberRoleResult {
+  if (typeof body === "object" && body !== null) {
+    const { ok, role, error } = body as Record<string, unknown>;
+    if (ok === true && (role === "lead" || role === "member")) {
+      return { ok: true, role };
+    }
+    if (typeof error === "string" && KNOWN_SET_ROLE_ERRORS.has(error)) {
+      return { ok: false, error: error as SetAdminTeamMemberRoleError };
+    }
+  }
+  return { ok: false, error: "unknown" };
+}
+
+export interface SetAdminTeamMemberRoleGateway {
+  setAdminTeamMemberRole(
+    idToken: string,
+    teamId: string,
+    uid: string,
+    role: "lead" | "member",
+  ): Promise<SetAdminTeamMemberRoleResult>;
+}
+
+function getDefaultSetMemberRoleGateway(): SetAdminTeamMemberRoleGateway {
+  return {
+    async setAdminTeamMemberRole(idToken, teamId, uid, role) {
+      try {
+        const response = await fetch(
+          `/api/admin/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(uid)}`,
+          {
+            method: "PATCH",
+            headers: { Authorization: `Bearer ${idToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ role }),
+          },
+        );
+        return parseSetRoleResponse(await parseJson(response));
+      } catch {
+        return { ok: false, error: "unknown" };
+      }
+    },
+  };
+}
+
+export interface SetAdminTeamMemberRoleDeps {
+  gateway?: SetAdminTeamMemberRoleGateway;
+}
+
+/**
+ * Sets a member's stored team role through the admin PATCH endpoint. The
+ * server stays the only authority (app-admin check, membership check and the
+ * active-team gate for promotion); nothing here is an authorization decision.
+ */
+export async function setAdminTeamMemberRole(
+  idToken: string,
+  teamId: string,
+  uid: string,
+  role: "lead" | "member",
+  deps: SetAdminTeamMemberRoleDeps = {},
+): Promise<SetAdminTeamMemberRoleResult> {
+  const gateway = deps.gateway ?? getDefaultSetMemberRoleGateway();
+  return gateway.setAdminTeamMemberRole(idToken, teamId, uid, role);
 }
 
 // --- Invitations ---------------------------------------------------------

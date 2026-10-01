@@ -1,6 +1,14 @@
 export type MembershipSource = "invitation" | "access_request" | "admin_direct";
 
 /**
+ * The team authorization role a membership carries: `"lead"` or an ordinary
+ * `"member"` (docs/features/member-identity-and-team-roles/SPEC.md — BR-16).
+ * Only `"lead"` is ever persisted (as `role`); `"member"` is represented by
+ * the field being absent. This is a *team role*, never a professional role.
+ */
+export type MembershipRole = "lead" | "member";
+
+/**
  * A Firestore `teamMemberships` document (docs/features/team-management/
  * SPEC.md — Architecture decisions → "Firestore collections"). Links one
  * Firebase `uid` to one `teamId` — never email-keyed.
@@ -11,6 +19,11 @@ export interface TeamMembershipRecord {
   createdAt: Date;
   createdVia: MembershipSource;
   grantedBy: string;
+  /** Present only while the member is a team lead; absent ≡ ordinary member. */
+  role?: "lead";
+  /** Paired with `roleUpdatedBy`: the last role assignment/removal (audit only, never consulted for authorization). */
+  roleUpdatedAt?: Date;
+  roleUpdatedBy?: string;
 }
 
 /**
@@ -61,4 +74,20 @@ export function extractMemberUid(data: unknown): string | null {
   return typeof record.uid === "string" && record.uid.length > 0
     ? record.uid
     : null;
+}
+
+/**
+ * Classifies a raw `teamMemberships` document's team role (SPEC — BR-17).
+ * Fail-safe toward least privilege: `"lead"` only when `role === "lead"`
+ * exactly; a missing field (every pre-existing document), any other value,
+ * or non-object input is an ordinary `"member"`. Pure domain
+ * classification — it neither validates the membership (use
+ * `isValidMembershipFor`) nor authorizes anything.
+ */
+export function membershipRoleOf(data: unknown): MembershipRole {
+  if (typeof data !== "object" || data === null) {
+    return "member";
+  }
+
+  return (data as Record<string, unknown>).role === "lead" ? "lead" : "member";
 }

@@ -16,6 +16,7 @@ const fetchTeamThreadsMock = vi.fn();
 const createThreadMock = vi.fn();
 const fetchTeamSkillsMock = vi.fn();
 const reportTeamSkillProgressMock = vi.fn();
+const fetchTeamRosterMock = vi.fn();
 
 /**
  * Records every time `TrendChart`'s module is actually loaded, without
@@ -60,6 +61,10 @@ vi.mock("../../forum/client/forum-gateway", () => ({
 vi.mock("../../skill-trees/client/skill-trees-gateway", () => ({
   fetchTeamSkills: fetchTeamSkillsMock,
   reportTeamSkillProgress: reportTeamSkillProgressMock,
+}));
+
+vi.mock("../client/team-roster-gateway", () => ({
+  fetchTeamRoster: fetchTeamRosterMock,
 }));
 
 vi.mock("../../results/components/TrendChart", async (importOriginal) => {
@@ -197,6 +202,7 @@ describe("TeamDetail", () => {
     createThreadMock.mockReset();
     routerPushMock.mockReset();
     submitChallengeMock.mockReset();
+    fetchTeamRosterMock.mockReset();
   });
 
   it("shows a Norwegian loading state before auth resolves", () => {
@@ -463,6 +469,88 @@ describe("TeamDetail", () => {
     await screen.findByRole("alert");
     const teamaktivitetHeading = screen.getByRole("heading", { name: "Teamaktivitet" });
     expect(teamaktivitetHeading.closest("section")?.textContent).toMatch(/Deploy owner unclear/);
+  });
+
+  describe("collapsed member roster section", () => {
+    async function renderAuthorized() {
+      observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+      fetchTeamsOverviewMock.mockResolvedValue({
+        status: "ok",
+        teams: [{ teamId: "team-1", name: "Platform", relationship: "member" }],
+      });
+      fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
+      render(<TeamDetail teamId="team-1" forumEnabled={true} />);
+      await screen.findByText("7 svar");
+    }
+
+    it("is present and collapsed for an authorized member, inside the Teamaktivitet zone, and makes no roster request on load", async () => {
+      await renderAuthorized();
+
+      const toggle = screen.getByRole("button", { name: "Medlemsliste" });
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(toggle.closest("section[aria-labelledby=\"team-detail-teamaktivitet-heading\"]")).toBeTruthy();
+      expect(fetchTeamRosterMock).not.toHaveBeenCalled();
+    });
+
+    it("loads the roster for this team on first expand and shows it", async () => {
+      const user = userEvent.setup();
+      fetchTeamRosterMock.mockResolvedValue({
+        status: "ok",
+        truncated: false,
+        members: [{ displayName: "Anna Berg", isLead: true, isSelf: true }],
+      });
+      await renderAuthorized();
+
+      await user.click(screen.getByRole("button", { name: "Medlemsliste" }));
+
+      expect(await screen.findByText("Anna Berg")).toBeTruthy();
+      expect(fetchTeamRosterMock).toHaveBeenCalledWith("a-token", "team-1");
+    });
+
+    it("keeps every other section working when the roster read fails", async () => {
+      const user = userEvent.setup();
+      fetchTeamRosterMock.mockResolvedValue({ status: "read_failed" });
+      fetchTeamChallengesMock.mockResolvedValue({
+        status: "ok",
+        challenges: [{ challengeId: "c1", text: "Deploy owner unclear", status: "open", submittedAt: "2026-01-10" }],
+        canSubmit: true,
+      });
+      await renderAuthorized();
+
+      await user.click(screen.getByRole("button", { name: "Medlemsliste" }));
+
+      expect((await screen.findByRole("alert")).textContent).toMatch(/lasting av medlemmene/i);
+      expect(screen.getByText("7 svar")).toBeTruthy();
+      expect(screen.getByText(/Deploy owner unclear/)).toBeTruthy();
+    });
+
+    it("is also offered in the results-unavailable view, where the activity sections still render", async () => {
+      observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+      fetchTeamsOverviewMock.mockResolvedValue({
+        status: "ok",
+        teams: [{ teamId: "team-1", name: "Platform", relationship: "member" }],
+      });
+      fetchTeamResultsMock.mockResolvedValue({ status: "read_failed" });
+
+      render(<TeamDetail teamId="team-1" forumEnabled={true} />);
+
+      await screen.findByRole("alert");
+      expect(screen.getByRole("button", { name: "Medlemsliste" }).getAttribute("aria-expanded")).toBe("false");
+    });
+
+    it("is never shown to a non-member, and no roster request is made for them", async () => {
+      observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+      fetchTeamsOverviewMock.mockResolvedValue({
+        status: "ok",
+        teams: [{ teamId: "team-1", name: "Platform", relationship: "none" }],
+      });
+
+      render(<TeamDetail teamId="team-1" forumEnabled={true} />);
+
+      await screen.findByRole("button", { name: /be om tilgang/i });
+      expect(screen.queryByRole("button", { name: "Medlemsliste" })).toBeNull();
+      expect(fetchTeamRosterMock).not.toHaveBeenCalled();
+    });
   });
 
   it("submits a request-access action via the existing TASK-005 gateway and refreshes to the resulting state", async () => {

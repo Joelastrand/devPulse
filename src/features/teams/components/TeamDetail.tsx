@@ -50,6 +50,7 @@ import {
   requestTeamAccess,
 } from "../client/teams-overview-gateway";
 import { requestAccessErrorMessage } from "./request-access-messages";
+import { TeamRosterSection } from "./TeamRosterSection";
 
 /**
  * `TrendChart` code-split out of this page's eager client bundle
@@ -539,6 +540,7 @@ export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnab
             state={toTeamSkillSectionState(result.skills)}
             onReported={() => handleSkillReported(token, generation)}
           />
+          <TeamRosterSection key={generation} teamId={teamId} token={token} />
         </TeamaktivitetZone>
       </div>
     );
@@ -585,6 +587,7 @@ export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnab
             state={toTeamSkillSectionState(result.skills)}
             onReported={() => handleSkillReported(token, generation)}
           />
+          <TeamRosterSection key={generation} teamId={teamId} token={token} />
         </TeamaktivitetZone>
       </div>
     );

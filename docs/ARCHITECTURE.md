@@ -78,6 +78,69 @@ flowchart TD
   Admin navigation link from server-derived state only — the UI never
   evaluates `APP_ADMIN_EMAILS` or any allow-list itself.
 
+## Member identity and team roles (decided, implemented)
+
+Foundation for the team/personal-development work
+(`docs/features/member-identity-and-team-roles/SPEC.md`, F0). Additive and
+migration-free; it gives no new permission to anyone.
+
+- **Profiles feature (`src/features/profiles/`).** `domain/` holds the
+  display-name normalisation/validation and the `userProfiles` record guard;
+  `server/` holds the own-profile operations (`getOwnProfile`/
+  `setOwnProfile`/`deleteOwnProfile`), a `UserProfileStore` seam over
+  `userProfiles/{uid}`, and the batched `getDisplayNames` reader
+  (`getAll`, ≤ 100 refs per call, returns only `uid → validated name` for
+  server-internal use — not a directory); `client/` + `components/` hold
+  the gateway and the `/me/profile` form. The own-profile API
+  (`/api/me/profile`) derives the subject only from the verified token and
+  takes no `uid`. `teams` imports only the batched name reader from
+  `profiles`; `profiles` never imports `teams`.
+- **Team role primitives (`src/features/teams/`).** A membership may carry
+  an optional `role: "lead"` (`membershipRoleOf` is the single,
+  fail-safe classifier: only exactly `"lead"`). `setTeamMemberRole`
+  (app-admin-only, one Firestore transaction: membership check → for a
+  promotion, a fresh `active` team-status check → update) is the only writer
+  and is exposed through `PATCH /api/admin/teams/[teamId]/members/[uid]`.
+- **`authorizeTeamAccess` vs `resolveTeamRole`.** `authorizeTeamAccess`
+  (`admin | member | denied`) is **unchanged**: every existing caller still
+  sees a lead as a plain `member`. `resolveTeamRole` is a separate,
+  **opt-in** primitive that wraps it and returns
+  `admin | lead | member | denied` (or `read_failed`): it reuses the wrapped
+  decision verbatim for `admin`/`denied`, and only for a `member` re-reads
+  the caller's membership (and, for a stored lead, the team status). An app
+  admin is always `admin`, even when also a lead member; a lead is never an
+  admin. **No production code calls `resolveTeamRole` yet and lead grants no
+  capability in F0** — later features must opt in explicitly.
+- **Effective lead.** A stored `role: "lead"` is an *effective* lead only
+  while the team's status is exactly `"active"`. On a disabled (or
+  unreadable/malformed-status) team it resolves to `member`; the stored role
+  is left untouched and becomes effective again on re-activation. The
+  member-facing roster's `isLead` uses this same effective definition; the
+  admin member list deliberately shows the **stored** role so an admin can
+  manage it.
+- **Member-facing roster boundary.** `GET /api/teams/[teamId]/members`
+  (`listTeamRoster`) authorizes with `authorizeTeamAccess` and returns only
+  `{displayName, isLead, isSelf}` per member (plus `truncated`), built field
+  by field. It reads at most 500 memberships (limit 501 to detect
+  truncation, document-id order, no composite index) and resolves names with
+  batched profile reads — never Firebase Auth, never e-mail. The app-admin
+  member list (`GET /api/admin/teams/[teamId]/members`) is a separate,
+  admin-only contract that carries `uid`/e-mail and is never reused for
+  members. The UI roster (`TeamRosterSection`) is collapsed, loads lazily on
+  first expand, and makes no other request.
+- **Forum anonymity constraint.** A forum `authorTag` is a pure function of
+  `(teamId, authorUid)`, so no member-visible response may expose another
+  member's `uid` or a value derived from it (see `docs/SECURITY.md`).
+  Consequently a client-visible **member reference** for later features
+  (roadmap owner, mentor, check-in participant) must be designed first — an
+  opaque, team-scoped, non-`uid`, non-authoritative reference resolved
+  server-side with fresh authorization. F0 deliberately builds none
+  (`docs/features/member-identity-and-team-roles/SPEC.md` — "Follow-up
+  constraints for A–D").
+- **Not built in F0.** No RBAC framework, no professional roles, no lead-only
+  capability, no directory/search, no account-deletion flow, no feature flag
+  (the exposure is opt-in: nothing is visible until a user sets a name).
+
 ## Submission and dashboard boundaries (decided, implemented)
 
 ```mermaid

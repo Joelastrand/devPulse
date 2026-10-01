@@ -166,6 +166,20 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // userProfiles holds one self-set display name per Firebase uid
+    // (document id = uid; displayName, createdAt, updatedAt — no e-mail or
+    // other identity field). It is personal data, read/written only by the
+    // owner's own server-side operations (src/features/profiles/server/)
+    // via the Firebase Admin SDK, which bypasses these rules entirely — this
+    // rule exists solely to deny the separate client-SDK path
+    // unconditionally, regardless of authentication state (including an app
+    // admin's). Same server-only-access rationale as every other collection
+    // above. See docs/features/member-identity-and-team-roles/SPEC.md
+    // (TASK-001).
+    match /userProfiles/{document=**} {
+      allow read, write: if false;
+    }
+
     // Deny everything else by default; no collection is currently intended
     // to be reached directly by the Firebase client SDK.
     match /{document=**} {

@@ -1,16 +1,29 @@
 import "server-only";
 import { getAdminAuth, getFirestoreDb } from "../../../lib/firebase/admin";
 import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { getDisplayNames, type ProfileBatchReader } from "../../profiles/server/get-display-names";
 import type { IsAppAdminDeps } from "../domain/app-admin";
-import { extractMemberUid } from "../domain/team-membership";
+import { extractMemberUid, membershipRoleOf, type MembershipRole } from "../domain/team-membership";
 import { requireAppAdmin } from "./require-app-admin";
 
 const MEMBERSHIPS_COLLECTION = "teamMemberships";
 
-/** One member row for display: uid plus its current, live-resolved email. */
+/**
+ * One admin-only member row: uid plus its current, live-resolved email (the
+ * existing admin identity), and — additively (docs/features/member-identity-
+ * and-team-roles/SPEC.md — BR-29) — the member's self-set `displayName`
+ * (`null` when they have no valid profile; never derived from e-mail) and the
+ * **stored** team role. `role` is the membership's persisted role
+ * (`membershipRoleOf`), not the effective `resolveTeamRole` result: a stored
+ * lead on a disabled team is still `"lead"` here. This shape carries the
+ * `uid` admin operations need and must never be reused for the member-facing
+ * roster (`TeamRosterEntry`).
+ */
 export interface TeamMember {
   uid: string;
   email: string | null;
+  displayName: string | null;
+  role: MembershipRole;
 }
 
 /**
@@ -51,6 +64,7 @@ export interface ListTeamMembersDeps {
   allowList?: IsAppAdminDeps["allowList"];
   collection?: TeamMembersCollection;
   getUser?: GetUser;
+  profileReader?: ProfileBatchReader;
 }
 
 /**
@@ -60,7 +74,10 @@ export interface ListTeamMembersDeps {
  * document itself. A member whose document is malformed (no valid `uid`)
  * or whose `uid` no longer resolves to a live Firebase account is
  * excluded from the result rather than causing the whole list to fail or
- * fabricating a value.
+ * fabricating a value. Display names come from one batched `userProfiles`
+ * read; a missing/corrupt profile is `null`, and — names being
+ * presentation, not authorization — a failed profile read degrades every
+ * name to `null` rather than blocking the admin's member management.
  */
 export async function listTeamMembers(
   idToken: string,
@@ -85,28 +102,39 @@ export async function listTeamMembers(
     return { ok: false, error: "read_failed" };
   }
 
-  const uids = rawDocs
-    .map(extractMemberUid)
-    .filter((uid): uid is string => uid !== null);
+  const rows = rawDocs.flatMap((raw) => {
+    const uid = extractMemberUid(raw);
+    return uid === null ? [] : [{ uid, role: membershipRoleOf(raw) }];
+  });
+  const namesPromise = getDisplayNames(
+    rows.map((row) => row.uid),
+    { reader: deps.profileReader },
+  ).catch(() => new Map<string, string>());
 
   // Concurrent, not sequential: each lookup keeps its own try/catch so one
   // uid's failure never affects a sibling lookup or the overall result
-  // (`.map()`/`Promise.all` preserve `uids`' order in the resolved array
+  // (`.map()`/`Promise.all` preserve `rows`' order in the resolved array
   // regardless of which lookup settles first — never re-derived from
   // resolution timing).
-  const lookups = await Promise.all(
-    uids.map(async (uid): Promise<TeamMember | null> => {
-      try {
-        const userRecord = await getUser(uid);
-        return { uid, email: userRecord.email ?? null };
-      } catch {
-        // uid no longer resolves to a live Firebase account (e.g. the
-        // account was deleted) — exclude rather than fabricate a value.
-        return null;
-      }
-    }),
-  );
-  const members = lookups.filter((member): member is TeamMember => member !== null);
+  const [names, lookups] = await Promise.all([
+    namesPromise,
+    Promise.all(
+      rows.map(async ({ uid, role }) => {
+        try {
+          const userRecord = await getUser(uid);
+          return { uid, role, email: userRecord.email ?? null };
+        } catch {
+          // uid no longer resolves to a live Firebase account (e.g. the
+          // account was deleted) — exclude rather than fabricate a value.
+          return null;
+        }
+      }),
+    ),
+  ]);
+
+  const members = lookups
+    .filter((lookup): lookup is NonNullable<typeof lookup> => lookup !== null)
+    .map(({ uid, role, email }): TeamMember => ({ uid, email, displayName: names.get(uid) ?? null, role }));
 
   return { ok: true, members };
 }

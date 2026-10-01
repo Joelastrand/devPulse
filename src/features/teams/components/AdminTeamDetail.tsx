@@ -68,9 +68,11 @@ import {
   inviteTeamMember,
   removeAdminTeamMember,
   resolveAccessRequest,
+  setAdminTeamMemberRole,
   type AdminPendingAccessRequestEntry,
   type AdminPendingInvitationEntry,
   type AdminTeamMemberEntry,
+  type SetAdminTeamMemberRoleError,
 } from "../client/admin-team-detail-gateway";
 import { fetchAdminTeams } from "../client/admin-teams-gateway";
 import type { TeamStatus } from "../domain/team";
@@ -261,6 +263,12 @@ type RowActionState =
   | { status: "pending" }
   | { status: "error"; message: string };
 
+/** A member row's action state — `kind` says which of the row's two mutations is in flight, while either one blocks the other. */
+type MemberActionState =
+  | { status: "idle" }
+  | { status: "pending"; kind: "remove" | "role" }
+  | { status: "error"; message: string };
+
 type SurveyCreateState =
   | { status: "idle" }
   | { status: "pending" }
@@ -323,6 +331,12 @@ function inviteErrorMessage(
   return adminCopy.detail.inviteError.generic;
 }
 
+function memberRoleErrorMessage(error: SetAdminTeamMemberRoleError): string {
+  if (error === "team_disabled") return adminCopy.detail.roleError.teamDisabled;
+  if (error === "not_a_member") return adminCopy.detail.roleError.notAMember;
+  return adminCopy.detail.rowError;
+}
+
 function skillStartErrorMessage(error: Exclude<StartAdminTeamSkillTrackingResult, { ok: true }>["error"]): string {
   if (error === "team_disabled") return teamSkillTrackingCopy.untracked.error.teamDisabled;
   if (error === "tree_not_found") return teamSkillTrackingCopy.untracked.error.treeNotFound;
@@ -366,7 +380,7 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
   const [state, setState] = useState<ViewState>({ phase: "loading" });
   const [inviteState, setInviteState] = useState<InviteState>({ status: "idle" });
   const [email, setEmail] = useState("");
-  const [memberActions, setMemberActions] = useState<Record<string, RowActionState>>({});
+  const [memberActions, setMemberActions] = useState<Record<string, MemberActionState>>({});
   const [invitationActions, setInvitationActions] = useState<Record<string, RowActionState>>({});
   const [requestActions, setRequestActions] = useState<Record<string, RequestActionState>>({});
   const [surveyFormOpen, setSurveyFormOpen] = useState(false);
@@ -466,7 +480,7 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
     if (memberActions[uid]?.status === "pending") {
       return;
     }
-    setMemberActions((prev) => ({ ...prev, [uid]: { status: "pending" } }));
+    setMemberActions((prev) => ({ ...prev, [uid]: { status: "pending", kind: "remove" } }));
 
     const result = await removeAdminTeamMember(token, teamId, uid);
 
@@ -478,6 +492,37 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
       setMemberActions((prev) => ({
         ...prev,
         [uid]: { status: "error", message: adminCopy.detail.rowError },
+      }));
+      return;
+    }
+
+    setMemberActions((prev) => ({ ...prev, [uid]: { status: "idle" } }));
+    await loadForGeneration(token, generation);
+  }
+
+  /**
+   * Promotes/demotes one member through the existing admin PATCH route, then
+   * re-reads the authoritative member list (same pattern as removal). Each
+   * member is administered independently — setting one lead never touches
+   * another. The server remains the only authority (incl. rejecting a
+   * promotion on a disabled team), so a stale view is safely refused.
+   */
+  async function handleSetMemberRole(token: string, generation: number, uid: string, role: "lead" | "member") {
+    if (memberActions[uid]?.status === "pending") {
+      return;
+    }
+    setMemberActions((prev) => ({ ...prev, [uid]: { status: "pending", kind: "role" } }));
+
+    const result = await setAdminTeamMemberRole(token, teamId, uid, role);
+
+    if (!isCurrentGeneration(generation)) {
+      return;
+    }
+
+    if (!result.ok) {
+      setMemberActions((prev) => ({
+        ...prev,
+        [uid]: { status: "error", message: memberRoleErrorMessage(result.error) },
       }));
       return;
     }
@@ -955,6 +1000,9 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
         <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
           {adminCopy.detail.membersSectionTitle}
         </h2>
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          {team.status === "disabled" ? adminCopy.detail.leadDisabledTeamNote : adminCopy.detail.leadRoleHint}
+        </p>
         {members.length === 0 ? (
           <EmptyState>{adminCopy.detail.noMembers}</EmptyState>
         ) : (
@@ -971,23 +1019,51 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
                 >
                   <div className="min-w-0">
                     <p className="break-words font-medium text-zinc-900 dark:text-zinc-50">
+                      {member.displayName ?? adminCopy.detail.unnamedMember}
+                    </p>
+                    <p className="break-words text-sm text-zinc-600 dark:text-zinc-400">
                       {member.email ?? member.uid}
                     </p>
+                    {member.role === "lead" && (
+                      <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                        {team.status === "disabled"
+                          ? adminCopy.detail.leadMarkerDormant
+                          : adminCopy.detail.leadMarker}
+                      </p>
+                    )}
                     {action.status === "error" && (
                       <Alert variant="error" className="mt-1 text-sm">
                         {action.message}
                       </Alert>
                     )}
                   </div>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="shrink-0"
-                    pending={action.status === "pending"}
-                    onClick={() => handleRemoveMember(token, generation, member.uid)}
-                  >
-                    {action.status === "pending" ? adminCopy.detail.removingButton : adminCopy.detail.removeButton}
-                  </Button>
+                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      pending={action.status === "pending"}
+                      disabled={member.role !== "lead" && team.status === "disabled"}
+                      onClick={() =>
+                        handleSetMemberRole(token, generation, member.uid, member.role === "lead" ? "member" : "lead")
+                      }
+                    >
+                      {action.status === "pending" && action.kind === "role"
+                        ? adminCopy.detail.savingRoleButton
+                        : member.role === "lead"
+                          ? adminCopy.detail.makeMemberButton
+                          : adminCopy.detail.makeLeadButton}
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      pending={action.status === "pending"}
+                      onClick={() => handleRemoveMember(token, generation, member.uid)}
+                    >
+                      {action.status === "pending" && action.kind === "remove"
+                        ? adminCopy.detail.removingButton
+                        : adminCopy.detail.removeButton}
+                    </Button>
+                  </div>
                 </Card>
               );
             })}

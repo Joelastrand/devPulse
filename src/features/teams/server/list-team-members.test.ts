@@ -1,7 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type { TeamMembersCollection } from "./list-team-members";
 import { listTeamMembers } from "./list-team-members";
+
+// Display names are covered by get-display-names.test.ts; here the batched
+// read is an injected seam so these listing tests never reach Firestore.
+const { getDisplayNamesMock } = vi.hoisted(() => ({ getDisplayNamesMock: vi.fn() }));
+vi.mock("../../profiles/server/get-display-names", () => ({
+  getDisplayNames: getDisplayNamesMock,
+}));
 
 const ADMIN_EMAIL = "admin@example.com";
 
@@ -43,6 +50,11 @@ async function flushMicrotasks(turns = 20): Promise<void> {
   }
 }
 
+beforeEach(() => {
+  getDisplayNamesMock.mockReset();
+  getDisplayNamesMock.mockResolvedValue(new Map<string, string>());
+});
+
 describe("listTeamMembers", () => {
   it("returns each member's uid with email resolved live from Firebase Auth", async () => {
     const verifyToken = verifyTokenReturning(verifiedIdentity());
@@ -62,8 +74,8 @@ describe("listTeamMembers", () => {
     expect(result).toEqual({
       ok: true,
       members: [
-        { uid: "user-1", email: "one@example.com" },
-        { uid: "user-2", email: "two@example.com" },
+        { uid: "user-1", email: "one@example.com", displayName: null, role: "member" },
+        { uid: "user-2", email: "two@example.com", displayName: null, role: "member" },
       ],
     });
   });
@@ -86,7 +98,7 @@ describe("listTeamMembers", () => {
 
     expect(result).toEqual({
       ok: true,
-      members: [{ uid: "user-1", email: "one@example.com" }],
+      members: [{ uid: "user-1", email: "one@example.com", displayName: null, role: "member" }],
     });
   });
 
@@ -107,7 +119,7 @@ describe("listTeamMembers", () => {
 
     expect(result).toEqual({
       ok: true,
-      members: [{ uid: "user-1", email: "one@example.com" }],
+      members: [{ uid: "user-1", email: "one@example.com", displayName: null, role: "member" }],
     });
   });
 
@@ -225,9 +237,9 @@ describe("listTeamMembers", () => {
     expect(result).toEqual({
       ok: true,
       members: [
-        { uid: "user-a", email: "a@example.com" },
-        { uid: "user-b", email: "b@example.com" },
-        { uid: "user-c", email: "c@example.com" },
+        { uid: "user-a", email: "a@example.com", displayName: null, role: "member" },
+        { uid: "user-b", email: "b@example.com", displayName: null, role: "member" },
+        { uid: "user-c", email: "c@example.com", displayName: null, role: "member" },
       ],
     });
   });
@@ -250,9 +262,117 @@ describe("listTeamMembers", () => {
     expect(result).toEqual({
       ok: true,
       members: [
-        { uid: "user-a", email: "a@example.com" },
-        { uid: "user-c", email: "c@example.com" },
+        { uid: "user-a", email: "a@example.com", displayName: null, role: "member" },
+        { uid: "user-c", email: "c@example.com", displayName: null, role: "member" },
       ],
     });
+  });
+});
+
+describe("listTeamMembers — display name and stored role (additive admin fields)", () => {
+  const deps = (collection: TeamMembersCollection, getUser = fakeGetUser({ "user-1": "one@example.com", "user-2": "two@example.com", "user-3": "three@example.com" })) => ({
+    verifyToken: verifyTokenReturning(verifiedIdentity()),
+    allowList: [ADMIN_EMAIL],
+    collection,
+    getUser,
+  });
+
+  it("returns each member's self-set display name next to the unchanged uid and e-mail", async () => {
+    getDisplayNamesMock.mockResolvedValue(new Map([["user-1", "Anna Berg"]]));
+    const collection = fakeCollection([
+      { uid: "user-1", teamId: "team-1" },
+      { uid: "user-2", teamId: "team-1" },
+    ]);
+
+    const result = await listTeamMembers("token", "team-1", deps(collection));
+
+    expect(result).toEqual({
+      ok: true,
+      members: [
+        { uid: "user-1", email: "one@example.com", displayName: "Anna Berg", role: "member" },
+        { uid: "user-2", email: "two@example.com", displayName: null, role: "member" },
+      ],
+    });
+  });
+
+  it("asks for names of exactly the team's members, in one batched call, and never substitutes e-mail for a missing name", async () => {
+    const collection = fakeCollection([{ uid: "user-1", teamId: "team-1" }, { uid: "user-2", teamId: "team-1" }]);
+
+    const result = await listTeamMembers("token", "team-1", deps(collection));
+
+    expect(getDisplayNamesMock).toHaveBeenCalledTimes(1);
+    expect(getDisplayNamesMock.mock.calls[0][0]).toEqual(["user-1", "user-2"]);
+    expect(result.ok && result.members.map((member) => member.displayName)).toEqual([null, null]);
+  });
+
+  it("degrades every name to null, keeping the full member list, when the profile read fails", async () => {
+    getDisplayNamesMock.mockRejectedValue(new Error("boom"));
+    const collection = fakeCollection([{ uid: "user-1", teamId: "team-1" }]);
+
+    const result = await listTeamMembers("token", "team-1", deps(collection));
+
+    expect(result).toEqual({
+      ok: true,
+      members: [{ uid: "user-1", email: "one@example.com", displayName: null, role: "member" }],
+    });
+  });
+
+  it("reports the stored role: lead for role: \"lead\", member for no role — several leads allowed", async () => {
+    const collection = fakeCollection([
+      { uid: "user-1", teamId: "team-1", role: "lead" },
+      { uid: "user-2", teamId: "team-1" },
+      { uid: "user-3", teamId: "team-1", role: "lead" },
+    ]);
+
+    const result = await listTeamMembers("token", "team-1", deps(collection));
+
+    expect(result.ok && result.members.map((member) => member.role)).toEqual(["lead", "member", "lead"]);
+  });
+
+  it.each([
+    ["an unknown string", "admin"],
+    ["a differently-cased string", "Lead"],
+    ["an explicit member", "member"],
+    ["a number", 1],
+    ["null", null],
+  ])("treats a malformed or unknown role (%s) as member, never lead", async (_label, role) => {
+    const collection = fakeCollection([{ uid: "user-1", teamId: "team-1", role }]);
+
+    const result = await listTeamMembers("token", "team-1", deps(collection));
+
+    expect(result.ok && result.members[0].role).toBe("member");
+  });
+
+  it("reports the stored role regardless of team status (this list never reads it)", async () => {
+    const collection = fakeCollection([{ uid: "user-1", teamId: "team-1", role: "lead", roleUpdatedBy: "admin-0" }]);
+
+    const result = await listTeamMembers("token", "team-1", deps(collection));
+
+    expect(result.ok && result.members[0]).toEqual({
+      uid: "user-1",
+      email: "one@example.com",
+      displayName: null,
+      role: "lead",
+    });
+  });
+
+  it("still excludes a member whose Auth account is gone, even if they hold a profile and a lead role (existing semantics)", async () => {
+    getDisplayNamesMock.mockResolvedValue(new Map([["user-1", "Anna Berg"]]));
+    const collection = fakeCollection([{ uid: "user-1", teamId: "team-1", role: "lead" }]);
+
+    const result = await listTeamMembers("token", "team-1", deps(collection, fakeGetUser({})));
+
+    expect(result).toEqual({ ok: true, members: [] });
+  });
+
+  it("does not read profiles for a non-admin caller", async () => {
+    const result = await listTeamMembers("token", "team-1", {
+      verifyToken: verifyTokenReturning(verifiedIdentity({ email: "dev@example.com" })),
+      allowList: [ADMIN_EMAIL],
+      collection: fakeCollection([{ uid: "user-1", teamId: "team-1" }]),
+    });
+
+    expect(result).toEqual({ ok: false, error: "forbidden" });
+    expect(getDisplayNamesMock).not.toHaveBeenCalled();
   });
 });
