@@ -114,7 +114,8 @@ const adminDeps = {
   now: NOW,
 };
 
-const GRANT_FIELDS = ["createdAt", "createdVia", "grantedBy", "teamId", "uid"];
+const GRANT_FIELDS = ["createdAt", "createdVia", "grantedBy", "memberRef", "teamId", "uid"];
+const MEMBER_REF = /^[0-9a-hjkmnp-tv-z]{26}$/;
 
 function membership(uid: string, extra: Doc = {}): Doc {
   return { uid, teamId: "team-1", createdAt: NOW, createdVia: "admin_direct", grantedBy: "admin-0", ...extra };
@@ -231,6 +232,93 @@ describe("existing membership grant paths never write or inherit a role", () => 
 
     expect(outcome).toBe("already_member");
     expect(store.get("teamMemberships/user-1__team-1")).toEqual(lead);
+  });
+});
+
+describe("memberRef lifecycle (team-skill-planning TASK-001)", () => {
+  const grant = (grantedBy = "admin-1") =>
+    grantTeamMembership({ uid: "user-1", teamId: "team-1", createdAt: NOW, createdVia: "invitation", grantedBy });
+
+  it("every grant path stores a well-formed memberRef on the new membership", async () => {
+    await grant();
+    store.set("teamAccessRequests/user-2__team-1", { uid: "user-2", teamId: "team-1", status: "pending", createdAt: NOW });
+    await approveAccessRequest("t", "user-2", "team-1", adminDeps);
+    store.set("teamInvitations/team-1__anna@example.com", {
+      teamId: "team-1",
+      email: "anna@example.com",
+      status: "pending",
+      invitedBy: "admin-1",
+      createdAt: NOW,
+    });
+    await resolveInvitations({ uid: "user-3", email: "anna@example.com", emailVerified: true }, { now: NOW });
+
+    const refs = ["user-1", "user-2", "user-3"].map((uid) => store.get(`teamMemberships/${uid}__team-1`)?.memberRef);
+    refs.forEach((ref) => expect(ref).toMatch(MEMBER_REF));
+    expect(new Set(refs).size).toBe(3);
+  });
+
+  it("a repeated grant keeps the existing ref and writes nothing", async () => {
+    await grant();
+    const before = store.get("teamMemberships/user-1__team-1");
+
+    expect(await grant("admin-2")).toBe("already_member");
+
+    expect(store.get("teamMemberships/user-1__team-1")).toEqual(before);
+  });
+
+  it("a legacy membership without a ref stays without one after a grant attempt (no implicit backfill)", async () => {
+    const legacy = membership("user-1");
+    store.set("teamMemberships/user-1__team-1", legacy);
+
+    expect(await grant()).toBe("already_member");
+
+    expect(store.get("teamMemberships/user-1__team-1")).toEqual(legacy);
+    expect(store.get("teamMemberships/user-1__team-1")).not.toHaveProperty("memberRef");
+  });
+
+  it("removal deletes the ref with the document; a rejoin receives a different ref and nothing is left behind", async () => {
+    await grant();
+    const oldRef = store.get("teamMemberships/user-1__team-1")?.memberRef;
+
+    expect(await removeTeamMember("t", "team-1", "user-1", adminDeps)).toEqual({ ok: true });
+    expect(store.has("teamMemberships/user-1__team-1")).toBe(false);
+    expect([...store.keys()].filter((path) => !path.startsWith("teams/"))).toEqual([]);
+
+    await grant("admin-2");
+
+    const newRef = store.get("teamMemberships/user-1__team-1")?.memberRef;
+    expect(newRef).toMatch(MEMBER_REF);
+    expect(newRef).not.toBe(oldRef);
+  });
+
+  it("promoting and demoting a member leaves the memberRef untouched", async () => {
+    await grant();
+    const ref = store.get("teamMemberships/user-1__team-1")?.memberRef;
+
+    await setTeamMemberRole("t", "team-1", "user-1", "lead", adminDeps);
+    expect(store.get("teamMemberships/user-1__team-1")?.memberRef).toBe(ref);
+    await setTeamMemberRole("t", "team-1", "user-1", "member", adminDeps);
+    expect(store.get("teamMemberships/user-1__team-1")?.memberRef).toBe(ref);
+  });
+
+  it("a memberRef grants no access: authorization ignores it entirely", async () => {
+    const stranger = { uid: "user-9", email: "x@example.com", emailVerified: true };
+    store.set("teamMemberships/user-1__team-1", membership("user-1", { memberRef: "0123456789abcdefghjkmnpqrs" }));
+
+    expect(await authorizeTeamAccess(stranger, "team-1", { allowList: [ADMIN_EMAIL] })).toEqual({ ok: true, access: "denied" });
+  });
+
+  it("the F0 roster still returns only displayName/isLead/isSelf and never the memberRef", async () => {
+    await grant();
+    const ref = store.get("teamMemberships/user-1__team-1")?.memberRef as string;
+    const result = await listTeamRoster("t", "team-1", {
+      verifyToken: vi.fn().mockResolvedValue({ uid: "user-1", email: "dev@example.com", email_verified: true }),
+      allowList: [ADMIN_EMAIL],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(JSON.stringify(result)).not.toContain(ref);
+    expect(JSON.stringify(result)).not.toContain("memberRef");
   });
 });
 

@@ -66,12 +66,14 @@ import {
   fetchTeamInvitations,
   fetchTeamMembers,
   inviteTeamMember,
+  prepareAdminMemberRefs,
   removeAdminTeamMember,
   resolveAccessRequest,
   setAdminTeamMemberRole,
   type AdminPendingAccessRequestEntry,
   type AdminPendingInvitationEntry,
   type AdminTeamMemberEntry,
+  type PrepareAdminMemberRefsError,
   type SetAdminTeamMemberRoleError,
 } from "../client/admin-team-detail-gateway";
 import { fetchAdminTeams } from "../client/admin-teams-gateway";
@@ -269,6 +271,13 @@ type MemberActionState =
   | { status: "pending"; kind: "remove" | "role" }
   | { status: "error"; message: string };
 
+/** The member-ref preparation action's own state (one team-wide action, not per row). */
+type PrepareMemberRefsState =
+  | { status: "idle" }
+  | { status: "pending" }
+  | { status: "success"; truncated: boolean }
+  | { status: "error"; message: string };
+
 type SurveyCreateState =
   | { status: "idle" }
   | { status: "pending" }
@@ -337,6 +346,11 @@ function memberRoleErrorMessage(error: SetAdminTeamMemberRoleError): string {
   return adminCopy.detail.rowError;
 }
 
+function prepareMemberRefsErrorMessage(error: PrepareAdminMemberRefsError): string {
+  if (error === "team_not_found") return adminCopy.detail.prepareMemberRefsError.teamNotFound;
+  return adminCopy.detail.prepareMemberRefsError.generic;
+}
+
 function skillStartErrorMessage(error: Exclude<StartAdminTeamSkillTrackingResult, { ok: true }>["error"]): string {
   if (error === "team_disabled") return teamSkillTrackingCopy.untracked.error.teamDisabled;
   if (error === "tree_not_found") return teamSkillTrackingCopy.untracked.error.treeNotFound;
@@ -383,6 +397,7 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
   const [memberActions, setMemberActions] = useState<Record<string, MemberActionState>>({});
   const [invitationActions, setInvitationActions] = useState<Record<string, RowActionState>>({});
   const [requestActions, setRequestActions] = useState<Record<string, RequestActionState>>({});
+  const [prepareState, setPrepareState] = useState<PrepareMemberRefsState>({ status: "idle" });
   const [surveyFormOpen, setSurveyFormOpen] = useState(false);
   const [surveyCreateState, setSurveyCreateState] = useState<SurveyCreateState>({ status: "idle" });
   const [surveyAccessMode, setSurveyAccessMode] = useState<SurveyAccessMode | null>(null);
@@ -405,6 +420,7 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
       setMemberActions({});
       setInvitationActions({});
       setRequestActions({});
+      setPrepareState({ status: "idle" });
       setSurveyFormOpen(false);
       setSurveyCreateState({ status: "idle" });
       setSurveyAccessMode(null);
@@ -528,6 +544,32 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
     }
 
     setMemberActions((prev) => ({ ...prev, [uid]: { status: "idle" } }));
+    await loadForGeneration(token, generation);
+  }
+
+  /**
+   * Runs the explicit admin member-ref preparation, then re-reads the member
+   * list so the readiness state (`hasMemberRef`) is authoritative. One
+   * team-wide action: a second click while pending is ignored.
+   */
+  async function handlePrepareMemberRefs(token: string, generation: number) {
+    if (prepareState.status === "pending") {
+      return;
+    }
+    setPrepareState({ status: "pending" });
+
+    const result = await prepareAdminMemberRefs(token, teamId);
+
+    if (!isCurrentGeneration(generation)) {
+      return;
+    }
+
+    if (!result.ok) {
+      setPrepareState({ status: "error", message: prepareMemberRefsErrorMessage(result.error) });
+      return;
+    }
+
+    setPrepareState({ status: "success", truncated: result.truncated });
     await loadForGeneration(token, generation);
   }
 
@@ -1003,6 +1045,31 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
           {team.status === "disabled" ? adminCopy.detail.leadDisabledTeamNote : adminCopy.detail.leadRoleHint}
         </p>
+        {members.some((member) => !member.hasMemberRef) && (
+          <div className="flex flex-col gap-2">
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">{adminCopy.detail.prepareMemberRefsHint}</p>
+            <div>
+              <Button
+                type="button"
+                variant="secondary"
+                pending={prepareState.status === "pending"}
+                onClick={() => handlePrepareMemberRefs(token, generation)}
+              >
+                {prepareState.status === "pending"
+                  ? adminCopy.detail.preparingMemberRefsButton
+                  : adminCopy.detail.prepareMemberRefsButton}
+              </Button>
+            </div>
+          </div>
+        )}
+        {prepareState.status === "error" && <Alert variant="error">{prepareState.message}</Alert>}
+        {prepareState.status === "success" && (
+          <Alert variant="success">
+            {prepareState.truncated
+              ? `${adminCopy.detail.prepareMemberRefsSuccess} ${adminCopy.detail.prepareMemberRefsTruncated}`
+              : adminCopy.detail.prepareMemberRefsSuccess}
+          </Alert>
+        )}
         {members.length === 0 ? (
           <EmptyState>{adminCopy.detail.noMembers}</EmptyState>
         ) : (

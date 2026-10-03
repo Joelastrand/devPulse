@@ -20,6 +20,12 @@ const PROJECT = "fake-demo-project";
 const PRIVATE_KEY_SENTINEL = "PRIVATE-KEY-SENTINEL-DO-NOT-PRINT";
 const EMAIL_SENTINEL = "presenter.email@example.invalid";
 
+const ROADMAP_PATHS = [
+  "roadmapItems/demo-team__demo-skill-testing",
+  "roadmapItems/demo-team__demo-skill-observability",
+  "roadmapItems/demo-team__demo-skill-delivery",
+];
+
 const realCrypto: DemoCrypto = { encrypt, decrypt };
 
 beforeEach(() => {
@@ -122,7 +128,7 @@ describe("local crypto preflight (BR-26)", () => {
 });
 
 describe("offline preflight (BR-28, BR-29)", () => {
-  it("makes zero reader and presenter calls, checks crypto, and plans all 82 operations", async () => {
+  it("makes zero reader and presenter calls, checks crypto, and plans all 85 operations", async () => {
     const { operations, manifest } = buildPlan();
     const r = fakeReader(new Map());
     const p = fakePresenter();
@@ -135,7 +141,7 @@ describe("offline preflight (BR-28, BR-29)", () => {
     });
 
     expect(result).toMatchObject({ ok: true, existingStateChecked: false, classifications: [] });
-    expect(result.ok && result.plannedOperations).toHaveLength(82);
+    expect(result.ok && result.plannedOperations).toHaveLength(85);
     expect(r.calls).toEqual([]);
     expect(p.calls).toEqual([]);
   });
@@ -151,7 +157,7 @@ describe("online preflight — presenter and adapters", () => {
   it("checks presenter existence with the uid only, before any read", async () => {
     const { presenterCalls, reads } = await preflightOnline(new Map());
     expect(presenterCalls).toEqual([PRESENTER]);
-    expect(reads).toHaveLength(82);
+    expect(reads).toHaveLength(85);
   });
 
   it("aborts with zero reads when the presenter does not exist", async () => {
@@ -210,16 +216,16 @@ describe("online preflight — presenter and adapters", () => {
 });
 
 describe("classification — empty, correct and partial targets (BR-23)", () => {
-  it("empty target: every path ABSENT → create, all 82 operations planned", async () => {
+  it("empty target: every path ABSENT → create, all 85 operations planned", async () => {
     const { result, reads, operations, manifest } = await preflightOnline(new Map());
 
     expect(result.ok).toBe(true);
-    expect(result.classifications).toHaveLength(82);
+    expect(result.classifications).toHaveLength(85);
     expect(result.classifications.every((c) => c.state === "ABSENT" && c.action === "create")).toBe(true);
-    expect(result.ok && result.plannedOperations).toHaveLength(82);
+    expect(result.ok && result.plannedOperations).toHaveLength(85);
     // Only manifest paths are read, each exactly once (BR-29).
     expect([...reads].sort()).toEqual(manifest.map((m) => m.path).sort());
-    expect(operations).toHaveLength(82);
+    expect(operations).toHaveLength(85);
   });
 
   it("already-correct target: C → skip, U → set (79 planned), no conflict", async () => {
@@ -229,7 +235,7 @@ describe("classification — empty, correct and partial targets (BR-23)", () => 
     expect(result.ok).toBe(true);
     const c = result.classifications;
     expect(c.every((x) => x.state === "COMPATIBLE")).toBe(true);
-    expect(c.filter((x) => x.action === "skip").map((x) => x.writeClass)).toEqual(["C", "C", "C"]);
+    expect(c.filter((x) => x.action === "skip").map((x) => x.writeClass)).toEqual(["C", "C", "C", "C", "C", "C"]);
     expect(c.filter((x) => x.action === "set")).toHaveLength(79);
     expect(result.ok && result.plannedOperations.every((op) => op.writeClass === "U")).toBe(true);
     expect(result.ok && result.plannedOperations).toHaveLength(79);
@@ -253,9 +259,15 @@ describe("classification — empty, correct and partial targets (BR-23)", () => 
       action: "skip",
     });
     expect(classificationOf(result, "surveys/demo-survey-02")).toMatchObject({ state: "COMPATIBLE", action: "set" });
-    // 82 - 1 skipped membership - scheduled survey skip - … only C-compatible are skipped.
+    // 85 - 1 skipped membership - scheduled survey skip - … only C-compatible are skipped.
     const skipped = result.classifications.filter((c) => c.action === "skip").map((c) => c.path).sort();
-    expect(skipped).toEqual([`teamMemberships/${PRESENTER}__demo-team`, "surveys/demo-survey-next"].sort());
+    expect(skipped).toEqual(
+      [
+        `teamMemberships/${PRESENTER}__demo-team`,
+        "surveys/demo-survey-next",
+        ...ROADMAP_PATHS,
+      ].sort(),
+    );
     expect(result.ok && result.plannedOperations).toHaveLength(80);
   });
 
@@ -384,7 +396,7 @@ describe("classification — conflicts abort with no planned writes (BR-23, BR-2
     expect(result).not.toHaveProperty("plannedOperations");
     expect(classificationOf(result, path)).toMatchObject({ state: "CONFLICT", action: "blocked", reason });
     // Every other path is still classified, so the report shows the whole picture.
-    expect(result.classifications).toHaveLength(82);
+    expect(result.classifications).toHaveLength(85);
     expect(result.classifications.filter((c) => c.state === "CONFLICT")).toHaveLength(1);
   });
 
@@ -493,7 +505,7 @@ describe("dry-run report (BR-4, BR-28, BR-31)", () => {
     expect(text).toContain("Mode: online-dry-run");
     expect(text).toContain("Presenter uid: presenter-uid-fixture");
     expect(text).toContain("As-of date: 2026-03-16");
-    for (const [collection, n] of Object.entries({ teams: 1, teamMemberships: 1, surveys: 9, surveyResponses: 59, challenges: 5, skillTrees: 4, skillProgress: 3 })) {
+    for (const [collection, n] of Object.entries({ teams: 1, teamMemberships: 1, surveys: 9, surveyResponses: 59, challenges: 5, skillTrees: 4, skillProgress: 3, roadmapItems: 3 })) {
       expect(text).toContain(`  ${collection}: ${n}`);
     }
     expect(text).toContain("  create teams/demo-team");
@@ -572,5 +584,57 @@ describe("dry-run report (BR-4, BR-28, BR-31)", () => {
     }
     expect(text).not.toContain("Kodegranskninger");
     expect(text).not.toMatch(/\[\d,\d,\d\]/);
+  });
+});
+
+describe("classification — roadmap plans (team-skill-planning TASK-011)", () => {
+  const TESTING = "roadmapItems/demo-team__demo-skill-testing";
+
+  async function withRoadmapEdit(edit: (data: Record<string, unknown>) => Record<string, unknown>) {
+    const { operations } = buildPlan();
+    const store = correctStore(operations);
+    store.set(TESTING, edit(store.get(TESTING) as Record<string, unknown>));
+    return preflightOnline(store);
+  }
+
+  it("missing plans → create; identical plans → compatible skip (never rewritten)", async () => {
+    const { operations } = buildPlan();
+    const store = correctStore(operations);
+    store.delete(TESTING);
+    const { result } = await preflightOnline(store);
+    expect(result.ok).toBe(true);
+    expect(classificationOf(result, TESTING)).toMatchObject({ state: "ABSENT", action: "create", writeClass: "C" });
+    expect(classificationOf(result, "roadmapItems/demo-team__demo-skill-delivery")).toMatchObject({
+      state: "COMPATIBLE",
+      action: "skip",
+    });
+    expect(result.ok && result.plannedOperations.some((op) => op.collection === "roadmapItems")).toBe(true);
+  });
+
+  it("tolerates presenter edits (status, owner reference, updatedBy, archive)", async () => {
+    const { result } = await withRoadmapEdit((d) => ({
+      ...d,
+      status: "planned",
+      completedAt: undefined,
+      ownerRef: "opaque-ref",
+      updatedBy: "someone-else",
+      archivedAt: new Date("2026-03-20T00:00:00Z"),
+      archivedBy: "someone-else",
+    }));
+    expect(result.ok).toBe(true);
+    expect(classificationOf(result, TESTING)).toMatchObject({ state: "COMPATIBLE", action: "skip" });
+    expect(result.ok && result.plannedOperations.map((o) => o.path)).not.toContain(TESTING);
+  });
+
+  it.each([
+    ["malformed shape", (d: Record<string, unknown>) => ({ ...d, priority: "urgent" }), "malformed-shape"],
+    ["another team", (d: Record<string, unknown>) => ({ ...d, teamId: "other-team" }), "scope-mismatch"],
+    ["another tree", (d: Record<string, unknown>) => ({ ...d, treeId: "demo-skill-delivery" }), "scope-mismatch"],
+    ["foreign creator", (d: Record<string, unknown>) => ({ ...d, createdBy: "a-real-user" }), "foreign-creator"],
+  ])("%s ⇒ CONFLICT, abort, nothing planned", async (_name, edit, reason) => {
+    const { result } = await withRoadmapEdit(edit);
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.error.category).toBe("conflict");
+    expect(classificationOf(result, TESTING)).toMatchObject({ state: "CONFLICT", action: "blocked", reason });
   });
 });

@@ -90,14 +90,14 @@ async function expectRejected(
 }
 
 describe("writeDemoOperations — happy path", () => {
-  it("writes the full 82-operation plan in exactly one batch and one commit", async () => {
+  it("writes the full 85-operation plan in exactly one batch and one commit", async () => {
     const fake = fakeStore();
     const result = await writeDemoOperations({ operations, manifest, createBatch: fake.createBatch });
 
-    expect(result).toEqual({ written: 82 });
+    expect(result).toEqual({ written: 85 });
     expect(fake.batches).toBe(1);
     expect(fake.commits).toBe(1);
-    expect(fake.store.size).toBe(82);
+    expect(fake.store.size).toBe(85);
   });
 
   it("maps class C to create and class U to set", async () => {
@@ -105,7 +105,7 @@ describe("writeDemoOperations — happy path", () => {
     await writeDemoOperations({ operations, manifest, createBatch: fake.createBatch });
 
     const creates = operations.filter((o) => o.writeClass === "C").length;
-    expect(creates).toBe(3);
+    expect(creates).toBe(6);
     expect(fake.calls.filter((c) => c === "create")).toHaveLength(creates);
     expect(fake.calls.filter((c) => c === "set")).toHaveLength(operations.length - creates);
   });

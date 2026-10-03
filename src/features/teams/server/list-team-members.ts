@@ -3,6 +3,7 @@ import { getAdminAuth, getFirestoreDb } from "../../../lib/firebase/admin";
 import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import { getDisplayNames, type ProfileBatchReader } from "../../profiles/server/get-display-names";
 import type { IsAppAdminDeps } from "../domain/app-admin";
+import { memberRefOf } from "../domain/member-ref";
 import { extractMemberUid, membershipRoleOf, type MembershipRole } from "../domain/team-membership";
 import { requireAppAdmin } from "./require-app-admin";
 
@@ -17,13 +18,17 @@ const MEMBERSHIPS_COLLECTION = "teamMemberships";
  * (`membershipRoleOf`), not the effective `resolveTeamRole` result: a stored
  * lead on a disabled team is still `"lead"` here. This shape carries the
  * `uid` admin operations need and must never be reused for the member-facing
- * roster (`TeamRosterEntry`).
+ * roster (`TeamRosterEntry`). `hasMemberRef` (docs/features/team-skill-
+ * planning/SPEC.md — BR-5, BR-36) is only the readiness signal for the admin
+ * "Klargjør medlemsvelger" action: whether the membership carries a valid
+ * `memberRef`. The ref value itself is never returned.
  */
 export interface TeamMember {
   uid: string;
   email: string | null;
   displayName: string | null;
   role: MembershipRole;
+  hasMemberRef: boolean;
 }
 
 /**
@@ -104,7 +109,7 @@ export async function listTeamMembers(
 
   const rows = rawDocs.flatMap((raw) => {
     const uid = extractMemberUid(raw);
-    return uid === null ? [] : [{ uid, role: membershipRoleOf(raw) }];
+    return uid === null ? [] : [{ uid, role: membershipRoleOf(raw), hasMemberRef: memberRefOf(raw) !== null }];
   });
   const namesPromise = getDisplayNames(
     rows.map((row) => row.uid),
@@ -119,10 +124,10 @@ export async function listTeamMembers(
   const [names, lookups] = await Promise.all([
     namesPromise,
     Promise.all(
-      rows.map(async ({ uid, role }) => {
+      rows.map(async ({ uid, role, hasMemberRef }) => {
         try {
           const userRecord = await getUser(uid);
-          return { uid, role, email: userRecord.email ?? null };
+          return { uid, role, hasMemberRef, email: userRecord.email ?? null };
         } catch {
           // uid no longer resolves to a live Firebase account (e.g. the
           // account was deleted) — exclude rather than fabricate a value.
@@ -134,7 +139,15 @@ export async function listTeamMembers(
 
   const members = lookups
     .filter((lookup): lookup is NonNullable<typeof lookup> => lookup !== null)
-    .map(({ uid, role, email }): TeamMember => ({ uid, email, displayName: names.get(uid) ?? null, role }));
+    .map(
+      ({ uid, role, hasMemberRef, email }): TeamMember => ({
+        uid,
+        email,
+        displayName: names.get(uid) ?? null,
+        role,
+        hasMemberRef,
+      }),
+    );
 
   return { ok: true, members };
 }

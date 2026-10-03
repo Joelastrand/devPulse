@@ -281,6 +281,18 @@ until attrition, burnout, or delivery failure makes them obvious.
   data, unlike `SurveyAggregate` — a tree tracked by exactly one team
   appears, same as it would to that team's own admin page.
 
+## Delivered: Team Skill Planning (Feature A)
+
+- A team can record a simple plan for each competency area it tracks — the
+  target stage it wants to reach, a priority, a status and optional dates —
+  inside the existing *Kompetanseområder* view, so intent sits next to the
+  team's current stage. A plan may optionally name one team member as the
+  responsible contact; this is coordination metadata only, grants no
+  permissions, and is never an individual performance measure. Planning stays
+  team-level and carries no per-person scoring or ranking.
+- A dedicated Team Roadmap experience is a later, separate feature. See
+  `docs/features/team-skill-planning/SPEC.md` and `docs/ROADMAP.md`.
+
 ## Future capabilities (not implemented yet)
 
 - A cross-team/org-wide "developer forum" or community, beyond Team

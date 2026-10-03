@@ -513,6 +513,23 @@ describe("listTeamRoster — privacy contract (member-visible response)", () => 
     }
   });
 
+  it("does not expose a memberRef stored on the memberships (selector contract is separate)", async () => {
+    const world = teamWorld();
+    for (const [key, doc] of Object.entries(world.memberships ?? {})) {
+      world.memberships![key] = { ...doc, memberRef: "0123456789abcdefghjkmnpqrs" };
+    }
+    const { deps } = build(world);
+
+    const result = await listTeamRoster("token", "team-1", deps);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    for (const entry of result.members) {
+      expect(Object.keys(entry).sort()).toEqual(["displayName", "isLead", "isSelf"]);
+    }
+    expect(JSON.stringify(result)).not.toContain("0123456789abcdefghjkmnpqrs");
+  });
+
   it("carries no uid, e-mail, membership id, audit field or authTag-computable value anywhere in the serialised response", async () => {
     const { deps } = build(teamWorld());
 

@@ -52,13 +52,15 @@ is considered done.
     isSelf}` per member — built field by field, never from a spread of a
     membership or profile object. Only admin-only contracts may carry a
     `uid`.
-20. A client-visible reference to a specific team member (e.g. a future
-    roadmap owner, mentor or check-in participant) must not be a Firebase
+20. A client-visible reference to a specific team member (e.g. a roadmap
+    owner, or a future mentor or check-in participant) must not be a Firebase
     `uid` or be derived from one. It must be an opaque, team-scoped
     reference that is resolved server-side, never treated as authentication
     or authorization evidence (the server re-authorizes on every use), and
-    fails closed when the membership ends. No such reference exists yet; it
-    must be designed and security-reviewed before any feature that needs one.
+    fails closed when the membership ends. The reference now exists as
+    `teamMemberships.memberRef` (invariants 23–30, introduced by Team Skill
+    Planning); any new feature needing a member handle must reuse it and its
+    constraints rather than invent another.
 21. A display name (`userProfiles`) is presentation only: never an
     identifier, lookup key, uniqueness key or authorization input, never
     derived from or falling back to an e-mail address, and always rendered
@@ -74,6 +76,46 @@ is considered done.
     transaction, never client-supplied, and grants no capability unless a
     feature explicitly opts into `resolveTeamRole`. `authorizeTeamAccess`
     continues to treat a lead as an ordinary member.
+23. Roadmap data (`roadmapItems`) is team-scoped and server-only (client
+    Firestore rules deny all). Every roadmap operation re-derives
+    authorization from the verified identity and fresh state. Reads follow
+    `authorizeTeamAccess`; writes require a genuine membership in an `active`
+    team, checked in the write transaction. App-admin status or a team lead
+    role does not independently grant roadmap write access (a lead is an
+    ordinary member for planning). `canEdit` is server-derived and only hides
+    controls. A client-supplied team, uid, role, owner or document id is never
+    proof, and the deterministic document id is a uniqueness device, not
+    authorization.
+24. A client-visible member reference (`teamMemberships.memberRef`) is CSPRNG
+    output stored on the membership, never derived from `uid`, `teamId` or
+    e-mail.
+25. A member reference is never authentication or authorization evidence;
+    being referenced (e.g. as a roadmap `ownerRef`) grants nothing — no
+    access, visibility, lead capability or edit right.
+26. A member reference is valid only with its own `teamId`. Unknown, stale,
+    malformed, cross-team or ambiguous (duplicate) references fail closed: a
+    write is rejected, and a stored owner that no longer resolves is shown as
+    unavailable, never guessed. Owner display names are resolved server-side.
+27. A removed membership cannot be newly assigned, and its reference is
+    destroyed with it; a rejoin receives a fresh reference. No `GET`
+    generates or writes a reference: only the grant primitive and the
+    admin-only preparation operation (`POST
+    /api/admin/teams/[teamId]/member-refs`, which writes only `memberRef`,
+    is idempotent and never recreates a membership) do.
+28. Member-facing planning responses contain only allow-listed keys — never a
+    `uid`, e-mail, membership document id or audit field
+    (`createdBy`/`updatedBy`/`archivedBy`). The assignable-members endpoint
+    is privacy-minimized (`memberRef`, display name, presentation ordinal,
+    `isSelf`, counts) and exposes no join date. Logs never carry names, refs
+    or plan content.
+29. The F0 member roster stays identifier-free (`{displayName, isLead,
+    isSelf}`: no `uid`, e-mail, membership id or `memberRef`); member
+    selection uses the dedicated assignable-members contract instead.
+30. Planning stores team-level intent only: no individual score, ranking,
+    per-person aggregate, manager note or inferred competence. The optional
+    owner is coordination metadata, not an individual performance or
+    accountability measure, and the UI offers no per-owner filter, sort or
+    summary.
 
 ## Feature review checklist
 
@@ -99,6 +141,13 @@ Before marking a feature touching survey/team/user data as done, check:
       authorization input, or trusted from the client?
 - [ ] Does a lead role (or any other membership metadata) grant access
       implicitly instead of through an explicit, reviewed opt-in?
+- [ ] Is a member reference or planning owner treated as authorization, or
+      does any read/GET generate or write one?
+- [ ] Does a planning write rely on app-admin status or the lead role instead
+      of a genuine active-team membership, or trust a client-supplied
+      team/owner/document id?
+- [ ] Does a planning feature introduce a per-person score, ranking,
+      aggregate, owner-based filter or manager note?
 
 Known, accepted limitations of the member-identity foundation (display-name
 Unicode compatibility, roster truncation above 500 members, the absence of an

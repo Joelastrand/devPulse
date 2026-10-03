@@ -166,6 +166,21 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // roadmapItems holds exactly one team's plan for exactly one competency
+    // area (teamId, treeId, targetNodeId, priority, status, optional dates
+    // and ownerRef, archive/completion/audit fields), keyed by the
+    // deterministic id `{teamId}__{treeId}` — a uniqueness mechanism only,
+    // never authorization. Team planning metadata; no person data beyond the
+    // opaque ownerRef. All access happens server-side via the Firebase Admin
+    // SDK, which bypasses these rules entirely — this rule exists solely to
+    // deny the separate client-SDK path unconditionally, regardless of
+    // authentication state (including an app admin's). Same server-only-access
+    // rationale as every other collection above. See
+    // docs/features/team-skill-planning/SPEC.md (TASK-004).
+    match /roadmapItems/{document=**} {
+      allow read, write: if false;
+    }
+
     // userProfiles holds one self-set display name per Firebase uid
     // (document id = uid; displayName, createdAt, updatedAt — no e-mail or
     // other identity field). It is personal data, read/written only by the

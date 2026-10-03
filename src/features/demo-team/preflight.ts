@@ -1,6 +1,7 @@
 import type { EncryptedPayload } from "../../lib/encryption/encryption";
 import { validateChallengeText } from "../challenges/domain/challenge-text";
 import { isValidChallenge } from "../challenges/domain/challenge";
+import { parseRoadmapItem, roadmapItemDocId } from "../roadmap/domain/roadmap-item";
 import { isValidSkillProgress } from "../skill-trees/domain/skill-progress";
 import { isValidSkillTree } from "../skill-trees/domain/skill-tree";
 import { validateSurveyAnswers } from "../surveys/domain/answers";
@@ -265,6 +266,20 @@ function classifySkillProgress(existing: Record<string, unknown>, expected: Reco
   return OK;
 }
 
+/** Compatible = valid roadmap shape for this team/tree/doc id, created by the seed. Later presenter edits are tolerated. */
+function classifyRoadmapItem(existing: Record<string, unknown>, expected: Record<string, unknown>, docId: string): Verdict {
+  const parsed = parseRoadmapItem(existing);
+  if (parsed === null) return conflict("malformed-shape");
+  if (
+    parsed.teamId !== DEMO_TEAM_ID ||
+    parsed.treeId !== expected.treeId ||
+    docId !== roadmapItemDocId(DEMO_TEAM_ID, parsed.treeId)
+  ) {
+    return conflict("scope-mismatch");
+  }
+  return parsed.createdBy === DEMO_AUDIT_ACTOR ? OK : conflict("foreign-creator");
+}
+
 function classifyExisting(op: PlannedOperation, data: unknown, crypto: DemoCrypto): Verdict {
   const existing = asRecord(data);
   const expected = asRecord(op.data);
@@ -285,6 +300,8 @@ function classifyExisting(op: PlannedOperation, data: unknown, crypto: DemoCrypt
       return classifySkillTree(existing, expected);
     case "skillProgress":
       return classifySkillProgress(existing, expected);
+    case "roadmapItems":
+      return classifyRoadmapItem(existing, expected, op.docId);
   }
 }
 

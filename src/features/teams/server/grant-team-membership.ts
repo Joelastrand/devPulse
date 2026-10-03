@@ -1,6 +1,7 @@
 import "server-only";
 import type { DocumentReference, Transaction } from "firebase-admin/firestore";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
+import { generateMemberRef } from "../domain/member-ref";
 import { membershipDocId, type MembershipSource } from "../domain/team-membership";
 
 const MEMBERSHIPS_COLLECTION = "teamMemberships";
@@ -30,6 +31,13 @@ export interface MembershipGrantRecord {
  * overwriting it. This is what makes grant attribution deterministic
  * (first-committer-wins) rather than a last-write-wins race between
  * `createInvitation` and `resolveInvitations`.
+ *
+ * A newly created membership also receives a fresh opaque `memberRef`
+ * (docs/features/team-skill-planning/SPEC.md — BR-1, BR-2). An existing
+ * membership is never written, so its ref (or the absence of one on a legacy
+ * document) is left exactly as it was — backfilling legacy documents is an
+ * explicit admin operation, not a side effect of a grant. Removal deletes the
+ * document, so a later rejoin runs this path again and gets a new ref.
  */
 export function applyMembershipGrant(
   tx: Transaction,
@@ -40,7 +48,7 @@ export function applyMembershipGrant(
   if (membershipExists) {
     return "already_member";
   }
-  tx.set(membershipRef, record);
+  tx.set(membershipRef, { ...record, memberRef: generateMemberRef() });
   return "created";
 }
 

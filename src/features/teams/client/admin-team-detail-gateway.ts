@@ -22,6 +22,8 @@ export interface AdminTeamMemberEntry {
   email: string | null;
   displayName: string | null;
   role: "lead" | "member";
+  /** Admin-only readiness flag; `false` only when the server says so (the ref value is never sent). */
+  hasMemberRef: boolean;
 }
 
 /** One pending invitation row (BR-30). */
@@ -78,7 +80,7 @@ function parseAdminTeamMemberEntry(value: unknown): AdminTeamMemberEntry | null 
   if (typeof value !== "object" || value === null) {
     return null;
   }
-  const { uid, email, displayName, role } = value as Record<string, unknown>;
+  const { uid, email, displayName, role, hasMemberRef } = value as Record<string, unknown>;
   if (!isNonEmptyString(uid) || !isNullableString(email)) {
     return null;
   }
@@ -87,6 +89,7 @@ function parseAdminTeamMemberEntry(value: unknown): AdminTeamMemberEntry | null 
     email,
     displayName: isNonEmptyString(displayName) ? displayName : null,
     role: role === "lead" ? "lead" : "member",
+    hasMemberRef: hasMemberRef !== false,
   };
 }
 
@@ -669,4 +672,73 @@ export async function resolveAccessRequest(
 ): Promise<ResolveAccessRequestResult> {
   const gateway = deps.gateway ?? getDefaultResolveAccessRequestGateway();
   return gateway.resolveAccessRequest(idToken, teamId, uid, status);
+}
+
+// --- Member-ref preparation ----------------------------------------------
+
+export type PrepareAdminMemberRefsError =
+  | "unauthenticated"
+  | "forbidden"
+  | "team_not_found"
+  | "persistence_failed"
+  | "unknown";
+
+export type PrepareAdminMemberRefsResult =
+  | { ok: true; materialized: number; alreadyHad: number; truncated: boolean }
+  | { ok: false; error: PrepareAdminMemberRefsError };
+
+const KNOWN_PREPARE_ERRORS = new Set<string>(["unauthenticated", "forbidden", "team_not_found", "persistence_failed"]);
+
+function isCount(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+}
+
+function parsePrepareMemberRefsResponse(body: unknown): PrepareAdminMemberRefsResult {
+  if (typeof body === "object" && body !== null) {
+    const { materialized, alreadyHad, truncated, error } = body as Record<string, unknown>;
+    if (isCount(materialized) && isCount(alreadyHad) && typeof truncated === "boolean") {
+      return { ok: true, materialized, alreadyHad, truncated };
+    }
+    if (typeof error === "string" && KNOWN_PREPARE_ERRORS.has(error)) {
+      return { ok: false, error: error as PrepareAdminMemberRefsError };
+    }
+  }
+  return { ok: false, error: "unknown" };
+}
+
+export interface PrepareAdminMemberRefsGateway {
+  prepareAdminMemberRefs(idToken: string, teamId: string): Promise<PrepareAdminMemberRefsResult>;
+}
+
+function getDefaultPrepareMemberRefsGateway(): PrepareAdminMemberRefsGateway {
+  return {
+    async prepareAdminMemberRefs(idToken, teamId) {
+      try {
+        const response = await fetch(`/api/admin/teams/${encodeURIComponent(teamId)}/member-refs`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+        return parsePrepareMemberRefsResponse(await parseJson(response));
+      } catch {
+        return { ok: false, error: "unknown" };
+      }
+    },
+  };
+}
+
+export interface PrepareAdminMemberRefsDeps {
+  gateway?: PrepareAdminMemberRefsGateway;
+}
+
+/**
+ * Runs the explicit, app-admin-only member-ref preparation (no request body;
+ * the response carries counts only). The server stays the only authority.
+ */
+export async function prepareAdminMemberRefs(
+  idToken: string,
+  teamId: string,
+  deps: PrepareAdminMemberRefsDeps = {},
+): Promise<PrepareAdminMemberRefsResult> {
+  const gateway = deps.gateway ?? getDefaultPrepareMemberRefsGateway();
+  return gateway.prepareAdminMemberRefs(idToken, teamId);
 }

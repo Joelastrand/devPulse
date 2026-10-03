@@ -547,11 +547,19 @@ Highest observable boundary first: server operations with injected `*Deps`
   component with its own fetch.
 
 ## Follow-up constraints for A–D
+
+> **Update (2026-10-03, Team Skill Planning):** the constraint below was
+> resolved by A0 as `teamMemberships.memberRef` (see
+> `docs/features/team-skill-planning/SPEC.md`). F0 itself is unchanged: the
+> member-facing roster still returns exactly `{displayName, isLead, isSelf}`
+> and carries no reference; member selection uses the separate
+> assignable-members endpoint. The text below records F0's original position.
+
 F0 deliberately ships **no** member reference: the roster is display-only
 (no selection, no actions), and the only `uid`-addressed operation is
 admin-only. An opaque reference is therefore **not needed and not built in
 F0** (no speculative identifier infrastructure). Adding one later is
-additive: the roster response gains a key; nothing in F0 is renamed.
+additive and, as built by A0, did not touch the roster response.
 
 **Constraint for Skills Planning (A) — must be resolved before `owner` is
 implemented** (and inherited by B, C, D mentors/participants/selectors): a

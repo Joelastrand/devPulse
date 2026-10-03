@@ -4,6 +4,8 @@ import { decrypt, encrypt } from "../../lib/encryption/encryption";
 import { effectiveChallengeStatus, isValidChallenge } from "../challenges/domain/challenge";
 import { validateChallengeText } from "../challenges/domain/challenge-text";
 import { computeSurveyAggregate } from "../results/domain/aggregation";
+import { isRoadmapItemFor, parseRoadmapItem, roadmapItemDocId, type RoadmapItemRecord } from "../roadmap/domain/roadmap-item";
+import { isTargetReached, validateTargetNode } from "../roadmap/domain/roadmap-target";
 import { isValidSkillProgress } from "../skill-trees/domain/skill-progress";
 import { isValidSkillTree } from "../skill-trees/domain/skill-tree";
 import { validateSurveyAnswers } from "../surveys/domain/answers";
@@ -13,6 +15,7 @@ import { isValidMembershipFor } from "../teams/domain/team-membership";
 import {
   buildDemoLogicalFixtures,
   DEMO_AUDIT_ACTOR,
+  DEMO_TEAM_ID,
   DEMO_SURVEY_NEXT_ID,
   surveyPeriodDates,
 } from "./fixtures";
@@ -55,8 +58,8 @@ function countBy(operations: readonly PlannedOperation[]) {
 describe("demo dataset shape", () => {
   const { operations, manifest } = plan();
 
-  it("plans exactly 82 documents with the approved per-collection counts", () => {
-    expect(operations).toHaveLength(82);
+  it("plans exactly 85 documents with the approved per-collection counts", () => {
+    expect(operations).toHaveLength(85);
     expect(countBy(operations)).toEqual({
       teams: 1,
       teamMemberships: 1,
@@ -65,6 +68,7 @@ describe("demo dataset shape", () => {
       challenges: 5,
       skillTrees: 4,
       skillProgress: 3,
+      roadmapItems: 3,
     });
   });
 
@@ -90,23 +94,31 @@ describe("demo dataset shape", () => {
       "demo-team__demo-skill-delivery",
       "demo-team__demo-skill-observability",
     ]);
+    expect(ids("roadmapItems")).toEqual([
+      "demo-team__demo-skill-testing",
+      "demo-team__demo-skill-observability",
+      "demo-team__demo-skill-delivery",
+    ]);
     expect(ids("surveyResponses")[0]).toBe("demo-response-s01-r01");
     expect(ids("surveyResponses").at(-1)).toBe("demo-response-s08-r08");
   });
 
-  it("assigns the approved write classes (C for team, membership, scheduled survey; U for the rest)", () => {
+  it("assigns the approved write classes (C for team, membership, scheduled survey, roadmap plans; U for the rest)", () => {
     const cPaths = operations.filter((o) => o.writeClass === "C").map((o) => o.path);
     expect(cPaths).toEqual([
       "teams/demo-team",
       `teamMemberships/${PRESENTER}__demo-team`,
       "surveys/demo-survey-next",
+      "roadmapItems/demo-team__demo-skill-testing",
+      "roadmapItems/demo-team__demo-skill-observability",
+      "roadmapItems/demo-team__demo-skill-delivery",
     ]);
     expect(operations.filter((o) => o.writeClass === "U")).toHaveLength(79);
   });
 
-  it("has an explicit manifest of 82 unique, allow-listed paths that the plan matches exactly", () => {
-    expect(manifest).toHaveLength(82);
-    expect(new Set(manifest.map((m) => m.path)).size).toBe(82);
+  it("has an explicit manifest of 85 unique, allow-listed paths that the plan matches exactly", () => {
+    expect(manifest).toHaveLength(85);
+    expect(new Set(manifest.map((m) => m.path)).size).toBe(85);
     expect(new Set(manifest.map((m) => m.collection))).toEqual(new Set(ALLOWED_COLLECTIONS));
     expect(operations.map((o) => o.path)).toEqual(manifest.map((m) => m.path));
     expect(() => assertOperationsMatchManifest(operations, manifest)).not.toThrow();
@@ -192,7 +204,7 @@ describe("surveys and dates", () => {
       expect(() => plan(bad)).toThrow(/midnight UTC/);
     }
     const leap = plan(new Date("2028-02-29T00:00:00.000Z"));
-    expect(leap.operations).toHaveLength(82);
+    expect(leap.operations).toHaveLength(85);
 
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2001-01-01T00:00:00Z"));
@@ -394,8 +406,8 @@ describe("team, membership, presenter uid and privacy", () => {
       }
     }
     expect([...actorKeys].sort()).toEqual([
-      "challenges.archivedBy", "challenges.resolvedBy", "skillProgress.updatedBy", "skillTrees.createdBy",
-      "surveys.createdBy", "teamMemberships.grantedBy", "teams.createdBy",
+      "challenges.archivedBy", "challenges.resolvedBy", "roadmapItems.createdBy", "roadmapItems.updatedBy", "skillProgress.updatedBy",
+      "skillTrees.createdBy", "surveys.createdBy", "teamMemberships.grantedBy", "teams.createdBy",
     ]);
   });
 
@@ -432,7 +444,7 @@ describe("determinism", () => {
     expect(b.manifest).toEqual(a.manifest);
 
     const strip = (p: ReturnType<typeof plan>) =>
-      JSON.stringify(p.operations, (_k, v) => (typeof v === "string" && /^\d{4}-\d\d-\d\dT/.test(v) ? "<date>" : v));
+      JSON.stringify(p.operations, (_k, v) => (typeof v === "string" && /^\d{4}-\d\d-\d\d(T|$)/.test(v) ? "<date>" : v));
     expect(strip(b)).toBe(strip(a));
     expect(JSON.stringify(b.operations)).not.toBe(JSON.stringify(a.operations));
 
@@ -455,5 +467,83 @@ describe("determinism", () => {
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+});
+
+describe("roadmap plan fixtures (team-skill-planning TASK-011)", () => {
+  const { operations } = plan();
+  const items = opsIn(operations, "roadmapItems");
+  const record = (treeId: string) =>
+    items.find((o) => o.docId === roadmapItemDocId(DEMO_TEAM_ID, treeId))!.data as RoadmapItemRecord;
+  const fixtures = buildDemoLogicalFixtures({ presenterUid: PRESENTER, asOf: AS_OF });
+  const tree = (treeId: string) => fixtures.skillTrees.find((t) => t.id === treeId)!.record;
+  const current = (treeId: string) => fixtures.skillProgress.find((p) => p.treeId === treeId)!.record.currentNodeId;
+
+  it("has exactly three plans at the deterministic id, all parseable by the roadmap domain", () => {
+    expect(items.map((o) => o.docId)).toEqual([
+      "demo-team__demo-skill-testing",
+      "demo-team__demo-skill-observability",
+      "demo-team__demo-skill-delivery",
+    ]);
+    for (const o of items) {
+      const parsed = parseRoadmapItem(o.data);
+      expect(parsed).not.toBeNull();
+      expect(isRoadmapItemFor(parsed!, o.docId, DEMO_TEAM_ID, parsed!.treeId)).toBe(true);
+      expect(o.writeClass).toBe("C");
+    }
+  });
+
+  it("targets a node of the exact tree, ahead of the tracked stage (delivery is reached)", () => {
+    for (const o of items) {
+      const r = o.data as RoadmapItemRecord;
+      expect(tree(r.treeId).nodes.map((n) => n.nodeId)).toContain(r.targetNodeId);
+    }
+    expect(validateTargetNode(tree("demo-skill-testing"), current("demo-skill-testing"), "node-4")).toEqual({ ok: true });
+    expect(validateTargetNode(tree("demo-skill-observability"), current("demo-skill-observability"), "node-2")).toEqual({ ok: true });
+    expect(isTargetReached(tree("demo-skill-delivery"), current("demo-skill-delivery"), "node-4")).toBe(true);
+    expect(isTargetReached(tree("demo-skill-testing"), current("demo-skill-testing"), "node-4")).toBe(false);
+  });
+
+  it("has the approved status, priority and dates", () => {
+    expect(record("demo-skill-testing")).toMatchObject({
+      status: "active",
+      priority: "high",
+      startDate: "2026-03-02",
+      targetDate: "2026-05-15",
+    });
+    expect(record("demo-skill-observability")).toMatchObject({ status: "planned", priority: "medium" });
+    expect(record("demo-skill-delivery")).toMatchObject({ status: "completed", priority: "low", completedAt: AS_OF });
+    expect(record("demo-skill-observability").startDate).toBeUndefined();
+    expect(record("demo-skill-observability").targetDate).toBeUndefined();
+    expect(record("demo-skill-delivery").targetDate).toBeUndefined();
+    expect(record("demo-skill-testing").completedAt).toBeUndefined();
+  });
+
+  it("is unassigned and carries no identity or derived presentation field", () => {
+    const allowed = new Set([
+      "teamId", "treeId", "targetNodeId", "priority", "status", "startDate", "targetDate",
+      "completedAt", "createdAt", "createdBy", "updatedAt", "updatedBy",
+    ]);
+    for (const o of items) {
+      expect(Object.keys(o.data as object).every((k) => allowed.has(k))).toBe(true);
+      expect(o.data).not.toHaveProperty("ownerRef");
+      expect(JSON.stringify(o)).not.toContain(PRESENTER);
+      expect((o.data as RoadmapItemRecord).createdBy).toBe(DEMO_AUDIT_ACTOR);
+      expect((o.data as RoadmapItemRecord).updatedBy).toBe(DEMO_AUDIT_ACTOR);
+    }
+  });
+
+  it("leaves the presenter membership free of any member reference, and adds no member", () => {
+    const memberships = opsIn(operations, "teamMemberships");
+    expect(memberships).toHaveLength(1);
+    expect(memberships[0].data).not.toHaveProperty("memberRef");
+  });
+
+  it("moves only the dated plan's dates with as-of", () => {
+    const later = opsIn(plan(LATER_AS_OF).operations, "roadmapItems");
+    const startAt = (x: readonly PlannedOperation[]) => (x[0].data as RoadmapItemRecord).startDate;
+    expect(startAt(later)).toBe("2026-03-16");
+    expect((later[0].data as RoadmapItemRecord).targetDate).toBe("2026-05-29");
+    expect(JSON.stringify(later.slice(1))).toBe(JSON.stringify(items.slice(1)).replaceAll("2026-03-16", "2026-03-30"));
   });
 });

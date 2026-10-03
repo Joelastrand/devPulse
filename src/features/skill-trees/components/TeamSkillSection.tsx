@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { LoadingState } from "../../../components/ui/LoadingState";
+import type { AreaPlanning } from "../../roadmap/components/RoadmapPlanning";
 import { reportTeamSkillProgress, type TeamSkillView } from "../client/skill-trees-gateway";
 import { teamSkillSectionCopy } from "../copy";
 import { SkillProgressPath } from "./SkillProgressPath";
@@ -28,6 +29,12 @@ export interface TeamSkillSectionProps {
    * update").
    */
   onReported: () => void;
+  /**
+   * Optional read-only plan presentation (docs/features/team-skill-planning/
+   * SPEC.md — BR-29/30): each row shows its plan summary, matched by
+   * `treeId`, and the rows follow the planning order. Absent ⇒ unchanged.
+   */
+  planning?: AreaPlanning;
 }
 
 /**
@@ -79,7 +86,7 @@ export interface TeamSkillSectionProps {
  * rendered as ordinary React text — never `dangerouslySetInnerHTML` or any
  * HTML-parsing path.
  */
-export function TeamSkillSection({ idToken, teamId, state, onReported }: TeamSkillSectionProps) {
+export function TeamSkillSection({ idToken, teamId, state, onReported, planning }: TeamSkillSectionProps) {
   return (
     <Card as="section" variant="bordered" padding="md" aria-labelledby="team-skill-section-heading">
       <h2
@@ -100,9 +107,12 @@ export function TeamSkillSection({ idToken, teamId, state, onReported }: TeamSki
       {state.status === "loaded" && state.skills.length === 0 && (
         <EmptyState className="mt-4">{teamSkillSectionCopy.empty}</EmptyState>
       )}
+      {state.status === "loaded" && planning?.controls && (
+        <div className="mt-4">{planning.controls}</div>
+      )}
       {state.status === "loaded" && state.skills.length > 0 && (
         <ul className="mt-4 flex flex-col gap-4">
-          {state.skills.map((skill) => (
+          {(planning ? planning.orderAreas(state.skills) : state.skills).map((skill) => (
             <TrackedSkillRow
               key={`${skill.treeId}-${skill.currentNodeId ?? "null"}`}
               skill={skill}
@@ -110,10 +120,12 @@ export function TeamSkillSection({ idToken, teamId, state, onReported }: TeamSki
               teamId={teamId}
               canReportProgress={state.canReportProgress}
               onReported={onReported}
+              planSlot={planning?.renderAreaPlan(skill)}
             />
           ))}
         </ul>
       )}
+      {state.status === "loaded" && planning?.untracked && <div className="mt-6">{planning.untracked}</div>}
     </Card>
   );
 }
@@ -130,7 +142,9 @@ function TrackedSkillRow({
   teamId,
   canReportProgress,
   onReported,
+  planSlot,
 }: {
+  planSlot?: ReactNode;
   skill: TeamSkillView;
   idToken: string;
   teamId: string;
@@ -173,6 +187,7 @@ function TrackedSkillRow({
     <Card as="li" variant="bordered" padding="sm" className="flex flex-col gap-2">
       <p className="break-words font-medium text-zinc-900 dark:text-zinc-50">{skill.name}</p>
       <SkillProgressPath name={skill.name} nodes={skill.nodes} currentNodeId={skill.currentNodeId} />
+      {planSlot}
 
       {canReportProgress && phase === "validation_error" && (
         <Alert variant="error" className="text-sm">

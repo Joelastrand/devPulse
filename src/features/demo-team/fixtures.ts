@@ -1,3 +1,4 @@
+import type { RoadmapItemRecord } from "../roadmap/domain/roadmap-item";
 import type { SkillProgressRecord } from "../skill-trees/domain/skill-progress";
 import type { SkillTreeRecord } from "../skill-trees/domain/skill-tree";
 import type { Survey } from "../surveys/domain/survey";
@@ -201,6 +202,11 @@ export interface SkillProgressFixture {
   record: SkillProgressRecord;
 }
 
+export interface RoadmapItemFixture {
+  treeId: string;
+  record: RoadmapItemRecord;
+}
+
 export interface DemoLogicalFixtures {
   team: Omit<Team, "teamId">;
   membership: TeamMembershipRecord;
@@ -210,6 +216,7 @@ export interface DemoLogicalFixtures {
   challenges: ChallengeFixture[];
   skillTrees: SkillTreeFixture[];
   skillProgress: SkillProgressFixture[];
+  roadmapItems: RoadmapItemFixture[];
 }
 
 // ---------------------------------------------------------------------------
@@ -271,6 +278,57 @@ export const DEMO_TRACKED_SKILLS: readonly { treeId: string; currentNodeId: stri
   { treeId: "demo-skill-delivery", currentNodeId: "node-4" },
   { treeId: "demo-skill-observability", currentNodeId: null },
 ];
+
+/**
+ * Representative team plans (team-skill-planning TASK-011), one per tracked
+ * area. Always unassigned: no `ownerRef`, so no member identity of any kind is
+ * seeded. Delivery is already at its target (current `node-4`) and completed.
+ */
+export const DEMO_ROADMAP_PLANS: readonly {
+  treeId: string;
+  targetNodeId: string;
+  status: RoadmapItemRecord["status"];
+  priority: RoadmapItemRecord["priority"];
+  /** Day offsets from `asOf`; absent = undated. */
+  dates?: { startOffsetDays: number; targetOffsetDays: number };
+}[] = [
+  {
+    treeId: "demo-skill-testing",
+    targetNodeId: "node-4",
+    status: "active",
+    priority: "high",
+    dates: { startOffsetDays: -14, targetOffsetDays: 60 },
+  },
+  { treeId: "demo-skill-observability", targetNodeId: "node-2", status: "planned", priority: "medium" },
+  { treeId: "demo-skill-delivery", targetNodeId: "node-4", status: "completed", priority: "low" },
+];
+
+/** `YYYY-MM-DD` of `asOf` shifted by whole days (asOf is midnight UTC). */
+function planDate(asOf: Date, offsetDays: number): string {
+  return new Date(asOf.getTime() + offsetDays * DAY_MS).toISOString().slice(0, 10);
+}
+
+function buildRoadmapItems(asOf: Date): RoadmapItemFixture[] {
+  return DEMO_ROADMAP_PLANS.map(({ treeId, targetNodeId, status, priority, dates }) => ({
+    treeId,
+    record: {
+      teamId: DEMO_TEAM_ID,
+      treeId,
+      targetNodeId,
+      priority,
+      status,
+      ...(dates && {
+        startDate: planDate(asOf, dates.startOffsetDays),
+        targetDate: planDate(asOf, dates.targetOffsetDays),
+      }),
+      ...(status === "completed" && { completedAt: asOf }),
+      createdAt: asOf,
+      createdBy: DEMO_AUDIT_ACTOR,
+      updatedAt: asOf,
+      updatedBy: DEMO_AUDIT_ACTOR,
+    },
+  }));
+}
 
 // ---------------------------------------------------------------------------
 // Builder
@@ -408,6 +466,7 @@ export function buildDemoLogicalFixtures(input: {
         updatedBy: DEMO_AUDIT_ACTOR,
       },
     })),
+    roadmapItems: buildRoadmapItems(asOf),
   };
 }
 

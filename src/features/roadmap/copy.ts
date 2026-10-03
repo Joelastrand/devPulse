@@ -1,0 +1,113 @@
+import type { RoadmapPriority, RoadmapStatus } from "./domain/roadmap-item";
+
+/**
+ * Norwegian copy for the plan summary in Kompetanseområder (docs/features/
+ * team-skill-planning/SPEC.md — BR-30, BR-35). The owner help text and the
+ * unavailable-owner wording are neutral: they say nothing about why an owner
+ * is not shown.
+ */
+export const roadmapCopy = {
+  loading: "Laster planer…",
+  error: "Planene kunne ikke lastes. Resten av siden er upåvirket.",
+  noPlan: "Ingen plan ennå",
+  planHeading: "Plan",
+  labels: {
+    target: "Målstadium",
+    priority: "Prioritet",
+    period: "Periode",
+    owner: "Ansvarlig",
+    status: "Status",
+  },
+  targetUnavailable: "Målstadiet er ikke tilgjengelig",
+  priority: { high: "Høy", medium: "Middels", low: "Lav" } satisfies Record<RoadmapPriority, string>,
+  status: { planned: "Planlagt", active: "Pågår", completed: "Fullført" } satisfies Record<RoadmapStatus, string>,
+  period: {
+    none: "Ikke satt",
+    from: "Fra",
+    to: "Til",
+  },
+  owner: {
+    none: "Ikke tildelt",
+    unnamed: "Medlem uten navn",
+    self: "Deg",
+    unavailable: "Ansvarlig er ikke lenger tilgjengelig",
+  },
+  indicators: {
+    targetReached: "Målet er nådd",
+    targetReachedHint: "Vurder å markere planen som fullført.",
+    overdue: "Måldato passert",
+    archived: "Arkivert",
+  },
+  untracked: {
+    heading: "Plan for område teamet ikke lenger følger",
+    explanation:
+      "Teamet følger ikke lenger dette kompetanseområdet. Planen beholdes, og alt unntatt målstadiet kan fortsatt endres.",
+    unnamedArea: "Kompetanseområde uten tilgjengelig navn",
+    targetLocked: "Målstadiet kan ikke endres så lenge teamet ikke følger området.",
+  },
+  toggles: {
+    completed: "Fullførte",
+    showArchived: "Vis arkiverte",
+    hideArchived: "Skjul arkiverte",
+    archivedLoading: "Laster arkiverte planer…",
+    archivedError: "Arkiverte planer kunne ikke lastes.",
+  },
+  form: {
+    plan: "Planlegg",
+    edit: "Rediger plan",
+    createHeading: "Ny plan",
+    editHeading: "Rediger plan",
+    target: "Målstadium",
+    targetPlaceholder: "Velg målstadium",
+    targetChangePlaceholder: "Velg nytt målstadium",
+    targetCurrentSuffix: "(nåværende mål)",
+    noTargetOptions: "Det finnes ingen stadier foran dagens stadium å sette som mål.",
+    priority: "Prioritet",
+    status: "Status",
+    startDate: "Startdato",
+    targetDate: "Måldato",
+    owner: "Ansvarlig",
+    ownerNone: "Ikke tildelt",
+    ownerKeep: "Ansvarlig er ikke lenger tilgjengelig (beholdes)",
+    ownerLoading: "Laster medlemmer…",
+    ownerHelp: "Ansvarlig er en planleggingsmarkering – ikke en vurdering av noen.",
+    ownerLoadError: "Medlemslisten kunne ikke lastes. Du kan fortsatt lagre uten å endre ansvarlig.",
+    ownerRetry: "Last medlemmer på nytt",
+    ownerSomeUnavailable:
+      "Noen medlemmer kan ikke velges som ansvarlig ennå. Be teammedlemmer sette visningsnavn under Min profil, eller be en administrator klargjøre medlemsvelgeren.",
+    ownerTruncated: "Bare deler av medlemslisten vises.",
+    save: "Lagre",
+    saving: "Lagrer…",
+    cancel: "Avbryt",
+    archive: "Arkiver",
+    archiving: "Arkiverer…",
+    restore: "Gjenopprett",
+    restorePlan: "Gjenopprett plan",
+    restoring: "Gjenoppretter…",
+    archiveDirtyHint: "Lagre eller avbryt endringene før du arkiverer planen.",
+    noChanges: "Ingen endringer å lagre.",
+    datesOutOfOrder: "Startdato kan ikke være etter måldato.",
+    targetRequired: "Velg et målstadium.",
+    reloadPlans: "Last planer på nytt",
+  },
+  notices: {
+    savedRefreshFailed: "Endringen er lagret, men siste planstatus kunne ikke lastes. Last planene på nytt for å se den.",
+    alreadyPlanned: "Området har allerede en plan. Den vises nå.",
+    staleRefreshFailed: "Planvisningen kan være utdatert fordi siste planstatus ikke kunne lastes. Last planene på nytt.",
+    alreadyPlannedRefreshFailed: "Området har allerede en plan, men den kunne ikke lastes. Last planene på nytt.",
+  },
+  errors: {
+    teamDisabled: "Teamet er ikke aktivt, så planer kan ikke endres.",
+    forbidden: "Du har ikke tilgang til å endre planer.",
+    targetNotAhead: "Målstadiet må ligge foran teamets nåværende stadium.",
+    invalidInput: "Noe i skjemaet er ugyldig. Sjekk feltene og prøv igjen.",
+    invalidOwner: "Den valgte ansvarlige kan ikke velges lenger. Velg på nytt.",
+    notTracked: "Teamet følger ikke lenger dette kompetanseområdet, så målstadiet kan ikke settes.",
+    treeNotFound: "Kompetanseområdet finnes ikke lenger.",
+    planArchived: "Dette området har en arkivert plan. Gjenopprett den i stedet for å lage en ny.",
+    archived: "Planen er arkivert. Gjenopprett den for å endre den.",
+    notFound: "Planen finnes ikke lenger.",
+    persistenceFailed: "Planen ble ikke lagret. Prøv igjen.",
+    requestFailed: "Vi fikk ikke svar fra tjenesten. Endringen kan være lagret – last planene på nytt for å se siste tilstand.",
+  },
+} as const;

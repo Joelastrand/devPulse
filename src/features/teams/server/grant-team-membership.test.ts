@@ -6,6 +6,7 @@ import type {
 import { applyMembershipGrant, grantTeamMembership } from "./grant-team-membership";
 
 const NOW = new Date("2026-09-01T00:00:00Z");
+const MEMBER_REF = /^[0-9a-hjkmnp-tv-z]{26}$/;
 
 function record(overrides: Partial<MembershipGrantRecord> = {}): MembershipGrantRecord {
   return {
@@ -105,7 +106,21 @@ describe("applyMembershipGrant", () => {
     const outcome = applyMembershipGrant(tx, ref, false, record());
 
     expect(outcome).toBe("created");
-    expect(tx.set).toHaveBeenCalledWith(ref, record());
+    expect(tx.set).toHaveBeenCalledWith(ref, { ...record(), memberRef: expect.stringMatching(MEMBER_REF) });
+  });
+
+  it("gives each new membership its own fresh memberRef, independent of uid/team/e-mail", () => {
+    const first = fakeTx();
+    const second = fakeTx();
+
+    applyMembershipGrant(first, fakeRef(), false, record());
+    applyMembershipGrant(second, fakeRef(), false, record());
+
+    const refOf = (tx: typeof first) =>
+      (vi.mocked(tx.set).mock.calls[0][1] as { memberRef: string }).memberRef;
+    expect(refOf(first)).toMatch(MEMBER_REF);
+    expect(refOf(first)).not.toBe(refOf(second));
+    expect(refOf(first)).not.toContain("user-1");
   });
 
   it("writes nothing and returns 'already_member' when the membership already exists", () => {

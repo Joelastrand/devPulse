@@ -89,6 +89,22 @@ describe("Firestore deployment configuration", () => {
     );
   });
 
+  it("denies all client-SDK access to roadmapItems unconditionally", () => {
+    const rules = readRepoFile("firestore.rules");
+
+    expect(rules).toMatch(
+      /match\s+\/roadmapItems\/\{document=\*\*\}\s*\{\s*allow read, write: if false;/,
+    );
+  });
+
+  it("declares no composite index for roadmapItems — every access is a direct document operation or a single-field equality filter", () => {
+    const indexes = JSON.parse(readRepoFile("firestore.indexes.json")) as {
+      indexes: Array<{ collectionGroup: string }>;
+    };
+
+    expect(indexes.indexes.filter((index) => index.collectionGroup === "roadmapItems")).toHaveLength(0);
+  });
+
   it("denies all client-SDK access to userProfiles unconditionally", () => {
     const rules = readRepoFile("firestore.rules");
 

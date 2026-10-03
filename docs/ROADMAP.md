@@ -306,5 +306,27 @@
 
   See `docs/features/org-skill-progress-overview/SPEC.md`.
 
+- **Team & Personal Development initiative** *(in progress)*: a sequence of
+  small, separately specified features, F0 → A → B → C1 → C2 → D1 → D2.
+  - **F0 — Member identity and team roles** *(delivered)*: self-set display
+    name, member-facing roster, optional team lead.
+    See `docs/features/member-identity-and-team-roles/SPEC.md`.
+  - **A — Team skill planning** *(delivered)*: per-team roadmap *plans* for
+    competency areas, embedded in *Kompetanseområder* (target stage, priority,
+    status, optional dates, optional owner as planning metadata), plus the
+    opaque member reference (`memberRef`) and an assignable-member selector.
+    No Roadmap route. Demo Team shows three representative plans.
+    See `docs/features/team-skill-planning/SPEC.md`.
+  - **B — Team Roadmap** *(planned, not built)*: a dedicated roadmap
+    route/tab with timeline/list views and fuller roadmap experience.
+  - **C1/C2 — Skill needs and individual skills** *(planned, not
+    built)*: desired team needs (`teamSkillNeeds`) and individual
+    self-assessment (`skillProfiles`); gap/coverage views are derived, not
+    persisted, and C2 may prefill a plan from a team gap.
+  - **D1/D2 — Role expectations** *(planned, not built)*: `roleDefinitions`
+    and their use in planning, reusing the member reference rules.
+  Only F0 and A exist; later phases are intentions, not commitments, and each
+  needs its own approved SPEC.
+
 Phases 0–9 are complete. See `docs/PRODUCT.md` for the product vision and
 non-goals.

@@ -19,6 +19,11 @@ export interface TeamMembershipRecord {
   createdAt: Date;
   createdVia: MembershipSource;
   grantedBy: string;
+  /**
+   * Opaque team-scoped handle (see `member-ref.ts`). Written at grant; absent
+   * on legacy documents until an explicit admin preparation. Never authorization.
+   */
+  memberRef?: string;
   /** Present only while the member is a team lead; absent ≡ ordinary member. */
   role?: "lead";
   /** Paired with `roleUpdatedBy`: the last role assignment/removal (audit only, never consulted for authorization). */

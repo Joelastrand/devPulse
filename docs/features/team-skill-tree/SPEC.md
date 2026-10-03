@@ -172,6 +172,13 @@ a future member-write extension would need to add.
 - **Individual/per-person skill assignment, self-assessment, or
   manager override of a person's level.** Ruled out by existing product
   policy (see "Purpose"), not merely unbuilt for convenience.
+  *Clarification (2026-10-03, Team Skill Planning):* this excludes assigning a
+  *skill or level* to a person; team maturity and skill tracking remain
+  team-level. `docs/features/team-skill-planning/SPEC.md` later added one
+  narrow exception — an optional responsible team member on a separate
+  roadmap plan (`roadmapItems`), as planning metadata only: no authorization,
+  no individual performance meaning, no `uid`/e-mail exposed. `skillProgress`
+  is unchanged and never becomes per-person.
 - **Member-initiated (non-admin) progress writes.** Kept out of v1 as an
   independent scope-minimization decision, *not* one the individual-
   performance non-goal itself mandates — see "Purpose" and "Open
@@ -875,6 +882,7 @@ changed; five are newly appended (BR-31 through BR-35).
   `aria-current="step"` together — never by color alone.
 - **BR-30**: No comment, voting, reaction, free-text, per-person
   assignment, or ranking/leaderboard feature exists anywhere in this UI.
+  *(2026-10-03: a roadmap plan's owner is planning metadata, not a per-person skill assignment; see `docs/features/team-skill-planning/SPEC.md`.)*
 
 **Cosmetic tree correction (new in this revision)**
 - **BR-31**: Only an app admin may cosmetically correct an existing

@@ -11,6 +11,7 @@ const fetchTeamAccessRequestsMock = vi.fn();
 const inviteTeamMemberMock = vi.fn();
 const removeAdminTeamMemberMock = vi.fn();
 const setAdminTeamMemberRoleMock = vi.fn();
+const prepareAdminMemberRefsMock = vi.fn();
 const cancelTeamInvitationMock = vi.fn();
 const resolveAccessRequestMock = vi.fn();
 const fetchAdminSurveysMock = vi.fn();
@@ -43,6 +44,7 @@ vi.mock("../client/admin-team-detail-gateway", () => ({
   inviteTeamMember: inviteTeamMemberMock,
   removeAdminTeamMember: removeAdminTeamMemberMock,
   setAdminTeamMemberRole: setAdminTeamMemberRoleMock,
+  prepareAdminMemberRefs: prepareAdminMemberRefsMock,
   cancelTeamInvitation: cancelTeamInvitationMock,
   resolveAccessRequest: resolveAccessRequestMock,
 }));
@@ -2216,5 +2218,114 @@ describe("AdminTeamDetail — member display names and team lead role", () => {
 
     expect(removeAdminTeamMemberMock).toHaveBeenCalledWith("a-token", "team-1", "uid-1");
     expect(setAdminTeamMemberRoleMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("AdminTeamDetail — Klargjør medlemsvelger (member-ref preparation)", () => {
+  afterEach(() => {
+    cleanup();
+    observeIdTokenMock.mockReset();
+    prepareAdminMemberRefsMock.mockReset();
+    fetchTeamMembersMock.mockReset();
+  });
+
+  const legacy = { uid: "uid-1", email: "a@example.com", displayName: null, role: "member" as const, hasMemberRef: false };
+  const prepared = { ...legacy, hasMemberRef: true };
+
+  async function renderWith(members: unknown[], team: "active" | "disabled" = "active") {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({ teams: [{ teamId: "team-1", name: "Platform", status: team }], members: members as never });
+    render(<AdminTeamDetail teamId="team-1" />);
+    await screen.findByText("a@example.com");
+  }
+
+  const button = () => screen.queryByRole("button", { name: "Klargjør medlemsvelger" });
+
+  it("shows the control when any member lacks a ref", async () => {
+    await renderWith([prepared, { ...legacy, uid: "uid-2", email: "b@example.com" }]);
+    expect(button()).toBeTruthy();
+  });
+
+  it("hides the control when every member is prepared, and when there are no members", async () => {
+    await renderWith([prepared]);
+    expect(button()).toBeNull();
+    cleanup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk({ members: [] });
+    render(<AdminTeamDetail teamId="team-1" />);
+    await screen.findByText("Ingen medlemmer ennå.");
+    expect(button()).toBeNull();
+  });
+
+  it("is available for a disabled team", async () => {
+    await renderWith([legacy], "disabled");
+    expect(button()).toBeTruthy();
+  });
+
+  it("makes one POST with the admin token, then re-reads members, shows success and hides the control", async () => {
+    const user = userEvent.setup();
+    prepareAdminMemberRefsMock.mockResolvedValue({ ok: true, materialized: 1, alreadyHad: 0, truncated: false });
+    await renderWith([legacy]);
+    fetchTeamMembersMock.mockResolvedValue({ status: "ok", members: [prepared] });
+
+    await user.click(button()!);
+
+    expect(prepareAdminMemberRefsMock).toHaveBeenCalledTimes(1);
+    expect(prepareAdminMemberRefsMock).toHaveBeenCalledWith("a-token", "team-1");
+    expect(await screen.findByText("Medlemsvelgeren er klargjort.")).toBeTruthy();
+    expect(button()).toBeNull();
+  });
+
+  it("shows a loading state and prevents duplicate submission while pending", async () => {
+    const user = userEvent.setup();
+    let resolvePrepare: (value: unknown) => void = () => {};
+    prepareAdminMemberRefsMock.mockImplementation(() => new Promise((resolve) => { resolvePrepare = resolve; }));
+    await renderWith([legacy]);
+
+    await user.click(button()!);
+    const pending = screen.getByRole("button", { name: "Klargjør…" }) as HTMLButtonElement;
+    await user.click(pending);
+
+    expect(pending.disabled).toBe(true);
+    expect(prepareAdminMemberRefsMock).toHaveBeenCalledTimes(1);
+
+    resolvePrepare({ ok: false, error: "persistence_failed" });
+    await flushMicrotasks();
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect((button() as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it.each([
+    ["persistence_failed", "Noe gikk galt under klargjøring. Ingenting ble endret. Prøv igjen."],
+    ["forbidden", "Noe gikk galt under klargjøring. Ingenting ble endret. Prøv igjen."],
+    ["unknown", "Noe gikk galt under klargjøring. Ingenting ble endret. Prøv igjen."],
+    ["team_not_found", "Teamet ble ikke funnet."],
+  ])("shows a generic error for %s and keeps the control for retry", async (error, message) => {
+    const user = userEvent.setup();
+    prepareAdminMemberRefsMock.mockResolvedValue({ ok: false, error });
+    await renderWith([legacy]);
+
+    await user.click(button()!);
+
+    expect((await screen.findByRole("alert")).textContent).toBe(message);
+    expect(button()).toBeTruthy();
+    expect(screen.queryByText("Medlemsvelgeren er klargjort.")).toBeNull();
+  });
+
+  it("tells the admin when the bound left some members unprepared", async () => {
+    const user = userEvent.setup();
+    prepareAdminMemberRefsMock.mockResolvedValue({ ok: true, materialized: 500, alreadyHad: 0, truncated: true });
+    await renderWith([legacy]);
+
+    await user.click(button()!);
+
+    expect(await screen.findByText(/fortsatt ikke klargjort/)).toBeTruthy();
+    expect(button()).toBeTruthy();
+  });
+
+  it("never renders a member ref in the DOM", async () => {
+    const ref = "0123456789abcdefghjkmnpqrs";
+    await renderWith([{ ...prepared, memberRef: ref }]);
+    expect(document.body.innerHTML).not.toContain(ref);
   });
 });

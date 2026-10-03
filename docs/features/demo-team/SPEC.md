@@ -188,6 +188,12 @@ artifact, called out so it is not mistaken for a realistic small-team
 anonymity property.
 
 ## Demo dataset — authoritative count: **82 documents**
+
+> **Update (2026-10-03):** Team Skill Planning TASK-011 later added three
+> create-only (class `C`) `roadmapItems` fixtures, so the shipped dataset is
+> **85 documents in 8 collections**. The 82-document figures below describe
+> this feature's original scope; `docs/DEVELOPMENT.md` has the current counts.
+
 | Collection | Ids | Class | Count |
 |---|---|---|---|
 | `teams` | `demo-team` | C | 1 |

@@ -74,8 +74,8 @@ describe("listTeamMembers", () => {
     expect(result).toEqual({
       ok: true,
       members: [
-        { uid: "user-1", email: "one@example.com", displayName: null, role: "member" },
-        { uid: "user-2", email: "two@example.com", displayName: null, role: "member" },
+        { uid: "user-1", email: "one@example.com", displayName: null, role: "member", hasMemberRef: false },
+        { uid: "user-2", email: "two@example.com", displayName: null, role: "member", hasMemberRef: false },
       ],
     });
   });
@@ -98,7 +98,7 @@ describe("listTeamMembers", () => {
 
     expect(result).toEqual({
       ok: true,
-      members: [{ uid: "user-1", email: "one@example.com", displayName: null, role: "member" }],
+      members: [{ uid: "user-1", email: "one@example.com", displayName: null, role: "member", hasMemberRef: false }],
     });
   });
 
@@ -119,7 +119,7 @@ describe("listTeamMembers", () => {
 
     expect(result).toEqual({
       ok: true,
-      members: [{ uid: "user-1", email: "one@example.com", displayName: null, role: "member" }],
+      members: [{ uid: "user-1", email: "one@example.com", displayName: null, role: "member", hasMemberRef: false }],
     });
   });
 
@@ -237,9 +237,9 @@ describe("listTeamMembers", () => {
     expect(result).toEqual({
       ok: true,
       members: [
-        { uid: "user-a", email: "a@example.com", displayName: null, role: "member" },
-        { uid: "user-b", email: "b@example.com", displayName: null, role: "member" },
-        { uid: "user-c", email: "c@example.com", displayName: null, role: "member" },
+        { uid: "user-a", email: "a@example.com", displayName: null, role: "member", hasMemberRef: false },
+        { uid: "user-b", email: "b@example.com", displayName: null, role: "member", hasMemberRef: false },
+        { uid: "user-c", email: "c@example.com", displayName: null, role: "member", hasMemberRef: false },
       ],
     });
   });
@@ -262,8 +262,8 @@ describe("listTeamMembers", () => {
     expect(result).toEqual({
       ok: true,
       members: [
-        { uid: "user-a", email: "a@example.com", displayName: null, role: "member" },
-        { uid: "user-c", email: "c@example.com", displayName: null, role: "member" },
+        { uid: "user-a", email: "a@example.com", displayName: null, role: "member", hasMemberRef: false },
+        { uid: "user-c", email: "c@example.com", displayName: null, role: "member", hasMemberRef: false },
       ],
     });
   });
@@ -289,8 +289,8 @@ describe("listTeamMembers — display name and stored role (additive admin field
     expect(result).toEqual({
       ok: true,
       members: [
-        { uid: "user-1", email: "one@example.com", displayName: "Anna Berg", role: "member" },
-        { uid: "user-2", email: "two@example.com", displayName: null, role: "member" },
+        { uid: "user-1", email: "one@example.com", displayName: "Anna Berg", role: "member", hasMemberRef: false },
+        { uid: "user-2", email: "two@example.com", displayName: null, role: "member", hasMemberRef: false },
       ],
     });
   });
@@ -313,7 +313,7 @@ describe("listTeamMembers — display name and stored role (additive admin field
 
     expect(result).toEqual({
       ok: true,
-      members: [{ uid: "user-1", email: "one@example.com", displayName: null, role: "member" }],
+      members: [{ uid: "user-1", email: "one@example.com", displayName: null, role: "member", hasMemberRef: false }],
     });
   });
 
@@ -353,6 +353,7 @@ describe("listTeamMembers — display name and stored role (additive admin field
       email: "one@example.com",
       displayName: null,
       role: "lead",
+      hasMemberRef: false,
     });
   });
 
@@ -374,5 +375,43 @@ describe("listTeamMembers — display name and stored role (additive admin field
 
     expect(result).toEqual({ ok: false, error: "forbidden" });
     expect(getDisplayNamesMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("listTeamMembers — hasMemberRef readiness signal (team-skill-planning BR-5, BR-36)", () => {
+  const VALID_REF = "0123456789abcdefghjkmnpqrs";
+  const deps = (collection: TeamMembersCollection) => ({
+    verifyToken: verifyTokenReturning(verifiedIdentity()),
+    allowList: [ADMIN_EMAIL],
+    collection,
+    getUser: fakeGetUser({ "user-1": "one@example.com" }),
+  });
+
+  it.each([
+    ["a valid ref", VALID_REF, true],
+    ["no ref (legacy)", undefined, false],
+    ["a malformed ref", "not-a-ref", false],
+    ["a non-string ref", 7, false],
+  ])("reports hasMemberRef for %s", async (_label, memberRef, expected) => {
+    const collection = fakeCollection([{ uid: "user-1", teamId: "team-1", memberRef }]);
+
+    const result = await listTeamMembers("token", "team-1", deps(collection));
+
+    expect(result.ok && result.members[0].hasMemberRef).toBe(expected);
+  });
+
+  it("exposes exactly the admin keys and never the ref value", async () => {
+    const collection = fakeCollection([{ uid: "user-1", teamId: "team-1", memberRef: VALID_REF }]);
+
+    const result = await listTeamMembers("token", "team-1", deps(collection));
+
+    expect(result.ok && Object.keys(result.members[0]).sort()).toEqual([
+      "displayName",
+      "email",
+      "hasMemberRef",
+      "role",
+      "uid",
+    ]);
+    expect(JSON.stringify(result)).not.toContain(VALID_REF);
   });
 });

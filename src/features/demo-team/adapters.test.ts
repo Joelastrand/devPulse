@@ -211,7 +211,7 @@ describe("reader adapter", () => {
     expect(toPlainData(null)).toBeNull();
   });
 
-  it("rejects paths outside the seven allow-listed collections before any read", async () => {
+  it("rejects paths outside the eight allow-listed collections before any read", async () => {
     const { sdk, rec } = fakeSdk();
     const { reader } = build(sdk);
     for (const path of ["forumThreads/x", "teamSurveyState/demo-team", "teams", "teams/", "teams/a/b", "teams/demo-team/extra"]) {

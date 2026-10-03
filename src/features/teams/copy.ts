@@ -149,6 +149,17 @@ export const adminCopy = {
     makeMemberButton: "Gjør til vanlig medlem",
     savingRoleButton: "Lagrer…",
     leadRoleHint: "Teamlead er en rolle på medlemskapet og gir foreløpig ingen ekstra tilganger.",
+    prepareMemberRefsHint:
+      "Noen medlemmer er ikke klargjort for medlemsvelgeren ennå. Klargjøring er en engangsjobb per team og endrer ikke roller eller tilganger.",
+    prepareMemberRefsButton: "Klargjør medlemsvelger",
+    preparingMemberRefsButton: "Klargjør…",
+    prepareMemberRefsSuccess: "Medlemsvelgeren er klargjort.",
+    prepareMemberRefsTruncated:
+      "Teamet har flere medlemmer enn én klargjøring kan behandle. Noen medlemmer er fortsatt ikke klargjort.",
+    prepareMemberRefsError: {
+      teamNotFound: "Teamet ble ikke funnet.",
+      generic: "Noe gikk galt under klargjøring. Ingenting ble endret. Prøv igjen.",
+    },
     leadDisabledTeamNote:
       "Mens dette teamet står som deaktivert kan nye teamledere ikke utnevnes, men en teamlead kan fortsatt gjøres til vanlig medlem.",
     roleError: {

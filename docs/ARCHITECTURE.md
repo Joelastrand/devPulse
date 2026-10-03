@@ -131,15 +131,71 @@ migration-free; it gives no new permission to anyone.
 - **Forum anonymity constraint.** A forum `authorTag` is a pure function of
   `(teamId, authorUid)`, so no member-visible response may expose another
   member's `uid` or a value derived from it (see `docs/SECURITY.md`).
-  Consequently a client-visible **member reference** for later features
-  (roadmap owner, mentor, check-in participant) must be designed first — an
-  opaque, team-scoped, non-`uid`, non-authoritative reference resolved
-  server-side with fresh authorization. F0 deliberately builds none
+  Consequently a client-visible **member reference** must be an opaque,
+  team-scoped, non-`uid`, non-authoritative reference resolved server-side
+  with fresh authorization. F0 deliberately built none
   (`docs/features/member-identity-and-team-roles/SPEC.md` — "Follow-up
-  constraints for A–D").
+  constraints for A–D"); Team Skill Planning (A0) introduced it as
+  `teamMemberships.memberRef` — see "Team skill planning and member
+  references" below. The F0 roster itself is unchanged and still carries no
+  reference.
 - **Not built in F0.** No RBAC framework, no professional roles, no lead-only
   capability, no directory/search, no account-deletion flow, no feature flag
   (the exposure is opt-in: nothing is visible until a user sets a name).
+
+## Team skill planning and member references (decided, implemented)
+
+Feature A (`docs/features/team-skill-planning/SPEC.md`) adds team-level
+roadmap *plans* for competency areas and the first client-visible member
+handle. Boundaries:
+
+- **Server-only persistence.** `roadmapItems` and `teamMemberships.memberRef`
+  are read/written only through the Firebase Admin SDK; `firestore.rules`
+  denies all client access. The browser uses API routes through the gateway
+  `src/features/roadmap/client/roadmap-gateway.ts` (and the existing teams
+  gateways); it never touches Firestore.
+- **Routes.** `GET/POST /api/teams/[teamId]/roadmap-items`,
+  `PATCH …/roadmap-items/[treeId]` (no DELETE), `GET
+  /api/teams/[teamId]/assignable-members`, and the admin-only `POST
+  /api/admin/teams/[teamId]/member-refs`. Handlers are thin: bearer
+  extraction, strict allow-lists, then a server operation with injected deps.
+- **Slice layout.** `src/features/roadmap/` holds pure domain helpers (item
+  guard, dates, target rule, sort, form mapping), the server read/create/
+  update services, the gateway, components and copy. `src/features/teams/`
+  holds the member-reference primitive (`domain/member-ref.ts`), presentation
+  ordinals, `materialize-member-refs` and `list-assignable-members`.
+  Dependencies point `roadmap → teams/skill-trees/profiles`, never back;
+  `TeamDetail` only composes.
+- **Authorization is re-derived per operation.** Reads follow the existing
+  team/admin access semantics (`authorizeTeamAccess`, unchanged). Writes
+  require a genuine membership in an *active* team, checked inside the write
+  transaction; an app admin or team lead who is not a member gets no extra
+  write access (a lead is an ordinary member here; `resolveTeamRole` still has
+  no production caller). `canEdit` in the read DTO is server-derived and only
+  hides controls; the server re-checks every write.
+- **Member reference.** `memberRef` is CSPRNG output stored on the membership,
+  an opaque selector identity only — never evidence of identity or
+  authorization. It is generated in `applyMembershipGrant`, or by the explicit
+  admin preparation operation for legacy memberships; no GET writes. Resolving
+  a ref reads the team's memberships (≤501) and matches in memory; unknown,
+  stale, cross-team, malformed or duplicate refs fail closed. The
+  assignable-members endpoint is a separate, privacy-minimized contract
+  (`{memberRef, displayName, ordinal, isSelf}` + counts); the F0 roster DTO is
+  not reused. Owner display names are resolved server-side.
+- **Source-of-truth split.** Current stage stays `skillProgress`; planning is
+  `roadmapItems` (one deterministic document per team + tree; the id is a
+  uniqueness device, not authorization). Derived values (tracking state,
+  `targetReached`, `overdue`, labels, owner name) are computed per read and
+  never stored. Plans are not coupled to tracking writes: stopping tracking
+  leaves the plan in place.
+- **Shared client state.** One `RoadmapPlanningScope` component state in
+  `TeamDetail` serves the tracked-area rows and the untracked-plans section;
+  its failures are independent of the other sections.
+- **Surface.** Feature A lives inside the existing *Kompetanseområder*
+  section; it adds no route, tab or navigation entry. The dedicated Team
+  Roadmap surface (route, timeline/list, history) is Feature B and is not
+  built. Future `teamSkillNeeds`, `skillProfiles` and `roleDefinitions` are
+  not part of this architecture yet.
 
 ## Submission and dashboard boundaries (decided, implemented)
 

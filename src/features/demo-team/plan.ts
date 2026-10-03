@@ -1,5 +1,6 @@
 import type { EncryptedPayload } from "../../lib/encryption/encryption";
 import type { Challenge } from "../challenges/domain/challenge";
+import { roadmapItemDocId, type RoadmapItemRecord } from "../roadmap/domain/roadmap-item";
 import type { SkillProgressRecord } from "../skill-trees/domain/skill-progress";
 import { skillProgressDocId } from "../skill-trees/domain/skill-progress";
 import type { SkillTreeRecord } from "../skill-trees/domain/skill-tree";
@@ -11,6 +12,7 @@ import {
   assertValidPresenterUid,
   buildDemoLogicalFixtures,
   CLOSED_PERIOD_COUNT,
+  DEMO_ROADMAP_PLANS,
   DEMO_SKILL_TREES,
   DEMO_SURVEY_NEXT_ID,
   DEMO_TEAM_ID,
@@ -38,6 +40,7 @@ export const ALLOWED_COLLECTIONS = [
   "challenges",
   "skillTrees",
   "skillProgress",
+  "roadmapItems",
 ] as const;
 
 export type DemoCollection = (typeof ALLOWED_COLLECTIONS)[number];
@@ -77,6 +80,7 @@ export type PlannedOperation = OperationBase &
     | { collection: "challenges"; data: PersistedChallenge }
     | { collection: "skillTrees"; data: SkillTreeRecord }
     | { collection: "skillProgress"; data: SkillProgressRecord }
+    | { collection: "roadmapItems"; data: RoadmapItemRecord }
   );
 
 export type DemoEncrypt = (plaintext: string) => EncryptedPayload;
@@ -112,6 +116,10 @@ export function buildDemoManifest(presenterUid: string): readonly ManifestEntry[
     ...DEMO_TRACKED_SKILLS.map(({ treeId }) =>
       entry("skillProgress", skillProgressDocId(DEMO_TEAM_ID, treeId), "U"),
     ),
+    // Create-only: a presenter's real edits to a plan are never overwritten.
+    ...DEMO_ROADMAP_PLANS.map(({ treeId }) =>
+      entry("roadmapItems", roadmapItemDocId(DEMO_TEAM_ID, treeId), "C"),
+    ),
   ];
 
   assertManifestValid(manifest);
@@ -122,7 +130,7 @@ export function isAllowedCollection(collection: string): collection is DemoColle
   return (ALLOWED_COLLECTIONS as readonly string[]).includes(collection);
 }
 
-/** Rejects any entry outside the seven-collection allow-list (e.g. `forumThreads`) or with a path that does not match its parts. */
+/** Rejects any entry outside the eight-collection allow-list (e.g. `forumThreads`) or with a path that does not match its parts. */
 export function assertAllowedEntry(candidate: { collection: string; docId: string; path: string }): void {
   if (!isAllowedCollection(candidate.collection)) {
     throw new Error("Manifest entry rejected: collection is not allow-listed.");
@@ -175,7 +183,7 @@ export function assertOperationsMatchManifest(
 }
 
 export interface DemoSeedPlan {
-  /** The 82 intended document operations, in deterministic order. */
+  /** The 85 intended document operations, in deterministic order. */
   operations: readonly PlannedOperation[];
   manifest: readonly ManifestEntry[];
 }
@@ -231,6 +239,9 @@ export function buildDemoSeedPlan(input: {
     ...fixtures.skillTrees.map((t) => op("skillTrees", t.id, t.record)),
     ...fixtures.skillProgress.map((p) =>
       op("skillProgress", skillProgressDocId(DEMO_TEAM_ID, p.treeId), p.record),
+    ),
+    ...fixtures.roadmapItems.map((r) =>
+      op("roadmapItems", roadmapItemDocId(DEMO_TEAM_ID, r.treeId), r.record),
     ),
   ];
 

@@ -17,6 +17,12 @@ const createThreadMock = vi.fn();
 const fetchTeamSkillsMock = vi.fn();
 const reportTeamSkillProgressMock = vi.fn();
 const fetchTeamRosterMock = vi.fn();
+const fetchRoadmapItemsMock = vi.fn().mockResolvedValue({
+  status: "ok",
+  items: [],
+  canEdit: false,
+  truncated: false,
+});
 
 /**
  * Records every time `TrendChart`'s module is actually loaded, without
@@ -65,6 +71,10 @@ vi.mock("../../skill-trees/client/skill-trees-gateway", () => ({
 
 vi.mock("../client/team-roster-gateway", () => ({
   fetchTeamRoster: fetchTeamRosterMock,
+}));
+
+vi.mock("../../roadmap/client/roadmap-gateway", () => ({
+  fetchRoadmapItems: fetchRoadmapItemsMock,
 }));
 
 vi.mock("../../results/components/TrendChart", async (importOriginal) => {
@@ -1802,6 +1812,8 @@ describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
     fetchTeamThreadsMock.mockReset();
     createThreadMock.mockReset();
     fetchTeamSkillsMock.mockReset();
+    fetchRoadmapItemsMock.mockReset();
+    fetchRoadmapItemsMock.mockResolvedValue({ status: "ok", items: [], canEdit: false, truncated: false });
     reportTeamSkillProgressMock.mockReset();
     routerPushMock.mockReset();
   });
@@ -1855,6 +1867,67 @@ describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
     await screen.findByText("7 svar");
     const alerts = screen.getAllByRole("alert");
     expect(alerts.some((alert) => /lasting av kompetanseområder/i.test(alert.textContent ?? ""))).toBe(true);
+  });
+
+  it("shows each tracked area's plan, matched by treeId, from one independent roadmap fetch", async () => {
+    fetchTeamSkillsMock.mockResolvedValue({ status: "ok", skills: [TRACKED_SKILL, NOT_STARTED_SKILL], canReportProgress: true });
+    fetchRoadmapItemsMock.mockResolvedValue({
+      status: "ok",
+      canEdit: true,
+      truncated: false,
+      items: [
+        {
+          treeId: NOT_STARTED_SKILL.treeId,
+          areaName: "Wrong name on purpose",
+          targetNodeId: "node-0",
+          targetLabel: "Basic logging",
+          targetAvailable: true,
+          tracking: { state: "tracked", currentNodeId: null },
+          priority: "high",
+          status: "active",
+          startDate: null,
+          targetDate: null,
+          owner: null,
+          overdue: false,
+          archived: false,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+    });
+
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
+
+    await screen.findByText("Observability");
+    expect(await screen.findByText("Høy")).toBeTruthy();
+    expect(screen.getAllByText("Ingen plan ennå")).toHaveLength(1);
+    expect(fetchRoadmapItemsMock).toHaveBeenCalledTimes(1);
+    expect(fetchRoadmapItemsMock).toHaveBeenCalledWith("a-token", "team-1");
+    const items = screen.getAllByRole("listitem").filter((li) => li.textContent?.includes("Containers") || li.textContent?.includes("Observability"));
+    expect(items[0].textContent).toContain("Observability");
+  });
+
+  it("a roadmap failure leaves the area rows and other sections intact", async () => {
+    fetchTeamSkillsMock.mockResolvedValue({ status: "ok", skills: [TRACKED_SKILL], canReportProgress: true });
+    fetchRoadmapItemsMock.mockResolvedValue({ status: "read_failed" });
+    fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
+
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
+
+    await screen.findByText("7 svar");
+    expect(screen.getByText("Containers")).toBeTruthy();
+    expect(pathStageItem("Fundamentals")).toBeTruthy();
+    expect(await screen.findByText(/planene kunne ikke lastes/i)).toBeTruthy();
+  });
+
+  it("a skills failure does not block the roadmap fetch or the other sections", async () => {
+    fetchTeamSkillsMock.mockResolvedValue({ status: "read_failed" });
+    fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
+
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
+
+    await screen.findByText("7 svar");
+    expect(screen.getAllByRole("alert").some((a) => /lasting av kompetanseområder/i.test(a.textContent ?? ""))).toBe(true);
   });
 
   it("keeps the skill section on a results read failure (results_unavailable branch)", async () => {

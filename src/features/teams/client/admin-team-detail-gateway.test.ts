@@ -5,6 +5,7 @@ import {
   fetchTeamInvitations,
   fetchTeamMembers,
   inviteTeamMember,
+  prepareAdminMemberRefs,
   removeAdminTeamMember,
   resolveAccessRequest,
   setAdminTeamMemberRole,
@@ -24,7 +25,7 @@ describe("fetchTeamMembers default gateway", () => {
     });
     expect(result).toEqual({
       status: "ok",
-      members: [{ uid: "uid-1", email: "a@example.com", displayName: null, role: "member" }],
+      members: [{ uid: "uid-1", email: "a@example.com", displayName: null, role: "member", hasMemberRef: true }],
     });
 
     vi.unstubAllGlobals();
@@ -261,7 +262,7 @@ describe("fetchTeamMembers — additive displayName/role fields", () => {
 
     expect(result).toEqual({
       status: "ok",
-      members: [{ uid: "uid-1", email: "a@example.com", displayName: "Anna Berg", role: "lead" }],
+      members: [{ uid: "uid-1", email: "a@example.com", displayName: "Anna Berg", role: "lead", hasMemberRef: true }],
     });
     vi.unstubAllGlobals();
   });
@@ -271,7 +272,7 @@ describe("fetchTeamMembers — additive displayName/role fields", () => {
 
     const result = await fetchTeamMembers("t", "team-1");
 
-    expect(result).toEqual({ status: "ok", members: [{ uid: "uid-1", email: null, displayName: null, role: "member" }] });
+    expect(result).toEqual({ status: "ok", members: [{ uid: "uid-1", email: null, displayName: null, role: "member", hasMemberRef: true }] });
     vi.unstubAllGlobals();
   });
 
@@ -301,7 +302,7 @@ describe("fetchTeamMembers — additive displayName/role fields", () => {
 
     expect(result).toEqual({
       status: "ok",
-      members: [{ uid: "uid-1", email: "a@example.com", displayName: null, role: "lead" }],
+      members: [{ uid: "uid-1", email: "a@example.com", displayName: null, role: "lead", hasMemberRef: true }],
     });
     vi.unstubAllGlobals();
   });
@@ -368,6 +369,65 @@ describe("setAdminTeamMemberRole default gateway", () => {
     );
 
     expect(await setAdminTeamMemberRole("t", "team-1", "uid-1", "lead")).toEqual({ ok: false, error: "unknown" });
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("fetchTeamMembers — hasMemberRef readiness flag", () => {
+  function respondWith(member: Record<string, unknown>) {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ json: async () => ({ members: [member] }) })));
+  }
+  const base = { uid: "uid-1", email: null, displayName: null, role: "member" };
+
+  it.each([
+    [{ hasMemberRef: false }, false],
+    [{ hasMemberRef: true }, true],
+    [{}, true],
+    [{ hasMemberRef: "no" }, true],
+  ])("parses %j as hasMemberRef %s (only an explicit false asks for preparation)", async (extra, expected) => {
+    respondWith({ ...base, ...extra });
+    const result = await fetchTeamMembers("t", "team-1");
+    expect(result.status === "ok" && result.members[0].hasMemberRef).toBe(expected);
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("prepareAdminMemberRefs default gateway", () => {
+  it("POSTs without a body to the team's member-refs route and parses the counts", async () => {
+    const fetchMock = vi.fn(async () => ({ json: async () => ({ materialized: 2, alreadyHad: 1, truncated: false }) }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await prepareAdminMemberRefs("tok", "team 1");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/admin/teams/team%201/member-refs", {
+      method: "POST",
+      headers: { Authorization: "Bearer tok" },
+    });
+    expect(result).toEqual({ ok: true, materialized: 2, alreadyHad: 1, truncated: false });
+    vi.unstubAllGlobals();
+  });
+
+  it.each(["unauthenticated", "forbidden", "team_not_found", "persistence_failed"])(
+    "maps the %s error code",
+    async (error) => {
+      vi.stubGlobal("fetch", vi.fn(async () => ({ json: async () => ({ error }) })));
+      expect(await prepareAdminMemberRefs("t", "team-1")).toEqual({ ok: false, error });
+      vi.unstubAllGlobals();
+    },
+  );
+
+  it.each([[{}], [{ materialized: -1, alreadyHad: 0, truncated: false }], [{ error: "weird" }]])(
+    "falls back to unknown for an unrecognised body %j",
+    async (body) => {
+      vi.stubGlobal("fetch", vi.fn(async () => ({ json: async () => body })));
+      expect(await prepareAdminMemberRefs("t", "team-1")).toEqual({ ok: false, error: "unknown" });
+      vi.unstubAllGlobals();
+    },
+  );
+
+  it("maps a network failure to unknown", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("network"); }));
+    expect(await prepareAdminMemberRefs("t", "team-1")).toEqual({ ok: false, error: "unknown" });
     vi.unstubAllGlobals();
   });
 });

@@ -138,7 +138,7 @@ firebase deploy --only firestore:rules,firestore:indexes
   (`docs/features/managed-surveys/SPEC.md`), `challenges`
   (`docs/features/anonymous-challenges/SPEC.md`), `forumThreads`/
   `forumReplies` (`docs/features/team-forum/SPEC.md`), `skillTrees`/
-  `skillProgress` (`docs/features/team-skill-tree/SPEC.md`), and `userProfiles`
+  `skillProgress` (`docs/features/team-skill-tree/SPEC.md`), `roadmapItems` (`docs/features/team-skill-planning/SPEC.md`), and `userProfiles`
   (`docs/features/member-identity-and-team-roles/SPEC.md`) collections each
   have the same explicit deny block, for the same defense-in-depth/
   documentation reason — all access happens server-side via
@@ -200,6 +200,12 @@ firebase deploy --only firestore:rules,firestore:indexes
     is a direct document `get`/`add`/`set`/`update`/`delete` by a
     deterministic or already-known id, not a query. No composite index is
     declared for this feature.
+  - Team Skill Planning (`docs/features/team-skill-planning/SPEC.md`) adds
+    **no index**. Roadmap and member-reference reads are document `get`s by
+    deterministic id or single-field equality filters with a `limit` and no
+    `orderBy` (`roadmapItems` / `teamMemberships` by `teamId`, at most 501,
+    auto-indexed); `memberRef` matching happens in memory, deliberately
+    avoiding a `teamId` + `memberRef` two-field equality query.
 
 Add new composite indexes or rule changes here whenever a new Firestore
 query or access path is introduced, rather than relying on manually
@@ -217,13 +223,16 @@ Firestore project using service-account credentials that bypass all
 application authorization. Nothing in the repo approves any project; no real
 seeding is part of the feature's implementation.
 
-### What it writes (82 documents, one batch)
+### What it writes (85 documents, one batch)
 
 `teams` 1 · `teamMemberships` 1 (the presenter) · `surveys` 9 (8 closed + the
 scheduled `demo-survey-next`) · `surveyResponses` 59 (encrypted; none for the
 scheduled survey) · `challenges` 5 (encrypted) · `skillTrees` 4 (org-wide,
-names prefixed "Demo – ") · `skillProgress` 3. Ids are fixed and date-free; all
-timestamps derive from `--as-of`. It never writes Forum data,
+names prefixed "Demo – ") · `skillProgress` 3 · `roadmapItems` 3 (unassigned team
+plans — testing active/high/dated, observability planned/medium, delivery
+completed/low; no `ownerRef`, no synthetic members or fixed `memberRef`;
+create-only class `C`, so presenter edits survive a reseed). Ids are fixed and
+date-free; all timestamps derive from `--as-of`. It never writes Forum data,
 `teamSurveyState`, `surveyParticipations`, invitations, access requests or Auth
 users, never deletes or queries, and adds no schema field. Ownership is the
 explicit list of exact paths (the manifest), not a marker field.
@@ -280,12 +289,12 @@ It adds no new environment variable.
 | | Offline | Online dry-run | Write |
 | --- | --- | --- | --- |
 | Network / Firebase | none; `firebase-admin` is not even loaded | Auth `getUser` + Firestore `get` by exact id | same as dry-run, then one batch commit |
-| Writes | 0 | 0 | 82 at most (fewer if compatible create-only records exist) |
-| Verifies | argument/env/target consistency, plan construction (82 docs, manifest), local crypto round-trip | all of offline, plus: credentials bound to the project, presenter exists, every manifest path classified, existing encrypted demo records decryptable | all of dry-run, plus the write gates below |
+| Writes | 0 | 0 | 85 at most (fewer if compatible create-only records exist) |
+| Verifies | argument/env/target consistency, plan construction (85 docs, manifest), local crypto round-trip | all of offline, plus: credentials bound to the project, presenter exists, every manifest path classified, existing encrypted demo records decryptable | all of dry-run, plus the write gates below |
 | Does **not** verify | anything about existing Firestore state, presenter existence, or that `ENCRYPTION_KEY` matches the target | that the key matches the target on a first run; app-admin status of the presenter | same; also not isolated from concurrent edits (see residual risks) |
 
 - **Offline** proves only local consistency. It says nothing about what is in
-  Firestore, and its "Writes planned: 82" is not a prediction of a real run.
+  Firestore, and its "Writes planned: 85" is not a prediction of a real run.
 - **Online dry-run** prints the exact resolved project id, mode, presenter uid
   (never email), as-of date, counts per collection, the action per manifest
   path (`create`, `set`, `skip (exists)`, `blocked (<reason>)`), `Deletes: 0`,
@@ -307,7 +316,7 @@ Write proceeds only if **all** hold: `--write` and `--confirm` equal to
 · local crypto round-trip ok · plan built and all 64 payloads encrypted ·
 Admin app bound to the proven project · presenter exists in Auth · every
 manifest path read with zero conflicts · at least one operation planned. The
-guarded writer then re-checks that every operation is on one of the seven
+guarded writer then re-checks that every operation is on one of the eight
 collections and in the manifest, and commits them in **one** Firestore batch
 (`create` for create-only records, `set` without merge for upserts). Reads and
 encryption finish before the batch; any earlier failure means zero writes, and
@@ -319,8 +328,8 @@ Every manifest path is read by exact id and classified before any write:
 
 | Situation | Result |
 | --- | --- |
-| Target empty | all 82 planned (`create`/`set`) |
-| Compatible demo documents already exist | upsert (`U`) records are `set` again to the fixture (presenter edits to them are reverted, e.g. a moved skill stage or a resolved demo challenge); create-only (`C`: team, membership, scheduled survey) records are skipped, so a same-as-of rerun writes 79 |
+| Target empty | all 85 planned (`create`/`set`) |
+| Compatible demo documents already exist | upsert (`U`) records are `set` again to the fixture (presenter edits to them are reverted, e.g. a moved skill stage or a resolved demo challenge); create-only (`C`: team, membership, scheduled survey, roadmap plans) records are skipped, so a same-as-of rerun writes 79 |
 | Only some documents exist | missing ones created, compatible ones handled as above |
 | A document is incompatible or foreign | **abort, zero writes.** Reasons: `malformed-shape`, `scope-mismatch`, `foreign-creator`, `team-disabled`, `membership-mismatch`, `structure-mismatch`, `undecryptable` |
 | An existing demo response/challenge cannot be decrypted with the active key | `undecryptable` conflict: abort, zero writes, never overwritten |
@@ -335,7 +344,7 @@ later `--as-of` moves `U` dates forward). Responses a presenter submits to
 
 Explicit target proof in every mode · no ambient credentials or project
 discovery · local crypto round-trip and read-only preflight before write ·
-structural seven-collection allow-list plus manifest check in the writer · one
+structural eight-collection allow-list plus manifest check in the writer · one
 batch, ≤ 400 operations · no delete, query or wildcard method exists on the
 reader/writer seams · encrypted-only sensitive content, no identity in
 anonymous records, no participation records · output and errors contain no

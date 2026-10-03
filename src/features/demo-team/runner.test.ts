@@ -157,7 +157,7 @@ describe("offline dry-run", () => {
     const text = allOutput(out);
     expect(text).toContain(`Resolved project id: ${PROJECT}`);
     expect(text).toContain("Mode: offline-dry-run");
-    expect(text).toContain("Writes planned: 82");
+    expect(text).toContain("Writes planned: 85");
     expect(text).toContain("Deletes: 0");
     expect(text).toContain("not checked (offline");
     expectNoSecrets(text);
@@ -187,8 +187,8 @@ describe("online dry-run", () => {
     });
 
     const reads = online.log.filter((l) => l.startsWith("get "));
-    expect(reads).toHaveLength(82);
-    expect(new Set(reads).size).toBe(82);
+    expect(reads).toHaveLength(85);
+    expect(new Set(reads).size).toBe(85);
     expect(online.log[0]).toBe("userExists");
     expect(online.counts()).toEqual({ commits: 0, batches: 0 });
     expect(online.store.size).toBe(0);
@@ -229,22 +229,22 @@ describe("online dry-run", () => {
 });
 
 describe("write mode (fake adapters only)", () => {
-  it("passes every gate → reads and encryption precede exactly one batch commit of all 82 documents", async () => {
+  it("passes every gate → reads and encryption precede exactly one batch commit of all 85 documents", async () => {
     const online = fakeOnline();
     const out = await run(WRITE_ARGS, online).result;
 
     expect(out.exitCode).toBe(0);
     expect(online.counts()).toEqual({ commits: 1, batches: 1 });
-    expect(online.store.size).toBe(82);
+    expect(online.store.size).toBe(85);
     const commitIndex = online.log.indexOf("commit");
-    expect(online.log.slice(0, commitIndex).filter((l) => l.startsWith("get "))).toHaveLength(82);
+    expect(online.log.slice(0, commitIndex).filter((l) => l.startsWith("get "))).toHaveLength(85);
     expect(online.log.slice(commitIndex + 1)).toEqual([]);
-    expect(allOutput(out)).toContain("Write: committed 82 documents in one batch. Deletes: 0");
+    expect(allOutput(out)).toContain("Write: committed 85 documents in one batch. Deletes: 0");
     expect(out.stdout[0]).toBe("Demo Team seed — preflight before write");
     expectNoSecrets(allOutput(out));
   });
 
-  it("writes only manifest paths, from the seven collections, with no undefined values", async () => {
+  it("writes only manifest paths, from the eight collections, with no undefined values", async () => {
     const online = fakeOnline();
     await run(WRITE_ARGS, online).result;
     const { manifest } = buildDemoSeedPlan({ presenterUid: PRESENTER, asOf: new Date("2026-03-16T00:00:00.000Z"), encrypt: demoCrypto.encrypt });
@@ -278,7 +278,7 @@ describe("write mode (fake adapters only)", () => {
     const second = await run(WRITE_ARGS, online).result;
     expect(second.exitCode).toBe(0);
     expect([...online.store.keys()].sort()).toEqual(firstKeys);
-    expect(online.store.size).toBe(82);
+    expect(online.store.size).toBe(85);
     expect(allOutput(second)).toContain("Write: committed 79 documents in one batch");
     const secondResponse = online.store.get("surveyResponses/demo-response-s01-r01") as { ciphertext: string };
     expect(secondResponse.ciphertext).not.toBe(firstResponse.ciphertext);

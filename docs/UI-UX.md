@@ -417,9 +417,49 @@ identifier (see `docs/features/team-skill-tree/SPEC.md` — Owner decision 4).
   `dangerouslySetInnerHTML`, never passed through an HTML/Markdown parser.
   Text that looks like HTML or a script tag renders as inert, visible
   characters everywhere this feature displays it.
-- No comment, voting, reaction, free-text note, per-person assignment, or
-  ranking/leaderboard control exists anywhere in this feature's UI — every
-  surface shows team-level progress only, never an individual's.
+- No comment, voting, reaction, free-text note, per-person *skill*
+  assignment, or ranking/leaderboard control exists anywhere in this
+  feature's UI — every surface shows team-level progress only, never an
+  individual's. **One narrow, deliberate exception (Team Skill Planning, see
+  below):** a roadmap plan may optionally name one team member as its
+  responsible contact. That is planning metadata, not a skill, level or
+  performance assignment; skill tracking and maturity stay team-level.
+
+### Team skill planning (Feature A, `docs/features/team-skill-planning/SPEC.md`)
+
+Planning lives **inside** the `/teams/[teamId]` *Kompetanseområder* section.
+There is no Roadmap route, tab or navigation entry in Feature A (the dedicated
+Team Roadmap is Feature B and does not exist). Team surface term:
+*Kompetanseområder*; the individual surface remains *Ferdigheter*.
+
+- Each tracked area's row shows its plan below the progress path. With no plan
+  the row says "Ingen plan ennå" (and offers "Planlegg" to members). A plan
+  line shows target stage, priority (text), period, owner, status and text
+  indicators: "Målet er nådd" (informative only — it never changes status;
+  completion is marked manually) and "Måldato passert" (overdue). Completed
+  plans get a distinct completed presentation. No state relies on colour alone.
+- Members of an active team get an inline, expandable create/edit form
+  (target stage above the current stage only, priority, two date inputs,
+  optional owner, status when editing, "Lagre"/"Avbryt", and
+  "Arkiver"/"Gjenopprett"). When the server says the viewer cannot edit
+  (`canEdit: false`) the controls are absent, not disabled. No optimistic
+  update: a successful save refetches.
+- **Owner** is an optional "Ansvarlig" select fed by the assignable-members
+  endpoint: "Ikke tildelt", names (duplicates get a presentation ordinal),
+  "Medlem uten navn", "Deg", and "Ansvarlig er ikke lenger tilgjengelig" when
+  the reference no longer resolves. Help copy states it is a planning marker,
+  not an assessment of anyone. No UID/e-mail is shown; there is no filter,
+  sort, count or summary by owner.
+- **Plans for areas the team no longer tracks** appear in a dedicated section
+  at the bottom ("Plan for område teamet ikke lenger følger"). Their target
+  is shown read-only (it cannot be changed while untracked); other fields stay
+  editable and archive/restore remain available. Restarting tracking returns
+  the plan to its normal area row.
+- Archived plans are hidden by default and revealed by the existing
+  "Vis arkiverte" control, which stays reachable even when the team tracks
+  zero areas.
+- The roadmap read fails independently of the other sections; text and names
+  are rendered as inert text; fields stack on narrow screens.
 - Every admin creation/correction/tracking control, and the boundary
   validation errors the creation form's dynamic add/remove-stage-row
   controls can trigger, are keyboard-operable with a visible focus state

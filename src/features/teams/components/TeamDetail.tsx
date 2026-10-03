@@ -32,6 +32,7 @@ import {
   fetchTeamResults,
   type SurveyResultSummary,
 } from "../../results/client/team-results-gateway";
+import { RoadmapPlanningScope } from "../../roadmap/components/RoadmapPlanning";
 import { fetchTeamSkills, type FetchTeamSkillsResult, type TeamSkillView } from "../../skill-trees/client/skill-trees-gateway";
 import { TeamSkillSection, type TeamSkillSectionState } from "../../skill-trees/components/TeamSkillSection";
 import { PeriodSummary } from "../../results/components/PeriodSummary";
@@ -534,12 +535,17 @@ export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnab
               onThreadCreated={(threadId) => handleThreadCreated(generation, threadId)}
             />
           )}
-          <TeamSkillSection
-            idToken={token}
-            teamId={teamId}
-            state={toTeamSkillSectionState(result.skills)}
-            onReported={() => handleSkillReported(token, generation)}
-          />
+          <RoadmapPlanningScope key={generation} token={token} teamId={teamId}>
+            {(planning) => (
+              <TeamSkillSection
+                idToken={token}
+                teamId={teamId}
+                state={toTeamSkillSectionState(result.skills)}
+                onReported={() => handleSkillReported(token, generation)}
+                planning={planning}
+              />
+            )}
+          </RoadmapPlanningScope>
           <TeamRosterSection key={generation} teamId={teamId} token={token} />
         </TeamaktivitetZone>
       </div>
@@ -581,12 +587,17 @@ export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnab
               onThreadCreated={(threadId) => handleThreadCreated(generation, threadId)}
             />
           )}
-          <TeamSkillSection
-            idToken={token}
-            teamId={teamId}
-            state={toTeamSkillSectionState(result.skills)}
-            onReported={() => handleSkillReported(token, generation)}
-          />
+          <RoadmapPlanningScope key={generation} token={token} teamId={teamId}>
+            {(planning) => (
+              <TeamSkillSection
+                idToken={token}
+                teamId={teamId}
+                state={toTeamSkillSectionState(result.skills)}
+                onReported={() => handleSkillReported(token, generation)}
+                planning={planning}
+              />
+            )}
+          </RoadmapPlanningScope>
           <TeamRosterSection key={generation} teamId={teamId} token={token} />
         </TeamaktivitetZone>
       </div>
