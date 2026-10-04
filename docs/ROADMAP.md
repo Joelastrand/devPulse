@@ -315,17 +315,26 @@
     competency areas, embedded in *Kompetanseområder* (target stage, priority,
     status, optional dates, optional owner as planning metadata), plus the
     opaque member reference (`memberRef`) and an assignable-member selector.
-    No Roadmap route. Demo Team shows three representative plans.
+    No Roadmap route in A. Demo Team shows three representative plans.
     See `docs/features/team-skill-planning/SPEC.md`.
-  - **B — Team Roadmap** *(planned, not built)*: a dedicated roadmap
-    route/tab with timeline/list views and fuller roadmap experience.
+  - **B — Team Roadmap** *(delivered)*: a dedicated `/teams/[teamId]/roadmap`
+    page over the same canonical `roadmapItems` plans as A (one current plan
+    per team + competency area). Team navigation is the two route links
+    `Oversikt · Roadmap`; *Kompetanse* stays a section of Oversikt. A list view
+    (default) and a lightweight vertical target-quarter timeline
+    (`?view=timeline`), local status/priority/`Vis arkiverte` filters, a
+    collapsed *Fullført* disclosure, create-from-roadmap for tracked areas
+    without a plan (`Områder uten plan`), and editing through A's editor. It is
+    a current-plan view: no persisted history, no board/Gantt, no challenge
+    links, no owner filter or metric. No new persistence, rule, index,
+    migration or Demo Team change. See `docs/features/team-roadmap/SPEC.md`.
   - **C1/C2 — Skill needs and individual skills** *(planned, not
     built)*: desired team needs (`teamSkillNeeds`) and individual
     self-assessment (`skillProfiles`); gap/coverage views are derived, not
     persisted, and C2 may prefill a plan from a team gap.
   - **D1/D2 — Role expectations** *(planned, not built)*: `roleDefinitions`
     and their use in planning, reusing the member reference rules.
-  Only F0 and A exist; later phases are intentions, not commitments, and each
+  Only F0, A and B exist; later phases are intentions, not commitments, and each
   needs its own approved SPEC.
 
 Phases 0–9 are complete. See `docs/PRODUCT.md` for the product vision and

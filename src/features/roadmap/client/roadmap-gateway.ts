@@ -81,7 +81,8 @@ function parseItem(value: unknown): RoadmapItemView | null {
     typeof value.overdue !== "boolean" ||
     typeof value.archived !== "boolean" ||
     typeof value.createdAt !== "string" ||
-    typeof value.updatedAt !== "string"
+    typeof value.updatedAt !== "string" ||
+    !isNullableString(value.completedAt)
   ) {
     return null;
   }
@@ -101,6 +102,7 @@ function parseItem(value: unknown): RoadmapItemView | null {
     archived: value.archived,
     createdAt: value.createdAt,
     updatedAt: value.updatedAt,
+    completedAt: value.completedAt,
   };
   if (typeof value.targetReached === "boolean") {
     item.targetReached = value.targetReached;

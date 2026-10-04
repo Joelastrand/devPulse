@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
@@ -95,6 +96,12 @@ export function TeamSkillSection({ idToken, teamId, state, onReported, planning 
       >
         {teamSkillSectionCopy.sectionTitle}
       </h2>
+      <Link
+        href={`/teams/${encodeURIComponent(teamId)}/roadmap`}
+        className="mt-2 inline-block text-sm font-medium text-zinc-900 underline dark:text-zinc-50"
+      >
+        {teamSkillSectionCopy.seeRoadmap}
+      </Link>
 
       {state.status === "loading" && (
         <LoadingState label={teamSkillSectionCopy.loading} className="mt-4" />

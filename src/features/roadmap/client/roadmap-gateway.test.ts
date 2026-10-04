@@ -27,6 +27,7 @@ const ITEM = {
   archived: false,
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-02T00:00:00.000Z",
+  completedAt: null,
 };
 
 function stubFetch(status: number, body: unknown) {
@@ -86,6 +87,29 @@ describe("fetchRoadmapItems", () => {
     if (result.status !== "ok") throw new Error("expected ok");
     expect(result.items[0]).not.toHaveProperty("uid");
     expect(result.items[0]).not.toHaveProperty("createdBy");
+  });
+
+  it("preserves a valid completedAt and the null legacy case unchanged", async () => {
+    stubFetch(200, {
+      canEdit: false,
+      truncated: false,
+      items: [
+        { ...ITEM, status: "completed", completedAt: "2026-03-04T10:00:00.000Z" },
+        { ...ITEM, treeId: "tree-2", status: "completed", completedAt: null },
+      ],
+    });
+
+    const result = await fetchRoadmapItems("tok", "team-1");
+
+    if (result.status !== "ok") throw new Error("expected ok");
+    expect(result.items[0].completedAt).toBe("2026-03-04T10:00:00.000Z");
+    expect(result.items[1].completedAt).toBeNull();
+    expect(result.items[1].updatedAt).toBe(ITEM.updatedAt);
+  });
+
+  it.each([[42], [undefined], [{}]])("fails safe to read_failed on a malformed completedAt (%j)", async (bad) => {
+    stubFetch(200, { items: [{ ...ITEM, completedAt: bad }], canEdit: false, truncated: false });
+    expect(await fetchRoadmapItems("tok", "team-1")).toEqual({ status: "read_failed" });
   });
 
   it("fails safe to read_failed on a malformed item or body", async () => {

@@ -52,6 +52,7 @@ import {
 } from "../client/teams-overview-gateway";
 import { requestAccessErrorMessage } from "./request-access-messages";
 import { TeamRosterSection } from "./TeamRosterSection";
+import { TeamRouteNav } from "./TeamRouteNav";
 
 /**
  * `TrendChart` code-split out of this page's eager client bundle
@@ -516,6 +517,7 @@ export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnab
     return (
       <div className="flex flex-col gap-4">
         <TeamHeading name={result.name} />
+        <TeamRouteNav teamId={teamId} />
         <Alert variant="error">{teamsCopy.detail.resultsUnavailable}</Alert>
         <ResultaterZone>
           <CurrentSurveySection state={result.currentSurvey} />
@@ -562,6 +564,7 @@ export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnab
     return (
       <div className="flex flex-col gap-8">
         <TeamHeading name={result.name} />
+        <TeamRouteNav teamId={teamId} />
         <ResultaterZone>
           <CurrentSurveySection state={result.currentSurvey} />
           <PeriodSummary result={latest} />

@@ -155,6 +155,16 @@ describe("parseRoadmapItem", () => {
     expect(parseRoadmapItem(raw({ status: "completed", completedAt: "x" }))).toBeNull();
   });
 
+  it("tolerates a missing/null completedAt on a completed plan only when explicitly allowed", () => {
+    const lenient = { allowMissingCompletedAt: true };
+    expect(parseRoadmapItem(raw({ status: "completed" }))).toBeNull();
+    expect(parseRoadmapItem(raw({ status: "completed", completedAt: null }))).toBeNull();
+    expect(parseRoadmapItem(raw({ status: "completed" }), lenient)?.completedAt).toBeUndefined();
+    expect(parseRoadmapItem(raw({ status: "completed", completedAt: null }), lenient)).not.toBeNull();
+    expect(parseRoadmapItem(raw({ status: "completed", completedAt: "x" }), lenient)).toBeNull();
+    expect(parseRoadmapItem(raw({ status: "active", completedAt: T0 }), lenient)).toBeNull();
+  });
+
   it("copies only the approved fields — no current stage, person data or unknown keys", () => {
     const item = parseRoadmapItem(
       raw({ currentNodeId: "node-1", displayName: "Alex", email: "a@example.test", ownerUid: "u", label: "x", score: 9 }),

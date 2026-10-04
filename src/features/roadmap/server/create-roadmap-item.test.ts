@@ -424,6 +424,23 @@ describe("createRoadmapItem — slot and persisted shape", () => {
     expect(world.roadmap["team-1__tree-1"]).toBe(archived);
   });
 
+  // create uses the strict parser: a legacy completed occupant (no usable completedAt) is a corrupt
+  // occupant, so it is never overwritten and — even when archived — is not reported as plan_archived.
+  it.each([
+    ["absent", {}],
+    ["null", { completedAt: null }],
+  ])("treats a legacy completed occupant with %s completedAt as already_planned, no write", async (_label, extra) => {
+    for (const archive of [{}, { archivedAt: T0, archivedBy: "u" }]) {
+      const world = baseWorld();
+      const legacy = stored({ status: "completed", ...extra, ...archive });
+      world.roadmap = { "team-1__tree-1": legacy };
+      const { result, writes } = await create(world, valid);
+      expect(result).toEqual({ ok: false, error: "already_planned" });
+      expect(writes).toEqual([]);
+      expect(world.roadmap["team-1__tree-1"]).toBe(legacy);
+    }
+  });
+
   it("treats a mismatching/corrupt occupant as already_planned, no write", async () => {
     const world = baseWorld();
     world.roadmap = { "team-1__tree-1": { teamId: "team-2", treeId: "tree-1" } };
@@ -481,7 +498,7 @@ describe("createRoadmapItem — slot and persisted shape", () => {
       [
         "archived", "areaName", "createdAt", "overdue", "owner", "priority", "startDate", "status",
         "targetAvailable", "targetDate", "targetLabel", "targetNodeId", "targetReached", "tracking",
-        "treeId", "updatedAt",
+        "treeId", "updatedAt", "completedAt",
       ].sort(),
     );
     expect(result.item).toMatchObject({

@@ -86,6 +86,7 @@ const routerPushMock = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: routerPushMock }),
+  usePathname: () => "/teams/team-1",
 }));
 
 const { TeamDetail } = await import("./TeamDetail");
@@ -241,6 +242,64 @@ describe("TeamDetail", () => {
 
     await screen.findByRole("link", { name: /logg inn/i });
     expect(fetchTeamResultsMock).not.toHaveBeenCalled();
+  });
+
+  describe("team route navigation and roadmap link (team-roadmap BR-2, BR-3)", () => {
+    function mockAuthorized(resultsStatus: "ok" | "read_failed") {
+      observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+      fetchTeamsOverviewMock.mockResolvedValue({
+        status: "ok",
+        teams: [{ teamId: "team-1", name: "Platform", relationship: "member" }],
+      });
+      fetchTeamResultsMock.mockResolvedValue(
+        resultsStatus === "ok" ? INSUFFICIENT_RESULTS : { status: "read_failed" },
+      );
+      fetchCurrentTeamSurveyMock.mockResolvedValue(NO_CURRENT_SURVEY);
+      fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
+      fetchTeamThreadsMock.mockResolvedValue(NO_THREADS);
+      fetchTeamSkillsMock.mockResolvedValue(NO_SKILLS);
+    }
+
+    it.each(["ok", "read_failed"] as const)(
+      "renders Oversikt and Roadmap navigation plus 'Se roadmap' in the %s branch",
+      async (resultsStatus) => {
+        mockAuthorized(resultsStatus);
+
+        render(<TeamDetail teamId="team-1" forumEnabled={true} />);
+
+        const nav = await screen.findByRole("navigation", { name: teamsCopy.nav.label });
+        const links = within(nav).getAllByRole("link");
+        expect(links.map((link) => link.getAttribute("href"))).toEqual([
+          "/teams/team-1",
+          "/teams/team-1/roadmap",
+        ]);
+        const seeRoadmap = await screen.findByRole("link", { name: "Se roadmap" });
+        expect(seeRoadmap.getAttribute("href")).toBe("/teams/team-1/roadmap");
+      },
+    );
+
+    it("does not render the navigation or 'Se roadmap' in the access-denied/request state", async () => {
+      observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+      fetchTeamsOverviewMock.mockResolvedValue({
+        status: "ok",
+        teams: [{ teamId: "team-1", name: "Platform", relationship: "none" }],
+      });
+
+      render(<TeamDetail teamId="team-1" forumEnabled={true} />);
+
+      await screen.findByRole("button", { name: /be om tilgang/i });
+      expect(screen.queryByRole("navigation", { name: teamsCopy.nav.label })).toBeNull();
+      expect(screen.queryByRole("link", { name: "Se roadmap" })).toBeNull();
+    });
+
+    it("keeps the same navigation with the forum flag off", async () => {
+      mockAuthorized("ok");
+
+      render(<TeamDetail teamId="team-1" forumEnabled={false} />);
+
+      const nav = await screen.findByRole("navigation", { name: teamsCopy.nav.label });
+      expect(within(nav).getAllByRole("link")).toHaveLength(2);
+    });
   });
 
   it("shows a Norwegian generic error state on an overview read failure, never a fabricated team", async () => {

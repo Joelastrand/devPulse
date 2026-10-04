@@ -595,6 +595,7 @@ describe("updateRoadmapItem — response and reliability", () => {
       [
         "archived",
         "areaName",
+        "completedAt",
         "createdAt",
         "overdue",
         "owner",

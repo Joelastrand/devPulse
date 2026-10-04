@@ -44,6 +44,12 @@ export const teamsCopy = {
         "Den forrige forespørselen din om å bli med i dette teamet ble ikke godkjent.",
     },
   },
+  /** Route-level team navigation (docs/features/team-roadmap/SPEC.md — BR-2). */
+  nav: {
+    label: "Teamnavigasjon",
+    overview: "Oversikt",
+    roadmap: "Roadmap",
+  },
   /** The collapsed, read-only member roster on `/teams/[teamId]` (docs/features/member-identity-and-team-roles/SPEC.md — BR-31). */
   roster: {
     title: "Medlemmer",

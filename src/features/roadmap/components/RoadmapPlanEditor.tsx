@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
 import { Select } from "../../../components/ui/Select";
@@ -81,6 +81,7 @@ export function AreaPlanEditor({
   canEdit,
   actions,
   targetLocked = false,
+  embedded = false,
 }: {
   area: PlanningArea;
   plan: RoadmapItemView | undefined;
@@ -88,8 +89,22 @@ export function AreaPlanEditor({
   actions: PlanningActions;
   /** Untracked area (D13): the target is shown read-only and is never part of a write. */
   targetLocked?: boolean;
+  /**
+   * Controls only, for a host that already presents the plan (Roadmap page card/row): no summary and
+   * no completed disclosure; the edit button stays visible as the disclosure trigger
+   * (`aria-expanded`/`aria-controls`) and regains focus when the form closes.
+   */
+  embedded?: boolean;
 }) {
   const [formOpen, setFormOpen] = useState(false);
+  // The shared Button primitive takes no ref; the trigger is found through its wrapper.
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const wasOpenRef = useRef(false);
+  useEffect(() => {
+    if (embedded && wasOpenRef.current && !formOpen) triggerRef.current?.querySelector("button")?.focus();
+    wasOpenRef.current = formOpen;
+  }, [embedded, formOpen]);
+  const formRegionId = `plan-editor-${area.treeId}`;
   const [completedOpen, setCompletedOpen] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [restoring, setRestoring] = useState(false);
@@ -183,12 +198,26 @@ export function AreaPlanEditor({
     );
   }
 
-  const summary = <RoadmapPlanSummary plan={plan} />;
-  const completedHidden = plan.status === "completed" && !completedOpen;
+  const editForm = (
+    <PlanForm
+      key="edit"
+      area={area}
+      plan={plan}
+      actions={actions}
+      targetLocked={targetLocked}
+      restoring={restoring}
+      onRestore={restore}
+      onSaved={handleSaved}
+      onStale={handleStale}
+      onCancel={() => setFormOpen(false)}
+    />
+  );
+  const summary = embedded ? null : <RoadmapPlanSummary plan={plan} />;
+  const completedHidden = !embedded && plan.status === "completed" && !completedOpen;
 
   return (
     <div className="flex flex-col items-start gap-2">
-      {plan.status === "completed" && (
+      {!embedded && plan.status === "completed" && (
         <Button
           variant="secondary"
           size="sm"
@@ -211,25 +240,22 @@ export function AreaPlanEditor({
           {restoreLabel}
         </Button>
       )}
-      {!completedHidden && canEdit && !plan.archived && !formOpen && (
-        <Button variant="secondary" size="sm" aria-label={`${roadmapCopy.form.edit} – ${area.name}`} onClick={openForm}>
-          {roadmapCopy.form.edit}
-        </Button>
+      {!completedHidden && canEdit && !plan.archived && (embedded || !formOpen) && (
+        <div ref={triggerRef} className="contents">
+          <Button
+            variant="secondary"
+            size="sm"
+            aria-label={`${roadmapCopy.form.edit} – ${area.name}`}
+            aria-expanded={embedded ? formOpen : undefined}
+            aria-controls={embedded ? formRegionId : undefined}
+            onClick={openForm}
+          >
+            {roadmapCopy.form.edit}
+          </Button>
+        </div>
       )}
-      {!completedHidden && canEdit && !plan.archived && formOpen && (
-        <PlanForm
-          key="edit"
-          area={area}
-          plan={plan}
-          actions={actions}
-          targetLocked={targetLocked}
-          restoring={restoring}
-          onRestore={restore}
-          onSaved={handleSaved}
-          onStale={handleStale}
-          onCancel={() => setFormOpen(false)}
-        />
-      )}
+      {!completedHidden && canEdit && !plan.archived && embedded && <div id={formRegionId} hidden={!formOpen} className="w-full">{formOpen && editForm}</div>}
+      {!completedHidden && canEdit && !plan.archived && !embedded && formOpen && editForm}
     </div>
   );
 }

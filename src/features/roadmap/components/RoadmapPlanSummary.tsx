@@ -3,7 +3,7 @@ import { roadmapCopy } from "../copy";
 import type { RoadmapItemView, RoadmapOwner } from "../server/list-roadmap-items";
 
 /** `YYYY-MM-DD` → `DD.MM.YYYY` by string rearrangement only (no timezone involved). */
-function formatPlanDate(value: string): string {
+export function formatPlanDate(value: string): string {
   const [year, month, day] = value.split("-");
   return `${day}.${month}.${year}`;
 }
@@ -26,7 +26,7 @@ export function formatOwnerName(displayName: string | null, ordinal: number | nu
   return isSelf ? `${named} · ${self}` : named;
 }
 
-function ownerText(owner: RoadmapOwner): string {
+export function ownerText(owner: RoadmapOwner): string {
   const { none, unavailable } = roadmapCopy.owner;
   if (owner === null) return none;
   if (owner.state === "unavailable") return unavailable;

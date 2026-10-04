@@ -290,8 +290,26 @@ until attrition, burnout, or delivery failure makes them obvious.
   responsible contact; this is coordination metadata only, grants no
   permissions, and is never an individual performance measure. Planning stays
   team-level and carries no per-person scoring or ranking.
-- A dedicated Team Roadmap experience is a later, separate feature. See
-  `docs/features/team-skill-planning/SPEC.md` and `docs/ROADMAP.md`.
+- See `docs/features/team-skill-planning/SPEC.md` and `docs/ROADMAP.md`.
+
+## Delivered: Team Roadmap (Feature B)
+
+- A dedicated Roadmap page per team (`/teams/[teamId]/roadmap`, reached from
+  an `Oversikt · Roadmap` navigation) shows the team's **current** plans across
+  competency areas together, so the team sees shared direction: what is
+  active, planned, completed or undated, and when. It presents the same plans
+  as *Kompetanseområder* — there is one current plan per team and competency
+  area, with priority, status, optional dates and an optional owner.
+- Plans can be read as a grouped list (default) or a lightweight timeline
+  grouped by target quarter, filtered by status and priority, with archived
+  plans revealed on request. Members of an active team can edit, archive,
+  restore and create plans from here with the same controls and rules as in
+  *Kompetanseområder*; everyone else reads.
+- It shows the current plan only. Replanning overwrites the plan; there is no
+  plan history, no board or Gantt view and no link to challenges. The plan
+  count line counts plans, not people. The owner is coordination metadata: it
+  grants no permission, and there is no owner filter, ranking, completion rate
+  or performance score.
 
 ## Future capabilities (not implemented yet)
 

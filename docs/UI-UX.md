@@ -428,9 +428,9 @@ identifier (see `docs/features/team-skill-tree/SPEC.md` — Owner decision 4).
 ### Team skill planning (Feature A, `docs/features/team-skill-planning/SPEC.md`)
 
 Planning lives **inside** the `/teams/[teamId]` *Kompetanseområder* section.
-There is no Roadmap route, tab or navigation entry in Feature A (the dedicated
-Team Roadmap is Feature B and does not exist). Team surface term:
-*Kompetanseområder*; the individual surface remains *Ferdigheter*.
+Feature A itself added no Roadmap route; the dedicated Team Roadmap is Feature B
+(see "Team Roadmap" below). Team surface term: *Kompetanseområder*; the
+individual surface remains *Ferdigheter*.
 
 - Each tracked area's row shows its plan below the progress path. With no plan
   the row says "Ingen plan ennå" (and offers "Planlegg" to members). A plan
@@ -464,6 +464,69 @@ Team Roadmap is Feature B and does not exist). Team surface term:
   validation errors the creation form's dynamic add/remove-stage-row
   controls can trigger, are keyboard-operable with a visible focus state
   and an associated, accessible error message.
+
+### Team Roadmap (Feature B, `docs/features/team-roadmap/SPEC.md`)
+
+A dedicated page at `/teams/[teamId]/roadmap` shows the team's **current** plans
+across competency areas. It presents the same canonical plans as
+*Kompetanseområder* (one plan per team + area) and reuses A's editor.
+
+- **Navigation.** A route-based nav with exactly two links, **Oversikt** and
+  **Roadmap** (`aria-current="page"` on the exact-path match only). It appears
+  on the Roadmap page and in the authorized states of the team page, not in
+  access-denied/request states. There is no three-tab shell: *Kompetanse* is not
+  a separate destination and stays a section of Oversikt. The Roadmap page links
+  back to *Kompetanseområder*, and that section links to the Roadmap.
+- **Views.** A labelled **Liste | Tidslinje** switch (buttons with
+  `aria-pressed`). List is the default; `?view=timeline` selects the timeline,
+  and a missing or invalid value falls back to list. Only the view uses the URL.
+  The list groups plans Pågår / Planlagt / Fullført, with archived plans last.
+  The timeline is a lightweight vertical **target-quarter** timeline built from
+  semantic headings and ordered lists: first-match groups Arkiverte, Fullførte,
+  Forfalt, target quarter (by `targetDate`), Kun startdato, Uten dato, shown in
+  the order Forfalt, quarters, Kun startdato, Uten dato, Fullførte, Arkiverte.
+  The groups are derived presentation only. There is no board, Gantt, calendar
+  grid, drag-and-drop or `Nå` marker.
+- **Filters.** Exactly three, all transient (not in the URL, not stored): single-
+  select **Status** and **Prioritet** (default *Alle*, combined with AND) and a
+  **Vis arkiverte** toggle. There is no owner, area, tracking or text filter and
+  no owner sort. A plan-count line counts plans by status over the unfiltered,
+  non-archived set; it is not a rate, score or per-person figure.
+- **Completed and archived.** *Fullført*/*Fullførte* is a collapsed-by-default
+  disclosure (button, `aria-expanded`/`aria-controls`) showing the filtered count;
+  choosing the *Fullført* status filter expands it. Completed is a manual status;
+  "Målet er nådd" is a separate informative indicator; archived is a third,
+  separate state. Archived plans are never deleted and are restorable where
+  editable.
+- **Områder uten plan.** Tracked areas with no plan can be given one here. An area
+  that already has any plan — including an archived, completed, legacy or
+  untracked one — is not offered; the user restores via *Vis arkiverte*. Filters,
+  archive visibility and view do not change this list. If the archived-inclusive
+  read is truncated, creation is withheld (the page cannot prove an area has no
+  plan from an incomplete response) and the "list may be incomplete" notice is
+  shown; this is intentional.
+- **Plans, states and read-only.** Plans for areas the team no longer tracks stay
+  visible with "Følges ikke" and a locked target (roadmap editing never restarts
+  tracking). A legacy completed plan without a completion timestamp is shown as
+  completed, without a date, with the note "Eldre fullført plan – kan ikke
+  endres" and no controls. Edit, archive, restore and create controls exist only
+  when the server allows editing **and** the team skills read succeeded; they are
+  absent (not disabled) otherwise, with no stated reason. A skills-read failure
+  keeps plans readable and shows a scoped alert whose retry reloads only the
+  skills. A roadmap read failure shows an error with retry; `forbidden` shows a
+  neutral no-access message.
+- **Current plan only.** Copy states that the roadmap shows the current plan.
+  Replanning overwrites it; "Sist oppdatert" and "Fullført" dates are current-
+  state metadata, never history. There are no challenge links.
+- **Owner and privacy.** Owner is shown as in Feature A (name, "Deg", "Ansvarlig
+  er ikke lenger tilgjengelig") and is coordination metadata only. No UID, e-mail
+  or member reference appears in text, URL or attributes.
+- **Responsive and accessibility.** Cards and timeline rows stack on narrow
+  screens (no horizontal scroll to 360 px), filters wrap, and every meaning
+  (status, priority, overdue, reached, archived, untracked) is text. Controls are
+  native and keyboard-operable with visible focus; the editor button returns
+  focus on close; dates are labelled or use `<time datetime>`; h1 is the page
+  title and h2 the groups.
 
 ## Results UX
 

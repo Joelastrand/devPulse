@@ -127,6 +127,8 @@ export const orgSkillProgressOverviewCopy = {
  */
 export const teamSkillSectionCopy = {
   sectionTitle: "Kompetanseområder",
+  /** Link to the team Roadmap route (docs/features/team-roadmap/SPEC.md — BR-3). */
+  seeRoadmap: "Se roadmap",
   loading: "Laster kompetanseområder…",
   error: "Noe gikk galt under lasting av kompetanseområder. Prøv igjen senere.",
   empty: "Teamet sporer ingen kompetanseområder ennå.",

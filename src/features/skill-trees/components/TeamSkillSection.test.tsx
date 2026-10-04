@@ -53,6 +53,14 @@ function pathStage(treeName: string, label: string | RegExp) {
 }
 
 describe("TeamSkillSection", () => {
+  it("keeps the heading id the Roadmap page links to and links to the team roadmap route", () => {
+    const state: TeamSkillSectionState = { status: "loading" };
+    render(<TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />);
+
+    expect(screen.getByRole("heading", { name: "Kompetanseområder" }).id).toBe("team-skill-section-heading");
+    expect(screen.getByRole("link", { name: "Se roadmap" }).getAttribute("href")).toBe("/teams/team-1/roadmap");
+  });
+
   it("shows a Norwegian loading state", () => {
     const state: TeamSkillSectionState = { status: "loading" };
     render(<TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />);

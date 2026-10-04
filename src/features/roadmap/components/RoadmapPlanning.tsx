@@ -1,36 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
 import { LoadingState } from "../../../components/ui/LoadingState";
-import {
-  fetchAssignableMembers,
-  fetchRoadmapItems,
-  type AssignableMemberOption,
-} from "../client/roadmap-gateway";
+import { useRoadmapPlanning, type OwnersState } from "../client/use-roadmap-planning";
 import { roadmapCopy } from "../copy";
 import type { StageNode } from "../domain/roadmap-form";
 import { compareRoadmapPlans, orderAreasForPlanning } from "../domain/roadmap-sort";
 import type { RoadmapItemView } from "../server/list-roadmap-items";
 import { AreaPlanEditor } from "./RoadmapPlanEditor";
 
-type BaseState =
-  | { phase: "loading" }
-  | { phase: "error" }
-  | { phase: "loaded"; items: RoadmapItemView[]; canEdit: boolean };
-type ArchivedState =
-  | { phase: "off" }
-  | { phase: "loading" }
-  | { phase: "error" }
-  | { phase: "loaded"; items: RoadmapItemView[] };
-
-/** Team-level owner-selector dataset, fetched lazily once and shared by every area row. */
-export type OwnersState =
-  | { phase: "idle" }
-  | { phase: "loading" }
-  | { phase: "error" }
-  | { phase: "loaded"; members: AssignableMemberOption[]; unavailableCount: number; truncated: boolean };
+export type { OwnersState };
 
 /** What the planning UI needs to know about one tracked competency area. */
 export interface PlanningArea {
@@ -86,99 +67,11 @@ export function RoadmapPlanningScope({
   teamId: string;
   children: (planning: AreaPlanning) => ReactNode;
 }) {
-  const [base, setBase] = useState<BaseState>({ phase: "loading" });
-  const [archived, setArchived] = useState<ArchivedState>({ phase: "off" });
-  const [owners, setOwners] = useState<OwnersState>({ phase: "idle" });
-  // Bumped whenever token/teamId change or the scope unmounts, so late responses are ignored.
-  const epochRef = useRef(0);
-  const archivedOnRef = useRef(false);
-  const ownersPhaseRef = useRef<OwnersState["phase"]>("idle");
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchRoadmapItems(token, teamId).then((result) => {
-      if (cancelled) return;
-      setBase(
-        result.status === "ok"
-          ? { phase: "loaded", items: result.items, canEdit: result.canEdit }
-          : { phase: "error" },
-      );
-    });
-    return () => {
-      cancelled = true;
-      epochRef.current += 1;
-      ownersPhaseRef.current = "idle";
-    };
-  }, [token, teamId]);
-
-  function updateArchived(next: ArchivedState | ((current: ArchivedState) => ArchivedState)) {
-    setArchived((current) => {
-      const resolved = typeof next === "function" ? next(current) : next;
-      archivedOnRef.current = resolved.phase !== "off";
-      return resolved;
-    });
-  }
-
-  // A response arriving after "Skjul arkiverte" is dropped: it only applies
-  // while the state is still "loading".
-  function showArchived() {
-    updateArchived({ phase: "loading" });
-    fetchRoadmapItems(token, teamId, { includeArchived: true }).then((result) => {
-      updateArchived((current) => {
-        if (current.phase !== "loading") return current;
-        return result.status === "ok" ? { phase: "loaded", items: result.items } : { phase: "error" };
-      });
-    });
-  }
-
-  async function refresh(): Promise<boolean> {
-    const epoch = epochRef.current;
-    const includeArchived = archivedOnRef.current;
-    const [baseResult, archivedResult] = await Promise.all([
-      fetchRoadmapItems(token, teamId),
-      includeArchived ? fetchRoadmapItems(token, teamId, { includeArchived: true }) : Promise.resolve(null),
-    ]);
-    if (epoch !== epochRef.current) return false;
-    let success = true;
-    if (baseResult.status === "ok") {
-      setBase({ phase: "loaded", items: baseResult.items, canEdit: baseResult.canEdit });
-    } else {
-      success = false;
-    }
-    if (archivedResult !== null) {
-      if (archivedResult.status === "ok") {
-        updateArchived((current) =>
-          current.phase === "off" ? current : { phase: "loaded", items: archivedResult.items },
-        );
-      } else {
-        success = false;
-      }
-    }
-    return success;
-  }
-
-  function loadOwners(force = false) {
-    const phase = ownersPhaseRef.current;
-    if (phase === "loading" || (phase === "loaded" && !force)) return;
-    const epoch = epochRef.current;
-    ownersPhaseRef.current = "loading";
-    setOwners({ phase: "loading" });
-    fetchAssignableMembers(token, teamId).then((result) => {
-      if (epoch !== epochRef.current) return;
-      if (result.status === "ok") {
-        ownersPhaseRef.current = "loaded";
-        setOwners({
-          phase: "loaded",
-          members: result.members,
-          unavailableCount: result.unavailableCount,
-          truncated: result.truncated,
-        });
-      } else {
-        ownersPhaseRef.current = "error";
-        setOwners({ phase: "error" });
-      }
-    });
-  }
+  const { roadmap: base, archived, showArchived, hideArchived, refresh, owners, loadOwners } = useRoadmapPlanning({
+    token,
+    teamId,
+    mode: "lazy-archived",
+  });
 
   const archivedOn = archived.phase !== "off";
   const baseItems = base.phase === "loaded" ? base.items : [];
@@ -206,7 +99,7 @@ export function RoadmapPlanningScope({
         : areas,
     renderAreaPlan: (area) => {
       if (base.phase === "loading") return <LoadingState label={roadmapCopy.loading} />;
-      if (base.phase === "error") {
+      if (base.phase === "error" || base.phase === "forbidden") {
         return (
           <Alert variant="error" className="text-sm">
             {roadmapCopy.error}
@@ -252,7 +145,7 @@ export function RoadmapPlanningScope({
             variant="secondary"
             size="sm"
             aria-pressed={archivedOn}
-            onClick={() => (archivedOn ? updateArchived({ phase: "off" }) : showArchived())}
+            onClick={() => (archivedOn ? hideArchived() : showArchived())}
           >
             {archivedOn ? roadmapCopy.toggles.hideArchived : roadmapCopy.toggles.showArchived}
           </Button>

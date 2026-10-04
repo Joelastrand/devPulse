@@ -483,6 +483,51 @@ describe("listRoadmapItems — owner resolution", () => {
   });
 });
 
+describe("listRoadmapItems — completedAt", () => {
+  const DONE = new Date("2026-03-04T10:00:00.000Z");
+
+  it("maps a completed plan's completedAt to an ISO string and other plans to null", async () => {
+    const r = await items(
+      memberWorld({
+        trees: { "tree-a": TREE, "tree-b": TREE, "tree-c": TREE },
+        plans: [
+          doc("tree-a", { status: "completed", completedAt: DONE }),
+          doc("tree-b", { status: "active" }),
+          doc("tree-c", { status: "planned" }),
+        ],
+      }),
+    );
+    const by = Object.fromEntries(r.items.map((i) => [i.treeId, i.completedAt]));
+    expect(by).toEqual({ "tree-a": "2026-03-04T10:00:00.000Z", "tree-b": null, "tree-c": null });
+  });
+
+  it.each([
+    ["absent", {}],
+    ["null", { completedAt: null }],
+  ])("keeps a legacy completed plan with %s completedAt readable and undated", async (_label, extra) => {
+    const r = await items(memberWorld({ plans: [doc("tree-a", { status: "completed", ...extra })] }));
+    expect(r.items).toHaveLength(1);
+    expect(r.items[0]).toMatchObject({ status: "completed", completedAt: null, overdue: false });
+    expect(r.items[0].updatedAt).toBe(T0.toISOString());
+  });
+
+  it("still skips a plan whose completedAt is present but malformed", async () => {
+    const r = await items(memberWorld({ plans: [doc("tree-a", { status: "completed", completedAt: "x" })] }));
+    expect(r.items).toEqual([]);
+  });
+
+  it("exposes no actor, history or presentation extras", async () => {
+    const r = await items(
+      memberWorld({ plans: [doc("tree-a", { status: "completed", completedAt: DONE, completedBy: "done-secret" })] }),
+    );
+    const keys = Object.keys(r.items[0]);
+    for (const key of ["currentLabel", "today", "updatedBy", "completedBy", "archivedBy", "createdBy"]) {
+      expect(keys).not.toContain(key);
+    }
+    expect(JSON.stringify(r)).not.toContain("done-secret");
+  });
+});
+
 describe("listRoadmapItems — response shape and read-only behaviour", () => {
   it("returns exactly the approved keys and no identity/audit data", async () => {
     const r = await items(
@@ -498,7 +543,7 @@ describe("listRoadmapItems — response shape and read-only behaviour", () => {
       [
         "areaName", "archived", "createdAt", "overdue", "owner", "priority", "startDate", "status",
         "targetAvailable", "targetDate", "targetLabel", "targetNodeId", "targetReached", "tracking",
-        "treeId", "updatedAt",
+        "treeId", "updatedAt", "completedAt",
       ].sort(),
     );
     expect(Object.keys(r.items[0].owner as object).sort()).toEqual([

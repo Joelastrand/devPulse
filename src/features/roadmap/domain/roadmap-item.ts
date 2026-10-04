@@ -89,8 +89,16 @@ export function isRoadmapItemFor(
  * owner"): a present but non-string `ownerRef` is dropped, i.e. the plan has no
  * owner. Everything else — identity, enums, dates, the completed/archived
  * pairings — fails closed.
+ *
+ * `allowMissingCompletedAt` is opt-in for strictly read-only callers (the
+ * roadmap read): a completed plan whose `completedAt` is absent/`null` (legacy
+ * data) stays readable with no `completedAt`. A present but malformed value
+ * still fails closed; writers never pass the option.
  */
-export function parseRoadmapItem(data: unknown): RoadmapItemRecord | null {
+export function parseRoadmapItem(
+  data: unknown,
+  options: { allowMissingCompletedAt?: boolean } = {},
+): RoadmapItemRecord | null {
   if (typeof data !== "object" || data === null || Array.isArray(data)) {
     return null;
   }
@@ -120,7 +128,9 @@ export function parseRoadmapItem(data: unknown): RoadmapItemRecord | null {
   }
 
   // completedAt exists iff the plan is completed.
-  if (r.status === "completed" ? !isValidDate(r.completedAt) : r.completedAt !== undefined) {
+  const legacyMissing =
+    options.allowMissingCompletedAt === true && (r.completedAt === undefined || r.completedAt === null);
+  if (r.status === "completed" ? !isValidDate(r.completedAt) && !legacyMissing : r.completedAt !== undefined) {
     return null;
   }
 
@@ -148,7 +158,7 @@ export function parseRoadmapItem(data: unknown): RoadmapItemRecord | null {
   if (r.startDate !== undefined) item.startDate = r.startDate as string;
   if (r.targetDate !== undefined) item.targetDate = r.targetDate as string;
   if (typeof r.ownerRef === "string") item.ownerRef = r.ownerRef;
-  if (r.completedAt !== undefined) item.completedAt = r.completedAt as Date;
+  if (isValidDate(r.completedAt)) item.completedAt = r.completedAt;
   if (archivedAtPresent) {
     item.archivedAt = r.archivedAt as Date;
     item.archivedBy = r.archivedBy as string;

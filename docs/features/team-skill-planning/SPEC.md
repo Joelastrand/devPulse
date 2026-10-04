@@ -715,6 +715,14 @@ re-validated; clearing always works (when W holds).
 - **BR-37** **B owns** (not in A): `/teams/[teamId]/roadmap`, tab navigation
   (`Oversikt · Kompetanse · Roadmap`), timeline/list/board views, cross-area
   overview, multi-plan history, challenge links, richer replanning flows.
+  **Reconciliation note (2026-10-04, Feature B closeout):** B v1
+  (`docs/features/team-roadmap/SPEC.md`) delivered the route and the cross-area
+  overview but narrowed the rest of this list: (1) navigation is the two route
+  links `Oversikt · Roadmap`, not three tabs — *Kompetanse* remains a section of
+  Oversikt; (2) views are list and a lightweight target-quarter timeline, with
+  no board view; (3) no persisted or multi-plan history — one current plan per
+  team + area, replanning overwrites; (4) no challenge links. Replanning uses
+  A's existing editor and routes.
 
 ### Compatibility
 - **BR-38** No migration of existing documents. Existing memberships behave

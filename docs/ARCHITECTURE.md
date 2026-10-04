@@ -193,9 +193,56 @@ handle. Boundaries:
   its failures are independent of the other sections.
 - **Surface.** Feature A lives inside the existing *Kompetanseområder*
   section; it adds no route, tab or navigation entry. The dedicated Team
-  Roadmap surface (route, timeline/list, history) is Feature B and is not
-  built. Future `teamSkillNeeds`, `skillProfiles` and `roleDefinitions` are
-  not part of this architecture yet.
+  Roadmap surface is Feature B (below). Future `teamSkillNeeds`,
+  `skillProfiles` and `roleDefinitions` are not part of this architecture yet.
+
+## Team Roadmap (Feature B, decided, implemented)
+
+Feature B (`docs/features/team-roadmap/SPEC.md`) is a presentation surface over
+Feature A's `roadmapItems`. Boundaries:
+
+- **No new infrastructure.** No new collection, field, route method, Firestore
+  rule, index, migration, backfill or Demo Team fixture; no client Firestore
+  access. It uses the existing `GET/POST …/roadmap-items` and
+  `PATCH …/roadmap-items/[treeId]`, the team skills read, the assignable-members
+  read (lazy, as in A) and the teams overview (best-effort team name only).
+  Authorization is unchanged and server-side; a lead is an ordinary member.
+- **Route and navigation.** Thin `app/teams/[teamId]/roadmap/page.tsx`; logic in
+  `src/features/roadmap/`. A small shared two-link nav (`Oversikt · Roadmap`,
+  exact-path `aria-current`) lives in `src/features/teams/components/`;
+  `TeamDetail` only gains the nav and a link. No three-tab shell.
+- **Current-plan model.** One deterministic plan per team + tree, shared with A;
+  replanning overwrites it. No persisted history, timeline buckets, filters or
+  view state; timeline groups, filters, counts and eligibility are derived on the
+  client from the loaded response by pure helpers in
+  `src/features/roadmap/domain/` (`roadmap-timeline`, `roadmap-filter`). The only
+  URL state is the closed `?view` enum.
+- **Single canonical read.** The page loads one archived-inclusive response
+  (`?archived=true`) into page state via the extracted planning hook
+  (`useRoadmapPlanning`, mode `archived-inclusive`; Feature A keeps the
+  `lazy-archived` mode and its request pattern). Filters, `Vis arkiverte`, view
+  switch and disclosures issue no roadmap GET. After a successful mutation the
+  page performs one archived-inclusive refetch; there are no optimistic updates.
+  `RoadmapItemView` gained one additive derived field, `completedAt` (ISO string
+  or `null`, no actor).
+- **Fail-closed creation.** `Områder uten plan` = areas from the team skills
+  read minus every `treeId` in the complete archived-inclusive response. When
+  that read is `truncated` (501-document bound, applied before in-memory archived
+  filtering), creation is withheld, because the absence of a plan cannot be
+  proven from an incomplete response. This is intentional; the server's
+  `already_planned` check remains a backstop, not a substitute for correct client
+  eligibility.
+- **Skills dependency.** Roadmap plans and the skills read are independent
+  dependencies: a skills failure leaves plans readable, withholds every mutation
+  control and creation, and retries only the skills read. It never implies an
+  access failure. Mutation controls require `canEdit` **and** a loaded skills
+  read; legacy completed plans without `completedAt` are additionally read-only
+  per item. A refetch that returns `canEdit: false` removes controls while the
+  roadmap stays readable (distinct from `forbidden` → no-access).
+- **Privacy.** Owner presentation reuses A's privacy-safe contract; the page
+  renders no UID, e-mail, `memberRef`, membership id, forum `authorTag` or
+  challenge identity, and there is no roadmap–challenge link. Counts are over
+  plans, not people.
 
 ## Submission and dashboard boundaries (decided, implemented)
 

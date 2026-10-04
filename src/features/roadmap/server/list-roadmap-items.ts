@@ -71,6 +71,8 @@ export interface RoadmapItemView {
   archived: boolean;
   createdAt: string;
   updatedAt: string;
+  /** ISO completion time; `null` when not completed or a legacy completed plan has none (never synthesised). No actor. */
+  completedAt: string | null;
 }
 
 export type ListRoadmapItemsResult =
@@ -180,7 +182,9 @@ async function resolveCanEdit(store: RoadmapReadStore, uid: string, teamId: stri
  *
  * Plans: only this team's (`where teamId ==`, limit 501, first 500 processed,
  * `truncated` when more). A document that fails `parseRoadmapItem` or
- * `isRoadmapItemFor` (stored team/tree + document id) is skipped. Current
+ * `isRoadmapItemFor` (stored team/tree + document id) is skipped — except the
+ * explicit legacy read exception: a completed plan with no `completedAt` is
+ * kept (`completedAt: null`); a malformed value is still skipped. Current
  * stage comes only from a valid, id-consistent `skillProgress` record; no
  * record ⇒ `not_tracked` (the plan survives). Area name/target label are read
  * live from the tree; a missing/invalid tree or target node ⇒
@@ -223,7 +227,7 @@ export async function listRoadmapItems(
 
     const plans: RoadmapItemRecord[] = [];
     for (const { id, data } of rawPlans.slice(0, ROADMAP_ITEMS_MAX)) {
-      const plan = parseRoadmapItem(data);
+      const plan = parseRoadmapItem(data, { allowMissingCompletedAt: true });
       if (plan === null || !isRoadmapItemFor(plan, id, teamId, plan.treeId)) {
         continue;
       }
@@ -322,6 +326,7 @@ export function toRoadmapItemView(plan: RoadmapItemRecord, inputs: RoadmapViewIn
     archived: plan.archivedAt !== undefined,
     createdAt: plan.createdAt.toISOString(),
     updatedAt: plan.updatedAt.toISOString(),
+    completedAt: plan.completedAt?.toISOString() ?? null,
   };
   if (tracked && tree !== null && targetNode !== null) {
     const reached = isTargetReached(tree, currentNodeId, plan.targetNodeId);
