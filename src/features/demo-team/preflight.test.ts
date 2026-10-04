@@ -626,6 +626,17 @@ describe("classification — roadmap plans (team-skill-planning TASK-011)", () =
     expect(result.ok && result.plannedOperations.map((o) => o.path)).not.toContain(TESTING);
   });
 
+  // The read-side legacy tolerance (completed without completedAt) must not leak into preflight.
+  it.each([
+    ["absent", (d: Record<string, unknown>) => ({ ...d, status: "completed", completedAt: undefined })],
+    ["null", (d: Record<string, unknown>) => ({ ...d, status: "completed", completedAt: null })],
+  ])("completed plan with %s completedAt ⇒ CONFLICT malformed-shape, nothing planned", async (_name, edit) => {
+    const { result } = await withRoadmapEdit(edit);
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.error.category).toBe("conflict");
+    expect(classificationOf(result, TESTING)).toMatchObject({ state: "CONFLICT", action: "blocked", reason: "malformed-shape" });
+  });
+
   it.each([
     ["malformed shape", (d: Record<string, unknown>) => ({ ...d, priority: "urgent" }), "malformed-shape"],
     ["another team", (d: Record<string, unknown>) => ({ ...d, teamId: "other-team" }), "scope-mismatch"],
