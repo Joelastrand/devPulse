@@ -121,6 +121,32 @@ describe("Firestore deployment configuration", () => {
     expect(indexes.indexes.filter((index) => index.collectionGroup === "userProfiles")).toHaveLength(0);
   });
 
+  it("denies all client-SDK access to skillProfiles unconditionally, with an explicit block before the catch-all", () => {
+    const rules = readRepoFile("firestore.rules");
+
+    const explicit = rules.match(
+      /match\s+\/skillProfiles\/\{document=\*\*\}\s*\{\s*allow read, write: if false;\s*\}/,
+    );
+    expect(explicit).not.toBeNull();
+
+    const catchAllIndex = rules.search(/match\s+\/\{document=\*\*\}\s*\{/);
+    expect(catchAllIndex).toBeGreaterThan(-1);
+    expect(explicit?.index).toBeLessThan(catchAllIndex);
+
+    // Rules are OR-ed: no other allow may mention skillProfiles or grant owner access.
+    const blockBody = explicit?.[0] ?? "";
+    expect(blockBody.match(/allow\s/g)).toHaveLength(1);
+    expect(blockBody).not.toMatch(/request\.auth|resource\.|uid|if\s+true/);
+  });
+
+  it("declares no composite index for skillProfiles — every access is a direct document operation by uid", () => {
+    const indexes = JSON.parse(readRepoFile("firestore.indexes.json")) as {
+      indexes: Array<{ collectionGroup: string }>;
+    };
+
+    expect(indexes.indexes.filter((index) => index.collectionGroup === "skillProfiles")).toHaveLength(0);
+  });
+
   it("has no unconditional allow anywhere in the rules file (denies by default)", () => {
     const rules = readRepoFile("firestore.rules");
 

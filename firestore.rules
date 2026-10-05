@@ -195,6 +195,19 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // skillProfiles holds one person's private skill self-assessment
+    // (document id = uid; per-skill levels, timestamps). It is personal data,
+    // read/written only by the owner's own server-side operations
+    // (src/features/skill-profiles/server/) via the Firebase Admin SDK, which
+    // bypasses these rules entirely — this rule exists solely to deny the
+    // separate client-SDK path unconditionally, regardless of authentication
+    // state (including the owner's, a team lead's and an app admin's). Same
+    // server-only-access rationale as every other collection above. See
+    // docs/features/individual-skill-self-assessment/SPEC.md (BR-36, TASK-006).
+    match /skillProfiles/{document=**} {
+      allow read, write: if false;
+    }
+
     // Deny everything else by default; no collection is currently intended
     // to be reached directly by the Firebase client SDK.
     match /{document=**} {

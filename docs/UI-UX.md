@@ -51,13 +51,17 @@ from `SPEC.md`'s recorded implementation decisions.
 Auth-aware header/navigation, driven by resolved auth and admin state:
 
 - **Signed out**: Hjem, Logg inn, Opprett konto
-- **Signed in**: Hjem, Team, Min profil, Logg ut
+- **Signed in**: Hjem, Team, Min profil, Mine ferdigheter, Logg ut
 - **Signed in, app admin**: the signed-in set, plus Admin
 
 **Updated by `docs/features/member-identity-and-team-roles/SPEC.md` (F0):**
 signed-in users also get a **Min profil** link (to `/me/profile`, see
 "Profile UX" below), placed right after Team and before Admin; it is never
 shown to a signed-out visitor or before the first auth event.
+
+**Updated by `docs/features/individual-skill-self-assessment/SPEC.md` (C1):** signed-in
+users also get **Mine ferdigheter** (to `/me/skills`, see "Personal skills UX"), right after
+*Min profil*; it is never shown to a signed-out visitor.
 
 **Updated by `docs/features/managed-surveys/SPEC.md` (TASK-013):** the
 original Phase 3 nav set above included a "Pulsundersøkelse" entry linking
@@ -527,6 +531,63 @@ across competency areas. It presents the same canonical plans as
   native and keyboard-operable with visible focus; the editor button returns
   focus on close; dates are labelled or use `<time datetime>`; h1 is the page
   title and h2 the groups.
+
+### Personal skills UX (Feature C1, `docs/features/individual-skill-self-assessment/SPEC.md`)
+
+As-built. Terminology: the personal surface says *Ferdigheter*; the team surface keeps
+*Kompetanseområder* — a personal level is never called a team stage ("stadium").
+
+- **Route and navigation.** `/me/skills`, reached from one signed-in header link **Mine
+  ferdigheter** placed right after *Min profil* (`aria-current` on the exact path; never shown
+  to a signed-out visitor). A signed-out visitor sees the usual sign-in prompt and no
+  request is made. C1 adds no `/me` shell, *Mål*, *Samtaler* or role pages.
+- **Privacy notice.** A persistent (not tooltip) notice states that, in DevPulse, other
+  users, team leads and administrators cannot see the self-assessment. The copy makes no
+  absolute or future promise and implies no sharing.
+- **Scale legend.** Always visible: four levels, text names and descriptions —
+  *Grunnleggende kjennskap*, *Kan med støtte*, *Kan selvstendig*, *Avansert* (level 4 is deep
+  or advanced proficiency; guiding others is only an example). Absence is *Ikke vurdert*.
+- **Immediate save.** Each skill row has a labelled level select (*Ikke vurdert* + four
+  levels). Choosing saves at once: no Save button and no draft. A level uses `PUT`;
+  *Ikke vurdert* clears that one skill (`DELETE`), it neither sends `null` nor resets the
+  profile. No optimistic confirmed value: the row shows the server's confirmed value. While
+  a row saves, that row is disabled with a polite "Lagrer…" status; other rows stay
+  independent where safe. Failure reverts to the last confirmed value with an inline alert.
+  `404` shows that the skill is no longer available and refetches the list once; `409` moves
+  the page into the unreadable state; `401` discards the displayed assessments and requires
+  sign-in; generic failures never fabricate an empty/unassessed state.
+- **Filters and overview.** Local, non-persisted filters *Alle · Vurdert · Ikke vurdert*
+  (no request). The overview is text counts only ("Du har vurdert N av M ferdigheter." plus
+  per-level counts) over the visible skills. There is no chart, radar, percentage, average,
+  overall score or comparison.
+- **Unreadable recovery.** If the stored profile cannot be read, the page shows skill
+  names only plus a notice. Assessment controls are unavailable while the profile is
+  unreadable, and assessment values are never interpreted or shown. (Names only, rather
+  than disabled selectors, is deliberate: a disabled selector must show a selected value and
+  could imply an unknown stored value means *Ikke vurdert*. This reconciles the "controls
+  disabled" wording in SPEC BR-30 / TASK-009 with the substantive rule — unreadable data is
+  never presented as known assessment data.) The user can explicitly reset; only after
+  confirmed success does the page become a normal empty profile. No automatic repair.
+- **Reset all.** "Nullstill alle ferdigheter" is offered when any visible skill is assessed,
+  the profile is unreadable, or the list may be truncated. It requires explicit confirmation
+  and, once confirmed, physically deletes the caller's whole profile. It is not optimistic;
+  it is unavailable while a row save is pending. After confirmed success all visible skills
+  show *Ikke vurdert* without recreating a profile. Focus moves sensibly when the
+  confirmation action unmounts, and success is announced as "Egenvurderingene dine er
+  nullstilt."
+- **Truncated list.** "Listen kan være ufullstendig." — a conservative notice; it never
+  states that a skill is definitely missing and never mentions a limit. Overview counts refer
+  to the shown skills ("av de viste ferdighetene").
+- **Responsive and accessibility.** Rows stack below the `sm` breakpoint; long names wrap;
+  every meaning is text (never colour alone; indicator segments are `aria-hidden`);
+  native, keyboard-operable controls; errors use `role="alert"`, progress/success
+  `role="status"`.
+- **Known limitations (non-blocking, not fixed).** After a reset failure, keyboard focus can
+  land awkwardly once the status area becomes empty or hidden; the programmatic
+  status-focus target has no visible focus outline. Perfect accessibility is not claimed beyond
+  what the tests verify.
+- **Admin naming guidance.** A SkillTree `name` appears both as a team *Kompetanseområde*
+  and as a personal *Ferdighet*; see `docs/DATA-MODEL.md` (notes).
 
 ## Results UX
 

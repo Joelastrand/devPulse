@@ -50,7 +50,7 @@ function flushMicrotasks() {
 }
 
 const SIGNED_OUT_LINK_NAMES = [/hjem/i, /logg inn/i, /opprett konto/i];
-const SIGNED_IN_LINK_NAMES = [/hjem/i, /^team$/i, /^min profil$/i];
+const SIGNED_IN_LINK_NAMES = [/hjem/i, /^team$/i, /^min profil$/i, /^mine ferdigheter$/i];
 
 function navLinkNames() {
   const nav = screen.getByRole("navigation");
@@ -136,7 +136,7 @@ describe("SiteHeader", () => {
     const profileLink = await screen.findByRole("link", { name: /^min profil$/i });
     expect(profileLink.getAttribute("href")).toBe("/me/profile");
     await screen.findByRole("link", { name: /^admin$/i });
-    expect(navLinkNames()).toEqual(["Hjem", "Team", "Min profil", "Admin"]);
+    expect(navLinkNames()).toEqual(["Hjem", "Team", "Min profil", "Mine ferdigheter", "Admin"]);
   });
 
   it("never shows 'Min profil' to a signed-out visitor, nor before the first auth event", () => {
@@ -159,6 +159,34 @@ describe("SiteHeader", () => {
 
     expect((await screen.findByRole("link", { name: /^min profil$/i })).getAttribute("aria-current")).toBe("page");
     expect(screen.getByRole("link", { name: /^team$/i }).getAttribute("aria-current")).toBeNull();
+    usePathnameMock.mockReturnValue("/");
+  });
+
+  it("links 'Mine ferdigheter' to /me/skills right after 'Min profil' for a signed-in user only", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchOwnAdminStatusMock.mockResolvedValue({ ok: true, isAdmin: false });
+
+    render(<SiteHeader />);
+
+    const link = await screen.findByRole("link", { name: /^mine ferdigheter$/i });
+    expect(link.getAttribute("href")).toBe("/me/skills");
+    expect(navLinkNames()).toEqual(["Hjem", "Team", "Min profil", "Mine ferdigheter"]);
+    cleanup();
+
+    observeIdTokenMock.mockImplementation(subscribingWith(null));
+    render(<SiteHeader />);
+    expect(screen.queryByRole("link", { name: /mine ferdigheter/i })).toBeNull();
+  });
+
+  it("marks 'Mine ferdigheter' as the current page only on /me/skills", async () => {
+    usePathnameMock.mockReturnValue("/me/skills");
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchOwnAdminStatusMock.mockResolvedValue({ ok: true, isAdmin: false });
+
+    render(<SiteHeader />);
+
+    expect((await screen.findByRole("link", { name: /^mine ferdigheter$/i })).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("link", { name: /^min profil$/i }).getAttribute("aria-current")).toBeNull();
     usePathnameMock.mockReturnValue("/");
   });
 

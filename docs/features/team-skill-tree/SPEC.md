@@ -114,6 +114,11 @@ actual repository text:
   rating would be exactly the individual-performance data point this
   project has already ruled out.
 
+> *Closeout note (2026-10-05):* the "per-person skill rating" sentence above is historical
+> wording. Individual Skill Self-Assessment (C1) narrowed it, for self-reported,
+> owner-only, development-oriented data only — see "Non-goals" below and
+> `docs/features/individual-skill-self-assessment/SPEC.md`.
+
 Because there is no individual-level data anywhere in this feature, an
 entire class of investigation questions (self-assessment vs. manager
 override of *a person's* level, behavior when a user leaves a team,
@@ -179,6 +184,13 @@ a future member-write extension would need to add.
   roadmap plan (`roadmapItems`), as planning metadata only: no authorization,
   no individual performance meaning, no `uid`/e-mail exposed. `skillProgress`
   is unchanged and never becomes per-person.
+  *Closeout cross-reference (2026-10-05, Individual Skill Self-Assessment C1):* the
+  blanket "per-person skill rating" wording in this document is historical. C1
+  (`docs/features/individual-skill-self-assessment/SPEC.md`, approved A1) deliberately
+  narrowed it for one category only: a **self-reported, person-owned, owner-only,
+  development-oriented** self-assessment now exists in `skillProfiles`. Manager, lead,
+  admin or team rating, ranking, scoring and monitoring remain prohibited, and
+  `skillProgress` is still team-level. See `docs/PRODUCT.md` (Non-goals clarification).
 - **Member-initiated (non-admin) progress writes.** Kept out of v1 as an
   independent scope-minimization decision, *not* one the individual-
   performance non-goal itself mandates — see "Purpose" and "Open

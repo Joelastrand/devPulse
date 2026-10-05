@@ -11,6 +11,7 @@ export const navCopy = {
   signUp: "Opprett konto",
   teams: "Team",
   profile: "Min profil",
+  skills: "Mine ferdigheter",
   admin: "Admin",
   signOut: "Logg ut",
   signingOut: "Logger ut…",

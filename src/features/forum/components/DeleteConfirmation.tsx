@@ -21,6 +21,8 @@ export interface DeleteConfirmationProps {
   onConfirmDelete: () => void;
   /** Disambiguates this instance's accessible button names when several render in one list (e.g. one per reply) — mirrors `AdminChallengeRow`'s `${label} – ${context}` convention. Omit for a page-level single instance (e.g. the one thread-delete action). */
   context?: string;
+  /** Blocks starting a delete (e.g. while conflicting work is in flight); the confirm step itself is unaffected. */
+  disabled?: boolean;
 }
 
 /**
@@ -41,6 +43,7 @@ export function DeleteConfirmation({
   onCancelDelete,
   onConfirmDelete,
   context,
+  disabled = false,
 }: DeleteConfirmationProps) {
   const isPending = state.status === "pending";
   const isConfirming = state.status === "confirming";
@@ -61,7 +64,7 @@ export function DeleteConfirmation({
           variant="destructive"
           size="sm"
           className="w-fit"
-          disabled={isPending}
+          disabled={isPending || disabled}
           pending={isPending}
           aria-label={isPending ? pendingLabel : label}
           onClick={onRequestDelete}

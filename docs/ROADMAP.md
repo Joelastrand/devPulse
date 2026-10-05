@@ -328,13 +328,27 @@
     a current-plan view: no persisted history, no board/Gantt, no challenge
     links, no owner filter or metric. No new persistence, rule, index,
     migration or Demo Team change. See `docs/features/team-roadmap/SPEC.md`.
-  - **C1/C2 — Skill needs and individual skills** *(planned, not
-    built)*: desired team needs (`teamSkillNeeds`) and individual
-    self-assessment (`skillProfiles`); gap/coverage views are derived, not
-    persisted, and C2 may prefill a plan from a team gap.
+  - **C1 — Individual skill self-assessment** *(delivered)*: a private,
+    person-owned self-assessment at `/me/skills` ("Mine ferdigheter", one header
+    link) over the existing SkillTree catalog, with a four-level ordinal scale
+    (absence = *Ikke vurdert*), immediate per-skill save, local filters, a
+    counts-only overview, reset-all and unreadable-profile recovery. Stored at
+    `skillProfiles/{uid}` (`levels`, `createdAt`, `updatedAt`), server-only with an
+    explicit deny-only Firestore rule. **Owner-only in C1**: no team, lead or admin
+    reader, no sharing, no chart or score. No new index, migration, dependency,
+    environment variable or Demo Team change. See
+    `docs/features/individual-skill-self-assessment/SPEC.md` and
+    `docs/SECURITY.md` (invariant 31).
+  - **C2 — Team skill needs and aggregation** *(planned, not built)*: desired
+    team needs (`teamSkillNeeds`), a team skill matrix and gap/coverage views
+    (derived, not persisted), and any privacy-protected aggregate of personal
+    assessments. C1 does not authorize any of it: a separately approved SPEC, an
+    updated privacy notice, a security/privacy review, deliberate changes to both
+    static-guard allow-lists, thresholds and an inclusion/consent decision are
+    required first. C2 may prefill a plan from a team gap.
   - **D1/D2 — Role expectations** *(planned, not built)*: `roleDefinitions`
     and their use in planning, reusing the member reference rules.
-  Only F0, A and B exist; later phases are intentions, not commitments, and each
+  Only F0, A, B and C1 exist; later phases are intentions, not commitments, and each
   needs its own approved SPEC.
 
 Phases 0–9 are complete. See `docs/PRODUCT.md` for the product vision and

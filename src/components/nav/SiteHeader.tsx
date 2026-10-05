@@ -138,6 +138,7 @@ function navLinksFor(state: HeaderState): NavLink[] {
       { href: "/", label: navCopy.home },
       { href: "/teams", label: navCopy.teams },
       { href: "/me/profile", label: navCopy.profile },
+      { href: "/me/skills", label: navCopy.skills },
     ];
     if (state.isAdmin) {
       links.push({ href: "/admin/teams", label: navCopy.admin });

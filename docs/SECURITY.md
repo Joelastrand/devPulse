@@ -116,6 +116,32 @@ is considered done.
     owner is coordination metadata, not an individual performance or
     accountability measure, and the UI offers no per-owner filter, sort or
     summary.
+31. Individual skill self-assessments (`skillProfiles/{uid}`, Individual Skill
+    Self-Assessment C1) are person-owned and, **in C1, owner-only**. The
+    subject is always the verified token's uid; no path, query or body carries
+    a uid, and there is no uid-based reader or writer. Ordinary member, team
+    lead and app admin have no access to another person's assessment, and no
+    role, team membership, roadmap ownership or `memberRef` widens it
+    (`authorizeTeamAccess`, `resolveTeamRole`, `requireAppAdmin` and
+    `isAppAdmin` never decide access to it). Access is server-only (Admin SDK);
+    `firestore.rules` has an explicit deny-only block, which is defence in
+    depth and not the owner-authorization mechanism. Personal self-assessment
+    for the person's own development is permitted; manager, lead, admin or
+    team assessment of an individual, performance evaluation, surveillance
+    use, ranking and productivity scoring remain prohibited. Levels are
+    ordinal: no average, sum or overall score is computed. Logs never carry
+    levels, tree ids, skill names or the profile. C1 provides no sharing and
+    no aggregate. Any future reader of personal assessments (for example C2
+    aggregation) is **not** authorized by C1 and requires all of: a separately
+    approved specification, an updated user-facing privacy notice, an explicit
+    security/privacy review, a deliberate change to **both** static-guard
+    allow-lists, threshold/aggregation protections where applicable, and an
+    explicit consent-or-inclusion decision. The static guard
+    (`src/features/skill-profiles/skill-profiles-scope-guard.test.ts`) is
+    change-detection evidence, not a security boundary: it does not prove
+    runtime behaviour, dynamically built collection names or module paths,
+    unresolvable re-exports/dynamic imports, code outside `src/` and `app/`, or
+    Admin-credential access outside the application.
 
 ## Feature review checklist
 
@@ -148,12 +174,25 @@ Before marking a feature touching survey/team/user data as done, check:
       team/owner/document id?
 - [ ] Does a planning feature introduce a per-person score, ranking,
       aggregate, owner-based filter or manager note?
+- [ ] Can any role (lead, app admin, team member) or any uid/team parameter
+      reach another person's `skillProfiles` document, or does a new
+      reader/importer of the skill-profiles server modules appear without a
+      deliberate guard allow-list edit and review?
+- [ ] Does a skill-assessment feature introduce a manager/lead/admin rating,
+      score, average, rank, comparison or sharing path?
 
 Known, accepted limitations of the member-identity foundation (display-name
 Unicode compatibility, roster truncation above 500 members, the absence of an
 account-deletion flow for profiles, no display-name moderation) are listed in
 `docs/features/member-identity-and-team-roles/SPEC.md` — "Known limitations
 (as built)".
+
+Known, accepted limitations of individual skill self-assessment (C1): there is
+no account-deletion flow, so a `skillProfiles` document can outlive a deleted
+Firebase account (the owner can erase it while signed in); and anyone with
+operator/console access to Firestore can technically read the data — that is not
+a product entitlement and no DevPulse surface provides it. See
+`docs/features/individual-skill-self-assessment/SPEC.md`.
 
 See `docs/ARCHITECTURE.md` for where these boundaries live, and
 `docs/features/<feature-id>/SPEC.md` for feature-specific decisions.

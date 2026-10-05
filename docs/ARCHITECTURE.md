@@ -193,8 +193,9 @@ handle. Boundaries:
   its failures are independent of the other sections.
 - **Surface.** Feature A lives inside the existing *Kompetanseområder*
   section; it adds no route, tab or navigation entry. The dedicated Team
-  Roadmap surface is Feature B (below). Future `teamSkillNeeds`,
-  `skillProfiles` and `roleDefinitions` are not part of this architecture yet.
+  Roadmap surface is Feature B (below). Future `teamSkillNeeds`
+  and `roleDefinitions` are not part of this architecture yet; personal `skillProfiles`
+  (C1) is described in "Individual skill self-assessment" below.
 
 ## Team Roadmap (Feature B, decided, implemented)
 
@@ -243,6 +244,78 @@ Feature A's `roadmapItems`. Boundaries:
   renders no UID, e-mail, `memberRef`, membership id, forum `authorTag` or
   challenge identity, and there is no roadmap–challenge link. Counts are over
   plans, not people.
+
+## Individual skill self-assessment (Feature C1, decided, implemented)
+
+C1 (`docs/features/individual-skill-self-assessment/SPEC.md`) adds a person-owned,
+**owner-only** self-assessment. It is the only part of the Team & Personal
+Development work that stores per-person skill data; team aggregation (C2) is not
+built. Boundaries:
+
+- **Slice and dependency direction.** `src/features/skill-profiles/` holds `domain/`
+  (the 1–4 ordinal scale, record guard, sort and count helpers), `server/` (store
+  seam over `skillProfiles/{uid}`, bounded catalog reader, own-profile operations),
+  `client/` (gateway) and `components/` (the `/me/skills` page); copy lives in
+  `copy.ts`. Dependencies point `skill-profiles → skill-trees (isValidSkillTree) / auth`,
+  never back. It imports no team authorization, `skillProgress`, roadmap, membership,
+  `userProfiles` or admin code.
+- **Server-only persistence.** Admin SDK only; `firestore.rules` has an explicit
+  deny-only `skillProfiles` block (defence in depth). The browser uses the gateway and
+  never touches Firestore. Owner authorization is enforced by server API behaviour using
+  the verified token, not by the rules block.
+- **Owner-only API.** `GET /api/me/skills`, `PUT` and `DELETE /api/me/skills/[treeId]`,
+  `DELETE /api/me/skills`. No uid in path/query/body, no admin/team/lead reader, and no
+  `emailVerified` requirement for own-profile access. Role never expands access.
+- **SkillTree catalog reuse.** The global SkillTree catalog supplies skill-area identity
+  (`treeId`) and name; there is no personal catalog. `listSkillTrees` (admin-only) is not
+  reused or changed: the catalog read is duplicated minimally in the slice. This couples
+  `skillProfiles` and future `teamSkillNeeds` to the catalog: replacing or materially
+  changing the global catalog model requires considering both (no migration is defined).
+- **Catalog raw window.** One query, `orderBy(createdAt asc).limit(501)`: the 501st **raw**
+  document is only a truncation probe; the first 500 raw documents are the candidate
+  window; invalid candidates are dropped but still consume slots; there is no refill
+  query; valid skills are then sorted by name for presentation (sorting never changes
+  window membership). Firestore resolves equal `createdAt` by document id; the application
+  adds no tie-break. `truncated` is true iff a raw 501st document exists — it does not prove
+  a valid skill is hidden or that assessments were cut off; the UI says only
+  "Listen kan være ufullstendig." The query needs no composite index.
+- **Existence is not the catalog window.** A `PUT` validates its target SkillTree directly
+  inside the write transaction, so a valid `treeId` beyond the visible catalog window can
+  still be written. Catalog visibility is not existence authorization.
+- **Read, write and erase semantics.** `GET` never writes or repairs. Per-skill writes are
+  single-transaction per-key merges (only the requested key and `updatedAt`, plus a
+  `createdAt` repair when missing/invalid); unrelated keys and unknown top-level fields are
+  preserved. Different-key concurrent writes are protected by the transaction; same-key
+  writes are last-write-wins. `DELETE` one is an idempotent no-write when the key or
+  document is absent. `DELETE` all physically deletes the document with no timestamp
+  repair. A non-object `levels` makes the profile unreadable: reads return no levels and
+  `profile: "unreadable"`, per-skill writes/clears return `409 profile_unreadable` and write
+  nothing, and only reset-all (physical delete) recovers it. No automatic repair or migration.
+- **Client state.** The page loads one `GET`, applies server-confirmed values only (no
+  optimistic state), and moves to the unreadable state on `409`, to the sign-in prompt on
+  `401`, and refetches the catalog once on `404`. A state epoch invalidates responses started
+  before an unreadable transition or a successful reset so they cannot restore stale
+  assessment data; reset is unavailable while a row save is pending.
+- **Static privacy guard.** `skill-profiles-scope-guard.test.ts` is two-dimensional:
+  (1) the files that reference the `skillProfiles` collection and (2) the entry points that
+  import the skill-profiles server/store modules must each equal an approved allow-list, so
+  an accidental new reader or importer fails visibly. It also pins the persisted key set and
+  forbids team-authorization/`skillProgress`/roadmap/membership imports in the slice. It is
+  change detection, **not a security boundary**: it does not prove runtime behaviour,
+  dynamic collection names or module paths, code outside `src/` and `app/`, or arbitrary
+  Admin-credential access. A future C2 reader must deliberately edit **both** allow-lists
+  under review (`docs/SECURITY.md`, invariant 31).
+- **Not in C1 (future C2, separately gated):** `teamSkillNeeds`, a team skill matrix, gap
+  analysis, aggregate views, privacy thresholds, inclusion/consent decisions, role
+  expectations, sharing, and any team/lead/admin access to individual self-assessments.
+- **No new infrastructure.** No composite index, migration, backfill, dependency or
+  environment variable; no Demo Team personal profile.
+- **Known limitations (as built).** A 404-triggered catalog refetch can theoretically overlap
+  another successful save by the same user and briefly replace that row with an older
+  snapshot (transient, same user, corrected by the next action or reload; the state epoch
+  covers 409/reset transitions but not this overlap). The page reuses the generic
+  `DeleteConfirmation` component from `src/features/forum/components/` (no data coupling; a
+  maintainability concern only).
 
 ## Submission and dashboard boundaries (decided, implemented)
 

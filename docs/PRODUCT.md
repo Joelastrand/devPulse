@@ -311,8 +311,37 @@ until attrition, burnout, or delivery failure makes them obvious.
   grants no permission, and there is no owner filter, ranking, completion rate
   or performance score.
 
+## Delivered: Individual Skill Self-Assessment (Feature C1)
+
+- A signed-in person opens **Mine ferdigheter** (`/me/skills`, one header link) and
+  states, for each organization-defined skill area (*Ferdigheter*), how they
+  assess themselves on a four-level ordinal scale: *Grunnleggende kjennskap*,
+  *Kan med støtte*, *Kan selvstendig*, *Avansert*. A skill with no level is simply
+  "Ikke vurdert". Selections save immediately and can be changed or cleared at
+  any time; a person can also reset all of their own assessments. The page shows
+  counts only — no chart, no overall score, no average.
+- **In C1 the self-assessment is owner-only**: it is available only to the
+  signed-in owner. Other users, team leads and app admins cannot read it
+  through any DevPulse product or API surface, and a role never widens access.
+  The page notice says exactly that and makes no promise about future use.
+- It is development-oriented, self-reported and person-owned. It is not a
+  rating by anyone else and not a performance, productivity or readiness
+  measure. The skill-area names come from the existing org-wide SkillTree
+  catalog (the same names the team sees as *Kompetanseområder*); no separate
+  personal catalog exists.
+- **Not delivered (C2 remains future):** `teamSkillNeeds`, a team skill matrix,
+  gap or coverage analysis, any aggregate of personal assessments, privacy
+  thresholds, consent/inclusion decisions, role expectations and any sharing.
+  C1 adds no Demo Team personal data.
+- See `docs/features/individual-skill-self-assessment/SPEC.md`, `docs/SECURITY.md`
+  (invariant 31) and `docs/ROADMAP.md`.
+
 ## Future capabilities (not implemented yet)
 
+- **Feature C2 — team skill needs and aggregation** (`teamSkillNeeds`, a team
+  skill matrix, gap/coverage views, privacy-protected aggregates of personal
+  assessments, role expectations): not built and not authorized by C1; each
+  needs its own approved SPEC.
 - A cross-team/org-wide "developer forum" or community, beyond Team
   Forum's team-scoped v1 slice, and real-name/display-name attribution for
   it (see "Delivered: Team Forum (Phase 6)" above).
@@ -333,3 +362,21 @@ until attrition, burnout, or delivery failure makes them obvious.
 - DevPulse does not surface individual wellbeing scores to anyone.
 - The system emphasizes team/forum-level trends and sustainable development
   practices, not individual surveillance.
+
+### Clarification (2026-10-05, Individual Skill Self-Assessment C1)
+
+The first non-goal above prohibits *others* assessing, ranking or monitoring a
+person. It does not prohibit a person recording their own development-oriented
+self-assessment, which C1 now delivers.
+
+| | |
+|---|---|
+| **Allowed (C1)** | personal, self-reported, person-owned, development-oriented self-assessment, owner-only in C1 |
+| **Still not allowed** | manager, lead, admin or team assessment of an individual; performance evaluation; surveillance or monitoring use; ranking; productivity scoring; named comparison; inferred competence |
+
+This is an approved, deliberate narrowing of the earlier blanket wording
+about per-person skill ratings (historically in
+`docs/features/team-skill-tree/SPEC.md`). It weakens no anti-surveillance rule.
+Any future use of personal assessments beyond the owner (Feature C2) is not
+authorized by C1 and requires its own approved specification, an updated
+privacy notice and a security/privacy review (`docs/SECURITY.md`, invariant 31).
