@@ -3,7 +3,7 @@
 Specification: [SPEC.md](./SPEC.md) (Approved, revision 2; P1–P6 closed; no open questions)
 
 ## Status
-Ready: 12  In Progress: 0  Done: 8
+Ready: 11  In Progress: 1  Done: 8
 
 Total tasks: **20**. Repository convention (`implement-task`): the only states are `Ready`,
 `In Progress`, `Done`; a task whose dependencies are not `Done` stays `Ready` and is skipped until they
@@ -792,7 +792,7 @@ None in this task.
 
 ### TASK-013 — Deliberate C1 static-guard edits: module-level importer maps, identifier and re-export scans
 
-**Status:** Ready
+**Status:** In Progress
 **Covers:** BR-32, BR-33, BR-30, BR-23
 **Depends on:** TASK-012
 
