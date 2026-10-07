@@ -44,6 +44,37 @@ export interface SkillProfileStore {
   delete(uid: string): Promise<void>;
 }
 
+/** Maximum document refs per Firestore `getAll` call made by {@link readSkillProfilesBatch}. */
+export const SKILL_PROFILE_READ_CHUNK_SIZE = 100;
+
+// Ids Firestore would reject; skipped so one corrupt id neither fails the batch nor widens it.
+function isReadableDocumentId(uid: string): boolean {
+  return uid.length > 0 && !uid.includes("/") && uid !== "." && uid !== ".." && !/^__.*__$/.test(uid);
+}
+
+/**
+ * Narrow, read-only server primitive: the raw documents of exactly the supplied
+ * uids, fetched by document id with `getAll` in chunks. Deliberately NOT part of
+ * {@link SkillProfileStore}, so no owner operation can reach it. It never queries
+ * or scans the collection and never writes or repairs. Entries are raw and
+ * unvalidated (`undefined` = absent) and carry no uid; their order is not
+ * meaningful. Its single intended consumer is `read-skill-levels-batch.ts`.
+ * A Firestore failure rejects so the caller can fail closed.
+ */
+export async function readSkillProfilesBatch(uids: readonly string[]): Promise<Array<Record<string, unknown> | undefined>> {
+  const readable = uids.filter(isReadableDocumentId);
+  if (readable.length === 0) return [];
+  const db = getFirestoreDb();
+  const chunks: string[][] = [];
+  for (let start = 0; start < readable.length; start += SKILL_PROFILE_READ_CHUNK_SIZE) {
+    chunks.push(readable.slice(start, start + SKILL_PROFILE_READ_CHUNK_SIZE));
+  }
+  const snapshots = await Promise.all(
+    chunks.map((chunk) => db.getAll(...chunk.map((uid) => db.collection(SKILL_PROFILES_COLLECTION).doc(uid)))),
+  );
+  return snapshots.flat().map((snapshot) => (snapshot.exists ? snapshot.data() : undefined));
+}
+
 export function getDefaultSkillProfileStore(): SkillProfileStore {
   return {
     async read(uid) {

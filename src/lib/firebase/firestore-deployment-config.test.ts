@@ -147,6 +147,33 @@ describe("Firestore deployment configuration", () => {
     expect(indexes.indexes.filter((index) => index.collectionGroup === "skillProfiles")).toHaveLength(0);
   });
 
+  it("denies all client-SDK access to teamSkillNeeds unconditionally, with an explicit block before the catch-all", () => {
+    const rules = readRepoFile("firestore.rules");
+
+    const explicit = rules.match(
+      /match\s+\/teamSkillNeeds\/\{document=\*\*\}\s*\{\s*allow read, write: if false;\s*\}/,
+    );
+    expect(explicit).not.toBeNull();
+
+    const catchAllIndex = rules.search(/match\s+\/\{document=\*\*\}\s*\{/);
+    expect(catchAllIndex).toBeGreaterThan(-1);
+    expect(explicit?.index).toBeLessThan(catchAllIndex);
+
+    // Rules are OR-ed: this is the only match path for teamSkillNeeds, and it grants nothing.
+    expect(rules.match(/match\s+\/teamSkillNeeds\//g)).toHaveLength(1);
+    const blockBody = explicit?.[0] ?? "";
+    expect(blockBody.match(/allow\s/g)).toHaveLength(1);
+    expect(blockBody).not.toMatch(/request\.auth|resource\.|uid|if\s+true/);
+  });
+
+  it("declares no composite index for teamSkillNeeds — the needs query is a single-field teamId equality filter", () => {
+    const indexes = JSON.parse(readRepoFile("firestore.indexes.json")) as {
+      indexes: Array<{ collectionGroup: string }>;
+    };
+
+    expect(indexes.indexes.filter((index) => index.collectionGroup === "teamSkillNeeds")).toHaveLength(0);
+  });
+
   it("has no unconditional allow anywhere in the rules file (denies by default)", () => {
     const rules = readRepoFile("firestore.rules");
 

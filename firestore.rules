@@ -208,6 +208,21 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // teamSkillNeeds holds exactly one team's required level and required
+    // coverage for exactly one SkillTree (teamId, treeId, requiredLevel,
+    // requiredCoverage, createdAt, updatedAt — no actor or person data),
+    // keyed by the deterministic id `{teamId}__{treeId}` — a uniqueness
+    // mechanism only, never authorization. All access happens server-side
+    // via the Firebase Admin SDK, which bypasses these rules entirely —
+    // this rule exists solely to deny the separate client-SDK path
+    // unconditionally, regardless of authentication state (including a
+    // team member's, a team lead's and an app admin's). Same
+    // server-only-access rationale as every other collection above. See
+    // docs/features/team-skill-needs-and-matrix/SPEC.md (BR-35, TASK-003).
+    match /teamSkillNeeds/{document=**} {
+      allow read, write: if false;
+    }
+
     // Deny everything else by default; no collection is currently intended
     // to be reached directly by the Firebase client SDK.
     match /{document=**} {
