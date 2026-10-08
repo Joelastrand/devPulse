@@ -3,11 +3,11 @@
 Specification: [SPEC.md](./SPEC.md) (Approved, revision 2; P1–P6 closed; no open questions)
 
 ## Status
-Ready: 11  In Progress: 0  Done: 9
+Ready: 9  In Progress: 0  Done: 11
 
 Total tasks: **20**. Repository convention (`implement-task`): the only states are `Ready`,
 `In Progress`, `Done`; a task whose dependencies are not `Done` stays `Ready` and is skipped until they
-are. **Unblocked now (dependencies satisfied):** TASK-008, TASK-014.
+are. **Unblocked now (dependencies satisfied):** TASK-008, TASK-016.
 
 Task-splitting ground rules (apply to **every** task):
 
@@ -842,7 +842,7 @@ None in this task (ARCHITECTURE/SECURITY in TASK-020).
 
 ### TASK-014 — Coverage operation core (authorization, needs, trees, completeness, consent selection, derivation)
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-6 (coverage), BR-8 (effective consent), BR-11 (disabled team, multi-team), BR-12, BR-13, BR-14, BR-15, BR-16, BR-18, BR-19, BR-20, BR-22, BR-24
 **Depends on:** TASK-001, TASK-002, TASK-004, TASK-006
 
@@ -900,19 +900,19 @@ contributor state; no data-dependent response fields.
 None in this task.
 
 **Acceptance criteria**
-- [ ] Coverage requires a genuine member of an active team; non-member admins, unrelated users and disabled teams never reach derivation.
-- [ ] Contributors are exactly genuine, effectively participating, per-skill-assessed members; `k = 5` is applied per skill; below 5 ⇒ `insufficient_data` without counts.
-- [ ] `covered`/`gap` follow BR-14, including `requiredCoverage` above the cohort ⇒ `gap`.
-- [ ] `area_unavailable` comes only from tree/need integrity; no contributor-dependent field exists in any row.
-- [ ] 501 memberships ⇒ `incomplete` with no derivation; no needs ⇒ no profile read; read failure ⇒ error, no partial data.
-- [ ] The injected reader is called with exactly the eligible uids and in no negative scenario; the operation writes nothing and caches nothing.
-- [ ] No conflict with `docs/SECURITY.md`; relevant tests pass.
+- [x] Coverage requires a genuine member of an active team; non-member admins, unrelated users and disabled teams never reach derivation.
+- [x] Contributors are exactly genuine, effectively participating, per-skill-assessed members; `k = 5` is applied per skill; below 5 ⇒ `insufficient_data` without counts.
+- [x] `covered`/`gap` follow BR-14, including `requiredCoverage` above the cohort ⇒ `gap`.
+- [x] `area_unavailable` comes only from tree/need integrity; no contributor-dependent field exists in any row.
+- [x] 501 memberships ⇒ `incomplete` with no derivation; no needs ⇒ no profile read; read failure ⇒ error, no partial data.
+- [x] The injected reader is called with exactly the eligible uids and in no negative scenario; the operation writes nothing and caches nothing.
+- [x] No conflict with `docs/SECURITY.md`; relevant tests pass.
 
 ---
 
 ### TASK-015 — Wire the approved batch reader and own the end-to-end privacy matrix
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-12, BR-15, BR-17, BR-23, BR-14 (end-to-end), BR-11 (reset/malformed)
 **Depends on:** TASK-012, TASK-013, TASK-014
 
@@ -949,11 +949,11 @@ suppression.
 None in this task.
 
 **Acceptance criteria**
-- [ ] The only production importer of the batch reader is `get-team-skill-coverage.ts`; it re-exports nothing.
-- [ ] Unassessed, unreadable, invalid, absent and withdrawn all produce responses indistinguishable from insufficient cohort.
-- [ ] No count, level, identity or contributor-dependent field appears in any response (deep assertions, not snapshots).
-- [ ] No C1 profile is written, deleted or repaired by any code path under test.
-- [ ] No conflict with `docs/SECURITY.md`; relevant tests pass.
+- [x] The only production importer of the batch reader is `get-team-skill-coverage.ts`; it re-exports nothing.
+- [x] Unassessed, unreadable, invalid, absent and withdrawn all produce responses indistinguishable from insufficient cohort.
+- [x] No count, level, identity or contributor-dependent field appears in any response (deep assertions, not snapshots).
+- [x] No C1 profile is written, deleted or repaired by any code path under test.
+- [x] No conflict with `docs/SECURITY.md`; relevant tests pass.
 
 ---
 
