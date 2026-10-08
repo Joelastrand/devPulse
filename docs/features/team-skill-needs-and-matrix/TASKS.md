@@ -3,11 +3,11 @@
 Specification: [SPEC.md](./SPEC.md) (Approved, revision 2; P1–P6 closed; no open questions)
 
 ## Status
-Ready: 9  In Progress: 0  Done: 11
+Ready: 8  In Progress: 0  Done: 12
 
 Total tasks: **20**. Repository convention (`implement-task`): the only states are `Ready`,
 `In Progress`, `Done`; a task whose dependencies are not `Done` stays `Ready` and is skipped until they
-are. **Unblocked now (dependencies satisfied):** TASK-008, TASK-016.
+are. **Unblocked now (dependencies satisfied):** TASK-008, TASK-017.
 
 Task-splitting ground rules (apply to **every** task):
 
@@ -959,7 +959,7 @@ None in this task.
 
 ### TASK-016 — `GET /api/teams/[teamId]/skill-coverage` route
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-16, BR-15, BR-18, BR-20 (no-store), BR-22
 **Depends on:** TASK-015
 
@@ -987,10 +987,10 @@ oracle remains an accepted residual risk.
 None in this task.
 
 **Acceptance criteria**
-- [ ] Route accepts no query-time threshold/level parameters and ignores any supplied.
-- [ ] Non-member admin ⇒ 403, disabled team ⇒ 409, unauthenticated ⇒ 401; successful responses are `no-store` and contain only the allow-listed keys.
-- [ ] Route imports only `team-skills` modules.
-- [ ] No conflict with `docs/SECURITY.md`; relevant tests pass.
+- [x] Route accepts no query-time threshold/level parameters and ignores any supplied.
+- [x] Non-member admin ⇒ 403, disabled team ⇒ 409, unauthenticated ⇒ 401; successful responses are `no-store` and contain only the allow-listed keys.
+- [x] Route imports only `team-skills` modules.
+- [x] No conflict with `docs/SECURITY.md`; relevant tests pass.
 
 ---
 
