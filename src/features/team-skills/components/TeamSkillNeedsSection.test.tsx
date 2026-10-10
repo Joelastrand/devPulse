@@ -20,7 +20,7 @@ function ok(
   viewer = { canManageNeeds: false, canReadCoverage: true },
   needsTruncated = false,
 ) {
-  fetchSkillNeedsMock.mockResolvedValue({ status: "ok", needs, needsTruncated, viewer });
+  fetchSkillNeedsMock.mockResolvedValue({ status: "ok", needs, catalog: [], catalogTruncated: false, needsTruncated, viewer });
 }
 
 afterEach(() => {
@@ -113,13 +113,12 @@ describe("TeamSkillNeedsSection", () => {
     expect(screen.queryByRole("combobox")).toBeNull();
   });
 
-  it("omits the read-only line for a lead, and still shows no editing controls in this task", async () => {
+  it("omits the read-only line for a lead (management controls are covered in the manage suite)", async () => {
     ok([NEED_A], { canManageNeeds: true, canReadCoverage: true });
     render(<TeamSkillNeedsSection teamId="team-1" token="a-token" />);
 
     await screen.findByRole("table");
     expect(screen.queryByText("Teamledere endrer kompetansebehovene.")).toBeNull();
-    expect(screen.queryByRole("button")).toBeNull();
   });
 
   it("shows the truncation notice only when the server says the list is truncated", async () => {
@@ -170,6 +169,8 @@ describe("TeamSkillNeedsSection", () => {
     release({
       status: "ok",
       needs: [NEED_B],
+      catalog: [],
+      catalogTruncated: false,
       needsTruncated: false,
       viewer: { canManageNeeds: false, canReadCoverage: true },
     });

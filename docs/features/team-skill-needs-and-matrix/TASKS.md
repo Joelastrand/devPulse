@@ -3,11 +3,11 @@
 Specification: [SPEC.md](./SPEC.md) (Approved, revision 2; P1–P6 closed; no open questions)
 
 ## Status
-Ready: 6  In Progress: 0  Done: 14
+Ready: 5  In Progress: 0  Done: 15
 
 Total tasks: **20**. Repository convention (`implement-task`): the only states are `Ready`,
 `In Progress`, `Done`; a task whose dependencies are not `Done` stays `Ready` and is skipped until they
-are. **Unblocked now (dependencies satisfied):** TASK-009, TASK-010, TASK-018.
+are. **Unblocked now (dependencies satisfied):** TASK-010, TASK-018.
 
 Task-splitting ground rules (apply to **every** task):
 
@@ -620,7 +620,7 @@ UI-UX closeout in TASK-020.
 
 ### TASK-009 — Lead need editor UI (add, edit, delete)
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-5 (UI), BR-26 (management), BR-28
 **Depends on:** TASK-005, TASK-008
 
@@ -653,10 +653,12 @@ inference.
 UI-UX closeout in TASK-020.
 
 **Acceptance criteria**
-- [ ] Only `viewer.canManageNeeds` users see add/edit/delete; the picker excludes already-needed areas and offers levels 2–4.
-- [ ] Editor is keyboard-operable with labelled controls, live-region saves and accessible delete confirmation.
-- [ ] Role/team-state changes surface calmly and refresh hints.
-- [ ] No conflict with `docs/SECURITY.md`; relevant tests pass.
+- [x] Only `viewer.canManageNeeds` users see add/edit/delete; the picker excludes already-needed areas and offers levels 2–4.
+- [x] Editor is keyboard-operable with labelled controls, live-region saves and accessible delete confirmation.
+- [x] Role/team-state changes surface calmly and refresh hints.
+- [x] No conflict with `docs/SECURITY.md`; relevant tests pass.
+
+**Implementation note:** one logical editor (`SkillNeedEditor`, owned by `TeamSkillNeedsSection`) serves the table and the stacked layout; row actions (Endre / Slett via the shared `DeleteConfirmation`) appear only when the server's `viewer.canManageNeeds` is true. The gateway gained the catalog fields of `GET skill-needs` plus `putSkillNeed` / `deleteSkillNeed` over the existing TASK-005 routes (no new route). After every successful write, and after errors that may mean the server's view changed (`forbidden`, `team_disabled`, `skill_unavailable`, unknown), the section re-reads `GET skill-needs`; the coverage column stays the TASK-008 placeholder and the coverage endpoint is not called. A module-level `Set` was avoided because the C2 guard (BR-34 #9) rejects module-level `Map`/`Set`.
 
 ---
 
