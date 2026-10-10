@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { deleteSkillNeed, fetchSkillNeeds, putSkillNeed } from "./team-skills-gateway";
+import { deleteSkillNeed, fetchSkillCoverage, fetchSkillNeeds, putSkillNeed } from "./team-skills-gateway";
 
 const VIEWER = { canManageNeeds: false, canReadCoverage: true };
 const NEED = { treeId: "t-a", areaName: "Testing", areaAvailable: true, requiredLevel: 3, requiredCoverage: 2 };
@@ -190,5 +190,66 @@ describe("fetchSkillNeeds catalog parsing", () => {
   ])("fails safe to read_failed for %s", async (_label, body) => {
     respond(200, body);
     expect(await fetchSkillNeeds("t", "team-1")).toEqual({ status: "read_failed" });
+  });
+});
+
+describe("fetchSkillCoverage", () => {
+  const ROW = { treeId: "t-a", areaName: "Testing", requiredLevel: 3, requiredCoverage: 2, state: "gap" };
+
+  it("calls the skill-coverage route with a bearer token only: no query, body or threshold", async () => {
+    const fetchMock = respond(200, { availability: "available", rows: [] });
+
+    await fetchSkillCoverage("a-token", "team/1");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/teams/team%2F1/skill-coverage", {
+      headers: { Authorization: "Bearer a-token" },
+    });
+  });
+
+  it("rebuilds rows from the five contract fields and drops anything else", async () => {
+    respond(200, { availability: "available", rows: [{ ...ROW, uid: "u1", contributors: 4, percent: 80 }], count: 5 });
+
+    expect(await fetchSkillCoverage("t", "team-1")).toEqual({ status: "available", rows: [ROW] });
+  });
+
+  it.each(["covered", "gap", "insufficient_data", "area_unavailable"])("accepts the %s state", async (state) => {
+    respond(200, { availability: "available", rows: [{ ...ROW, state }] });
+
+    expect(await fetchSkillCoverage("t", "team-1")).toEqual({ status: "available", rows: [{ ...ROW, state }] });
+  });
+
+  it("treats the 200 incomplete answer as a successful state and never reads its rows", async () => {
+    respond(200, { availability: "incomplete", rows: [ROW] });
+
+    expect(await fetchSkillCoverage("t", "team-1")).toEqual({ status: "incomplete" });
+  });
+
+  it.each([
+    ["an unknown state", { availability: "available", rows: [{ ...ROW, state: "partial" }] }],
+    ["a missing state", { availability: "available", rows: [{ ...ROW, state: undefined }] }],
+    ["an invalid level", { availability: "available", rows: [{ ...ROW, requiredLevel: 9 }] }],
+    ["a duplicate tree", { availability: "available", rows: [ROW, ROW] }],
+    ["an unknown availability", { availability: "partial", rows: [] }],
+    ["no rows array", { availability: "available" }],
+    ["one bad row among good ones", { availability: "available", rows: [ROW, { treeId: "t-b" }] }],
+  ])("fails closed on %s", async (_name, body) => {
+    respond(200, body);
+
+    expect(await fetchSkillCoverage("t", "team-1")).toEqual({ status: "read_failed" });
+  });
+
+  it("maps statuses to a closed set and never surfaces a server error string", async () => {
+    respond(401, {});
+    expect(await fetchSkillCoverage("t", "x")).toEqual({ status: "unauthenticated" });
+    respond(403, { error: "forbidden" });
+    expect(await fetchSkillCoverage("t", "x")).toEqual({ status: "forbidden" });
+    respond(409, { error: "team_disabled" });
+    expect(await fetchSkillCoverage("t", "x")).toEqual({ status: "team_disabled" });
+    respond(409, { error: "something else" });
+    expect(await fetchSkillCoverage("t", "x")).toEqual({ status: "read_failed" });
+    respond(500, { error: "boom: secret detail" });
+    expect(await fetchSkillCoverage("t", "x")).toEqual({ status: "read_failed" });
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network")));
+    expect(await fetchSkillCoverage("t", "x")).toEqual({ status: "read_failed" });
   });
 });

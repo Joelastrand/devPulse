@@ -9,9 +9,12 @@ import { LoadingState } from "../../../components/ui/LoadingState";
 import { DeleteConfirmation, type DeleteActionState } from "../../forum/components/DeleteConfirmation";
 import {
   deleteSkillNeed,
+  fetchSkillCoverage,
   fetchSkillNeeds,
   putSkillNeed,
+  type FetchSkillCoverageResult,
   type FetchSkillNeedsResult,
+  type SkillCoverageRowView,
   type SkillNeedInput,
   type SkillNeedView,
   type SkillNeedWriteError,
@@ -36,8 +39,9 @@ interface Settled {
 /**
  * «Kompetansebehov og dekning» on team Oversikt (docs/features/team-skill-needs-and-matrix/SPEC.md —
  * BR-26, BR-27, BR-28; TASK-008/009). It renders only the needs the server returns, one row per need and
- * nothing per person. The coverage column is a fixed placeholder until the coverage view exists; this
- * component never calls the coverage endpoint and derives nothing from the roster or from any profile.
+ * nothing per person. The coverage column renders the categorical state the server returns from
+ * `GET …/skill-coverage` (TASK-018), requested only when `viewer.canReadCoverage` is true; the browser
+ * counts, thresholds and derives nothing and reads no roster or profile.
  * Management controls appear only when the server's `viewer.canManageNeeds` says so — a hint, not
  * authority: every write is re-authorized by the server. It also hosts the caller's own participation panel
  * (TASK-010), which is independent of need management and of this section's load state. Self-loading like `TeamRosterSection`; remount
@@ -146,6 +150,7 @@ function NeedsManager({
   const { needs, catalog, catalogTruncated, needsTruncated, viewer } = result;
   const canManage = viewer.canManageNeeds;
   const root = useRef<HTMLDivElement>(null);
+  const { coverage, retryCoverage } = useCoverage(teamId, token, result);
   const mounted = useRef(true);
   const busyRef = useRef(false);
   const [busy, setBusy] = useState(false);
@@ -278,8 +283,16 @@ function NeedsManager({
         </div>
       ) : (
         <>
-          <NeedsTable needs={needs} actions={actions} />
-          <NeedCards needs={needs} actions={actions} />
+          <NeedsTable needs={needs} coverage={coverage} actions={actions} />
+          <NeedCards needs={needs} coverage={coverage} actions={actions} />
+          {coverage.kind === "error" && (
+            <div role="alert" className="flex flex-col items-start gap-2">
+              <p>{copy.coverageError}</p>
+              <Button type="button" variant="secondary" size="sm" onClick={retryCoverage}>
+                {copy.retryButton}
+              </Button>
+            </div>
+          )}
         </>
       )}
       {needsTruncated && <Alert variant="info">{copy.truncated}</Alert>}
@@ -368,17 +381,120 @@ function NeedActions({
   );
 }
 
+/** What the coverage column may show; one value for the whole table, derived from one server answer. */
+type CoverageView =
+  | { kind: "not_readable" }
+  | { kind: "loading" }
+  | { kind: "incomplete" }
+  | { kind: "error" }
+  | { kind: "members_only" }
+  | { kind: "team_disabled" }
+  | { kind: "rows"; rows: Map<string, SkillCoverageRowView> };
+
+interface SettledCoverage {
+  requestKey: string;
+  forResult: LoadedResult;
+  attempt: number;
+  result: FetchSkillCoverageResult;
+}
+
+/**
+ * Requests coverage only when the server's hint allows it, once per needs result (so a successful need write,
+ * which re-reads the needs, also re-reads coverage). A coverage answer is kept with the team/token, needs
+ * result and attempt it answers and is ignored otherwise, so a late or stale answer never shows.
+ */
+function useCoverage(teamId: string, token: string, result: LoadedResult) {
+  const requestKey = `${teamId}
+${token}`;
+  const canRead = result.viewer.canReadCoverage;
+  const [attempt, setAttempt] = useState(0);
+  const [settled, setSettled] = useState<SettledCoverage | null>(null);
+
+  useEffect(() => {
+    if (!canRead) return;
+    let cancelled = false;
+    void fetchSkillCoverage(token, teamId).then((answer) => {
+      if (!cancelled) setSettled({ requestKey, forResult: result, attempt, result: answer });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [canRead, token, teamId, requestKey, result, attempt]);
+
+  const retryCoverage = useCallback(() => setAttempt((n) => n + 1), []);
+
+  let coverage: CoverageView;
+  if (!canRead) coverage = { kind: "not_readable" };
+  else if (settled === null || settled.requestKey !== requestKey || settled.forResult !== result || settled.attempt !== attempt) {
+    coverage = { kind: "loading" };
+  } else coverage = toCoverageView(settled.result);
+  return { coverage, retryCoverage };
+}
+
+function toCoverageView(answer: FetchSkillCoverageResult): CoverageView {
+  switch (answer.status) {
+    case "available":
+      return { kind: "rows", rows: new Map(answer.rows.map((row) => [row.treeId, row])) };
+    case "incomplete":
+      return { kind: "incomplete" };
+    case "forbidden":
+      return { kind: "members_only" };
+    case "team_disabled":
+      return { kind: "team_disabled" };
+    default:
+      return { kind: "error" };
+  }
+}
+
 function areaCell(need: SkillNeedView): string {
   return need.areaAvailable && need.areaName !== null ? need.areaName : copy.unavailableAreaName;
 }
 
-function coverageCell(need: SkillNeedView): string {
-  return need.areaAvailable ? copy.coverageNotAvailableYet : copy.areaUnavailable;
+function CoverageCell({ need, coverage }: { need: SkillNeedView; coverage: CoverageView }) {
+  // A need whose area is gone reads the same everywhere (needs-read integrity state).
+  if (!need.areaAvailable) return <>{copy.areaUnavailable}</>;
+  switch (coverage.kind) {
+    case "loading":
+      return <>{copy.coverageLoading}</>;
+    case "incomplete":
+      return <>{copy.coverageIncomplete}</>;
+    case "error":
+      return <>{copy.coverageErrorCell}</>;
+    case "members_only":
+      return <>{copy.coverageMembersOnly}</>;
+    case "team_disabled":
+      return <>{copy.coverageDisabledTeam}</>;
+    case "not_readable":
+      // The hint cannot tell a non-member admin from a disabled team, so it states both facts.
+      return <>{copy.coverageMembersOnly} {copy.coverageDisabledTeam}</>;
+    case "rows": {
+      const row = coverage.rows.get(need.treeId);
+      // Joined by treeId only; a missing row or one for a different target is never shown as current.
+      if (!row || row.requiredLevel !== need.requiredLevel || row.requiredCoverage !== need.requiredCoverage) {
+        return <>{copy.coverageIncomplete}</>;
+      }
+      switch (row.state) {
+        case "covered":
+          return <>{copy.coverageCovered}</>;
+        case "gap":
+          return <>{copy.coverageGap}</>;
+        case "area_unavailable":
+          return <>{copy.areaUnavailable}</>;
+        case "insufficient_data":
+          return (
+            <>
+              {copy.coverageInsufficient}
+              <span className="block text-sm text-zinc-600 dark:text-zinc-400">{copy.coverageInsufficientHint}</span>
+            </>
+          );
+      }
+    }
+  }
 }
 
 type ActionsRenderer = ((need: SkillNeedView) => React.ReactNode) | null;
 
-function NeedsTable({ needs, actions }: { needs: SkillNeedView[]; actions: ActionsRenderer }) {
+function NeedsTable({ needs, coverage, actions }: { needs: SkillNeedView[]; coverage: CoverageView; actions: ActionsRenderer }) {
   return (
     <table className="hidden w-full text-left sm:table">
       <caption className="sr-only">{copy.tableCaption}</caption>
@@ -395,7 +511,7 @@ function NeedsTable({ needs, actions }: { needs: SkillNeedView[]; actions: Actio
           <tr key={need.treeId} className="border-b border-zinc-100 align-top dark:border-zinc-900">
             <th scope="row" className="py-2 pr-4 font-normal break-words">{areaCell(need)}</th>
             <td className="py-2 pr-4">{needDescription(need.requiredCoverage, need.requiredLevel)}</td>
-            <td className="py-2 pr-4">{coverageCell(need)}</td>
+            <td className="py-2 pr-4"><CoverageCell need={need} coverage={coverage} /></td>
             {actions && <td className="py-2">{actions(need)}</td>}
           </tr>
         ))}
@@ -405,7 +521,7 @@ function NeedsTable({ needs, actions }: { needs: SkillNeedView[]; actions: Actio
 }
 
 /** Below `sm` each need is a stacked card carrying the same text (and the same actions) as its table row. */
-function NeedCards({ needs, actions }: { needs: SkillNeedView[]; actions: ActionsRenderer }) {
+function NeedCards({ needs, coverage, actions }: { needs: SkillNeedView[]; coverage: CoverageView; actions: ActionsRenderer }) {
   return (
     <ul aria-label={copy.tableCaption} className="flex flex-col gap-2 sm:hidden">
       {needs.map((need) => (
@@ -416,7 +532,7 @@ function NeedCards({ needs, actions }: { needs: SkillNeedView[]; actions: Action
             <dt className="text-sm text-zinc-600 dark:text-zinc-400">{copy.columnNeed}</dt>
             <dd>{needDescription(need.requiredCoverage, need.requiredLevel)}</dd>
             <dt className="text-sm text-zinc-600 dark:text-zinc-400">{copy.columnCoverage}</dt>
-            <dd>{coverageCell(need)}</dd>
+            <dd><CoverageCell need={need} coverage={coverage} /></dd>
             {actions && (
               <>
                 <dt className="text-sm text-zinc-600 dark:text-zinc-400">{manage.actionsColumn}</dt>

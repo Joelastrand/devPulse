@@ -1,14 +1,16 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const fetchSkillNeedsMock = vi.fn();
+const fetchSkillCoverageMock = vi.fn();
 const putSkillNeedMock = vi.fn();
 const deleteSkillNeedMock = vi.fn();
 
 vi.mock("../client/team-skills-gateway", () => ({
   fetchSkillNeeds: fetchSkillNeedsMock,
+  fetchSkillCoverage: fetchSkillCoverageMock,
   putSkillNeed: putSkillNeedMock,
   deleteSkillNeed: deleteSkillNeedMock,
 }));
@@ -50,8 +52,16 @@ async function renderLead(needs: unknown[] = [NEED_A], viewer = LEAD, catalog: u
 
 const table = () => screen.getByRole("table");
 
+beforeEach(() => {
+  fetchSkillCoverageMock.mockResolvedValue({
+    status: "available",
+    rows: [{ ...NEED_A, state: "gap" }],
+  });
+});
+
 afterEach(() => {
   cleanup();
+  fetchSkillCoverageMock.mockReset();
   fetchSkillNeedsMock.mockReset();
   putSkillNeedMock.mockReset();
   deleteSkillNeedMock.mockReset();
@@ -389,12 +399,62 @@ describe("TeamSkillNeedsSection — team switch during a write", () => {
 });
 
 describe("TeamSkillNeedsSection — scope and copy", () => {
-  it("shows no observed counts, percentages or person data in the lead view and keeps the coverage placeholder", async () => {
+  it("shows no observed counts, percentages or person data in the lead view and shows only categorical coverage", async () => {
     const { view } = await renderLead([NEED_A, NEED_GONE]);
 
     const text = view.container.textContent ?? "";
-    expect(text).toContain("Dekning er ikke tilgjengelig ennå");
+    expect(text).toContain("Behovet er ikke dekket ennå");
     expect(text).not.toMatch(/svak|sterk|kritisk|rang|score|poeng|prosent|%|anonym|ansatt|mangler|kun \d|bare \d|\d+ av \d+/i);
     expect(fetchSkillNeedsMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("TeamSkillNeedsSection — coverage follows the server's needs (TASK-018)", () => {
+  async function editAndSave(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(within(table()).getByRole("button", { name: "Endre behov for Testing" }));
+    await user.click(screen.getByRole("button", { name: "Lagre endring" }));
+  }
+
+  it("re-reads coverage after a successful need write and shows the new server answer, not the old one", async () => {
+    putSkillNeedMock.mockResolvedValue({ ok: true });
+    const { user } = await renderLead();
+    expect(await within(table()).findByText("Behovet er ikke dekket ennå")).toBeTruthy();
+    const edited = { ...NEED_A, requiredCoverage: 1 };
+    serve(loaded([edited]));
+    fetchSkillCoverageMock.mockResolvedValue({ status: "available", rows: [{ ...edited, state: "covered" }] });
+
+    await editAndSave(user);
+
+    expect(await within(table()).findByText("Behovet er dekket")).toBeTruthy();
+    expect(within(table()).queryByText("Behovet er ikke dekket ennå")).toBeNull();
+    expect(fetchSkillCoverageMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("never keeps the old state when the coverage re-read after a write fails", async () => {
+    putSkillNeedMock.mockResolvedValue({ ok: true });
+    const { user } = await renderLead();
+    await within(table()).findByText("Behovet er ikke dekket ennå");
+    serve(loaded([NEED_A]));
+    fetchSkillCoverageMock.mockResolvedValue({ status: "read_failed" });
+
+    await editAndSave(user);
+
+    expect(await within(table()).findByText("Dekningen kunne ikke vises")).toBeTruthy();
+    expect(within(table()).queryByText("Behovet er ikke dekket ennå")).toBeNull();
+    expect(within(table()).getByText("Testing", { selector: "th" })).toBeTruthy();
+  });
+
+  it("drops shown coverage and requests none when a needs re-read turns the capability off", async () => {
+    putSkillNeedMock.mockResolvedValue({ ok: true });
+    const { user } = await renderLead();
+    await within(table()).findByText("Behovet er ikke dekket ennå");
+    serve(loaded([NEED_A], { canManageNeeds: true, canReadCoverage: false }));
+    fetchSkillCoverageMock.mockClear();
+
+    await editAndSave(user);
+
+    expect(await within(table()).findByText(/Dekning vises bare for teamets medlemmer/)).toBeTruthy();
+    expect(within(table()).queryByText("Behovet er ikke dekket ennå")).toBeNull();
+    expect(fetchSkillCoverageMock).not.toHaveBeenCalled();
   });
 });

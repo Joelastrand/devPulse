@@ -229,6 +229,90 @@ export async function deleteSkillNeed(
 }
 
 /* ------------------------------------------------------------------------------------------------
+ * The team's categorical coverage (SPEC BR-17/BR-27; TASK-018): `GET /api/teams/[teamId]/
+ * skill-coverage`, no parameters. The server owns membership, participation, the fixed threshold and the
+ * derivation; the parser only rebuilds the five allow-listed row fields and fails closed on anything
+ * malformed, so no partial categorical result is ever shown.
+ * ---------------------------------------------------------------------------------------------- */
+
+export type SkillCoverageState = "covered" | "gap" | "insufficient_data" | "area_unavailable";
+
+export interface SkillCoverageRowView {
+  treeId: string;
+  areaName: string | null;
+  requiredLevel: RequiredLevel;
+  requiredCoverage: number;
+  state: SkillCoverageState;
+}
+
+export type FetchSkillCoverageResult =
+  | { status: "available"; rows: SkillCoverageRowView[] }
+  | { status: "incomplete" }
+  | { status: "unauthenticated" | "forbidden" | "team_disabled" | "read_failed" };
+
+const COVERAGE_STATES: readonly string[] = ["covered", "gap", "insufficient_data", "area_unavailable"];
+
+function parseCoverageRow(value: unknown): SkillCoverageRowView | null {
+  if (!isRecord(value)) return null;
+  const { treeId, areaName, requiredLevel, requiredCoverage, state } = value;
+  if (typeof treeId !== "string" || treeId.length === 0) return null;
+  if (areaName !== null && typeof areaName !== "string") return null;
+  if (!isRequiredLevel(requiredLevel) || !isRequiredCoverage(requiredCoverage)) return null;
+  if (typeof state !== "string" || !COVERAGE_STATES.includes(state)) return null;
+  return { treeId, areaName, requiredLevel, requiredCoverage, state: state as SkillCoverageState };
+}
+
+function parseCoverage(body: unknown): FetchSkillCoverageResult {
+  if (!isRecord(body) || !Array.isArray(body.rows)) return { status: "read_failed" };
+  // `incomplete` is a successful, privacy-safe answer; whatever rows accompany it are never read.
+  if (body.availability === "incomplete") return { status: "incomplete" };
+  if (body.availability !== "available") return { status: "read_failed" };
+  const rows = body.rows.map(parseCoverageRow);
+  if (!rows.every((row): row is SkillCoverageRowView => row !== null)) return { status: "read_failed" };
+  if (new Set(rows.map((row) => row.treeId)).size !== rows.length) return { status: "read_failed" };
+  return { status: "available", rows };
+}
+
+export interface SkillCoverageGateway {
+  fetchSkillCoverage(idToken: string, teamId: string): Promise<FetchSkillCoverageResult>;
+}
+
+function getDefaultCoverageGateway(): SkillCoverageGateway {
+  return {
+    async fetchSkillCoverage(idToken, teamId) {
+      try {
+        const response = await fetch(`/api/teams/${encodeURIComponent(teamId)}/skill-coverage`, {
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+        if (response.status === 401) return { status: "unauthenticated" };
+        if (response.status === 403) return { status: "forbidden" };
+        if (response.status === 409) {
+          const body = await readJson(response);
+          return isRecord(body) && body.error === "team_disabled" ? { status: "team_disabled" } : { status: "read_failed" };
+        }
+        if (!response.ok) return { status: "read_failed" };
+        const body = await readJson(response);
+        return body === undefined ? { status: "read_failed" } : parseCoverage(body);
+      } catch {
+        return { status: "read_failed" };
+      }
+    },
+  };
+}
+
+export interface SkillCoverageDeps {
+  gateway?: SkillCoverageGateway;
+}
+
+export async function fetchSkillCoverage(
+  idToken: string,
+  teamId: string,
+  deps: SkillCoverageDeps = {},
+): Promise<FetchSkillCoverageResult> {
+  return (deps.gateway ?? getDefaultCoverageGateway()).fetchSkillCoverage(idToken, teamId);
+}
+
+/* ------------------------------------------------------------------------------------------------
  * The caller's own participation (SPEC BR-9; TASK-010): `GET|PUT|DELETE /api/teams/[teamId]/
  * skill-contribution`. Own state only — `{ contributing, canOptIn }`, never another member, a count
  * or the consent timestamp. The parser rebuilds the two booleans and drops everything else.

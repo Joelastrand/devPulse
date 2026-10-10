@@ -3,11 +3,11 @@
 Specification: [SPEC.md](./SPEC.md) (Approved, revision 2; P1–P6 closed; no open questions)
 
 ## Status
-Ready: 3  In Progress: 0  Done: 17
+Ready: 2  In Progress: 0  Done: 18
 
 Total tasks: **20**. Repository convention (`implement-task`): the only states are `Ready`,
 `In Progress`, `Done`; a task whose dependencies are not `Done` stays `Ready` and is skipped until they
-are. **Unblocked now (dependencies satisfied):** TASK-018.
+are. **Unblocked now (dependencies satisfied):** TASK-019.
 
 Task-splitting ground rules (apply to **every** task):
 
@@ -1054,7 +1054,7 @@ import strings the C1 scans search for; the C2 guard asserts that exact exemptio
 
 ### TASK-018 — Matrix UI: coverage column, categorical states and access-dependent messaging
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-26, BR-27, BR-28
 **Depends on:** TASK-008, TASK-016
 
@@ -1087,10 +1087,10 @@ Renders only what the DTO provides; adds no derivation in the browser.
 UI-UX closeout in TASK-020.
 
 **Acceptance criteria**
-- [ ] All BR-27 coverage states render as text with the approved copy; suppressed state reveals no number or cause.
-- [ ] Lead and ordinary member see identical coverage; non-member admin and disabled-team messages are correct.
-- [ ] No employee rows, counts, percentages or evaluative copy; no colour-only meaning.
-- [ ] No conflict with `docs/SECURITY.md`; relevant tests and build pass.
+- [x] All BR-27 coverage states render as text with the approved copy; suppressed state reveals no number or cause.
+- [x] Lead and ordinary member see identical coverage; non-member admin and disabled-team messages are correct.
+- [x] No employee rows, counts, percentages or evaluative copy; no colour-only meaning.
+- [x] No conflict with `docs/SECURITY.md`; relevant tests and build pass.
 
 ---
 

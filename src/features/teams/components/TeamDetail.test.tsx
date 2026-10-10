@@ -72,6 +72,7 @@ vi.mock("../../skill-trees/client/skill-trees-gateway", () => ({
 }));
 
 vi.mock("../../team-skills/client/team-skills-gateway", () => ({
+  fetchSkillCoverage: vi.fn(() => new Promise(() => {})),
   fetchSkillNeeds: fetchSkillNeedsMock,
   fetchSkillContribution: fetchSkillContributionMock,
   optInSkillContribution: vi.fn(),
