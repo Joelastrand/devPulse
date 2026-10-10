@@ -3,11 +3,11 @@
 Specification: [SPEC.md](./SPEC.md) (Approved, revision 2; P1–P6 closed; no open questions)
 
 ## Status
-Ready: 2  In Progress: 0  Done: 18
+Ready: 1  In Progress: 0  Done: 19
 
 Total tasks: **20**. Repository convention (`implement-task`): the only states are `Ready`,
 `In Progress`, `Done`; a task whose dependencies are not `Done` stays `Ready` and is skipped until they
-are. **Unblocked now (dependencies satisfied):** TASK-019.
+are. **Unblocked now (dependencies satisfied):** TASK-020.
 
 Task-splitting ground rules (apply to **every** task):
 
@@ -1096,7 +1096,7 @@ UI-UX closeout in TASK-020.
 
 ### TASK-019 — Cross-cutting accessibility, privacy, scope and regression verification
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-3, BR-20, BR-21, BR-24, BR-28 (feature-wide), BR-35 (no Demo/env/index), regression of C1/F0/A/B
 **Depends on:** TASK-003, TASK-007, TASK-009, TASK-011, TASK-017, TASK-018
 
@@ -1129,11 +1129,103 @@ Final evidence that no `docs/SECURITY.md` invariant is weakened; any finding is 
 None in this task.
 
 **Acceptance criteria**
-- [ ] Accessibility, privacy, scope and regression sweeps pass; findings fixed minimally or reported.
-- [ ] Demo, `skillProgress`, `roadmapItems`, D, persistence/cache, env/dependency/index non-integration is evidenced.
-- [ ] Copy contains no unqualified "anonym", counts or evaluative wording and claims no prevention of inference.
-- [ ] Full gates pass; `git diff` inspected.
-- [ ] No conflict with `docs/SECURITY.md`.
+- [x] Accessibility, privacy, scope and regression sweeps pass; findings fixed minimally or reported.
+- [x] Demo, `skillProgress`, `roadmapItems`, D, persistence/cache, env/dependency/index non-integration is evidenced.
+- [x] Copy contains no unqualified "anonym", counts or evaluative wording and claims no prevention of inference.
+- [x] Full gates pass; `git diff` inspected.
+- [x] No conflict with `docs/SECURITY.md`.
+
+**Closeout notes (TASK-019)**
+
+*Production change:* one defect found by the accessibility sweep — the participation panel and the needs content were
+siblings sharing the key `requestKey` (React duplicate-key warning). Both keys are now prefixed (`panel:` / `needs:`) in
+`TeamSkillNeedsSection.tsx`; they are still derived from team + token, so a team or token change still remounts both. No
+request, authorization or privacy behaviour changed. Regression: `TeamSkillNeedsSection.a11y.test.tsx` fails (verified by
+temporarily reverting the prefixes) on a duplicate-key warning only; other `console.error` output is forwarded.
+No other production file changed.
+
+*Dependencies (accurate history):* TASK-019 changes no manifest, `pnpm-workspace.yaml` or lockfile. The feature's history
+contains the earlier commit `32c6ea3` ("fix", 2026-10-07, before the coverage reader and participation tasks), which added
+the `jwks-rsa>jose` override pinning `jose` 4.15.9 (`pnpm-workspace.yaml`, `pnpm-lock.yaml`). TASK-019 neither introduces
+nor modifies it, and `package.json` is unchanged since the C1 close (`ef206de`). C2 adds no application dependency of
+its own, but the claim "no dependency/lockfile change anywhere in the C2 range" would be false. Env: no `process.env` in
+C2 production; index: `firestore.indexes.json` unchanged (four pre-existing indexes, asserted).
+
+*SECURITY.md "Feature review checklist" — walked item by item (20 items), against the whole C2 implementation unless noted:*
+
+| # | Item | Result | Basis |
+|---|---|---|---|
+| 1 | Sensitive data in Firestore as plaintext | N/A | C2 stores only team need numbers and a membership `{noticeVersion, consentedAt}`; no survey/free-text data. Levels stay in C1 `skillProfiles`, which C2 never writes |
+| 2 | Browser obtains encryption material | PASS | C2 has no encryption material; no `process.env`/`NEXT_PUBLIC` in C2; no Admin SDK in client files (guard: client/server boundary) |
+| 3 | Anonymous response contains identity | N/A | No anonymous survey response is touched; no per-person field in any C2 DTO (response-shape tests, guard) |
+| 4 | Participation correlated with responses | N/A | No survey response data; C2 participation is never joined to any response |
+| 5 | Timestamps/metadata undermining anonymity (team of one) | PASS | `consentedAt` never returned; coverage DTO has no timestamp or count; k = 5 per skill; persisted needs carry no actor (privacy matrix, route tests) |
+| 6 | Team A reaches Team B data | PASS | Genuine membership of the route team; cross-team membership/uid do not authorize (genuine-team-membership tests); per-team need slots; participation per membership (multi-team test) |
+| 7 | Aggregates below threshold | PASS | `n < 5` ⇒ `insufficient_data`, indistinguishable causes (privacy matrix); `k` is one constant, no override (guard + cross-cutting scan) |
+| 8 | Sensitive text reaches logs/monitoring | PASS | The repo's only logging mechanism is `console.*` in the Demo CLI; C2 production has no console/logger/stdout call (cross-cutting exact-set scan); a runtime test asserts a failing read logs nothing |
+| 9 | Secrets/credentials in source control | PASS | TASK-019 diff contains no credentials or env values; no secret-bearing file touched |
+| 10 | Real employee data in tests/fixtures | PASS | Only `example.com` / `example.test` addresses and obviously fictional ids/names across C2 tests; Demo fixtures hold no C2/profile data (scan) |
+| 11 | Admin path reaches raw individual responses | PASS | No survey responses exist in C2. Admin cannot read coverage or participation, and no admin path reads `skillProfiles` through C2 (non-member admin tests, C1 guard) |
+| 12 | Member-facing response exposes uid/e-mail/membership id/audit field or derived value | PASS | Participation non-exposure suite across roster, assignable members, admin list, needs, member-ref prep; coverage/needs/contribution DTOs allow-listed |
+| 13 | Client-visible member reference uses uid or derived value | PASS | C2 exposes no member reference at all; `memberRef` unused by C2 (SPEC BR-7; guard) |
+| 14 | Display name/role used as identifier or authorization input, or trusted from client | PASS | Identity only from the verified token; `teamId`/`treeId` are route context checked server-side; role read from the stored membership, never client input (client uid/role ignored tests) |
+| 15 | Lead role grants access implicitly | PASS | One explicit, SPEC-reviewed lead capability (need management, BR-5); lead gets no profile access and no richer coverage (lead = member DTO test; guard authorization-seam checks) |
+| 16 | Member ref/planning owner treated as authorization, or GET generates/writes one | PASS | C2 uses neither; GET routes write nothing (read-only store seams; guard write-boundary) |
+| 17 | Planning write relies on app-admin/lead instead of genuine active-team membership, or trusts client ids | PASS | Writes require a genuine membership whose stored role is lead and an active team, re-read in the transaction; admin status never consulted (manage-skill-need and genuine-membership tests) |
+| 18 | Per-person score, ranking, aggregate, owner filter, manager note | PASS | Only the SPEC-approved categorical, thresholded team aggregate; no score/rank/owner/note (copy and DTO scans, guard) |
+| 19 | Any role/uid/team parameter reaches another person's `skillProfiles`; new reader/importer without guard edit | PASS | Single reader module, single approved caller, exact uid list pinned (privacy "eligible uids" tests); C1 and C2 guards (importer maps, identifier and re-export scans) pass; no new route |
+| 20 | Manager/lead/admin rating, score, average, rank, comparison or sharing path in a skill-assessment feature | PASS | None exists; copy states the opposite; the accepted lead need-mutation oracle is documented residual risk (BR-21), not a rating path |
+
+Totals recomputed from the table: 20 items = 17 PASS + 3 N/A (items 1, 3, 4; each has exactly one disposition).
+
+No unresolved conflict with `docs/SECURITY.md`; `docs/SECURITY.md` itself is not changed here (invariants 32–36 are TASK-020).
+
+*Threat-model rows → evidence (SPEC "Threat model": 19 rows, verified by count).* "Residual" rows have no behavioural
+test by nature; the evidence is that the limit is stated to the user (`team-skills-cross-cutting.test.ts` →
+"Threat-model residual rows are disclosed…") and, where the mutation is possible, that the accepted behaviour is pinned.
+
+| # | Threat | Class | Evidence (file → test / group) |
+|---|---|---|---|
+| 1 | Ordinary-member probing | testable | `server/manage-skill-need.test.ts` → "need write authorization" (member, member+admin forbidden to put/delete); `app/api/teams/[teamId]/skill-coverage/route.test.ts` → "ignores query parameters…" |
+| 2 | Malicious-lead probing | residual + bounded | bounds: `domain/skill-need.test.ts` (requiredLevel 1 and coverage > 20 rejected); accepted flip pinned: `server/get-team-skill-coverage-privacy.test.ts` → "differencing: one boundary participant flips…"; disclosed: cross-cutting residual-rows test |
+| 3 | Small cohort | testable | `get-team-skill-coverage.test.ts` → "k is 5: 0, 1 and 4 contributors are insufficient_data"; privacy test → "k = 5 per skill over real profile reading" |
+| 4 | Sparse skill, large team | testable | `get-team-skill-coverage.test.ts` → "a sparse skill in a large team is judged by its own contributors"; "threshold is per skill" |
+| 5 | Homogeneous cohort | residual | disclosed in the «Slik fungerer personvernet» disclosure (cross-cutting residual-rows test); data-dependent suppression deliberately rejected (SPEC) |
+| 6 | Roster differencing | testable + residual | non-participants change nothing: `get-team-skill-coverage.test.ts` → "eligible uid set… contains exactly the genuine, effectively consenting members"; privacy test → "the response is the same whether 0, 1 or 4 members participate"; residual disclosed in the primary notice |
+| 7 | Opt-in/out differencing | testable + residual | privacy test → "unassessed, unreadable, invalid, absent and reset profiles are byte-identical to a smaller cohort"; "withdrawal and stale consent flip the state; removal does too"; residual disclosed |
+| 8 | Self-subtraction | residual, not separately disclosed | SPEC row 8: a contributor's own level narrows others at the margins of a cohort of 5. Approved BR-25 wording does not describe it separately, so no disclosure test is credited; it is covered only by the general "not full anonymity… rough information about the group" limit in the primary notice. Mitigation evidence: no counts/distribution in any output (`get-team-skill-coverage.test.ts` → "response shape"; privacy test → "the serialized response has no identity, consent, count or level field") |
+| 9 | Collusion | residual | disclosed in the disclosure (cross-cutting residual-rows test); no mitigation exists at this k (SPEC) |
+| 10 | Malformed profile | testable | privacy test → "unassessed, unreadable, invalid, absent and reset profiles are byte-identical…"; `skill-profiles/server/read-skill-levels-batch.test.ts` |
+| 11 | Reset/delete of profile | testable | same privacy test ("reset profiles"); `skill-contribution.test.ts` lifecycle (participation object persists, inert) |
+| 12 | Removal / rejoin | testable | `server/skill-contribution.test.ts` → "removal destroys participation; a rejoin is a fresh membership that is not contributing"; "re-grant of an existing membership is a no-op" |
+| 13 | Team deactivation | testable | `get-team-skill-coverage.test.ts` → "a disabled team is team_disabled…"; `skill-contribution.test.ts` → disabled opt-in refused, withdrawal succeeds; `manage-skill-need.test.ts` → disabled-team lead gets team_disabled |
+| 14 | Multiple teams | testable | `skill-contribution.test.ts` → "multi-team independence"; store test "never other teams" |
+| 15 | Non-member app admin | testable | coverage: `get-team-skill-coverage.test.ts` → "nonMemberAdmin… forbidden with no cohort reads"; participation: `skill-contribution.test.ts` → "…not for a non-member admin"; writes: `manage-skill-need.test.ts` (nonMemberAdmin); needs read allowed: `list-skill-needs.test.ts` |
+| 16 | Unauthorized new server reader | static | `team-skills-scope-guard.test.ts` → "personal data boundary"; `skill-profiles-scope-guard.test.ts` importer maps, identifier and re-export scans, negative fixtures (change-detection, not the boundary); call-site: privacy test → "eligible uids reach the real adapter's raw boundary" |
+| 17 | Accidental client Firestore access | static | `src/lib/firebase/firestore-deployment-config.test.ts` → "denies all client-SDK access to teamSkillNeeds…" (and skillProfiles); `team-skills-scope-guard.test.ts` → "client/server and Firebase boundaries" |
+| 18 | Participation exposed via membership DTOs | testable | `server/participation-non-exposure.test.ts` → "no membership-derived response exposes participation (BR-10)" |
+| 19 | Stale lead capability | testable | NEW `manage-skill-need.test.ts` → "a demoted or removed lead loses the capability on the very next call"; `genuine-team-membership.test.ts`; "a disabled-team lead gets team_disabled" |
+
+Previously uncovered testable row: 19 (demotion/removal between calls) — test added. Rows 2, 5, 6, 7 and 9 had no explicit
+disclosure assertion; the residual-rows copy test (key phrases, not full sentences) was added. Row 8 is honestly classified above
+as not separately disclosed; no copy was changed because the approved wording does not require it.
+
+*BR-21 in test sources:* `team-skills-cross-cutting.test.ts` scans every C1/C2 test source and comment (all of
+`src/features/team-skills`, `src/features/skill-profiles` and the C2 route directories, nested, `.test.ts` and `.test.tsx`; both
+scope guards are scanned) plus C2 production files. Only the scanning file itself is excluded, by exact path, because it holds
+the forbidden-claim fixtures. Claims are explicit families — prevention/guarantee verbs, "impossible/prevented" states,
+anonymizing verbs, passive "cannot be inferred/identified", agent "nobody can infer", and Norwegian equivalents. Negation is
+local: "does not prevent inference", "cannot guarantee anonymity" are allowed because the negator directly governs the claim
+verb (no word window; negation in another clause, e.g. "does not expose names but guarantees anonymity", never excuses it),
+while "cannot be inferred", "makes users anonymous" and "prevents inference, not just counts" are rejected. A guarantee
+nested inside an explicitly denied one ("does not guarantee that individuals cannot be inferred") is allowed; the denied span
+ends at the next comma, colon or coordinating word. Norwegian "hindrer/forhindrer utledning" and "gjør … anonym" are rejected,
+"gjør ikke … anonym" is allowed. The same
+helper is used by the table-driven self-tests and the repository scan. The existing "does not prevent inference over time"
+comment in the privacy suite is asserted to remain allowed.
+
+*Static scans are complementary:* TASK-017 (`team-skills-scope-guard.test.ts`) remains the owner of the exact collection,
+path, writer and importer allow-lists; the TASK-019 scans are lexical cross-checks and prove nothing beyond their tokens.
 
 ---
 

@@ -87,11 +87,11 @@ export function TeamSkillNeedsSection({ teamId, token, teamName }: { teamId: str
         {copy.heading}
       </h3>
       <p className="text-zinc-600 dark:text-zinc-400">{copy.intro}</p>
-      <SkillContributionPanel key={requestKey} teamId={teamId} token={token} teamName={teamName} />
+      <SkillContributionPanel key={`panel:${requestKey}`} teamId={teamId} token={token} teamName={teamName} />
       {current === null ? (
         <LoadingState label={copy.loading} />
       ) : current.status === "ok" ? (
-        <NeedsManager key={requestKey} teamId={teamId} token={token} result={current} onRefresh={refresh} />
+        <NeedsManager key={`needs:${requestKey}`} teamId={teamId} token={token} result={current} onRefresh={refresh} />
       ) : (
         <div className="flex flex-col items-start gap-3">
           <Alert variant="error">{current.status === "forbidden" ? copy.forbidden : copy.error}</Alert>

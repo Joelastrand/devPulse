@@ -156,6 +156,32 @@ describe("need write authorization", () => {
     },
   );
 
+  it("a demoted or removed lead loses the capability on the very next call (fresh reads, no cached role)", async () => {
+    const original = CALLERS.lead.membership;
+    try {
+      const allowed = await put({ caller: "lead" });
+      expect(allowed.result.ok).toBe(true);
+      expect(allowed.commits).toEqual([{ op: "put", docId: DOC }]);
+
+      const existing = { [DOC]: storedNeed() };
+      CALLERS.lead.membership = { role: "member" }; // demoted
+      for (const attempt of [await put({ caller: "lead", needs: existing }), await del({ caller: "lead", needs: existing })]) {
+        expect(attempt.result).toEqual({ ok: false, error: "forbidden" });
+        expect(attempt.commits).toEqual([]);
+        expect(attempt.needs).toEqual(existing);
+      }
+
+      CALLERS.lead.membership = undefined; // removed
+      for (const attempt of [await put({ caller: "lead", needs: existing }), await del({ caller: "lead", needs: existing })]) {
+        expect(attempt.result).toEqual({ ok: false, error: "forbidden" });
+        expect(attempt.commits).toEqual([]);
+        expect(attempt.needs).toEqual(existing);
+      }
+    } finally {
+      CALLERS.lead.membership = original;
+    }
+  });
+
   it("signed-out callers get unauthenticated and the store is never opened", async () => {
     const s = setup({ caller: "signedOut" });
     const runTransaction = vi.spyOn(s.deps.store, "runTransaction");
