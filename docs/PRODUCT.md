@@ -329,19 +329,57 @@ until attrition, burnout, or delivery failure makes them obvious.
   measure. The skill-area names come from the existing org-wide SkillTree
   catalog (the same names the team sees as *Kompetanseområder*); no separate
   personal catalog exists.
-- **Not delivered (C2 remains future):** `teamSkillNeeds`, a team skill matrix,
+- **Not delivered in C1:** `teamSkillNeeds`, a team skill matrix,
   gap or coverage analysis, any aggregate of personal assessments, privacy
   thresholds, consent/inclusion decisions, role expectations and any sharing.
-  C1 adds no Demo Team personal data.
+  C1 adds no Demo Team personal data. *(Amended 2026-10-10: C2 has since
+  delivered the needs, the opt-in and the thresholded coverage — see the next
+  entry; role expectations and any individual-level sharing remain
+  undelivered.)*
 - See `docs/features/individual-skill-self-assessment/SPEC.md`, `docs/SECURITY.md`
   (invariant 31) and `docs/ROADMAP.md`.
 
+## Delivered: Team Skill Needs and Privacy-Thresholded Coverage (Feature C2)
+
+- A team **lead** records, per competency area (*Kompetanseområde*), a team
+  skill need: "at least *r* contributors at personal level *L* or higher"
+  (*L* is 2–4, *r* is 1–20). All genuine team members, and app admins, can read
+  the needs; only a genuine lead of an active team can create, change or delete
+  them. Needs are a team planning statement, not a requirement on any person.
+- Each person decides, **per team and revocably**, whether their own C1
+  self-assessments may count towards that team's coverage ("Bidra til teamets
+  kompetanseoversikt"). It is opt-in, never pre-selected, never required to view
+  coverage, ends when the person withdraws or leaves the team, and has to be
+  chosen again after rejoining. No lead or admin can opt anyone in.
+- Genuine members of an active team see, per need, only a **categorical**
+  status: *Behovet er dekket*, *Behovet er ikke dekket ennå* or *Ikke nok data
+  til å vise dekning ennå*. A skill is evaluated only when at least **5**
+  eligible contributors have assessed it (fixed, not configurable); there are no
+  counts, percentages, levels, distributions or names, and no way to see who
+  contributes. The section is *Kompetansebehov og dekning* on the team Overview.
+  The output is **privacy-thresholded team coverage**, not anonymity: the
+  participation notice states that status changes can in some cases give rough
+  information about the group, and the SPEC/`docs/SECURITY.md` record the
+  residual risks (including that a lead who changes needs over time can learn
+  approximate counts).
+- Coverage is derived on each request and never stored; a gap creates no
+  assignment, goal, notification or roadmap item. The C1 `/me/skills` notice
+  now says that participation is optional and team-level only. The self-assessment
+  itself stays person-owned, and no lead, admin or teammate can read another
+  person's levels.
+- **Not delivered:** an employee-by-skill matrix or any per-person view (not
+  planned), counts/distributions, a configurable threshold, history or trends,
+  automatic roadmap prefill from a gap, role expectations (D1/D2), assignments,
+  goals or notifications, and Demo Team coverage data (no personal assessments
+  are seeded, so the Demo cannot show *dekket*/*ikke dekket*).
+- See `docs/features/team-skill-needs-and-matrix/SPEC.md`, `docs/SECURITY.md`
+  (invariants 32–36) and `docs/ROADMAP.md`.
+
 ## Future capabilities (not implemented yet)
 
-- **Feature C2 — team skill needs and aggregation** (`teamSkillNeeds`, a team
-  skill matrix, gap/coverage views, privacy-protected aggregates of personal
-  assessments, role expectations): not built and not authorized by C1; each
-  needs its own approved SPEC.
+- **Role expectations (D1/D2)** and any use of skill needs or coverage as an
+  expectation on a role or person: not built and not authorized by C2; each needs
+  its own approved SPEC.
 - A cross-team/org-wide "developer forum" or community, beyond Team
   Forum's team-scoped v1 slice, and real-name/display-name attribution for
   it (see "Delivered: Team Forum (Phase 6)" above).
@@ -380,3 +418,17 @@ about per-person skill ratings (historically in
 Any future use of personal assessments beyond the owner (Feature C2) is not
 authorized by C1 and requires its own approved specification, an updated
 privacy notice and a security/privacy review (`docs/SECURITY.md`, invariant 31).
+
+### Clarification (2026-10-10, Team Skill Needs and Privacy-Thresholded Coverage C2)
+
+C2 extends the 2026-10-05 clarification to a **team-level** use of self-assessments
+without making any individual visible. It weakens no anti-surveillance rule.
+
+| | |
+|---|---|
+| **Allowed (C2)** | an opt-in, per-team, revocable contribution of one's own self-assessment to a fixed-threshold (5 contributors per skill), categorical, derived team coverage; one lead capability: managing the team's skill needs |
+| **Still not allowed** | any individual-level output (named or employee rows, per-person cells, who contributes, who lacks a skill, counts or distributions); lead, manager or admin access to a person's levels; ranking, scoring or performance use; a configurable or lowerable threshold; claims of anonymity |
+
+The threshold limits what the output shows; it does not make the output anonymous in a
+formal sense, and the residual risks are recorded in `docs/SECURITY.md` (invariants 32–36).
+Any consumer of C2 output beyond team planning information needs its own approved SPEC.

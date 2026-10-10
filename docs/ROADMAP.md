@@ -339,16 +339,28 @@
     environment variable or Demo Team change. See
     `docs/features/individual-skill-self-assessment/SPEC.md` and
     `docs/SECURITY.md` (invariant 31).
-  - **C2 — Team skill needs and aggregation** *(planned, not built)*: desired
-    team needs (`teamSkillNeeds`), a team skill matrix and gap/coverage views
-    (derived, not persisted), and any privacy-protected aggregate of personal
-    assessments. C1 does not authorize any of it: a separately approved SPEC, an
-    updated privacy notice, a security/privacy review, deliberate changes to both
-    static-guard allow-lists, thresholds and an inclusion/consent decision are
-    required first. C2 may prefill a plan from a team gap.
+  - **C2 — Team skill needs and privacy-thresholded coverage** *(delivered)*:
+    lead-managed team needs (`teamSkillNeeds/{teamId}__{treeId}`: "at least *r*
+    contributors at personal level 2–4 or higher"), an opt-in, per-team, revocable
+    contribution stored on the membership (`teamMemberships.skillContribution`),
+    and a derived, never-stored **categorical** coverage status per need
+    (`covered` / `gap` / `insufficient_data`) shown in *Kompetansebehov og dekning*
+    on the team Oversikt. Fixed threshold of 5 eligible contributors per skill; no
+    counts, distributions, individual levels or employee rows; coverage is for
+    genuine members of an active team only. One narrow lead capability (managing
+    needs). Single read-only batch reader of `skillProfiles` behind both static-guard
+    allow-lists; C1 notice amended; no new index, dependency, environment variable or
+    Demo Team change. See `docs/features/team-skill-needs-and-matrix/SPEC.md` and
+    `docs/SECURITY.md` (invariants 32–36).
+    - *Superseded:* the earlier direction "default 5, configurable 3–20" (survey
+      `minimumResponses` precedent) is replaced by the fixed `k = 5` (P2). *Not
+      delivered:* "C2 may prefill a plan from a team gap" — C2 creates no roadmap item,
+      prefill, assignment, goal or notification, and neither reads nor writes
+      `skillProgress` or `roadmapItems`.
   - **D1/D2 — Role expectations** *(planned, not built)*: `roleDefinitions`
-    and their use in planning, reusing the member reference rules.
-  Only F0, A, B and C1 exist; later phases are intentions, not commitments, and each
+    and their use in planning, reusing the member reference rules. The D1/D2
+    naming ambiguity noted at C1 closeout is still only reported, not resolved.
+  Only F0, A, B, C1 and C2 exist; later phases are intentions, not commitments, and each
   needs its own approved SPEC.
 
 Phases 0–9 are complete. See `docs/PRODUCT.md` for the product vision and

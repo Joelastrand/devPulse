@@ -75,7 +75,12 @@ is considered done.
     team is `active`), written only by an app admin through a server-side
     transaction, never client-supplied, and grants no capability unless a
     feature explicitly opts into `resolveTeamRole`. `authorizeTeamAccess`
-    continues to treat a lead as an ordinary member.
+    continues to treat a lead as an ordinary member. *C2 amendment
+    (2026-10-10):* Team Skill Needs (C2) is the first feature to opt in, for
+    **exactly one** capability — management of `teamSkillNeeds` (invariant 33).
+    It decides this from the genuine membership read in the write
+    transaction, not through `resolveTeamRole`, and no other lead capability
+    exists.
 23. Roadmap data (`roadmapItems`) is team-scoped and server-only (client
     Firestore rules deny all). Every roadmap operation re-derives
     authorization from the verified identity and fresh state. Reads follow
@@ -131,8 +136,11 @@ is considered done.
     use, ranking and productivity scoring remain prohibited. Levels are
     ordinal: no average, sum or overall score is computed. Logs never carry
     levels, tree ids, skill names or the profile. C1 provides no sharing and
-    no aggregate. Any future reader of personal assessments (for example C2
-    aggregation) is **not** authorized by C1 and requires all of: a separately
+    no aggregate. *C2 amendment (2026-10-10):* the single reader C2 added is
+    governed by invariants 32–36 and does not widen owner access: no other
+    person can read a profile, and the only derived output is the
+    privacy-thresholded categorical team coverage. Any *other* future reader
+    of personal assessments is **not** authorized by C1 or C2 and requires all of: a separately
     approved specification, an updated user-facing privacy notice, an explicit
     security/privacy review, a deliberate change to **both** static-guard
     allow-lists, threshold/aggregation protections where applicable, and an
@@ -142,6 +150,76 @@ is considered done.
     runtime behaviour, dynamically built collection names or module paths,
     unresolvable re-exports/dynamic imports, code outside `src/` and `app/`, or
     Admin-credential access outside the application.
+32. **Team skill coverage (C2) reads a person's `skillProfiles` document only
+    through the single batch module** (`readSkillLevelsBatch`), only for a
+    person who holds an effective, per-team, versioned participation
+    (`teamMemberships.skillContribution`) on a genuine membership of an
+    `active` team, and only for the `treeId`s of the team's persisted needs.
+    It returns only a categorical per-need state (`covered`, `gap`,
+    `insufficient_data`, and `area_unavailable` for an unusable catalog tree) —
+    never a `uid`, e-mail, name, `memberRef`, level, count, ratio,
+    distribution, min/max, timestamp, completeness or contributor identity.
+    Participation is opt-in, per team, revocable, destroyed with the
+    membership, absent after a rejoin, and never overridden by a lead or app
+    admin. The cohort is judged per skill with a fixed threshold of 5 eligible
+    contributors; below it the result is `insufficient_data`, and every
+    suppression cause is indistinguishable.
+33. Roles do not widen coverage or profile access. Coverage is readable only
+    by genuine members of an `active` team, with an identical response for
+    ordinary members and leads; a non-member app admin may read the stated
+    needs (never coverage), and an app admin who is also a member is evaluated
+    purely as that membership. Another person's participation is never
+    readable (no contributor list, no `consentedAt`, not in any
+    membership-derived response). The single lead capability introduced by C2
+    is limited to creating, updating and deleting `teamSkillNeeds` of an
+    `active` team, decided from a fresh genuine-membership read; it grants no
+    access to any profile or richer output. App-admin status never grants
+    need mutation, coverage or participation.
+34. The coverage threshold `k = 5` is the code constant
+    `SKILL_COVERAGE_MIN_CONTRIBUTORS` (with the notice version
+    `SKILL_CONTRIBUTION_NOTICE_VERSION`, both owned by
+    `src/features/team-skills/domain/skill-coverage-policy.ts`). It is never
+    configurable by a request, setting, environment variable, team, lead or
+    app admin, and may not be lowered without a product decision, a revision of
+    this document and a bump of the notice version (which lapses all
+    participation). The coverage endpoint accepts no query-time inputs; the
+    only cut-points are the persisted needs (`requiredLevel` 2–4,
+    `requiredCoverage` 1–20; level 1 is excluded).
+35. Nothing derived from personal assessments is persisted or cached: no
+    aggregate, coverage/gap score, matrix snapshot, contribution record,
+    history or trend. Every coverage request recomputes from the canonical
+    sources. Any read failure yields an error with no partial result, and a
+    cohort that cannot be read completely (more than 500 memberships) yields
+    `incomplete` with no rows.
+36. C2 never writes `skillProfiles`, `userProfiles`, `skillProgress` or
+    `roadmapItems`. It writes only `teamSkillNeeds` (lead-only, no actor or
+    history fields, hard delete) and the caller's own
+    `teamMemberships.skillContribution` field. A `gap` creates no assignment,
+    notification, goal or roadmap item. `teamSkillNeeds` is server-only
+    (explicit deny-only rules block, no composite index).
+
+**Residual-risk statement for invariants 32–36 (approved, P6).** The output is
+**privacy-thresholded team coverage**. It is **not** anonymous in any formal
+sense, and `k = 5` is a product threshold, not an anonymity guarantee. C2 does
+not provide differential privacy, and does not protect against: a lead who
+deliberately mutates the persisted needs and compares the categorical results
+over time (the *malicious-lead oracle*: by varying `requiredLevel` and
+`requiredCoverage` a lead can learn whether the number of contributors at or
+above a level reaches a chosen value, hence roughly the count at or above each
+level and, at level 2, roughly the cohort size; several leads widen this); a
+state change that coincides with a visible roster or participation change,
+which can reveal a broad band property of one person; a homogeneous cohort,
+which reveals a broad band property of every contributor; collusion among
+contributors or leads, and self-subtraction by a contributor who knows their own
+level, at the margins of a small cohort; or repeated observations in general.
+Operators with Firestore Admin credentials can read the raw data (not a product
+entitlement). These limits are stated to participants in the participation
+notice (self-subtraction only through its general "rough information about the
+group" wording). The static guards (`team-skills-scope-guard.test.ts`,
+`skill-profiles-scope-guard.test.ts`) are change-detection evidence, not
+security boundaries: they do not prove runtime behaviour, dynamic collection
+names or module paths, path aliases other than `@/`, code outside `src/` and
+`app/`, or Admin-credential access.
 
 ## Feature review checklist
 
@@ -180,6 +258,18 @@ Before marking a feature touching survey/team/user data as done, check:
       deliberate guard allow-list edit and review?
 - [ ] Does a skill-assessment feature introduce a manager/lead/admin rating,
       score, average, rank, comparison or sharing path?
+- [ ] Is there a reader of `skillProfiles` outside the single approved batch
+      module, or does any team response contain a count, ratio, distribution,
+      min/max, timestamp or any path revealing who contributes?
+- [ ] Is the coverage threshold or need cut-point widened (a threshold below 5,
+      a configurable `k`, `requiredLevel = 1`, a non-lead need write, or a
+      query parameter, snapshot or timestamp on the coverage endpoint)?
+- [ ] Does a lead capability extend beyond managing `teamSkillNeeds`, or is
+      app-admin status used for coverage, need writes or participation?
+- [ ] Is participation exposed through a membership-derived response, kept
+      after removal or rejoin, defaulted on, or overridable by a lead or admin?
+- [ ] Is derived coverage persisted or cached, or is any output described as
+      "anonymous" or as preventing inference?
 
 Known, accepted limitations of the member-identity foundation (display-name
 Unicode compatibility, roster truncation above 500 members, the absence of an
@@ -193,6 +283,13 @@ Firebase account (the owner can erase it while signed in); and anyone with
 operator/console access to Firestore can technically read the data — that is not
 a product entitlement and no DevPulse surface provides it. See
 `docs/features/individual-skill-self-assessment/SPEC.md`.
+
+Known, accepted limitations of team skill coverage (C2): the residual privacy
+risks stated after invariant 36; there is no account-deletion flow, so a
+membership (and its participation) or a profile can outlive a deleted Firebase
+account until the membership is removed; and the Demo Team cannot show the
+available (`covered`/`gap`) states because no personal assessments are seeded.
+See `docs/features/team-skill-needs-and-matrix/SPEC.md`.
 
 See `docs/ARCHITECTURE.md` for where these boundaries live, and
 `docs/features/<feature-id>/SPEC.md` for feature-specific decisions.

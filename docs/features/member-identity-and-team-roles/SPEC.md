@@ -606,3 +606,16 @@ Documented limitations, not defects:
 None. All six draft defaults are resolved by the product owner (lead
 assignment on a disabled team changed to: rejected for *new* assignment,
 see BR-22).
+
+## C2 amendment (2026-10-10, Team Skill Needs and Privacy-Thresholded Coverage)
+Appended at C2 closeout; approved F0 text above is not rewritten.
+- **Membership field never exposed.** C2 adds the optional membership field `skillContribution`
+  (`{ noticeVersion, consentedAt }`, the member's own per-team opt-in). The roster, assignable members,
+  members list, admin member list and access-request responses stay field-by-field allow-lists and never
+  include it (regression-tested); the roster's exact `{displayName, isLead, isSelf}` contract is unchanged.
+- **One lead capability.** The "No lead-only capabilities" limitation above is amended by exactly one,
+  deliberate capability: a genuine lead of an `active` team may create, update and delete the team's
+  `teamSkillNeeds`. It is decided from the genuine membership read, not through `resolveTeamRole`, grants
+  no access to any personal data or richer output, and changes neither `authorizeTeamAccess` nor
+  `resolveTeamRole`. Any further lead capability needs its own specification. See `docs/SECURITY.md`
+  invariants 22 and 33.

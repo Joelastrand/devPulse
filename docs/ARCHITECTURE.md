@@ -249,8 +249,8 @@ Feature A's `roadmapItems`. Boundaries:
 
 C1 (`docs/features/individual-skill-self-assessment/SPEC.md`) adds a person-owned,
 **owner-only** self-assessment. It is the only part of the Team & Personal
-Development work that stores per-person skill data; team aggregation (C2) is not
-built. Boundaries:
+Development work that stores per-person skill data; team aggregation was added later by C2 (see
+"Team skill needs and privacy-thresholded coverage" below). Boundaries as delivered by C1:
 
 - **Slice and dependency direction.** `src/features/skill-profiles/` holds `domain/`
   (the 1–4 ordinal scale, record guard, sort and count helpers), `server/` (store
@@ -303,9 +303,9 @@ built. Boundaries:
   forbids team-authorization/`skillProgress`/roadmap/membership imports in the slice. It is
   change detection, **not a security boundary**: it does not prove runtime behaviour,
   dynamic collection names or module paths, code outside `src/` and `app/`, or arbitrary
-  Admin-credential access. A future C2 reader must deliberately edit **both** allow-lists
-  under review (`docs/SECURITY.md`, invariant 31).
-- **Not in C1 (future C2, separately gated):** `teamSkillNeeds`, a team skill matrix, gap
+  Admin-credential access. The C2 reader deliberately edited **both** allow-lists
+  under review (`docs/SECURITY.md`, invariants 31–36).
+- **Not in C1 (C2 later added the opt-in thresholded subset; the rest remains undelivered):** `teamSkillNeeds`, a team skill matrix, gap
   analysis, aggregate views, privacy thresholds, inclusion/consent decisions, role
   expectations, sharing, and any team/lead/admin access to individual self-assessments.
 - **No new infrastructure.** No composite index, migration, backfill, dependency or
@@ -316,6 +316,100 @@ built. Boundaries:
   covers 409/reset transitions but not this overlap). The page reuses the generic
   `DeleteConfirmation` component from `src/features/forum/components/` (no data coupling; a
   maintainability concern only).
+
+## Team skill needs and privacy-thresholded coverage (Feature C2, decided, implemented)
+
+C2 (`docs/features/team-skill-needs-and-matrix/SPEC.md`) adds team-owned skill needs, a
+per-team opt-in contribution, and a derived categorical coverage status. It is the only
+reader of `skillProfiles` other than the owner. Boundaries:
+
+- **Slice and dependency direction.** `src/features/team-skills/` holds `domain/` (need
+  record and validation, participation rule, pure `deriveCoverageState`, and the policy
+  constants), `server/` (genuine-membership check, needs list/upsert/delete, participation
+  get/set/withdraw, `get-team-skill-coverage`), `client/` (gateway), `components/`
+  (`TeamSkillNeedsSection`, `SkillNeedEditor`, `SkillContributionPanel`) and `copy.ts`.
+  Routes are thin: `app/api/teams/[teamId]/skill-needs[/[treeId]]`, `.../skill-coverage`,
+  `.../skill-contribution`. Dependencies point `team-skills → skill-trees/domain,
+  teams/domain, skill-profiles (level domain and the one batch module)`, never back.
+  `team-skills` imports no roadmap or `skillProgress` module.
+- **Policy constants, one owner.** `SKILL_COVERAGE_MIN_CONTRIBUTORS = 5`,
+  `SKILL_CONTRIBUTION_NOTICE_VERSION = 1` and `TEAM_SKILL_COHORT_SCAN_MAX = 500` live only in
+  `team-skills/domain/skill-coverage-policy.ts`. No environment variable, setting, request
+  parameter or UI can change them (invariant 34).
+- **Genuine-membership ordering.** `authorizeTeamAccess` and `resolveTeamRole` return `admin`
+  before they look at membership, and both are unchanged. Need *read* uses
+  `authorizeTeamAccess` (member or admin; disabled teams readable). Coverage, need writes and
+  participation use `genuine-team-membership.ts` with fresh reads in this order: verified token
+  (401) → team exists with a valid status (else 403 for everyone) → the caller's own valid
+  membership (else 403, without consulting app-admin status) → `active` team (else 409
+  `team_disabled`) → operation-specific checks. Failed reads are 500 `read_failed`, never 403.
+  Read-need, write-need and read-coverage are three separate permissions; there is no combined
+  `canEdit`, and the response `viewer` hints only hide controls.
+- **The one lead capability.** `PUT`/`DELETE .../skill-needs/[treeId]` re-verify in one
+  transaction that the caller's genuine membership has exactly `role: "lead"` and the team is
+  `active` (PUT also reads the target tree directly). This is decided from the membership, not
+  through `resolveTeamRole`; a lead who is also an app admin keeps it, an admin without a lead
+  membership has none, and a removed or demoted lead loses it on the next call.
+- **Needs persistence.** `teamSkillNeeds/{teamId}__{treeId}`: `teamId`, `treeId`,
+  `requiredLevel` (2–4), `requiredCoverage` (1–20), `createdAt`, `updatedAt`. No actor,
+  archive or history fields; `DELETE` is a hard, idempotent delete. Invalid documents are
+  skipped on read, never repaired. Server-only (Admin SDK) with an explicit deny-only
+  `firestore.rules` block; the needs query is `where("teamId","==",…).limit(501)`, so no index.
+- **Participation persistence.** Membership field `skillContribution: { noticeVersion,
+  consentedAt }` (presence = opt-in, no `enabled` flag). Written only by the owner through
+  `PUT`/`DELETE .../skill-contribution` in a transaction that updates only that field;
+  withdrawal deletes the whole object. Effective only when the key set is exact, the version
+  equals the current constant and the timestamp is valid; a version bump silently lapses all
+  participation. Membership removal destroys it, a rejoin starts without it, and a re-grant of
+  an existing membership is a no-op. It is never in a membership-derived DTO (roster,
+  assignable members, members list, admin member list, access requests); `consentedAt` is
+  never returned or used for a decision.
+- **Coverage aggregation order.** Authorize (above) → list needs (≤501) → none ⇒ empty
+  `available`, no profile read → list memberships (≤501; 501 ⇒ `incomplete` with no rows) →
+  keep valid memberships with effective participation → `readSkillLevelsBatch(uids,
+  needTreeIds)` → direct-read needed trees (invalid ⇒ `area_unavailable`) → derive →
+  allow-listed DTO, `Cache-Control: no-store`. Any read failure ⇒ 500 with no partial data;
+  nothing is persisted or cached (invariant 35). The route accepts no query parameter or body.
+- **Pure derivation.** `deriveCoverageState` takes plain integers for one skill plus the need's
+  two numbers: fewer than 5 eligible contributors ⇒ `insufficient_data`; otherwise at least
+  `requiredCoverage` at or above `requiredLevel` ⇒ `covered`, else `gap` (also when
+  `requiredCoverage` exceeds the cohort). The cohort is **per skill**, not team size. Only valid
+  exact-tree levels (1–4) contribute; unreadable, unassessed, invalid and absent profiles are
+  excluded without any count or cause, so every suppression cause is indistinguishable. The DTO
+  is exactly `treeId`, `areaName`, `requiredLevel`, `requiredCoverage`, `state` per row, plus
+  `availability`.
+- **The single reader.** `skill-profiles/server/read-skill-levels-batch.ts` exports only
+  `readSkillLevelsBatch(uids, treeIds)` and returns, per tree, a sorted array of plain
+  integers 1–4 with no uid or per-person association (or `{ ok: false }`). It builds on one new
+  function `readSkillProfilesBatch` inside the already approved `skill-profile-store.ts`, which is
+  **not** on the `SkillProfileStore` interface, default store or in-memory fake, so C1 owner
+  operations cannot call it. Only `team-skills/server/get-team-skill-coverage.ts` may import the
+  batch module, and a call-site test pins the uid list passed to it.
+- **Guard edits.** `skill-profiles-scope-guard.test.ts` gained module-level importer maps for
+  `skill-profile-store.ts` and the batch module, exactly one added outside importer in
+  `APPROVED_SERVER_IMPORTERS`, identifier and re-export scans, and negative fixtures; its
+  forbidden-identifier list is unchanged. The new `team-skills-scope-guard.test.ts` pins exact
+  writer sets for `teamSkillNeeds` and `skillContribution`, the coverage DTO key set, no
+  Firebase client SDK, no roadmap/`skillProgress` import, and the lead-only write check. Both are
+  change detection, **not security boundaries** (they do not prove dynamic paths, aliases other
+  than `@/`, code outside `src/` and `app/`, or Admin-credential access).
+- **Catalog read.** The member-readable bounded catalog read (500/501 raw window, the C1 rule) is
+  a minimal duplicate in `team-skills/server/skill-need-catalog.ts`; `listSkillTrees` and C1's
+  catalog module are neither changed nor imported.
+- **Client.** `TeamSkillNeedsSection` is rendered by `TeamDetail` on Oversikt (no new route or
+  navigation). It loads needs, then coverage when `viewer.canReadCoverage`; the participation panel
+  loads separately. The browser uses the gateway only.
+- **Independence.** C2 writes only `teamSkillNeeds` and the caller's own `skillContribution`. It never
+  writes `skillProfiles`, `userProfiles`, `skillProgress` or `roadmapItems`, creates no roadmap item,
+  assignment, goal or notification, and reads neither `skillProgress` nor `roadmapItems`.
+- **No new infrastructure.** No composite index (`firestore.indexes.json` unchanged), dependency,
+  environment variable, cache, background job, migration or Demo Team fixture. Rules deployment is a
+  separate explicit step not performed by implementation.
+- **Known limitations (as built).** The residual privacy risks of `docs/SECURITY.md` (invariant 36),
+  including the malicious-lead need-mutation oracle; a membership scan above 500 shows `incomplete`
+  rather than aggregating; no account-deletion flow, so orphaned memberships and profiles can persist;
+  a Demo re-seed (full-replace membership write) resets role and participation; and the Demo cannot show
+  the `covered`/`gap` states.
 
 ## Submission and dashboard boundaries (decided, implemented)
 

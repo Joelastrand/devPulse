@@ -884,3 +884,21 @@ Status of every item: **approved** (A1–A6, Revision 2).
 None. A1–A6 are confirmations of recommended decisions, not undecided design. C2-owned
 questions (consent/opt-in, cohort definition, differencing) are recorded under "Constraints
 C2 must honour" and deliberately not resolved here.
+
+## C2 amendment (2026-10-10, Team Skill Needs and Privacy-Thresholded Coverage)
+Appended at C2 closeout; the approved C1 text above is not rewritten. C1's behaviour and owner-only
+APIs are unchanged, and `/me/skills` remains person-owned and shows no team information.
+- **BR-5 notice.** The page notice was amended copy-only (C2 BR-29, `skill-profiles/copy.ts`): it still
+  says teammates, team leads and administrators cannot see the levels set, and now also says the person
+  may choose, team by team, to let the self-assessment count towards a privacy-protected team overview
+  in which the team sees only a coarse status per skill need. The participation control is on the team
+  Overview, not here.
+- **BR-18 "Future access process" fulfilled for C2 only.** C2 introduced one read-only reader (a batch
+  module behind both static-guard allow-lists) under an approved SPEC, a notice change, a security
+  review, opt-in participation and a fixed threshold; see `docs/SECURITY.md` invariants 31–36. No lead,
+  admin or teammate can read another person's levels, and any other future reader still needs the same
+  process.
+- **"Constraints C2 must honour" #2 superseded.** The "default 5, configurable 3–20" direction was
+  replaced by a fixed `k = 5` (C2 decision P2). Constraints #1, #3–#6 were honoured (opt-in per team,
+  per-skill cohort, no `skillProfiles` writes, no persisted coverage, `treeId` identity).
+- **Demo.** C2 added no Demo Team personal assessments.

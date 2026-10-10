@@ -541,9 +541,12 @@ As-built. Terminology: the personal surface says *Ferdigheter*; the team surface
   ferdigheter** placed right after *Min profil* (`aria-current` on the exact path; never shown
   to a signed-out visitor). A signed-out visitor sees the usual sign-in prompt and no
   request is made. C1 adds no `/me` shell, *Mål*, *Samtaler* or role pages.
-- **Privacy notice.** A persistent (not tooltip) notice states that, in DevPulse, other
-  users, team leads and administrators cannot see the self-assessment. The copy makes no
-  absolute or future promise and implies no sharing.
+- **Privacy notice.** A persistent (not tooltip) notice states that the self-assessment is the
+  person's own and that teammates, team leads and administrators cannot see the levels set.
+  *(Amended by C2, 2026-10-10:)* it also says the person can choose, team by team, to let it count
+  towards a privacy-protected team overview in which the team sees only a coarse status per skill
+  need. The copy still makes no absolute promise and implies no sharing of levels; the page shows no
+  team list and has no participation control (that lives on the team Overview, see below).
 - **Scale legend.** Always visible: four levels, text names and descriptions —
   *Grunnleggende kjennskap*, *Kan med støtte*, *Kan selvstendig*, *Avansert* (level 4 is deep
   or advanced proficiency; guiding others is only an example). Absence is *Ikke vurdert*.
@@ -588,6 +591,56 @@ As-built. Terminology: the personal surface says *Ferdigheter*; the team surface
   what the tests verify.
 - **Admin naming guidance.** A SkillTree `name` appears both as a team *Kompetanseområde*
   and as a personal *Ferdighet*; see `docs/DATA-MODEL.md` (notes).
+
+### Team skill needs and coverage UX (Feature C2, `docs/features/team-skill-needs-and-matrix/SPEC.md`)
+
+As-built. Terminology: the team surface says *Kompetanseområder / Kompetansebehov*; a need is a
+team planning statement, never a "mål" or "krav" on a person, and a personal level is never called
+a stage.
+
+- **Placement.** One section, **Kompetansebehov og dekning**, on `/teams/[teamId]` Oversikt after
+  *Kompetanseområder* (rendered by `TeamDetail`). No new route and no navigation change
+  (`Oversikt · Roadmap` stays).
+- **Table.** One `<table>` with a `<caption>` and `<th scope>` headers: *Kompetanseområde*, *Behov*
+  («Minst {r} bidragsytere på nivå «{nivånavn}» eller høyere», using the C1 level names; offered
+  levels are 2–4), *Dekning* (text), and a *Handlinger* column only when the viewer can manage needs.
+  **Rows are needs; there are no employee rows, no person cells and no per-person levels**, and
+  areas without a need are not rows. Below the `sm` breakpoint each row is a stacked card (`dl`)
+  with the same text.
+- **Coverage states (text, never colour alone).** *Behovet er dekket* · *Behovet er ikke dekket
+  ennå* · *Ikke nok data til å vise dekning ennå.* (with the generic line «Dekningen vises når nok
+  bidragsytere har vurdert området.», never a number or cause) · *Kompetanseområdet er ikke lenger
+  tilgjengelig* (delete only) · *Dekningen kan ikke vises for dette teamet akkurat nå.*
+  (incomplete cohort) · an alert with retry on read failure. No counts, "kun/bare N", percentages,
+  ranking, evaluative words or performance language anywhere in the section.
+- **Access-dependent messaging.** Lead of an active team: add / edit / delete controls (area `Select`
+  over areas without a need, level `Select`, coverage number input 1–20; delete needs explicit
+  confirmation and is permanent; saves announce through a polite status, errors through
+  `role="alert"`). Ordinary member, or any viewer of a disabled team: no controls and the line
+  «Teamledere endrer kompetansebehovene.» Team with no needs: «Ingen kompetansebehov er registrert.»
+  plus «Teamledere registrerer behov.» Non-member app admin: the needs without coverage values and
+  «Dekning vises bare for teamets medlemmer.» Disabled team: needs readable, coverage replaced by
+  «Dekning vises ikke for deaktiverte team.» A truncated list says only «Listen kan være
+  ufullstendig.»
+- **Participation panel.** Inside the section for genuine members: it names the team, states «Du
+  bidrar ikke» / «Du bidrar» and offers exactly one control («Bidra til teamets kompetanseoversikt» /
+  «Slutt å bidra»). It is never pre-selected, nagged or required to see coverage; withdrawal needs no
+  confirmation; on a disabled team the opt-in control is absent with a one-line reason and withdrawal
+  stays. The panel is not on `/me/skills`.
+- **Privacy explanation.** The primary notice is always visible next to the control (optional and per
+  team; levels never shown to the team; only a coarse status, once at least 5 contributors have assessed
+  the area; **not full anonymity** — status changes when someone joins, leaves or stops contributing
+  can in some cases give rough information about the group; withdrawal; removal ends participation and
+  rejoining requires a new choice). A collapsed, keyboard-operable «Slik fungerer personvernet»
+  disclosure adds the longer explanation, including that team leads can change needs and compare
+  statuses over time, that a homogeneous group or colleagues who share their levels reduce uncertainty,
+  that no status history is stored, and that this is not an assessment of the person. The UI claims no
+  absolute anonymity.
+- **Accessibility.** Table semantics as above; every control has a visible label; native,
+  keyboard-operable controls; focus returns to a sensible control after create/delete; no horizontal
+  page scroll at phone width; icons, if any, are `aria-hidden` and duplicate the text.
+- **Known limitation (non-blocking).** The Demo Team seeds no personal assessments, so the Demo cannot
+  show the *dekket* / *ikke dekket* states.
 
 ## Results UX
 

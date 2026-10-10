@@ -3,11 +3,11 @@
 Specification: [SPEC.md](./SPEC.md) (Approved, revision 2; P1–P6 closed; no open questions)
 
 ## Status
-Ready: 1  In Progress: 0  Done: 19
+Ready: 0  In Progress: 0  Done: 20
 
 Total tasks: **20**. Repository convention (`implement-task`): the only states are `Ready`,
 `In Progress`, `Done`; a task whose dependencies are not `Done` stays `Ready` and is skipped until they
-are. **Unblocked now (dependencies satisfied):** TASK-020.
+are. **All tasks are Done; C2 is implemented (closeout 2026-10-10).**
 
 Task-splitting ground rules (apply to **every** task):
 
@@ -1231,7 +1231,7 @@ path, writer and importer allow-lists; the TASK-019 scans are lexical cross-chec
 
 ### TASK-020 — Documentation reconciliation and closeout
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-21 (documentation of residual risk), SPEC "Documentation impact"
 **Depends on:** TASK-019
 
@@ -1262,7 +1262,22 @@ Documents the contract and residual risks accurately; no secrets.
 This task is the documentation impact.
 
 **Acceptance criteria**
-- [ ] All documents in the SPEC "Documentation impact" are reconciled; historical Approved specs preserved with dated amendments.
-- [ ] C2 marked delivered; D1/D2 not marked delivered and not redefined.
-- [ ] SECURITY.md states residual risks and no formal-anonymity claim.
-- [ ] Final gates pass; `git diff` inspected; no conflict with `docs/SECURITY.md`.
+- [x] All documents in the SPEC "Documentation impact" are reconciled; historical Approved specs preserved with dated amendments.
+- [x] C2 marked delivered; D1/D2 not marked delivered and not redefined.
+- [x] SECURITY.md states residual risks and no formal-anonymity claim.
+- [x] Final gates pass; `git diff` inspected; no conflict with `docs/SECURITY.md`.
+
+**Closeout notes (TASK-020, 2026-10-10).** Documentation-only; no production, test, config, rules or index change.
+- Reconciled: `docs/SECURITY.md` (invariants 32–36 with the residual-risk statement incl. the malicious-lead oracle and no
+  formal-anonymity claim; invariants 22 and 31 amended; checklist; known limitations), `docs/PRODUCT.md` (Delivered entry,
+  C1 "not delivered" line annotated, Future list now D1/D2 only, Non-goals clarification), `docs/ROADMAP.md` (C2 delivered;
+  "configurable 3–20" superseded; "may prefill a plan from a gap" not delivered; D1/D2 naming ambiguity still only reported),
+  `docs/ARCHITECTURE.md` (C2 section; C1 section annotated), `docs/DATA-MODEL.md` (`TeamSkillNeed`,
+  `TeamMembership.skillContribution`, derived coverage, sources of truth), `docs/UI-UX.md` (C2 section; C1 notice amended),
+  dated *C2 amendment* notes in the C1 SPEC/TASKS and `member-identity-and-team-roles/SPEC.md`, and this SPEC's status.
+  `AGENTS.md`/`CLAUDE.md` unchanged. Historical Approved text was preserved (dated amendments only).
+- Not claimed anywhere: D1/D2, roadmap/`skillProgress` integration, assignments/goals/notifications, Demo fixtures,
+  new indexes, environment variables or dependencies.
+- Deferred TASK-019 Suggestions (scanner handling of causal no-comma `as` and bare `then`; discriminated-union cleanup of
+  `negatable`/`selfNegated`) and earlier optional Suggestions remain unfixed and are not required by any acceptance criterion.
+- Gates: `pnpm typecheck`, `pnpm lint`, `pnpm test` (281 files / 5194 tests), `pnpm build` passed; `git diff` inspected.

@@ -826,3 +826,8 @@ This task is the documentation impact.
   E. Programmatic status-focus target has no visible outline — UI-UX and SPEC known limitations.
 - Gates at closeout: `pnpm typecheck`, `pnpm lint`, `pnpm test` (252 files / 4467 tests),
   `pnpm build` all passed. No production source changed in this task.
+
+**C2 amendment (2026-10-10).** Task state above is historical and unchanged. Team Skill Needs and
+Privacy-Thresholded Coverage (C2) later amended only the C1 privacy-notice copy (and the test that pins it)
+and the C1 static-guard allow-lists/scans; C1 owner-only behaviour, APIs, persistence and the
+forbidden-identifier list are unchanged. See `team-skill-needs-and-matrix/SPEC.md` (BR-29–BR-33).
