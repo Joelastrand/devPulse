@@ -3,11 +3,11 @@
 Specification: [SPEC.md](./SPEC.md) (Approved, revision 2; P1–P6 closed; no open questions)
 
 ## Status
-Ready: 8  In Progress: 0  Done: 12
+Ready: 7  In Progress: 0  Done: 13
 
 Total tasks: **20**. Repository convention (`implement-task`): the only states are `Ready`,
 `In Progress`, `Done`; a task whose dependencies are not `Done` stays `Ready` and is skipped until they
-are. **Unblocked now (dependencies satisfied):** TASK-008, TASK-017.
+are. **Unblocked now (dependencies satisfied):** TASK-008.
 
 Task-splitting ground rules (apply to **every** task):
 
@@ -996,7 +996,7 @@ None in this task.
 
 ### TASK-017 — C2 static scope/privacy guard and C1 regression evidence
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-34, BR-30, BR-23, BR-24, BR-20, BR-15, BR-22, BR-5 (static)
 **Depends on:** TASK-005, TASK-006, TASK-013, TASK-016
 
@@ -1035,10 +1035,14 @@ code outside `src/app`, runtime misuse, Admin credentials).
 None in this task.
 
 **Acceptance criteria**
-- [ ] All nine checks plus C1 regression evidence exist and pass; each has a failing negative fixture.
-- [ ] Exact sets for `teamSkillNeeds` and `skillContribution` references are enforced.
-- [ ] No claim that the guard is the security boundary; limitations stated.
-- [ ] No conflict with `docs/SECURITY.md`; relevant tests pass.
+- [x] All nine checks plus C1 regression evidence exist and pass; each has a failing negative fixture.
+- [x] Exact sets for `teamSkillNeeds` and `skillContribution` references are enforced.
+- [x] No claim that the guard is the security boundary; limitations stated.
+- [x] No conflict with `docs/SECURITY.md`; relevant tests pass.
+
+**Implementation note:** the only edit outside the new guard is in `skill-profiles-scope-guard.test.ts`: `isGuarded` additionally
+exempts the C2 guard file by exact path (`C2_GUARD_FILE`), because the C2 guard necessarily contains the tokens and fixture
+import strings the C1 scans search for; the C2 guard asserts that exact exemption. No C1 allow-list or forbidden-identifier list changed.
 
 ---
 

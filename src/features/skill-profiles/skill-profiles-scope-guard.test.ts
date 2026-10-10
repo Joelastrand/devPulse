@@ -171,7 +171,13 @@ function reExportTargets(file: SourceFile): string[] {
   return targets;
 }
 
-const isGuarded = (path: string) => path !== GUARD_FILE;
+/**
+ * Self-files: each guard necessarily contains the tokens it searches for. The C2 guard (TASK-017) is a test-only
+ * file with no imports of C1 modules (its path-like strings are fixtures); it is exempted by exact path and
+ * asserts this exemption by name, so no other file gains it.
+ */
+const C2_GUARD_FILE = "src/features/team-skills/team-skills-scope-guard.test.ts";
+const isGuarded = (path: string) => path !== GUARD_FILE && path !== C2_GUARD_FILE;
 
 function collectionReferenceViolations(files: SourceFile[]): string[] {
   const allowed = new Set([...APPROVED_COLLECTION_REFERENCES, ...APPROVED_WHEN_PRESENT_COLLECTION_REFERENCES]);
