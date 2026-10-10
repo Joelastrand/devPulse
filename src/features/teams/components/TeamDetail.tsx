@@ -51,6 +51,7 @@ import {
   requestTeamAccess,
 } from "../client/teams-overview-gateway";
 import { requestAccessErrorMessage } from "./request-access-messages";
+import { TeamSkillNeedsSection } from "../../team-skills/components/TeamSkillNeedsSection";
 import { TeamRosterSection } from "./TeamRosterSection";
 import { TeamRouteNav } from "./TeamRouteNav";
 
@@ -548,6 +549,7 @@ export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnab
               />
             )}
           </RoadmapPlanningScope>
+          <TeamSkillNeedsSection key={generation} teamId={teamId} token={token} />
           <TeamRosterSection key={generation} teamId={teamId} token={token} />
         </TeamaktivitetZone>
       </div>
@@ -601,6 +603,7 @@ export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnab
               />
             )}
           </RoadmapPlanningScope>
+          <TeamSkillNeedsSection key={generation} teamId={teamId} token={token} />
           <TeamRosterSection key={generation} teamId={teamId} token={token} />
         </TeamaktivitetZone>
       </div>

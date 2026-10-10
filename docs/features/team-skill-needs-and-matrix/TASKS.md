@@ -3,11 +3,11 @@
 Specification: [SPEC.md](./SPEC.md) (Approved, revision 2; P1–P6 closed; no open questions)
 
 ## Status
-Ready: 7  In Progress: 0  Done: 13
+Ready: 6  In Progress: 0  Done: 14
 
 Total tasks: **20**. Repository convention (`implement-task`): the only states are `Ready`,
 `In Progress`, `Done`; a task whose dependencies are not `Done` stays `Ready` and is skipped until they
-are. **Unblocked now (dependencies satisfied):** TASK-008.
+are. **Unblocked now (dependencies satisfied):** TASK-009, TASK-010, TASK-018.
 
 Task-splitting ground rules (apply to **every** task):
 
@@ -574,7 +574,7 @@ None in this task.
 
 ### TASK-008 — «Kompetansebehov og dekning» section on Oversikt: gateway and read-only needs table
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-4 (UI), BR-26, BR-27 (needs/empty/read-only), BR-28
 **Depends on:** TASK-004
 
@@ -608,11 +608,13 @@ UI only; hints are not authority (server re-authorizes). No personal data.
 UI-UX closeout in TASK-020.
 
 **Acceptance criteria**
-- [ ] Section appears on Oversikt after *Kompetanseområder* with no new route/nav change.
-- [ ] Table has caption/header scope, stacked narrow layout, and text-only statuses.
-- [ ] Empty, error, read-only, truncated and unavailable-area states are distinct and Norwegian.
-- [ ] No employee rows or per-person cells exist.
-- [ ] No conflict with `docs/SECURITY.md`; relevant tests pass.
+- [x] Section appears on Oversikt after *Kompetanseområder* with no new route/nav change.
+- [x] Table has caption/header scope, stacked narrow layout, and text-only statuses.
+- [x] Empty, error, read-only, truncated and unavailable-area states are distinct and Norwegian.
+- [x] No employee rows or per-person cells exist.
+- [x] No conflict with `docs/SECURITY.md`; relevant tests pass.
+
+**Implementation note:** the section is self-loading (`TeamSkillNeedsSection`) and mounted after the roadmap/skill section at both `TeamDetail` render sites. It calls only `GET /skill-needs` and renders its five-field DTO; the coverage column is the fixed text «Dekning er ikke tilgjengelig ennå» (TASK-018 replaces it). `TeamDetail.test.tsx` mocks the needs gateway as pending by default because the required empty-state sentence («…er registrert.») would otherwise collide with that file's loose `/registrert/i` challenge queries. No editing controls exist yet (TASK-009).
 
 ---
 

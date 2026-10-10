@@ -17,6 +17,7 @@ const createThreadMock = vi.fn();
 const fetchTeamSkillsMock = vi.fn();
 const reportTeamSkillProgressMock = vi.fn();
 const fetchTeamRosterMock = vi.fn();
+const fetchSkillNeedsMock = vi.fn();
 const fetchRoadmapItemsMock = vi.fn().mockResolvedValue({
   status: "ok",
   items: [],
@@ -67,6 +68,10 @@ vi.mock("../../forum/client/forum-gateway", () => ({
 vi.mock("../../skill-trees/client/skill-trees-gateway", () => ({
   fetchTeamSkills: fetchTeamSkillsMock,
   reportTeamSkillProgress: reportTeamSkillProgressMock,
+}));
+
+vi.mock("../../team-skills/client/team-skills-gateway", () => ({
+  fetchSkillNeeds: fetchSkillNeedsMock,
 }));
 
 vi.mock("../client/team-roster-gateway", () => ({
@@ -214,6 +219,9 @@ describe("TeamDetail", () => {
     routerPushMock.mockReset();
     submitChallengeMock.mockReset();
     fetchTeamRosterMock.mockReset();
+    fetchSkillNeedsMock.mockReset();
+    // Pending by default: the needs section is covered by its own tests, and its empty-state copy would collide with unrelated loose text queries here.
+    fetchSkillNeedsMock.mockReturnValue(new Promise(() => {}));
   });
 
   it("shows a Norwegian loading state before auth resolves", () => {
@@ -619,6 +627,54 @@ describe("TeamDetail", () => {
       await screen.findByRole("button", { name: /be om tilgang/i });
       expect(screen.queryByRole("button", { name: "Medlemsliste" })).toBeNull();
       expect(fetchTeamRosterMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("«Kompetansebehov og dekning» section", () => {
+    const HEADING = { name: "Kompetansebehov og dekning" };
+
+    it("renders after Kompetanseområder and before the roster for an authorized member, loading needs for this team", async () => {
+      observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+      fetchTeamsOverviewMock.mockResolvedValue({
+        status: "ok",
+        teams: [{ teamId: "team-1", name: "Platform", relationship: "member" }],
+      });
+      fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
+
+      render(<TeamDetail teamId="team-1" forumEnabled={true} />);
+
+      const heading = await screen.findByRole("heading", HEADING);
+      expect(fetchSkillNeedsMock).toHaveBeenCalledWith("a-token", "team-1");
+      const order = Array.from(document.querySelectorAll("h3")).map((h) => h.textContent);
+      expect(order.indexOf(heading.textContent ?? "")).toBeGreaterThan(order.indexOf("Kompetanseområder"));
+      expect(order.indexOf(heading.textContent ?? "")).toBeLessThan(order.indexOf("Medlemmer"));
+    });
+
+    it("is also rendered in the results-unavailable view", async () => {
+      observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+      fetchTeamsOverviewMock.mockResolvedValue({
+        status: "ok",
+        teams: [{ teamId: "team-1", name: "Platform", relationship: "member" }],
+      });
+      fetchTeamResultsMock.mockResolvedValue({ status: "read_failed" });
+
+      render(<TeamDetail teamId="team-1" forumEnabled={true} />);
+
+      expect(await screen.findByRole("heading", HEADING)).toBeTruthy();
+    });
+
+    it("is not rendered, and nothing is requested, for a non-member", async () => {
+      observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+      fetchTeamsOverviewMock.mockResolvedValue({
+        status: "ok",
+        teams: [{ teamId: "team-1", name: "Platform", relationship: "none" }],
+      });
+
+      render(<TeamDetail teamId="team-1" forumEnabled={true} />);
+
+      await screen.findByRole("button", { name: /be om tilgang/i });
+      expect(screen.queryByRole("heading", HEADING)).toBeNull();
+      expect(fetchSkillNeedsMock).not.toHaveBeenCalled();
     });
   });
 
