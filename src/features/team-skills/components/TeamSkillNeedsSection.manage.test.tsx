@@ -13,6 +13,9 @@ vi.mock("../client/team-skills-gateway", () => ({
   deleteSkillNeed: deleteSkillNeedMock,
 }));
 
+// The participation panel has its own tests (SkillContributionPanel.test.tsx); it is out of scope here.
+vi.mock("./SkillContributionPanel", () => ({ SkillContributionPanel: () => null }));
+
 const { TeamSkillNeedsSection } = await import("./TeamSkillNeedsSection");
 
 const NEED_A = { treeId: "t-a", areaName: "Testing", areaAvailable: true, requiredLevel: 3, requiredCoverage: 2 };

@@ -227,3 +227,120 @@ export async function deleteSkillNeed(
 ): Promise<DeleteSkillNeedResult> {
   return (deps.gateway ?? getDefaultGateway()).deleteSkillNeed(idToken, teamId, treeId);
 }
+
+/* ------------------------------------------------------------------------------------------------
+ * The caller's own participation (SPEC BR-9; TASK-010): `GET|PUT|DELETE /api/teams/[teamId]/
+ * skill-contribution`. Own state only — `{ contributing, canOptIn }`, never another member, a count
+ * or the consent timestamp. The parser rebuilds the two booleans and drops everything else.
+ * ---------------------------------------------------------------------------------------------- */
+
+export type FetchSkillContributionResult =
+  | { status: "ok"; contributing: boolean; canOptIn: boolean }
+  | { status: "unauthenticated" | "forbidden" | "read_failed" };
+
+export type SkillContributionWriteError =
+  | "unauthenticated"
+  | "forbidden"
+  | "notice_outdated"
+  | "team_disabled"
+  | "persistence_failed"
+  | "unknown";
+
+export type SkillContributionWriteResult = { ok: true } | { ok: false; error: SkillContributionWriteError };
+
+export interface SkillContributionGateway {
+  fetchSkillContribution(idToken: string, teamId: string): Promise<FetchSkillContributionResult>;
+  optInSkillContribution(idToken: string, teamId: string, noticeVersion: number): Promise<SkillContributionWriteResult>;
+  withdrawSkillContribution(idToken: string, teamId: string): Promise<SkillContributionWriteResult>;
+}
+
+function contributionUrl(teamId: string): string {
+  return `/api/teams/${encodeURIComponent(teamId)}/skill-contribution`;
+}
+
+function contributionError(status: number, body: unknown): SkillContributionWriteError {
+  if (status === 401) return "unauthenticated";
+  if (status === 403) return "forbidden";
+  const code = isRecord(body) ? body.error : undefined;
+  if (status === 409 && code === "notice_outdated") return "notice_outdated";
+  if (status === 409 && code === "team_disabled") return "team_disabled";
+  if (status === 500 && code === "persistence_failed") return "persistence_failed";
+  return "unknown";
+}
+
+function getDefaultContributionGateway(): SkillContributionGateway {
+  return {
+    async fetchSkillContribution(idToken, teamId) {
+      try {
+        const response = await fetch(contributionUrl(teamId), { headers: { Authorization: `Bearer ${idToken}` } });
+        if (response.status === 401) return { status: "unauthenticated" };
+        if (response.status === 403) return { status: "forbidden" };
+        if (!response.ok) return { status: "read_failed" };
+        const body = await readJson(response);
+        if (!isRecord(body) || typeof body.contributing !== "boolean" || typeof body.canOptIn !== "boolean") {
+          return { status: "read_failed" };
+        }
+        return { status: "ok", contributing: body.contributing, canOptIn: body.canOptIn };
+      } catch {
+        return { status: "read_failed" };
+      }
+    },
+
+    async optInSkillContribution(idToken, teamId, noticeVersion) {
+      try {
+        const response = await fetch(contributionUrl(teamId), {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${idToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ noticeVersion }),
+        });
+        if (!response.ok) return { ok: false, error: contributionError(response.status, await readJson(response)) };
+        return { ok: true };
+      } catch {
+        return { ok: false, error: "unknown" };
+      }
+    },
+
+    async withdrawSkillContribution(idToken, teamId) {
+      try {
+        const response = await fetch(contributionUrl(teamId), {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+        if (!response.ok) return { ok: false, error: contributionError(response.status, await readJson(response)) };
+        return { ok: true };
+      } catch {
+        return { ok: false, error: "unknown" };
+      }
+    },
+  };
+}
+
+export interface SkillContributionDeps {
+  gateway?: SkillContributionGateway;
+}
+
+export async function fetchSkillContribution(
+  idToken: string,
+  teamId: string,
+  deps: SkillContributionDeps = {},
+): Promise<FetchSkillContributionResult> {
+  return (deps.gateway ?? getDefaultContributionGateway()).fetchSkillContribution(idToken, teamId);
+}
+
+/** The caller passes the current notice version (from the single policy constant); the gateway sends exactly that. */
+export async function optInSkillContribution(
+  idToken: string,
+  teamId: string,
+  noticeVersion: number,
+  deps: SkillContributionDeps = {},
+): Promise<SkillContributionWriteResult> {
+  return (deps.gateway ?? getDefaultContributionGateway()).optInSkillContribution(idToken, teamId, noticeVersion);
+}
+
+export async function withdrawSkillContribution(
+  idToken: string,
+  teamId: string,
+  deps: SkillContributionDeps = {},
+): Promise<SkillContributionWriteResult> {
+  return (deps.gateway ?? getDefaultContributionGateway()).withdrawSkillContribution(idToken, teamId);
+}

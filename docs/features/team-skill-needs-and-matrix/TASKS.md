@@ -3,11 +3,11 @@
 Specification: [SPEC.md](./SPEC.md) (Approved, revision 2; P1–P6 closed; no open questions)
 
 ## Status
-Ready: 5  In Progress: 0  Done: 15
+Ready: 4  In Progress: 0  Done: 16
 
 Total tasks: **20**. Repository convention (`implement-task`): the only states are `Ready`,
 `In Progress`, `Done`; a task whose dependencies are not `Done` stays `Ready` and is skipped until they
-are. **Unblocked now (dependencies satisfied):** TASK-010, TASK-018.
+are. **Unblocked now (dependencies satisfied):** TASK-011, TASK-018.
 
 Task-splitting ground rules (apply to **every** task):
 
@@ -664,7 +664,7 @@ UI-UX closeout in TASK-020.
 
 ### TASK-010 — Team-specific participation panel, primary notice and «Slik fungerer personvernet»
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-25, BR-8 (UI), BR-21 (user-facing residual-risk wording), BR-28
 **Depends on:** TASK-006, TASK-008
 
@@ -699,10 +699,12 @@ The notice is the user-facing half of the P6 residual-risk contract; it must not
 UI-UX closeout in TASK-020.
 
 **Acceptance criteria**
-- [ ] Panel is team-specific, shows the approved two-layer notice, and supports opt-in and withdrawal; no global toggle exists.
-- [ ] The notice states optionality, per-team scope, hidden exact levels, categorical thresholded use, k = 5, non-absolute protection, inference caveat, withdrawal, removal, rejoin.
-- [ ] Opt-in sends the current `noticeVersion` from the single constant; stale versions are handled.
-- [ ] No conflict with `docs/SECURITY.md`; relevant tests pass.
+- [x] Panel is team-specific, shows the approved two-layer notice, and supports opt-in and withdrawal; no global toggle exists.
+- [x] The notice states optionality, per-team scope, hidden exact levels, categorical thresholded use, k = 5, non-absolute protection, inference caveat, withdrawal, removal, rejoin.
+- [x] Opt-in sends the current `noticeVersion` from the single constant; stale versions are handled.
+- [x] No conflict with `docs/SECURITY.md`; relevant tests pass.
+
+**Implementation note:** `SkillContributionPanel` is mounted by `TeamSkillNeedsSection` (keyed by team+token, so a late response for another team/token cannot land) and self-loads `GET skill-contribution`; `canOptIn` from that endpoint alone decides whether the opt-in control exists, never `viewer.canManageNeeds`. `403` renders nothing (non-member admin). After each PUT/DELETE (except `persistence_failed`) the state is re-read, never invented; a failed re-read fails closed. The copy object is named `participationCopy` because the C2 boundary tests forbid the literal membership-field name outside its owner. The existing section tests stub the panel; the C1 notice is untouched (TASK-011).
 
 ---
 

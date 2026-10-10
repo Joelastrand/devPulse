@@ -18,6 +18,7 @@ const fetchTeamSkillsMock = vi.fn();
 const reportTeamSkillProgressMock = vi.fn();
 const fetchTeamRosterMock = vi.fn();
 const fetchSkillNeedsMock = vi.fn();
+const fetchSkillContributionMock = vi.fn();
 const fetchRoadmapItemsMock = vi.fn().mockResolvedValue({
   status: "ok",
   items: [],
@@ -72,6 +73,9 @@ vi.mock("../../skill-trees/client/skill-trees-gateway", () => ({
 
 vi.mock("../../team-skills/client/team-skills-gateway", () => ({
   fetchSkillNeeds: fetchSkillNeedsMock,
+  fetchSkillContribution: fetchSkillContributionMock,
+  optInSkillContribution: vi.fn(),
+  withdrawSkillContribution: vi.fn(),
 }));
 
 vi.mock("../client/team-roster-gateway", () => ({
@@ -220,6 +224,8 @@ describe("TeamDetail", () => {
     submitChallengeMock.mockReset();
     fetchTeamRosterMock.mockReset();
     fetchSkillNeedsMock.mockReset();
+    fetchSkillContributionMock.mockReset();
+    fetchSkillContributionMock.mockReturnValue(new Promise(() => {}));
     // Pending by default: the needs section is covered by its own tests, and its empty-state copy would collide with unrelated loose text queries here.
     fetchSkillNeedsMock.mockReturnValue(new Promise(() => {}));
   });
@@ -645,6 +651,7 @@ describe("TeamDetail", () => {
 
       const heading = await screen.findByRole("heading", HEADING);
       expect(fetchSkillNeedsMock).toHaveBeenCalledWith("a-token", "team-1");
+      expect(fetchSkillContributionMock).toHaveBeenCalledWith("a-token", "team-1");
       const order = Array.from(document.querySelectorAll("h3")).map((h) => h.textContent);
       expect(order.indexOf(heading.textContent ?? "")).toBeGreaterThan(order.indexOf("Kompetanseområder"));
       expect(order.indexOf(heading.textContent ?? "")).toBeLessThan(order.indexOf("Medlemmer"));
@@ -675,6 +682,7 @@ describe("TeamDetail", () => {
       await screen.findByRole("button", { name: /be om tilgang/i });
       expect(screen.queryByRole("heading", HEADING)).toBeNull();
       expect(fetchSkillNeedsMock).not.toHaveBeenCalled();
+      expect(fetchSkillContributionMock).not.toHaveBeenCalled();
     });
   });
 

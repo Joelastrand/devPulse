@@ -549,7 +549,7 @@ export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnab
               />
             )}
           </RoadmapPlanningScope>
-          <TeamSkillNeedsSection key={generation} teamId={teamId} token={token} />
+          <TeamSkillNeedsSection key={generation} teamId={teamId} token={token} teamName={result.name} />
           <TeamRosterSection key={generation} teamId={teamId} token={token} />
         </TeamaktivitetZone>
       </div>
@@ -603,7 +603,7 @@ export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnab
               />
             )}
           </RoadmapPlanningScope>
-          <TeamSkillNeedsSection key={generation} teamId={teamId} token={token} />
+          <TeamSkillNeedsSection key={generation} teamId={teamId} token={token} teamName={result.name} />
           <TeamRosterSection key={generation} teamId={teamId} token={token} />
         </TeamaktivitetZone>
       </div>
