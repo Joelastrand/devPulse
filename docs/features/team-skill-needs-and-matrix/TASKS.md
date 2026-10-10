@@ -3,11 +3,11 @@
 Specification: [SPEC.md](./SPEC.md) (Approved, revision 2; P1–P6 closed; no open questions)
 
 ## Status
-Ready: 4  In Progress: 0  Done: 16
+Ready: 3  In Progress: 0  Done: 17
 
 Total tasks: **20**. Repository convention (`implement-task`): the only states are `Ready`,
 `In Progress`, `Done`; a task whose dependencies are not `Done` stays `Ready` and is skipped until they
-are. **Unblocked now (dependencies satisfied):** TASK-011, TASK-018.
+are. **Unblocked now (dependencies satisfied):** TASK-018.
 
 Task-splitting ground rules (apply to **every** task):
 
@@ -710,7 +710,7 @@ UI-UX closeout in TASK-020.
 
 ### TASK-011 — Amend the C1 `/me/skills` privacy notice (copy-only)
 
-**Status:** Ready
+**Status:** Done
 **Covers:** BR-29
 **Depends on:** TASK-010
 
@@ -738,9 +738,9 @@ Keeps the notice truthful once optional participation exists; weakens no C1 owne
 C1 documentation boundary reconciled in TASK-020.
 
 **Acceptance criteria**
-- [ ] Notice preserves person ownership, no exact levels to teammates, optional participation, and thresholded team-level use; no absolute wording.
-- [ ] Only copy and its pinned tests changed; C1 owner-only behaviour and guards untouched.
-- [ ] No conflict with `docs/SECURITY.md`; relevant tests pass.
+- [x] Notice preserves person ownership, no exact levels to teammates, optional participation, and thresholded team-level use; no absolute wording.
+- [x] Only copy and its pinned tests changed; C1 owner-only behaviour and guards untouched.
+- [x] No conflict with `docs/SECURITY.md`; relevant tests pass.
 
 ---
 

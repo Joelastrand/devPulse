@@ -70,11 +70,24 @@ describe("C1 anti-surveillance wording (BR-22) — copy.ts", () => {
     expect(strings.filter((text) => pattern.test(text))).toEqual([]);
   });
 
-  it("states owner-only privacy without promising future sharing, aggregation or manager visibility", () => {
-    expect(skillProfileCopy.privacyNotice).toBe(
-      "Egenvurderingen din er privat. Andre brukere, teamledere og administratorer kan ikke se den i DevPulse.",
+  it("states person ownership, hidden exact levels, optional team-by-team participation and thresholded team use (C2 BR-29)", () => {
+    const notice = skillProfileCopy.privacyNotice;
+    expect(notice).toBe(
+      "Egenvurderingen din er din egen. Teamkolleger, teamledere og administratorer kan ikke se nivåene du setter. Du kan velge, team for team, at den skal telle med i en personvernbeskyttet teamoversikt der teamet bare ser en grov status per kompetansebehov.",
     );
+    expect(notice).toMatch(/din egen/);
+    expect(notice).toMatch(/Teamkolleger, teamledere og administratorer kan ikke se nivåene du setter/);
+    expect(notice).toMatch(/Du kan velge, team for team/);
+    expect(notice).toMatch(/personvernbeskyttet/);
+    expect(notice).toMatch(/grov status/);
     expect(skillProfileCopy.pageDescription).toMatch(/din egen utvikling/);
+  });
+
+  it("makes no absolute, automatic-sharing, anonymity or count claim in the privacy notice", () => {
+    const notice = skillProfileCopy.privacyNotice;
+    expect(notice).not.toMatch(/ingen|ingen andre|kan ikke se den|aldri|anonym/i);
+    expect(notice).not.toMatch(/automatisk|[0-9]/);
+    expect(notice).not.toContain("Andre brukere");
   });
 
   it("uses exactly the four canonical levels, with 'Avansert' as level 4 and no mentoring requirement", () => {

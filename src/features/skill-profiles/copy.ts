@@ -6,12 +6,13 @@ import type { SelfAssessedLevel } from "./domain/self-assessed-level";
  * descriptions are wording only: the canonical meaning of each level lives in
  * `domain/self-assessed-level.ts` and may not change here. No numeric "x av 4"
  * display, no seniority wording, and no promise that the data is never used
- * elsewhere (BR-5).
+ * elsewhere (BR-5). The privacy notice was amended by team-skill-needs-and-matrix BR-29 (TASK-011).
  */
 export const skillProfileCopy = {
   pageTitle: "Mine ferdigheter",
   pageDescription: "Din egen vurdering av hva du kan, som støtte for din egen utvikling.",
-  privacyNotice: "Egenvurderingen din er privat. Andre brukere, teamledere og administratorer kan ikke se den i DevPulse.",
+  privacyNotice:
+    "Egenvurderingen din er din egen. Teamkolleger, teamledere og administratorer kan ikke se nivåene du setter. Du kan velge, team for team, at den skal telle med i en personvernbeskyttet teamoversikt der teamet bare ser en grov status per kompetansebehov.",
   loading: "Laster ferdighetene dine…",
   signInLink: "Logg inn",
   signInPrompt: "for å se ferdighetene dine.",

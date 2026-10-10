@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { skillProfileCopy } from "../copy";
 
 const observeIdTokenMock = vi.fn();
 const fetchOwnSkillsMock = vi.fn();
@@ -42,7 +43,7 @@ async function renderWith(result: unknown) {
   observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
   fetchOwnSkillsMock.mockResolvedValue(result);
   render(<SkillProfilePage />);
-  await screen.findByText(/egenvurderingen din er privat/i);
+  await screen.findByText(/egenvurderingen din er din egen/i);
 }
 
 describe("SkillProfilePage", () => {
@@ -75,7 +76,7 @@ describe("SkillProfilePage", () => {
       ]),
     );
 
-    expect(screen.getByText("Egenvurderingen din er privat. Andre brukere, teamledere og administratorer kan ikke se den i DevPulse.")).toBeTruthy();
+    expect(screen.getByText("Egenvurderingen din er din egen. Teamkolleger, teamledere og administratorer kan ikke se nivåene du setter. Du kan velge, team for team, at den skal telle med i en personvernbeskyttet teamoversikt der teamet bare ser en grov status per kompetansebehov.")).toBeTruthy();
     const terms = Array.from(document.querySelectorAll("dt")).map((el) => el.textContent);
     expect(terms).toEqual(["Grunnleggende kjennskap", "Kan med støtte", "Kan selvstendig", "Avansert"]);
     expect(document.querySelectorAll("dd")).toHaveLength(4);
@@ -235,7 +236,9 @@ describe("SkillProfilePage", () => {
       ]),
     );
 
-    const text = document.body.textContent ?? "";
+    // The amended notice (C2 BR-29) is the one place that names "team"; it is pinned in skill-profiles-cross-cutting.test.ts.
+    // Everything else on the page must still carry no team information.
+    const text = (document.body.textContent ?? "").replace(skillProfileCopy.privacyNotice, "");
     expect(text).not.toContain("secret-tree-id");
     expect(text).not.toContain("other-id");
     expect(text).not.toMatch(/@|\buid\b|team(?!ledere)/i);

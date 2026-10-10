@@ -53,7 +53,7 @@ async function renderWith(result: unknown) {
   });
   fetchOwnSkillsMock.mockResolvedValue(result);
   render(<SkillProfilePage />);
-  await screen.findByText(/egenvurderingen din er privat/i);
+  await screen.findByText(/egenvurderingen din er din egen/i);
 }
 
 function selectFor(name: string) {

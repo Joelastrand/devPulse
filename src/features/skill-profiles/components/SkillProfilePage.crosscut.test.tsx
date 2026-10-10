@@ -48,7 +48,7 @@ async function renderReady() {
   });
   fetchOwnSkillsMock.mockResolvedValue({ status: "ok", dto: { skills: rows, truncated: false, profile: "ok" } });
   render(<SkillProfilePage />);
-  await screen.findByText(/egenvurderingen din er privat/i);
+  await screen.findByText(/egenvurderingen din er din egen/i);
 }
 
 const resetButton = () => screen.getByRole("button", { name: /nullstill alle ferdigheter|nullstiller/i }) as HTMLButtonElement;
@@ -166,7 +166,7 @@ describe("SkillProfilePage — repeated reset on a truncated catalog (TASK-010 r
     });
     fetchOwnSkillsMock.mockResolvedValue({ status: "ok", dto: { skills: rows, truncated: true, profile: "ok" } });
     render(<SkillProfilePage />);
-    await screen.findByText(/egenvurderingen din er privat/i);
+    await screen.findByText(/egenvurderingen din er din egen/i);
   }
 
   async function startReset(result: Promise<unknown>) {
