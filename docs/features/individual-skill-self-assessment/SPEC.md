@@ -7,6 +7,15 @@ review with outcome PASS WITH SUGGESTIONS (BLOCKING 0, IMPORTANT 0). The require
 are the approved, historical text and are not rewritten; the clarifications that follow
 record delivered-state wording only and change no behaviour or business rule.
 
+### Dated pointer (2026-10-14, Personal development goals D1)
+Historical text in this document is unchanged. The "D1/D2" labels used above (role expectations,
+development goals, check-ins) are resolved by `docs/features/personal-development-goals/SPEC.md`
+("Label resolution"): **D1** = person-owned development goals, **D2** = check-ins/conversations,
+role expectations = a separate unscheduled future feature. D1 renamed the header link
+*Mine ferdigheter* to **Min utvikling** (still `/me/skills`, also active on `/me/goals`) and added a
+shared personal nav `Ferdigheter · Mål` to `/me/skills`. C1 behaviour, storage and privacy are
+unchanged, and D1 never reads `skillProfiles`.
+
 ### Closeout clarifications (2026-10-05)
 - **"Controls disabled" wording (BR-30 unreadable profile, TASK-009).** The text below says
   the catalog is shown read-only with "all controls disabled". As built, the unreadable

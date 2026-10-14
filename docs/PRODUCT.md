@@ -369,17 +369,52 @@ until attrition, burnout, or delivery failure makes them obvious.
   person's levels.
 - **Not delivered:** an employee-by-skill matrix or any per-person view (not
   planned), counts/distributions, a configurable threshold, history or trends,
-  automatic roadmap prefill from a gap, role expectations (D1/D2), assignments,
+  automatic roadmap prefill from a gap, role expectations (then labelled D1/D2;
+  see "Delivered: Personal Development Goals (Feature D1)" below), assignments,
   goals or notifications, and Demo Team coverage data (no personal assessments
   are seeded, so the Demo cannot show *dekket*/*ikke dekket*).
 - See `docs/features/team-skill-needs-and-matrix/SPEC.md`, `docs/SECURITY.md`
   (invariants 32–36) and `docs/ROADMAP.md`.
 
+## Delivered: Personal Development Goals (Feature D1)
+
+- A signed-in person opens **Min utvikling** (one header link, to `/me/skills`) and
+  uses the personal navigation `Ferdigheter · Mål`. **Mål** (`/me/goals`) lets the
+  person create, edit, complete, reopen and permanently delete their own
+  development goals. A goal has a title, an optional link to an organization
+  SkillTree skill area, an optional target date (past dates are accepted; there is
+  no overdue state) and a simple status, *Aktivt* or *Fullført*.
+- **Owner-only and private**: no teammate, team lead or app admin can read a goal
+  through any DevPulse surface, and a role never widens access. Goals are not part
+  of any team, roadmap, skill matrix, coverage or maturity view and are not a
+  performance or appraisal signal. The page says that goals are personal and that
+  sensitive or confidential information should not be written in a title (titles
+  are stored unencrypted; see `docs/SECURITY.md`, invariants 37–54).
+- The SkillTree link only names a skill area. D1 does not read the person's C1
+  self-assessment, creates no goal from it and records no level, progress history,
+  percentage or score. A person holds at most 100 goals.
+- **Label resolution (2026-10-11).** "D1/D2" was used ambiguously. Now: **D1** =
+  person-owned development goals (this feature); **D2** = check-ins/conversations,
+  any two-party development interaction or sharing with leads or mentors
+  (planned, not built); **role expectations** (`roleDefinitions`, role profiles,
+  manager development views) = a separate future feature, currently unscheduled,
+  neither implemented nor cancelled. Earlier text above that says "D1/D2" in the
+  role-expectation sense is historical.
+- **Not delivered in D1:** check-ins or conversations (`Samtaler`), sharing with
+  anyone, manager/lead/admin goal views, role profiles or expectations, progress
+  entries or history, target levels, notifications, assignments, analytics, and Demo
+  Team goal data (the presenter creates goals through the UI).
+- See `docs/features/personal-development-goals/SPEC.md`, `docs/SECURITY.md`
+  (invariants 37–54) and `docs/ROADMAP.md`.
+
 ## Future capabilities (not implemented yet)
 
-- **Role expectations (D1/D2)** and any use of skill needs or coverage as an
-  expectation on a role or person: not built and not authorized by C2; each needs
-  its own approved SPEC.
+- **D2 — check-ins/conversations** and any sharing of goals with leads or mentors:
+  not built and not authorized by D1; each needs its own approved SPEC, privacy
+  design and consent decision.
+- **Role expectations** (`roleDefinitions`; unscheduled, separate from D2) and any
+  use of skill needs or coverage as an expectation on a role or person: not built
+  and not authorized by C2 or D1; each needs its own approved SPEC.
 - A cross-team/org-wide "developer forum" or community, beyond Team
   Forum's team-scoped v1 slice, and real-name/display-name attribution for
   it (see "Delivered: Team Forum (Phase 6)" above).
@@ -432,3 +467,16 @@ without making any individual visible. It weakens no anti-surveillance rule.
 The threshold limits what the output shows; it does not make the output anonymous in a
 formal sense, and the residual risks are recorded in `docs/SECURITY.md` (invariants 32–36).
 Any consumer of C2 output beyond team planning information needs its own approved SPEC.
+
+### Clarification (2026-10-14, Personal Development Goals D1)
+
+D1 records a person's *own* development goals. It does not weaken the first
+non-goal: nobody else can read, assess or rank them.
+
+| | |
+|---|---|
+| **Allowed (D1)** | personal, person-owned, owner-only development goals with an optional skill-area link and optional target date |
+| **Still not allowed** | lead, manager or admin access to goals; sharing; use of goals for performance evaluation, ranking, scoring or monitoring; deriving goals from, or goal status into, C1/C2/roadmap data; claims of anonymity or encryption of titles |
+
+Any reader of goals other than the owner (D2 or otherwise) needs its own approved
+SPEC, privacy notice and security review.

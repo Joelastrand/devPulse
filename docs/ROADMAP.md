@@ -307,7 +307,7 @@
   See `docs/features/org-skill-progress-overview/SPEC.md`.
 
 - **Team & Personal Development initiative** *(in progress)*: a sequence of
-  small, separately specified features, F0 → A → B → C1 → C2 → D1 → D2.
+  small, separately specified features, F0 → A → B → C1 → C2 → D1 → D2 (D1 = personal goals, D2 = check-ins; role expectations are separate).
   - **F0 — Member identity and team roles** *(delivered)*: self-set display
     name, member-facing roster, optional team lead.
     See `docs/features/member-identity-and-team-roles/SPEC.md`.
@@ -357,10 +357,27 @@
       delivered:* "C2 may prefill a plan from a team gap" — C2 creates no roadmap item,
       prefill, assignment, goal or notification, and neither reads nor writes
       `skillProgress` or `roadmapItems`.
-  - **D1/D2 — Role expectations** *(planned, not built)*: `roleDefinitions`
-    and their use in planning, reusing the member reference rules. The D1/D2
-    naming ambiguity noted at C1 closeout is still only reported, not resolved.
-  Only F0, A, B, C1 and C2 exist; later phases are intentions, not commitments, and each
+  - **D1 — Personal development goals** *(delivered)*: person-owned, owner-only goals at
+    `/me/goals` ("Mål") with a title, an optional SkillTree skill-area link, an optional
+    target date and an *Aktivt*/*Fullført* status; create, edit, complete, reopen and
+    permanent delete; a cap of 100 goals per person; no progress history and no overdue
+    semantics. Stored at `userDevelopment/{uid}/goals/{goalId}` (the repository's first
+    subcollection), server-only with an explicit deny-only Firestore rule. The header
+    entry `Min utvikling` and the shared personal nav `Ferdigheter · Mål` cover
+    `/me/skills` and `/me/goals`. **Owner-only in D1**: no team, lead or admin reader, no
+    sharing; goals are independent of C1 `skillProfiles`, C2 coverage, `roadmapItems`
+    and `skillProgress`. No new index, migration, dependency, environment variable or
+    Demo Team change. See `docs/features/personal-development-goals/SPEC.md` and
+    `docs/SECURITY.md` (invariants 37–54).
+  - **D2 — Check-ins and conversations** *(planned, not built)*: any two-party
+    development interaction, sharing of goals with leads or mentors, and `Samtaler`
+    navigation. Not authorized by D1; needs its own approved SPEC, privacy design and
+    consent decision.
+  - **Role expectations** *(separate future feature, unscheduled; neither built nor
+    cancelled)*: `roleDefinitions`, role profiles and their use in planning, reusing the
+    member reference rules. Formerly labelled "D1/D2 — Role expectations"; the label
+    was resolved on 2026-10-11 (see the D1 SPEC "Label resolution").
+  Only F0, A, B, C1, C2 and D1 exist; later phases are intentions, not commitments, and each
   needs its own approved SPEC.
 
 Phases 0–9 are complete. See `docs/PRODUCT.md` for the product vision and

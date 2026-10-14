@@ -50,7 +50,7 @@ function flushMicrotasks() {
 }
 
 const SIGNED_OUT_LINK_NAMES = [/hjem/i, /logg inn/i, /opprett konto/i];
-const SIGNED_IN_LINK_NAMES = [/hjem/i, /^team$/i, /^min profil$/i, /^mine ferdigheter$/i];
+const SIGNED_IN_LINK_NAMES = [/hjem/i, /^team$/i, /^min profil$/i, /^min utvikling$/i];
 
 function navLinkNames() {
   const nav = screen.getByRole("navigation");
@@ -136,7 +136,7 @@ describe("SiteHeader", () => {
     const profileLink = await screen.findByRole("link", { name: /^min profil$/i });
     expect(profileLink.getAttribute("href")).toBe("/me/profile");
     await screen.findByRole("link", { name: /^admin$/i });
-    expect(navLinkNames()).toEqual(["Hjem", "Team", "Min profil", "Mine ferdigheter", "Admin"]);
+    expect(navLinkNames()).toEqual(["Hjem", "Team", "Min profil", "Min utvikling", "Admin"]);
   });
 
   it("never shows 'Min profil' to a signed-out visitor, nor before the first auth event", () => {
@@ -162,32 +162,64 @@ describe("SiteHeader", () => {
     usePathnameMock.mockReturnValue("/");
   });
 
-  it("links 'Mine ferdigheter' to /me/skills right after 'Min profil' for a signed-in user only", async () => {
+  it("links 'Min utvikling' to /me/skills right after 'Min profil' for a signed-in user only", async () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchOwnAdminStatusMock.mockResolvedValue({ ok: true, isAdmin: false });
 
     render(<SiteHeader />);
 
-    const link = await screen.findByRole("link", { name: /^mine ferdigheter$/i });
+    const link = await screen.findByRole("link", { name: /^min utvikling$/i });
     expect(link.getAttribute("href")).toBe("/me/skills");
-    expect(navLinkNames()).toEqual(["Hjem", "Team", "Min profil", "Mine ferdigheter"]);
+    expect(navLinkNames()).toEqual(["Hjem", "Team", "Min profil", "Min utvikling"]);
     cleanup();
 
     observeIdTokenMock.mockImplementation(subscribingWith(null));
     render(<SiteHeader />);
-    expect(screen.queryByRole("link", { name: /mine ferdigheter/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /min utvikling/i })).toBeNull();
   });
 
-  it("marks 'Mine ferdigheter' as the current page only on /me/skills", async () => {
+  it("marks 'Min utvikling' as the current page on /me/skills and /me/goals only", async () => {
     usePathnameMock.mockReturnValue("/me/skills");
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchOwnAdminStatusMock.mockResolvedValue({ ok: true, isAdmin: false });
 
     render(<SiteHeader />);
 
-    expect((await screen.findByRole("link", { name: /^mine ferdigheter$/i })).getAttribute("aria-current")).toBe("page");
+    expect((await screen.findByRole("link", { name: /^min utvikling$/i })).getAttribute("aria-current")).toBe("page");
     expect(screen.getByRole("link", { name: /^min profil$/i }).getAttribute("aria-current")).toBeNull();
     usePathnameMock.mockReturnValue("/");
+  });
+
+  it.each([
+    ["/me/goals", true],
+    ["/me/skills/x", false],
+    ["/me/goals/x", false],
+    ["/me/profile", false],
+  ])("on %s Min utvikling current=%s and Min profil is current only on /me/profile", async (path, devCurrent) => {
+    usePathnameMock.mockReturnValue(path);
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchOwnAdminStatusMock.mockResolvedValue({ ok: true, isAdmin: false });
+
+    render(<SiteHeader />);
+
+    const dev = await screen.findByRole("link", { name: /^min utvikling$/i });
+    expect(dev.getAttribute("aria-current")).toBe(devCurrent ? "page" : null);
+    expect(screen.getByRole("link", { name: /^min profil$/i }).getAttribute("aria-current")).toBe(
+      path === "/me/profile" ? "page" : null,
+    );
+  });
+
+  it("has no Mine ferdigheter, Samtaler or separate goals entry in the header", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchOwnAdminStatusMock.mockResolvedValue({ ok: true, isAdmin: false });
+
+    render(<SiteHeader />);
+
+    await screen.findByRole("link", { name: /^min utvikling$/i });
+    expect(navLinkNames().join("|")).not.toMatch(/mine ferdigheter|samtaler|mål/i);
+    expect(
+      Array.from(screen.getByRole("navigation").querySelectorAll("a")).some((l) => l.getAttribute("href") === "/me/goals"),
+    ).toBe(false);
   });
 
   it("adds the Admin link only once the own-admin-status read confirms it", async () => {

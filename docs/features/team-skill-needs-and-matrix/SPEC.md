@@ -7,6 +7,14 @@ and no unresolved material product or privacy question remains. This SPEC author
 written; it changes nothing delivered by C1. Fifth step of *Team & Personal Development*
 (F0 → A → B → C1 → **C2** → D1 → D2).
 
+
+### Dated pointer (2026-10-14, Personal development goals D1)
+Historical text is unchanged. The "D1/D2" naming ambiguity noted here is resolved by
+`docs/features/personal-development-goals/SPEC.md` ("Label resolution"): **D1** = person-owned
+development goals (delivered, independent of C2; no behaviour change here), **D2** =
+check-ins/conversations, role expectations = a separate unscheduled future feature. Goals feed no
+`teamSkillNeeds` or coverage.
+
 ### Decision record (P1–P6)
 | # | Decision | Result |
 |---|---|---|

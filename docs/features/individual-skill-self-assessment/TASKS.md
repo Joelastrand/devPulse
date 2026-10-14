@@ -7,6 +7,11 @@ Ready: 0  In Progress: 0  Done: 11
 
 Total tasks: **11**.
 
+> **Dated pointer (2026-10-14):** D1 (personal development goals) renamed the header link to
+> *Min utvikling* and added the shared personal nav `Ferdigheter · Mål` to `/me/skills`; "D1/D2" labels in
+> this file are resolved in `../personal-development-goals/SPEC.md` ("Label resolution"). No C1 task or
+> behaviour changed.
+
 Task-splitting ground rules (apply to **every** task):
 
 - Do not redesign the feature. If implementation proves the SPEC contradictory or

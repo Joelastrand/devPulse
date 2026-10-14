@@ -9,6 +9,10 @@ Total tasks: **20**. Repository convention (`implement-task`): the only states a
 `In Progress`, `Done`; a task whose dependencies are not `Done` stays `Ready` and is skipped until they
 are. **All tasks are Done; C2 is implemented (closeout 2026-10-10).**
 
+> **Dated pointer (2026-10-14):** the "D1/D2" labels in this file are resolved in
+> `../personal-development-goals/SPEC.md` ("Label resolution"); D1 is independent of C2 and changed no C2
+> behaviour.
+
 Task-splitting ground rules (apply to **every** task):
 
 - **Do not reopen P1–P6 or redesign C2.** If implementation proves the SPEC contradictory or unsafe,

@@ -223,6 +223,21 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // userDevelopment holds one person's private development goals at
+    // userDevelopment/{uid}/goals/{goalId} (no parent document is ever
+    // created). It is personal data, read/written only by the owner's own
+    // server-side operations (src/features/personal-goals/server/) via the
+    // Firebase Admin SDK, which bypasses these rules entirely — this rule
+    // exists solely to deny the separate client-SDK path unconditionally,
+    // for the parent path, the goals subcollection and every descendant,
+    // regardless of authentication state (including the owner's, a team
+    // lead's and an app admin's). It is defence in depth, not the owner
+    // authorization mechanism. See docs/features/personal-development-goals/
+    // SPEC.md (BR-44, TASK-002).
+    match /userDevelopment/{document=**} {
+      allow read, write: if false;
+    }
+
     // Deny everything else by default; no collection is currently intended
     // to be reached directly by the Firebase client SDK.
     match /{document=**} {

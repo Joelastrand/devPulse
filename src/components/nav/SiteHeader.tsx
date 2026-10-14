@@ -18,6 +18,8 @@ type HeaderState =
 interface NavLink {
   href: string;
   label: string;
+  /** Pathnames that mark this entry current; defaults to `href` alone. */
+  currentPaths?: readonly string[];
 }
 
 /**
@@ -106,7 +108,7 @@ export function SiteHeader() {
               <li key={link.href}>
                 <Link
                   href={link.href}
-                  aria-current={pathname === link.href ? "page" : undefined}
+                  aria-current={(link.currentPaths ?? [link.href]).includes(pathname) ? "page" : undefined}
                   className="hover:text-zinc-900 dark:hover:text-zinc-50"
                 >
                   {link.label}
@@ -138,7 +140,8 @@ function navLinksFor(state: HeaderState): NavLink[] {
       { href: "/", label: navCopy.home },
       { href: "/teams", label: navCopy.teams },
       { href: "/me/profile", label: navCopy.profile },
-      { href: "/me/skills", label: navCopy.skills },
+      // BR-46: one development entry, current on both personal development pages.
+      { href: "/me/skills", label: navCopy.personalDevelopment, currentPaths: ["/me/skills", "/me/goals"] },
     ];
     if (state.isAdmin) {
       links.push({ href: "/admin/teams", label: navCopy.admin });

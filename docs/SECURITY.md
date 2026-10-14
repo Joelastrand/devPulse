@@ -221,6 +221,47 @@ security boundaries: they do not prove runtime behaviour, dynamic collection
 names or module paths, path aliases other than `@/`, code outside `src/` and
 `app/`, or Admin-credential access.
 
+**Personal development goals (D1, `docs/features/personal-development-goals/SPEC.md`).**
+Invariants 37–54 are SI-1…SI-18 of that SPEC, in order (invariant *n* = SI-*(n−36)*).
+
+37. Goals (`userDevelopment/{uid}/goals/{goalId}`) are owner-only: readable and writable only
+    by the signed-in owner through `/api/me/goals…` (SI-1).
+38. The subject is always the verified-token uid; no uid, owner, e-mail, team or member
+    reference is accepted from the client in a path, query or body (SI-2).
+39. No uid-parameterised goal reader or writer exists (SI-3).
+40. Team roles and app-admin status never widen goal access (SI-4).
+41. Goals have no team scope and no sharing in D1 (SI-5). Any future reader (leads, mentors,
+    D2) needs a separately approved privacy/security design, an updated privacy notice, a
+    deliberate guard allow-list change and a consent decision.
+42. D1 never reads `skillProfiles` (SI-6) and goals feed no roadmap, matrix, coverage,
+    maturity or performance view.
+43. D1 never persists C1 levels (SI-7).
+44. D1 never writes SkillTree data (SI-8).
+45. Client Firestore access to `userDevelopment` is denied by an explicit deny-only rules
+    block before the catch-all (SI-9). This is defence in depth only: the Admin SDK bypasses
+    client rules, and owner authorization is enforced by server behaviour using the verified
+    token. Rules deployment is a separate explicit step.
+46. Goal DTOs, the recovery DTO and the list envelope are explicit field-by-field
+    allow-lists (SI-10).
+47. No uid, e-mail, display name, team id, audit actor or C1 level appears in any goal DTO
+    or error body (SI-11).
+48. Goal titles are potentially sensitive free text, stored **unencrypted**; the UI
+    discourages sensitive content (SI-12).
+49. Titles are inert text only (never HTML/Markdown) and are never logged; no request body,
+    stored document or tree name is logged (SI-13).
+50. A foreign goal id reveals no owner information: it is structurally missing under the
+    caller's path (SI-14).
+51. No `collectionGroup` goal query is permitted (SI-15).
+52. Account erasure is a known limitation: there is no deletion flow (SI-16).
+53. Operator or Admin-SDK access to goal data is an accepted residual risk, not a product
+    entitlement (SI-17).
+54. A malformed goal's existence and opaque id may be revealed to its owner only, as a
+    delete-only `{ goalId }` recovery item; no malformed content, failure reason or stored
+    field is returned (SI-18).
+
+D1 makes no claim of anonymity, differential privacy, or encryption of titles beyond the
+platform's storage guarantees, and does not claim operators cannot access the data.
+
 ## Feature review checklist
 
 Before marking a feature touching survey/team/user data as done, check:
@@ -270,6 +311,15 @@ Before marking a feature touching survey/team/user data as done, check:
       after removal or rejoin, defaulted on, or overridable by a lead or admin?
 - [ ] Is derived coverage persisted or cached, or is any output described as
       "anonymous" or as preventing inference?
+- [ ] Can any role (lead, app admin, team member) or any uid/team parameter reach
+      another person's `userDevelopment/{uid}/goals` documents, or does a new
+      reader/importer of the personal-goals server modules (or a `collectionGroup`
+      goal query) appear without a deliberate guard allow-list edit and review?
+- [ ] Does a goal feature share goals, derive goals from `skillProfiles`, or feed
+      goals or goal status into roadmap, coverage, matrix, maturity or any
+      performance/ranking view?
+- [ ] Is a goal title logged, or rendered as HTML/Markdown, or is the page or any
+      copy described as encrypting titles or guaranteeing operators cannot read them?
 
 Known, accepted limitations of the member-identity foundation (display-name
 Unicode compatibility, roster truncation above 500 members, the absence of an
@@ -290,6 +340,19 @@ membership (and its participation) or a profile can outlive a deleted Firebase
 account until the membership is removed; and the Demo Team cannot show the
 available (`covered`/`gap`) states because no personal assessments are seeded.
 See `docs/features/team-skill-needs-and-matrix/SPEC.md`.
+
+Known, accepted limitations of personal development goals (D1): there is no
+account-deletion flow, so goals can outlive a deleted Firebase account (the owner can
+delete them while signed in; the owner-subtree layout keeps a future erasure a single
+subtree operation); anyone with operator/Admin-SDK access to Firestore can technically
+read goal titles (not a product entitlement); titles are stored unencrypted and the owner
+can type sensitive text; the 100-goal cap can be slightly overshot under concurrent
+creates; malformed stored documents count toward the cap and appear to the owner only as
+delete-only recovery items, and a document whose id is not addressable cannot be
+recovered in-product; when more than the bounded read window of goals exists only a window
+is examined and deleting visible goals reveals the rest; and the static scope guard is
+change-detection evidence, not a security boundary. See
+`docs/features/personal-development-goals/SPEC.md`.
 
 See `docs/ARCHITECTURE.md` for where these boundaries live, and
 `docs/features/<feature-id>/SPEC.md` for feature-specific decisions.

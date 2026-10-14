@@ -411,6 +411,55 @@ reader of `skillProfiles` other than the owner. Boundaries:
   a Demo re-seed (full-replace membership write) resets role and participation; and the Demo cannot show
   the `covered`/`gap` states.
 
+## Personal development goals (Feature D1, decided, implemented)
+
+D1 (`docs/features/personal-development-goals/SPEC.md`) adds person-owned, **owner-only** development
+goals. It is independent of C1 and C2 data. Boundaries as delivered:
+
+- **Slice and dependency direction.** `src/features/personal-goals/` holds `domain/` (pure goal,
+  title, target-date and limit rules), `server/` (the single store module that names the collection,
+  own-goal operations, an in-memory fake for tests), `client/` (gateway) and `components/` (the
+  `/me/goals` page); copy lives in `copy.ts`. It depends on `auth` token verification, generic
+  `src/lib/firebase/` and `src/components/ui/` primitives, and the pure `isValidSkillTree` predicate
+  only. It imports no `profiles`, `skill-profiles`, `team-skills`, `teams`, `roadmap` or
+  `skill-trees/server` code and no team authorization or membership logic.
+- **First subcollection pattern.** Goals live at `userDevelopment/{uid}/goals/{goalId}`; every other
+  collection is top-level. The path is the ownership boundary (a foreign goal id resolves as missing
+  under the caller's path), no owner field is duplicated, no composite index is needed, and a future
+  erasure can target one owner subtree. No `userDevelopment/{uid}` parent document is stored. No
+  `collectionGroup` goal query is permitted. The root name is reserved for later per-owner
+  development data; D1 defines only `goals`.
+- **Server-only persistence and owner route family.** Admin SDK only; `firestore.rules` has an
+  explicit deny-only `userDevelopment/{document=**}` block placed before the catch-all (defence in
+  depth; the Admin SDK bypasses client rules, so owner authorization is enforced by server
+  behaviour using the verified token uid, never by the rules). Routes: `GET`/`POST /api/me/goals`,
+  `PATCH`/`DELETE /api/me/goals/[goalId]`. No uid in path, query or body; no user-id, admin or team
+  route; no `emailVerified` requirement; a role never widens access.
+- **SkillTree reuse.** The global catalog supplies only the optional topic link (`treeId`) and the
+  name resolved at read; a bounded catalog read (500/501 raw window) is duplicated minimally in the
+  slice. A stored link whose tree is gone or invalid is reported as unavailable, and editing stays
+  possible. D1 writes no SkillTree data and never reads `skillProfiles`.
+- **Limits, read window and recovery.** At most 100 goals per owner, enforced count-then-create
+  (a small overshoot under concurrent creates is accepted). The list reads a bounded window
+  (newest 100 by `createdAt`); malformed or overflow documents count toward the cap, and a bounded
+  `select`-only recovery scan finds malformed documents lacking `createdAt`. A malformed document
+  with an addressable id is returned to the owner only as a delete-only `{ goalId }` item with no
+  stored content; documents whose id is not addressable cannot be recovered in-product.
+- **Shared personal navigation.** `src/components/nav/PersonalNav` renders `Ferdigheter` (`/me/skills`)
+  and `Mål` (`/me/goals`) on both pages; the header entry `Min utvikling` replaces `Mine ferdigheter`
+  and is active on both routes. `/me/goals` stays a static route; there is no `/me` index.
+- **Static privacy guard.** `personal-goals-scope-guard.test.ts` pins the collection-name allow-list,
+  importer allow-lists, forbidden imports and concepts, and DTO/persisted key sets. It is change
+  detection, **not a security boundary** (same limits as the C1/C2 guards), and no C1/C2 allow-list
+  was edited for D1.
+- **Not in D1:** check-ins/conversations (D2), sharing, lead/admin/manager access, role profiles or
+  expectations, progress history, notifications, assignments, analytics.
+- **No new infrastructure.** No composite index (`firestore.indexes.json` unchanged), dependency,
+  environment variable, migration, background job or Demo Team fixture. Rules deployment is a
+  separate explicit step not performed by implementation.
+- **Known limitations.** See `docs/SECURITY.md` (after invariant 54): no account-deletion flow,
+  operator access, unencrypted titles, cap race, non-addressable ids and bounded windows.
+
 ## Submission and dashboard boundaries (decided, implemented)
 
 ```mermaid

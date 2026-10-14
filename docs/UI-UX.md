@@ -51,7 +51,7 @@ from `SPEC.md`'s recorded implementation decisions.
 Auth-aware header/navigation, driven by resolved auth and admin state:
 
 - **Signed out**: Hjem, Logg inn, Opprett konto
-- **Signed in**: Hjem, Team, Min profil, Mine ferdigheter, Logg ut
+- **Signed in**: Hjem, Team, Min profil, Min utvikling (was Mine ferdigheter before D1), Logg ut
 - **Signed in, app admin**: the signed-in set, plus Admin
 
 **Updated by `docs/features/member-identity-and-team-roles/SPEC.md` (F0):**
@@ -62,6 +62,11 @@ shown to a signed-out visitor or before the first auth event.
 **Updated by `docs/features/individual-skill-self-assessment/SPEC.md` (C1):** signed-in
 users also get **Mine ferdigheter** (to `/me/skills`, see "Personal skills UX"), right after
 *Min profil*; it is never shown to a signed-out visitor.
+
+**Updated by `docs/features/personal-development-goals/SPEC.md` (D1, 2026-10-14):** the C1
+header link *Mine ferdigheter* is renamed **Min utvikling**; it still links to `/me/skills` and is
+`aria-current="page"` on exactly `/me/skills` **and** `/me/goals`. *Min profil* stays a separate
+entry, active only on `/me/profile`. There is no separate global link for goals.
 
 **Updated by `docs/features/managed-surveys/SPEC.md` (TASK-013):** the
 original Phase 3 nav set above included a "Pulsundersøkelse" entry linking
@@ -538,7 +543,7 @@ As-built. Terminology: the personal surface says *Ferdigheter*; the team surface
 *Kompetanseområder* — a personal level is never called a team stage ("stadium").
 
 - **Route and navigation.** `/me/skills`, reached from one signed-in header link **Mine
-  ferdigheter** placed right after *Min profil* (`aria-current` on the exact path; never shown
+  ferdigheter** (renamed *Min utvikling* by D1, see below) placed right after *Min profil* (`aria-current` on the exact path; never shown
   to a signed-out visitor). A signed-out visitor sees the usual sign-in prompt and no
   request is made. C1 adds no `/me` shell, *Mål*, *Samtaler* or role pages.
 - **Privacy notice.** A persistent (not tooltip) notice states that the self-assessment is the
@@ -641,6 +646,35 @@ a stage.
   page scroll at phone width; icons, if any, are `aria-hidden` and duplicate the text.
 - **Known limitation (non-blocking).** The Demo Team seeds no personal assessments, so the Demo cannot
   show the *dekket* / *ikke dekket* states.
+
+### Personal development goals UX (Feature D1, `docs/features/personal-development-goals/SPEC.md`)
+
+As-built. Terminology: the header entry is *Min utvikling*; the page-level personal nav
+(`<nav aria-label="Personlig utvikling">`, shared by `/me/skills` and `/me/goals`) lists exactly
+*Ferdigheter* and *Mål*, with `aria-current="page"` on the exact current path. No *Samtaler*, role
+or placeholder entry and no `/me` index exist; `/me/skills` behaviour is unchanged.
+
+- **Route.** `/me/goals` (title *Mål*, static). A signed-out visitor sees the sign-in prompt and no
+  request is made. The page never reads or writes Firestore; it uses the gateway with a fresh ID
+  token per request.
+- **States.** Loading (`role="status"`); empty (with *Opprett mål*); populated (*Aktive mål* first,
+  *Fullførte mål (n)* in a collapsed-by-default disclosure, presentation only); native create/edit
+  form (*Tittel* required with inline message, *Ferdighetsområde* select whose first option is
+  *Ingen*, *Måldato* native date input, optional, past dates accepted); *Fullfør* / *Åpne på nytt*
+  buttons with status also in text (*Aktivt* / *Fullført*); *Ferdighetsområdet er ikke lenger
+  tilgjengelig* for an unavailable stored link (editing stays possible); goal-limit and general errors
+  as `role="alert"` with form content preserved; a notice when not all stored goals are shown;
+  a recovery region listing neutral "Lagret mål som ikke kan vises" items with delete only.
+- **Delete.** An explicit confirmation names the goal title as inert text, states that deletion is
+  permanent and cannot be undone, and offers *Slett permanent* / *Avbryt*. Recovery items name no title.
+- **Privacy copy.** A persistent notice says goals are personal, that teammates and team leads get no
+  access through DevPulse, and that sensitive or confidential information should not be written in a
+  title. It never claims encryption, anonymity or that operators cannot access data.
+- **Forbidden UI.** No chart, percentage, score, ranking, overdue wording or styling, performance
+  language, lead/admin view or *Samtaler* placeholder; a copy test enforces a forbidden-term list.
+- **Accessibility.** Native, keyboard-operable controls; visible labels; no meaning by colour alone;
+  existing `PageShell`/`Card`/`Button`/`TextField`/`Select`/`Alert`/`EmptyState`/`LoadingState` primitives.
+- **Demo Team.** No goal fixtures; the presenter creates goals through the UI.
 
 ## Results UX
 
