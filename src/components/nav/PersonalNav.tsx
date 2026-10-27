@@ -7,6 +7,7 @@ import { navCopy } from "./copy";
 const PERSONAL_LINKS = [
   { href: "/me/skills", label: navCopy.personalSkills },
   { href: "/me/goals", label: navCopy.personalGoals },
+  { href: "/me/conversations", label: navCopy.personalConversations },
 ] as const;
 
 /**

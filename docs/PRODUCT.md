@@ -406,12 +406,24 @@ until attrition, burnout, or delivery failure makes them obvious.
   Team goal data (the presenter creates goals through the UI).
 - See `docs/features/personal-development-goals/SPEC.md`, `docs/SECURITY.md`
   (invariants 37–54) and `docs/ROADMAP.md`.
+- **Delivered: development conversations (D2, 2026-10-21).** A person creates a conversation at
+  `/me/conversations` (`Samtaler`), writes notes, optionally shares up to five copies of their own goals,
+  and optionally invites **one** consenting teammate from the same team. The invitee sees only the
+  invitation until accepting; after acceptance both parties see the same content. Leads, managers and app
+  admins get no access. Mentors or guests from outside the team are not part of D2 and remain future
+  cross-team scope (CL-2). See `docs/features/development-conversations/SPEC.md` and `docs/SECURITY.md`
+  (invariants 55–72).
 
 ## Future capabilities (not implemented yet)
 
 - **D2 — check-ins/conversations** and any sharing of goals with leads or mentors:
   not built and not authorized by D1; each needs its own approved SPEC, privacy
   design and consent decision.
+  - *Dated pointer (2026-10-21; the entry above is the D1-era planning statement and is not rewritten):* D2 was
+    subsequently implemented in the repository as the consent-first, same-team development conversations feature
+    (`Samtaler`) described under "Delivered" above. Deployment is separate and has not been performed. Sharing with
+    a mentor from outside the team remains not built and is future cross-team scope (CL-2). Current D2 behaviour is
+    defined by `docs/features/development-conversations/SPEC.md` and its closeout record.
 - **Role expectations** (`roleDefinitions`; unscheduled, separate from D2) and any
   use of skill needs or coverage as an expectation on a role or person: not built
   and not authorized by C2 or D1; each needs its own approved SPEC.

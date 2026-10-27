@@ -58,6 +58,10 @@ const APPROVED_COLLECTION_REFERENCES = [
   "src/features/personal-goals/server/goal-store.test.ts",
   // TASK-009: the authorization/reachability suite asserts the production default collection paths.
   "src/features/personal-goals/server/personal-goals-authz-matrix.test.ts",
+  // TASK-005 (D2 persistence): the only D2 files that carry the protected `userDevelopment` namespace. This grants D2 no
+  // D1 goal access; the snapshot seam (TASK-008) is a separate, importer-and-module-exact amendment.
+  "src/features/development-conversations/server/conversation-store-types.ts",
+  "src/features/development-conversations/server/conversation-store.test.ts",
 ];
 /**
  * TASK-002 pins the rules block; allowed when present, never required. The pin lives beside the existing
@@ -75,6 +79,8 @@ const APPROVED_SERVER_IMPORTERS = [
   "app/api/me/goals/[goalId]/route.ts",
   "app/api/me/goals/[goalId]/route.test.ts",
   "app/me/goals/page.tsx",
+  // TASK-008 (D2 snapshot seam): the one D2 module that reads D1 goals, by the verified owner uid (SPEC CL-5, BR-24).
+  "src/features/development-conversations/server/read-owned-goal-snapshots.ts",
 ];
 
 const STORE_MODULE = "src/features/personal-goals/server/goal-store";
@@ -90,6 +96,8 @@ const APPROVED_STORE_IMPORTERS = [
   "src/features/personal-goals/server/personal-goals-authz-matrix.test.ts",
   // TASK-016: the route-level logging/body sweep substitutes the default store with the in-memory fake.
   "src/features/personal-goals/personal-goals-cross-cutting.test.ts",
+  // TASK-008 (D2 snapshot seam): the D2 snapshot module is the only non-D1 importer of the store module.
+  "src/features/development-conversations/server/read-owned-goal-snapshots.ts",
 ];
 /** Sibling test files of exactly the four operations: `<op>.test.ts` or `<op>-<suffix>.test.ts`. */
 const OPERATION_TEST =
@@ -581,6 +589,24 @@ describe("D1 scope guard — collection identifier (dimension 1)", () => {
       "app/api/admin/goals/route.ts",
     ]);
   });
+
+  it("keeps the D2 neighbours of the approved persistence files out of the exact allow-list", () => {
+    // TASK-005 approved two exact D2 files. Each neighbour below carries the same protected namespace and must still fail.
+    const D2_SRV = "src/features/development-conversations/server/";
+    expect(
+      collectionReferenceViolations([
+        virtual(`${D2_SRV}conversation-store-contract.test.ts`, `const p = "userDevelopment/o/conversations/c";`),
+        virtual(`${D2_SRV}conversation-store-test-support.ts`, `const p = "userDevelopment";`),
+        virtual(`${D2_SRV}conversation-store.ts`, `const p = "userDevelopment";`),
+        virtual(`${D2_SRV}fake-conversation-store.ts`, `const p = "userDevelopment";`),
+      ]),
+    ).toEqual([
+      `${D2_SRV}conversation-store-contract.test.ts`,
+      `${D2_SRV}conversation-store-test-support.ts`,
+      `${D2_SRV}conversation-store.ts`,
+      `${D2_SRV}fake-conversation-store.ts`,
+    ]);
+  });
 });
 
 describe("D1 scope guard — importer allow-list (dimension 2)", () => {
@@ -627,6 +653,16 @@ describe("D1 scope guard — importer allow-list (dimension 2)", () => {
   it("accepts exactly the approved route and page files", () => {
     const line = `import { getPersonalGoals } from "@/src/features/personal-goals/server/get-personal-goals";`;
     expect(serverImportViolations(APPROVED_SERVER_IMPORTERS.map((p) => virtual(p, line)))).toEqual([]);
+  });
+
+  it("admits the D2 snapshot seam as the only D2 importer of D1 goal server code, for the store and the store module alone", () => {
+    const snapshot = "src/features/development-conversations/server/read-owned-goal-snapshots.ts";
+    const storeLine = `import { getDefaultGoalStore } from "../../personal-goals/server/goal-store";`;
+    expect(serverImportViolations([virtual(snapshot, storeLine)])).toEqual([]);
+    expect(storeImporterViolations([virtual(snapshot, storeLine)])).toEqual([]);
+    const second = "src/features/development-conversations/server/second-snapshot.ts";
+    expect(serverImportViolations([virtual(second, storeLine)])).toEqual([second]);
+    expect(storeImporterViolations([virtual(second, storeLine)])).toEqual([`${second} -> goal-store`]);
   });
 
   it("restricts the store module to the operations, the fake and their tests, by any path form", () => {

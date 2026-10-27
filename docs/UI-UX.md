@@ -652,7 +652,8 @@ a stage.
 As-built. Terminology: the header entry is *Min utvikling*; the page-level personal nav
 (`<nav aria-label="Personlig utvikling">`, shared by `/me/skills` and `/me/goals`) lists exactly
 *Ferdigheter* and *Mål*, with `aria-current="page"` on the exact current path. No *Samtaler*, role
-or placeholder entry and no `/me` index exist; `/me/skills` behaviour is unchanged.
+or placeholder entry and no `/me` index exist; `/me/skills` behaviour is unchanged. *(Dated pointer,
+2026-10-21: this was true at D1 closeout. The nav now also includes `Samtaler`; see the D2 section below.)*
 
 - **Route.** `/me/goals` (title *Mål*, static). A signed-out visitor sees the sign-in prompt and no
   request is made. The page never reads or writes Firestore; it uses the gateway with a fresh ID
@@ -675,6 +676,18 @@ or placeholder entry and no `/me` index exist; `/me/skills` behaviour is unchang
 - **Accessibility.** Native, keyboard-operable controls; visible labels; no meaning by colour alone;
   existing `PageShell`/`Card`/`Button`/`TextField`/`Select`/`Alert`/`EmptyState`/`LoadingState` primitives.
 - **Demo Team.** No goal fixtures; the presenter creates goals through the UI.
+
+### Development conversations UX (Feature D2, `docs/features/development-conversations/SPEC.md`)
+
+As built 2026-10-21. The personal nav is `Ferdigheter · Mål · Samtaler` (`/me/conversations`, exact
+`aria-current`); the header entry `Min utvikling` is unchanged. Norwegian labels and privacy copy follow
+the SPEC "UI, routes and navigation" section and BR-38. Before inviting, sharing goals, completing, removing
+or deleting, the UI states the consequence before the person confirms. The pending view shows only the
+invitation, with the owner's name only under the roster rule and the neutral "En kollega" otherwise. The
+participant selector shows only what the owner-only read offers, states when the list is truncated, and never
+shows a uid, e-mail or member reference. No score, rating, progress, read receipt or last-viewed state appears.
+Controls are native and keyboard-operable with visible labels. Copy and forbidden-term checks are in the D2
+test suite (TASK-033).
 
 ## Results UX
 

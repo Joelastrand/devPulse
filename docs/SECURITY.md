@@ -68,7 +68,11 @@ is considered done.
     members (the name only, through the roster) and by app admins (admin
     member list). There is no organisation-wide directory, search, or
     by-`uid` profile read, and `userProfiles` follows the server-only
-    Firestore model (client rules deny all).
+    Firestore model (client rules deny all). *Development conversations
+    amendment (CL-20, 2026-10-21):* a conversation owner's and a participant's
+    names are shown to each other only while both hold an active same-team
+    membership; this is the roster rule above applied to one team, not a
+    directory.
 22. A team role (`teamMemberships.role`) is membership metadata, not a
     general RBAC system. It is read fail-safe to least privilege (only
     exactly `"lead"` is a lead; a stored lead is effective only while the
@@ -96,7 +100,15 @@ is considered done.
     e-mail.
 25. A member reference is never authentication or authorization evidence;
     being referenced (e.g. as a roadmap `ownerRef`) grants nothing — no
-    access, visibility, lead capability or edit right.
+    access, visibility, lead capability or edit right. *Development
+    conversations amendment (CL-23, 2026-10-21; product-owner approved 2026-10-21,
+    see the D2 SPEC closeout record):* a participant's access to a development conversation
+    requires the full D2-SI-2 predicate: the verified uid, a participation index,
+    the authoritative owner document (naming the caller as the accepted
+    participant), an active team, a current genuine membership, and a matching
+    membership-instance binding (the `memberRef` equals the value bound on the
+    owner document). The `memberRef` is only that equality and freshness check.
+    It grants nothing alone.
 26. A member reference is valid only with its own `teamId`. Unknown, stale,
     malformed, cross-team or ambiguous (duplicate) references fail closed: a
     write is rejected, and a stored owner that no longer resolves is shown as
@@ -259,6 +271,68 @@ Invariants 37–54 are SI-1…SI-18 of that SPEC, in order (invariant *n* = SI-*
     delete-only `{ goalId }` recovery item; no malformed content, failure reason or stored
     field is returned (SI-18).
 
+Development conversations (D2, `docs/features/development-conversations/SPEC.md`)
+assigns the next free numbers 55–72 to its D2-SI-1…D2-SI-18 in order. Each is
+stated here in the form the feature implements; the SPEC holds the full rules.
+
+55. Every conversation request derives the caller uid from the verified token. No
+    path, query or body carries a `uid`, owner uid, participant uid or membership
+    id; a `teamId` in a body is a choice, checked against the owner's real
+    membership (D2-SI-1).
+56. Conversation content is readable only by the owner, or by a participant who
+    passes the access check: a participation index, the authoritative owner
+    document, an active team, a current genuine membership and a matching member
+    reference. App-admin, lead and role checks are not used on this path. A member
+    reference grants nothing alone (D2-SI-2, invariant 25).
+57. No participant content is returned before an explicit accept that re-checks
+    the access rules. Participation starts only with the owner's choice and the
+    invitee's acceptance (D2-SI-3).
+58. A conversation has at most one participant, who must be an eligible member of
+    the owner's team, chosen by opaque reference. Lead-initiated, admin-initiated,
+    cross-team and role-derived participants do not exist (D2-SI-4).
+59. Participants see only owner-selected goal snapshots. They never read D1 goals or
+    goal ids. No C1 level, skill profile, C2 output, roadmap item or `skillProgress`
+    enters D2, and D2 never writes them (D2-SI-5).
+60. After acceptance, both parties see every owner and participant section. No
+    owner-only, participant-only, lead-only or admin-only section exists (D2-SI-6).
+61. Owner sections are written only by the owner; `participantNotes` only by an
+    accepted, eligible participant. No write crosses roles (D2-SI-7).
+62. Access ends immediately, on the next request, through decline, leave, removal,
+    replacement, withdrawal, team disablement or ineligibility. Only the
+    participant's own leave and the owner's removal delete `participantNotes`.
+    Ineligibility never deletes or hides content (D2-SI-8, CL-21).
+63. Completion freezes content and additions, never access. After completion the
+    owner can still remove the participant, clear snapshots and delete; the
+    participant can still leave (D2-SI-9).
+64. No exception keeps a former member able to read a conversation (D2-SI-10).
+65. Named free-text fields are encrypted on the server with the existing AES-256-GCM
+    helper. This is application-layer encryption, not end-to-end and not
+    zero-knowledge: the server and anyone with the encryption key can decrypt, and
+    both accepted parties receive plaintext through the API by design (D2-SI-11).
+66. Every conversation read is bounded and every body is capped. There is no
+    `collectionGroup` query, no export and no unbounded history (D2-SI-12).
+67. A malformed owner document is visible to its owner only as a delete-only
+    `{ conversationId }`. A malformed index entry is invisible. A missing, invalid or
+    mismatched encryption key is never a malformed document or a recovery candidate.
+    No ciphertext, key identifier, check value, decryption error or stored field
+    name is returned (D2-SI-13).
+68. Response DTOs are explicit allow-lists. The owner never sees the participant's
+    member reference or uid. Names appear only under the roster rule (invariant 21
+    amendment) (D2-SI-14).
+69. Missing, inaccessible, non-participant, ineligible, unbound and foreign ids all
+    return the same `conversation_not_found`. Invitation and goal-selection errors do
+    not reveal which underlying condition failed (D2-SI-15).
+70. D2 writes no `userDevelopment` goal, `skillProfiles`, `teamSkillNeeds`,
+    `roadmapItems`, `skillProgress`, `userProfiles` or membership document. It reads
+    membership only for the access and eligibility checks, and D1 goals only for
+    snapshot selection (D2-SI-16).
+71. D2 has no score, rating, rank, progress, activity, read receipt, last-viewed
+    time, lead dashboard, team aggregate or cross-conversation summary. No
+    notifications are sent (D2-SI-17, CL-24).
+72. D2 has no admin or lead route, no support or recovery path, and no route that
+    lets anyone other than the owner or the bound participant read a conversation
+    (D2-SI-18).
+
 D1 makes no claim of anonymity, differential privacy, or encryption of titles beyond the
 platform's storage guarantees, and does not claim operators cannot access the data.
 
@@ -320,6 +394,16 @@ Before marking a feature touching survey/team/user data as done, check:
       performance/ranking view?
 - [ ] Is a goal title logged, or rendered as HTML/Markdown, or is the page or any
       copy described as encrypting titles or guaranteeing operators cannot read them?
+- [ ] Can any party other than the owner or the one bound, accepted, eligible participant
+      reach a development conversation, through a role, admin, lead, `memberRef` alone,
+      a name match or a generic team endpoint?
+- [ ] Does a conversation response, error or log carry a `uid`, e-mail, membership id,
+      `memberRef`, title, note or goal title outside the authorized view, or a key or
+      decryption detail?
+- [ ] Does a conversation feature store free text outside the encrypted payload, or
+      treat a key outage or key mismatch as a malformed document?
+- [ ] Does a conversation feature add a score, progress, read receipt, last-viewed time,
+      activity count, notification, or a read of C1, C2, roadmap or goal data?
 
 Known, accepted limitations of the member-identity foundation (display-name
 Unicode compatibility, roster truncation above 500 members, the absence of an
@@ -353,6 +437,19 @@ recovered in-product; when more than the bounded read window of goals exists onl
 is examined and deleting visible goals reveals the rest; and the static scope guard is
 change-detection evidence, not a security boundary. See
 `docs/features/personal-development-goals/SPEC.md`.
+
+Known, accepted limitations of development conversations (D2): there is no account-deletion
+flow, so conversation content and participant bindings can outlive a deleted Firebase account until the
+owner removes the participant or deletes the conversation; anyone with operator or Admin-SDK access can
+decrypt conversation content (not a product entitlement); the encryption key is a single environment key with no
+rotation, so key loss makes content unrecoverable and rotation needs a separate migration; the
+ciphertext carries no additional authenticated data, so an operator with database write access could move
+ciphertext between documents undetected; an ineligible participant's notes stay visible to the owner until the
+owner removes them (CL-21); a membership removal does not itself delete participant notes; names follow the
+roster rule; there is no invitation rate limit beyond the participant cap; and the participant list verifies each
+entry with up to three point reads, so one call costs a bounded but non-trivial number of reads. The owner list
+verifies each bound participant with an index read and an owner read per item. See
+`docs/features/development-conversations/SPEC.md`.
 
 See `docs/ARCHITECTURE.md` for where these boundaries live, and
 `docs/features/<feature-id>/SPEC.md` for feature-specific decisions.

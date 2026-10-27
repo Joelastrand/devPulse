@@ -20,7 +20,7 @@ export interface EncryptedPayload {
  * falling back to plaintext when the key is missing or unusable.
  */
 export function encrypt(plaintext: string): EncryptedPayload {
-  const key = readEncryptionKey();
+  const key = readEncryptionKeyBytes();
   const iv = randomBytes(IV_LENGTH_BYTES);
   const cipher = createCipheriv(ALGORITHM, key, iv);
   const ciphertext = Buffer.concat([
@@ -55,7 +55,28 @@ export function encrypt(plaintext: string): EncryptedPayload {
  * may echo ciphertext/IV bytes.
  */
 export function decrypt(payload: EncryptedPayload): string {
-  const key = readEncryptionKey();
+  return decryptToBytes(payload).toString("utf8");
+}
+
+/**
+ * Authentication failure from AES-256-GCM `final()`: the auth tag did not verify for this key, IV and ciphertext.
+ * It is the only error `decryptToBytes` throws for a well-formed payload, so callers can tell it apart from
+ * configuration or programming errors without matching message text. The message never echoes payload or key bytes.
+ */
+export class EncryptedPayloadAuthenticationError extends Error {
+  constructor() {
+    super("Unable to authenticate encrypted payload.");
+    this.name = "EncryptedPayloadAuthenticationError";
+  }
+}
+
+/**
+ * Same authenticated decryption as `decrypt`, but returns the authenticated plaintext bytes before any UTF-8
+ * decoding. A caller that needs strict UTF-8 validation decodes the bytes itself. Same key source, IV handling and
+ * auth-tag handling as `decrypt`. Throws `EncryptedPayloadAuthenticationError` on authentication failure.
+ */
+export function decryptToBytes(payload: EncryptedPayload): Buffer {
+  const key = readEncryptionKeyBytes();
   const iv = Buffer.from(payload.iv, "base64");
   const authTag = Buffer.from(payload.authTag, "base64");
   const ciphertext = Buffer.from(payload.ciphertext, "base64");
@@ -63,15 +84,22 @@ export function decrypt(payload: EncryptedPayload): string {
   const decipher = createDecipheriv(ALGORITHM, key, iv);
   decipher.setAuthTag(authTag);
 
-  const plaintext = Buffer.concat([
-    decipher.update(ciphertext),
-    decipher.final(),
-  ]);
+  const updated = decipher.update(ciphertext);
+  let finalized: Buffer;
+  try {
+    finalized = decipher.final();
+  } catch {
+    throw new EncryptedPayloadAuthenticationError();
+  }
 
-  return plaintext.toString("utf8");
+  return Buffer.concat([updated, finalized]);
 }
 
-function readEncryptionKey(): Buffer {
+/**
+ * The single parser for `ENCRYPTION_KEY`. Returns the validated 32-byte key that `encrypt` and `decrypt` use, as a
+ * fresh buffer per call (no cache). Server-only, like the rest of this module. Its errors never echo the raw value.
+ */
+export function readEncryptionKeyBytes(): Buffer {
   const raw = process.env.ENCRYPTION_KEY;
 
   if (!raw) {

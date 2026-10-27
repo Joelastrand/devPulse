@@ -460,6 +460,37 @@ goals. It is independent of C1 and C2 data. Boundaries as delivered:
 - **Known limitations.** See `docs/SECURITY.md` (after invariant 54): no account-deletion flow,
   operator access, unencrypted titles, cap race, non-addressable ids and bounded windows.
 
+### Development conversations (D2, implemented 2026-10-21)
+
+Spec: `docs/features/development-conversations/SPEC.md`. Invariants: `docs/SECURITY.md` 55–72.
+
+- **Module boundary.** `src/features/development-conversations/` with `domain/`, `server/`, `client/`,
+  `components/` and `copy.ts`. Routes live under `app/api/me/conversations/` and `app/me/conversations/`.
+  The module imports `auth` token verification, `lib/encryption`, the Admin SDK, `components/ui`, the D1
+  goal store (one approved importer, CL-5), `profiles/server/get-display-names` (one call site), the pure
+  `teams/domain` membership helpers and the pure SkillTree predicate. It imports no `authorizeTeamAccess`,
+  C1, C2, roadmap, results, forum, surveys or challenges code.
+- **Two subtrees.** The owner document at `userDevelopment/{ownerUid}/conversations/{conversationId}` is the
+  only authority for content, participant state and status. The participant index at
+  `userDevelopment/{participantUid}/conversationParticipations/{conversationId}` holds exactly
+  `{ ownerUid, invitedAt }` and grants nothing alone. Both subtrees are covered by the existing recursive
+  deny rule, so `firestore.rules` and `firestore.indexes.json` are unchanged.
+- **Access check.** Every participant read and write re-derives the binding: the index, the owner document,
+  an active team, a current genuine membership and a matching `memberRef` (BR-21). Nothing is cached. Role,
+  lead status and app-admin status are never inputs, and `authorizeTeamAccess` is not used on this path.
+- **Encryption scope.** Free text (title, owner notes, next steps, participant notes and goal snapshots) is
+  encrypted with the existing AES-256-GCM helper through one codec module. Plain fields are structural only,
+  and a plain `keyCheck` distinguishes a configured-key mismatch (an operational failure) from a malformed or
+  unreadable document (CL-18, CL-27, BR-53). This is application-layer encryption, not end-to-end.
+- **Transactions.** Lifecycle transitions and every write touching both subtrees run as Firestore transactions
+  with preconditions re-read inside them (BR-48, BR-50).
+- **D1 interaction.** Snapshot selection reads D1 goals only through `getDefaultGoalStore().get(ownerUid,
+  goalId)`. Area names come from the SkillTree catalog. Membership is read only for eligibility. D2 writes no
+  goal, `skillProfiles`, `roadmapItems`, `skillProgress`, `userProfiles` or membership document.
+- **Navigation.** `PersonalNav` renders `Ferdigheter · Mål · Samtaler`. The header entry `Min utvikling` is
+  unchanged.
+- **Known limitations.** See `docs/SECURITY.md` (after invariant 72).
+
 ## Submission and dashboard boundaries (decided, implemented)
 
 ```mermaid

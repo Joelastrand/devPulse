@@ -373,12 +373,23 @@
     development interaction, sharing of goals with leads or mentors, and `Samtaler`
     navigation. Not authorized by D1; needs its own approved SPEC, privacy design and
     consent decision.
+    - *Dated pointer (2026-10-21; the planning entry above is a historical 2026-10-14 statement and is not rewritten):*
+      D2 was subsequently implemented in the repository as **D2 — Development conversations (`Samtaler`)**:
+      person-initiated, same-team development conversations with notes, up to five goal snapshots and at most one
+      consenting participant, reached through `/me/conversations`. Built D2 has no lead, manager or admin access,
+      no notifications and no C1/C2/roadmap data. Sharing with a mentor from outside the team remains future
+      cross-team scope (CL-2, D2 SPEC "Explicit future work"). Deployment is separate and has not been performed.
+      Current authoritative behaviour is defined by `docs/features/development-conversations/SPEC.md` (including its
+      closeout record) and `docs/SECURITY.md` (invariants 55–72).
   - **Role expectations** *(separate future feature, unscheduled; neither built nor
     cancelled)*: `roleDefinitions`, role profiles and their use in planning, reusing the
     member reference rules. Formerly labelled "D1/D2 — Role expectations"; the label
     was resolved on 2026-10-11 (see the D1 SPEC "Label resolution").
   Only F0, A, B, C1, C2 and D1 exist; later phases are intentions, not commitments, and each
   needs its own approved SPEC.
+  *Dated pointer (2026-10-21):* the sentence above is the historical 2026-10-14 planning statement and is not
+  rewritten. D2 has since been implemented in the repository (see the D2 entry above); deployment is separate and
+  has not been performed.
 
 Phases 0–9 are complete. See `docs/PRODUCT.md` for the product vision and
 non-goals.
