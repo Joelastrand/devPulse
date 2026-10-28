@@ -397,7 +397,7 @@ until attrition, burnout, or delivery failure makes them obvious.
   person-owned development goals (this feature); **D2** = check-ins/conversations,
   any two-party development interaction or sharing with leads or mentors
   (planned, not built); **role expectations** (`roleDefinitions`, role profiles,
-  manager development views) = a separate future feature, currently unscheduled,
+  manager development views) = a separate feature (dated pointer 2026-10-28: built as `role-profiles`; this is the 2026-10-14 planning statement),
   neither implemented nor cancelled. Earlier text above that says "D1/D2" in the
   role-expectation sense is historical.
 - **Not delivered in D1:** check-ins or conversations (`Samtaler`), sharing with
@@ -424,7 +424,7 @@ until attrition, burnout, or delivery failure makes them obvious.
     (`Samtaler`) described under "Delivered" above. Deployment is separate and has not been performed. Sharing with
     a mentor from outside the team remains not built and is future cross-team scope (CL-2). Current D2 behaviour is
     defined by `docs/features/development-conversations/SPEC.md` and its closeout record.
-- **Role expectations** (`roleDefinitions`; unscheduled, separate from D2) and any
+- **Role expectations** (`roleDefinitions`; built 2026-10-28 as the role-profiles feature, see `docs/features/role-profiles/SPEC.md`; formerly unscheduled, separate from D2) and any
   use of skill needs or coverage as an expectation on a role or person: not built
   and not authorized by C2 or D1; each needs its own approved SPEC.
 - A cross-team/org-wide "developer forum" or community, beyond Team

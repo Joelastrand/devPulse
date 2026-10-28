@@ -67,6 +67,13 @@ const APPROVED_SERVER_IMPORTERS = [
 const COVERAGE_MODULE = "src/features/team-skills/server/get-team-skill-coverage.ts";
 const COVERAGE_TEST = /^src\/features\/team-skills\/server\/get-team-skill-coverage[^/]*\.test\.ts$/;
 
+/**
+ * Dimension 2, role profiles (TASK-013): the owner-only comparison module, approved by its exact path, when present. It
+ * is the only outside importer of `skill-profiles/server` added by role-profiles. No directory allowance; its tests
+ * receive the C1 read by injection and import nothing from C1.
+ */
+const ROLE_COMPARISON_MODULE = "src/features/role-profiles/server/get-own-role-comparison.ts";
+
 const STORE_MODULE = "src/features/skill-profiles/server/skill-profile-store";
 const BATCH_MODULE = "src/features/skill-profiles/server/read-skill-levels-batch";
 const SERVER_DIR_PREFIX = "src/features/skill-profiles/server";
@@ -187,7 +194,12 @@ function collectionReferenceViolations(files: SourceFile[]): string[] {
 }
 
 function isApprovedServerImporter(path: string): boolean {
-  return APPROVED_SERVER_IMPORTERS.includes(path) || path === COVERAGE_MODULE || COVERAGE_TEST.test(path);
+  return (
+    APPROVED_SERVER_IMPORTERS.includes(path) ||
+    path === COVERAGE_MODULE ||
+    COVERAGE_TEST.test(path) ||
+    path === ROLE_COMPARISON_MODULE
+  );
 }
 
 function serverImportViolations(files: SourceFile[]): string[] {
@@ -402,6 +414,15 @@ describe("C1 scope guard — module/import allow-list (Dimension 2)", () => {
       "app/teams/page.tsx",
       "src/features/team-skill-needs/server/matrix.ts",
     ]);
+  });
+
+  it("approves the role-profiles comparison module by exact path only, not its sibling files", () => {
+    expect(
+      serverImportViolations([
+        virtual(ROLE_COMPARISON_MODULE, `import { getOwnSkills } from "../../skill-profiles/server/get-own-skills";`),
+        virtual("src/features/role-profiles/server/get-own-role-target.ts", `import { getOwnSkills } from "../../skill-profiles/server/get-own-skills";`),
+      ]),
+    ).toEqual(["src/features/role-profiles/server/get-own-role-target.ts"]);
   });
 
   it("a new file inside app/api/me/skills/ is not implicitly approved", () => {

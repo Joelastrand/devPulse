@@ -453,3 +453,38 @@ verifies each bound participant with an index read and an owner read per item. S
 
 See `docs/ARCHITECTURE.md` for where these boundaries live, and
 `docs/features/<feature-id>/SPEC.md` for feature-specific decisions.
+
+## Role profiles invariants (RP-SI, 2026-10-28)
+
+The role-profiles feature (`docs/features/role-profiles/SPEC.md`) adds the invariants below. They use their own `RP-SI`
+prefix, so the numbered invariants above are not renumbered. They do not weaken any existing invariant.
+
+- **RP-SI-1 (owner-only target).** Only the verified token uid reads or writes `userDevelopment/{uid}/roleTarget/current`. No
+  route, query, body, DTO or operation accepts another uid. A `uid` in a body or query is refused or ignored.
+- **RP-SI-2 (comparison is derived).** The comparison is owner-only, computed on request, and never stored, cached, logged
+  or aggregated. No request writes a document for it.
+- **RP-SI-3 (no other reader or assigner).** No admin, lead, team, member or app-admin route reads or writes any person's
+  target or comparison. App-admin status grants administration of role definitions only.
+- **RP-SI-4 (role definitions are reference data).** `roleDefinitions` is written and read only through Admin SDK routes behind
+  `requireAppAdmin`. Client Firestore access is denied by an explicit deny-only rule. Descriptions are org text and must not
+  contain personal names (the admin form shows the notice).
+- **RP-SI-5 (internal fields stay internal).** `createdBy`, `updatedBy`, `archivedBy` and `uid` never appear in any response.
+  Route responses are field allow-lists.
+- **RP-SI-6 (new reader of `skillProfiles`, scoped).** The owner-only comparison is the only reader of C1 levels added by this
+  feature, through the existing owner read. This scopes D1 SI-6 to this feature: D1 still never reads `skillProfiles`.
+  For notice purposes it counts as a further reader of private C1 assessments: the C1 privacy notice is amended (approved
+  2026-10-28) with the owner-only comparison sentence, and the C1 anti-surveillance scan exempts only that exact sentence.
+  No other copy or reader changes.
+- **RP-SI-7 (no D1 goal access).** role-profiles never reads or writes a goal document, the D1 goal store or the D1 routes, and
+  uses no `collectionGroup`. D1 never reads or writes the target. D1 SI-15 and invariant 51 are unchanged.
+- **RP-SI-8 (no D2 or team-planning data).** No role data reaches D2, team skill needs, coverage, progress or the roadmap.
+  The D2 guard, the C2 guard and the cross-feature suite pin this.
+- **RP-SI-9 (neutral errors and logs).** Errors and logs carry no role name, description, `roleId`, skill-area name, level or
+  comparison (BR-23). A failed read is a neutral failure (`500` or `persistence_failed`), never `not_assessed` or
+  `area_unavailable`.
+- **RP-SI-10 (malformed content is never echoed or repaired).** A malformed role or target is `not_found`, `unavailable` or
+  skipped, with no content returned. Reads never repair a document.
+- **RP-SI-11 (one write per operation).** Every operation performs at most one write, and every refusal writes nothing (PG-7,
+  TASK-012). Create is count-then-create: a small overshoot under concurrent creates is accepted (BR-7).
+- **RP-SI-12 (static guards are not authorization).** The scope guards are change detection. Authorization evidence is the
+  actor × operation matrix (`role-profiles-authz-matrix.test.ts`) and the route suites.

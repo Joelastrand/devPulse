@@ -94,7 +94,7 @@ See `docs/SECURITY.md` for the invariants these concepts must respect.
 
   Individual levels are never team maturity and are never copied into team
   documents. Coverage is derived on every request and never persisted; there is no
-  employee-by-skill matrix. `roleDefinitions` (the separate, unscheduled role-expectations feature; formerly labelled D1/D2) does **not** exist yet. Personal goals (`userDevelopment/{uid}/goals`, D1) are a separate PERSON-owned source of truth, see below.
+  employee-by-skill matrix. `roleDefinitions` exists since the role-profiles feature was built (2026-10-28; formerly the separate, unscheduled role-expectations feature, labelled D1/D2): see "Role profiles" below. Personal goals (`userDevelopment/{uid}/goals`, D1) are a separate PERSON-owned source of truth, see below.
 - **TeamSkillNeed (C2, implemented):** `teamSkillNeeds/{teamId}__{treeId}` (deterministic id,
   a uniqueness device only). Fields exactly `teamId`, `treeId`, `requiredLevel` (integer 2–4,
   a C1 personal level; level 1 is rejected), `requiredCoverage` (integer 1–20), `createdAt`,
@@ -135,9 +135,21 @@ See `docs/SECURITY.md` for the invariants these concepts must respect.
   Personal goals feed **no** team data: not `roadmapItems`, `skillProgress`, `teamSkillNeeds`,
   the C2 coverage or any maturity view, and D1 never reads `skillProfiles`. The earlier
   conceptual `developmentGoals → progressEntries` model was **not** implemented by D1 (there is
-  no progress-entry collection); `checkIns` and `roleDefinitions` likewise do not exist.
+  no progress-entry collection); `checkIns` likewise does not exist; `roleDefinitions` exists since 2026-10-28 (see "Role profiles" below).
   *Dated pointer (2026-10-21):* the sentence above is the historical D1-era statement and is not rewritten. D2 was
   implemented afterwards and does not introduce `checkIns`; development conversations are stored at
   `userDevelopment/{ownerUid}/conversations/{conversationId}` (`DevelopmentConversation`), with participant locators at
   `userDevelopment/{participantUid}/conversationParticipations/{conversationId}` (`ConversationParticipation`), as the
   D2 rows above describe.
+
+## Role profiles (role-profiles, built 2026-10-28)
+
+Feature spec: `docs/features/role-profiles/SPEC.md`. Two collections, both written only by the Admin SDK on the server.
+
+| Collection | Owner | Fields | Notes |
+|---|---|---|---|
+| `roleDefinitions/{roleId}` | role-profiles (admin-maintained, org-wide reference data) | `name` (1–80), `description` (≤500, optional), `expectations` (0–20 of `{ treeId, expectedLevel 2–4 }`), `createdAt`, `createdBy`, `updatedAt`, `updatedBy`, `archivedAt`, `archivedBy` | Document ID is the identity; no `roleId` field. `createdBy`, `updatedBy` and `archivedBy` are internal and never returned. Malformed documents are skipped on read. |
+| `userDevelopment/{uid}/roleTarget/current` | role-profiles (the owner's target only) | `roleId`, `updatedAt` | One fixed document per person; no history. Missing means no target; malformed content is `unavailable`. Owner-only. D1 goal documents under `userDevelopment/{uid}/goals` stay owned by personal-goals. |
+
+Derived, never stored: the comparison and the list of active roles. No composite index (`firestore.indexes.json` unchanged).
+Client Firestore access to `roleDefinitions` is denied by an explicit deny-only rule.

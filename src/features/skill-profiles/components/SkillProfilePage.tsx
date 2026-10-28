@@ -295,6 +295,7 @@ function ReadyView({
   return (
     <div className="flex flex-col gap-6">
       <p className="text-sm text-zinc-700 dark:text-zinc-300">{skillProfileCopy.privacyNotice}</p>
+      <p className="text-sm text-zinc-700 dark:text-zinc-300">{skillProfileCopy.roleComparisonNotice}</p>
 
       <section aria-labelledby="skill-legend-heading">
         <h2 id="skill-legend-heading" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">

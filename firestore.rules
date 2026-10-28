@@ -223,6 +223,20 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // roleDefinitions holds org-wide reference role definitions (name,
+    // optional description, expectations, createdAt/createdBy, optional
+    // updatedAt/updatedBy/archivedAt/archivedBy). Written only by app admins
+    // and read by signed-in people through server-side routes, all via the
+    // Firebase Admin SDK (src/features/role-profiles/server/), which bypasses
+    // these rules entirely. This rule exists solely to deny the separate
+    // client-SDK path unconditionally, regardless of authentication state
+    // (including an app admin's). Same server-only-access rationale as every
+    // other collection above. See docs/features/role-profiles/SPEC.md (BR-1,
+    // AD-1).
+    match /roleDefinitions/{document=**} {
+      allow read, write: if false;
+    }
+
     // userDevelopment holds one person's private development goals at
     // userDevelopment/{uid}/goals/{goalId} (no parent document is ever
     // created). It is personal data, read/written only by the owner's own

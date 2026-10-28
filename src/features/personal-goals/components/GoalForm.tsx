@@ -21,6 +21,8 @@ interface GoalFormProps {
   /** The goal being edited, or `undefined` to create. */
   goal?: GoalDto;
   skillOptions: SkillOptionDto[];
+  /** Create mode only: a tree to preselect (role-profiles "Opprett mål", PG-1). It is never a title, role or level. */
+  initialTreeId?: string;
   /** Resolves to an error message to show (form content is kept), or `undefined` when the save succeeded. */
   onSubmit: (submit: GoalFormSubmit) => Promise<string | undefined>;
   onCancel: () => void;
@@ -29,6 +31,13 @@ interface GoalFormProps {
 function initialAreaValue(goal: GoalDto | undefined): string {
   if (!goal || goal.treeId === null) return NO_AREA;
   return goal.areaAvailable ? goal.treeId : KEEP_UNAVAILABLE_AREA;
+}
+
+/** Create mode preselects the requested tree only when it is one of the bounded options; otherwise it starts with no area. */
+function initialCreateArea(initialTreeId: string | undefined, skillOptions: SkillOptionDto[]): string {
+  return initialTreeId !== undefined && skillOptions.some((option) => option.treeId === initialTreeId)
+    ? initialTreeId
+    : NO_AREA;
 }
 
 /** Only fields that differ from the goal are sent; absent = unchanged, `null` = removed (BR-22). */
@@ -49,9 +58,9 @@ function buildCreate(title: string, area: string, targetDate: string): CreateGoa
 }
 
 /** Native create/edit form (BR-48 state 4). Validation of the title itself stays with the server. */
-export function GoalForm({ goal, skillOptions, onSubmit, onCancel }: GoalFormProps) {
+export function GoalForm({ goal, skillOptions, initialTreeId, onSubmit, onCancel }: GoalFormProps) {
   const [title, setTitle] = useState(goal?.title ?? "");
-  const [area, setArea] = useState(initialAreaValue(goal));
+  const [area, setArea] = useState(goal ? initialAreaValue(goal) : initialCreateArea(initialTreeId, skillOptions));
   const [targetDate, setTargetDate] = useState(goal?.targetDate ?? "");
   const [titleError, setTitleError] = useState<string>();
   const [formError, setFormError] = useState<string>();

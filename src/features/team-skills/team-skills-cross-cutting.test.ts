@@ -46,7 +46,11 @@ describe("C2 scope regression — nothing outside the approved surface (BR-35, B
 
   it("no production code introduces D1/D2 concepts", () => {
     const d = /\b(roleDefinitions|developmentGoals|progressEntries|checkIns)\b/;
-    const offenders = [...walk("src"), ...walk("app")].filter((p) => !isTest(p) && d.test(read(p)));
+    // PG-12: exact file-level role-profiles entry; the role store alone holds the `roleDefinitions` literal.
+    const ROLE_PROFILES_ROLE_DEFINITION_STORE = ["src/features/role-profiles/server/role-store.ts"];
+    const offenders = [...walk("src"), ...walk("app")].filter(
+      (p) => !isTest(p) && !ROLE_PROFILES_ROLE_DEFINITION_STORE.includes(p) && d.test(read(p)),
+    );
     expect(offenders).toEqual([]);
   });
 
@@ -120,7 +124,7 @@ function strings(value: unknown): string[] {
 describe("C1 + C2 privacy copy, scanned together (BR-21, BR-25, BR-27, BR-29)", () => {
   const c2 = [...strings(teamSkillsCopy), ...strings(participationCopy)];
   const c1Notice = skillProfileCopy.privacyNotice;
-  const all = [...c2, c1Notice];
+  const all = [...c2, c1Notice, skillProfileCopy.roleComparisonNotice];
   const sentences = all.flatMap((s) => s.split(/(?<=[.!?])\s+/));
 
   it("never says anonymous without an explicit negation, and never promises formal anonymity", () => {

@@ -13,6 +13,12 @@ export const skillProfileCopy = {
   pageDescription: "Din egen vurdering av hva du kan, som støtte for din egen utvikling.",
   privacyNotice:
     "Egenvurderingen din er din egen. Teamkolleger, teamledere og administratorer kan ikke se nivåene du setter. Du kan velge, team for team, at den skal telle med i en personvernbeskyttet teamoversikt der teamet bare ser en grov status per kompetansebehov.",
+  /**
+   * Approved 2026-10-28 (role-profiles TASK-022): the C1 notice amendment for the owner-only role comparison.
+   * Rendered directly after `privacyNotice`, which is unchanged (C2 BR-29 pins it).
+   */
+  roleComparisonNotice:
+    "Dine ferdighetsvurderinger er private. De kan brukes til en valgfri sammenligning med din egen valgte målrolle. Sammenligningen er bare synlig for deg.",
   loading: "Laster ferdighetene dine…",
   signInLink: "Logg inn",
   signInPrompt: "for å se ferdighetene dine.",

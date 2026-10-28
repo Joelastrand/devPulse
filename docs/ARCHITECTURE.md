@@ -194,7 +194,7 @@ handle. Boundaries:
 - **Surface.** Feature A lives inside the existing *Kompetanseområder*
   section; it adds no route, tab or navigation entry. The dedicated Team
   Roadmap surface is Feature B (below). Future `teamSkillNeeds`
-  and `roleDefinitions` are not part of this architecture yet; personal `skillProfiles`
+  and `roleDefinitions` are described in "Role profiles" below (built 2026-10-28); personal `skillProfiles`
   (C1) is described in "Individual skill self-assessment" below.
 
 ## Team Roadmap (Feature B, decided, implemented)
@@ -438,7 +438,7 @@ goals. It is independent of C1 and C2 data. Boundaries as delivered:
 - **SkillTree reuse.** The global catalog supplies only the optional topic link (`treeId`) and the
   name resolved at read; a bounded catalog read (500/501 raw window) is duplicated minimally in the
   slice. A stored link whose tree is gone or invalid is reported as unavailable, and editing stays
-  possible. D1 writes no SkillTree data and never reads `skillProfiles`.
+  possible. D1 writes no SkillTree data and never reads `skillProfiles`. (Scoped 2026-10-28: the owner-only role comparison of role-profiles reads `skillProfiles` through the existing C1 owner read; D1 itself still never does, see "Role profiles".)
 - **Limits, read window and recovery.** At most 100 goals per owner, enforced count-then-create
   (a small overshoot under concurrent creates is accepted). The list reads a bounded window
   (newest 100 by `createdAt`); malformed or overflow documents count toward the cap, and a bounded
@@ -629,3 +629,21 @@ flowchart LR
 - Key management provider and rotation strategy.
 - Hosting/runtime target for the server-side boundary (not decided in this
   session; no deployment work has been done).
+
+## Role profiles (role-profiles, built 2026-10-28)
+
+Feature spec: `docs/features/role-profiles/SPEC.md`. Vertical slice in `src/features/role-profiles/` (domain, Admin SDK
+server operations, client components), with routes under `app/api/admin/roles/`, `app/api/roles/`,
+`app/api/me/role-target/`, `app/api/me/role-comparison/`, pages `app/admin/roles/` and the section on `app/me/skills/`.
+
+Boundaries:
+- **Persistence:** only `roleDefinitions` and `userDevelopment/{uid}/roleTarget/current`, through the Admin SDK on the
+  server. No client Firestore path, no `collectionGroup`, no composite index, no environment variable, no dependency.
+- **Reads of other features:** the owner-only comparison reads the owner's C1 levels through the existing
+  `getOwnSkills` read (one approved importer, pinned by the C1 guard). The "Opprett mål" entry links to the D1 goals
+  page with `treeId` as the only parameter (the D1 seam). Nothing else in D1, C2, D2, roadmap or team planning is read.
+- **Transactions:** target selection reads the role and its SkillTrees in one Firestore transaction (`tx.get`) and writes
+  once. Every other write is a single-document update or a single delete.
+- **Guards:** the C2 and D1 static guards admit only exact role-profiles files (PG-12), and the C1 guard admits only the
+  comparison module by exact path. These guards are change detection, not authorization; authorization is pinned by the
+  actor × operation matrix in `role-profiles-authz-matrix.test.ts`.

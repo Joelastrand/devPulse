@@ -62,6 +62,13 @@ const APPROVED_COLLECTION_REFERENCES = [
   // D1 goal access; the snapshot seam (TASK-008) is a separate, importer-and-module-exact amendment.
   "src/features/development-conversations/server/conversation-store-types.ts",
   "src/features/development-conversations/server/conversation-store.test.ts",
+  // PG-12 (role profiles): test-only pin. The role-profiles guard names `userDevelopment` as its approved
+  // role-target collection path; it grants no production access and no D1 goal access.
+  "src/features/role-profiles/role-profiles-scope-guard.test.ts",
+  // PG-12 (role profiles, TASK-010): the single role-target persistence file and its path test. Owner-only
+  // `userDevelopment/{uid}/roleTarget/current`; it grants no goal store, goal route, goal DTO or collectionGroup access.
+  "src/features/role-profiles/server/role-target-store.ts",
+  "src/features/role-profiles/server/role-target-store.test.ts",
 ];
 /**
  * TASK-002 pins the rules block; allowed when present, never required. The pin lives beside the existing

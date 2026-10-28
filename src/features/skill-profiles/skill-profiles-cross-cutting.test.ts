@@ -59,11 +59,25 @@ const SURVEILLANCE_PATTERNS: [string, RegExp][] = [
   ["lead/admin/team visibility implied", /kan se (den|dem|det)\b(?!.*ikke)|deles med|synlig for/i],
 ];
 
+/**
+ * The approved C1 role-comparison notice (role-profiles TASK-022, approved 2026-10-28). It is the only copy string
+ * exempt from the scan, matched by exact value: it describes the owner's own target-role comparison, which the
+ * `comparison` and `lead/admin/team visibility` patterns would otherwise reject. Every other string is still scanned.
+ */
+const APPROVED_ROLE_COMPARISON_NOTICE =
+  "Dine ferdighetsvurderinger er private. De kan brukes til en valgfri sammenligning med din egen valgte målrolle. Sammenligningen er bare synlig for deg.";
+
 describe("C1 anti-surveillance wording (BR-22) — copy.ts", () => {
-  const strings = allCopyStrings();
+  const strings = allCopyStrings().filter((text) => text !== APPROVED_ROLE_COMPARISON_NOTICE);
 
   it("scans a non-trivial amount of copy", () => {
     expect(strings.length).toBeGreaterThan(30);
+  });
+
+  it("pins the approved role-comparison notice word for word, and a near-copy with comparison wording is still scanned", () => {
+    expect(skillProfileCopy.roleComparisonNotice).toBe(APPROVED_ROLE_COMPARISON_NOTICE);
+    const nearCopy = APPROVED_ROLE_COMPARISON_NOTICE.replace("valgfri sammenligning", "sammenligning av kolleger");
+    expect(SURVEILLANCE_PATTERNS.some(([, pattern]) => pattern.test(nearCopy))).toBe(true);
   });
 
   it.each(SURVEILLANCE_PATTERNS)("contains no %s wording", (_name, pattern) => {

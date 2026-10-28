@@ -833,3 +833,27 @@ Directional inspiration only — never a pixel-copy requirement:
 - **Culture Amp** and comparable employee-survey products — how to
   present survey-style aggregate results without individualizing them.
 - **Vercel** — admin/settings UI clarity and operational density.
+
+## Role profiles (role-profiles, built 2026-10-28)
+
+**Person: *Rolleforventninger* on `/me/skills`.** A section below the self-assessment overview (no new navigation item).
+- No target: *Ingen rolle valgt*, with a selector that offers only selectable roles (*Rolle å utvikle mot*). If no role is
+  selectable, *Ingen roller er lagt inn ennå.*
+- Selected: the role name, *Endre rolle* and *Fjern valgt rolle*. An archived target shows *Rollen er arkivert*; a role with
+  no expectations shows *Rollen har ingen forventninger ennå.*; an unusable target shows *Valgt rolle kan ikke brukes til
+  sammenligning nå.* (copy approved by the product owner, 2026-10-28).
+- Comparison rows, in the role's order, with one text label each: *Møter forventningen*, *Utviklingsmulighet*, *Ikke vurdert
+  ennå*, *Ikke tilgjengelig*. Own level as *Ditt nivå N*; expected level as *Forventet nivå N*. No totals, counts or sorting.
+  The approved privacy notice is shown with the rows.
+- *Opprett mål* appears on development-opportunity and not-assessed rows only. It opens the D1 goals form with the tree
+  preselected, and nothing is created until the owner submits.
+- **C1 notice:** the approved role-comparison notice is shown directly after the C1 privacy notice (decision 2026-10-28; see the feature's TASKS.md,
+  TASK-022).
+
+**Admin: *Roller* on `/admin/roles`,** linked from the admin area next to *Kompetanseområder*.
+- List with *Aktiv* or *Arkivert* as text labels, expectations and levels, and the notice
+  *Ikke registrer personnavn eller personlige opplysninger i rollebeskrivelser.*
+- *Ny rolle*, *Rediger*, *Arkiver* and *Gjenopprett*. An archived role offers only *Gjenopprett*. Row actions are named after
+  their role, for screen readers.
+- The expectations editor offers skill areas from the catalog and levels 2–4. Errors are neutral and linked to their fields;
+  server refusals are shown with `role="alert"`.

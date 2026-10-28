@@ -1057,3 +1057,9 @@ No open product decisions remain.
   recovery scan (BR-58); overflow beyond both windows drains by
   delete-and-refetch (BR-60); the at-cap lock is excluded for addressable ids
   (BR-60, BR-63). Normative text: BR-25, BR-32, BR-33, BR-56…BR-63, SI-18.
+
+## Dated pointer (2026-10-28)
+
+Role expectations are built as the separate `role-profiles` feature (`docs/features/role-profiles/SPEC.md`). The
+statements above that describe role expectations as a future, unscheduled feature are historical (2026-10-14 planning).
+D1 itself is unchanged except for the approved "Opprett mål" prefill seam, which is described in that feature.

@@ -7,6 +7,10 @@ vi.mock("../../../src/features/skill-profiles/components/SkillProfilePage", () =
   SkillProfilePage: () => <div data-testid="skill-profile-page" />,
 }));
 
+vi.mock("../../../src/features/role-profiles/components/RoleTargetSection", () => ({
+  RoleTargetSection: () => <div data-testid="role-target-section" />,
+}));
+
 const { default: MySkillsPage } = await import("./page");
 
 afterEach(cleanup);
@@ -18,5 +22,6 @@ describe("/me/skills page", () => {
     expect(screen.getByTestId("skill-profile-page")).toBeTruthy();
     const nav = screen.getByRole("navigation", { name: "Personlig utvikling" });
     expect(nav.querySelector('a[aria-current="page"]')?.textContent).toBe("Ferdigheter");
+    expect(screen.getByTestId("role-target-section")).toBeTruthy();
   });
 });

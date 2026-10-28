@@ -15,4 +15,12 @@ describe("AdminTeamsPage", () => {
 
     expect(screen.getByRole("main").className).toContain(WIDTH_CLASSNAMES.wide);
   });
+
+  it("links to the admin roles page next to the skill areas page (role-profiles TASK-020)", () => {
+    render(<AdminTeamsPage />);
+
+    const links = screen.getAllByRole("link", { name: "Roller" });
+    expect(links.length).toBeGreaterThan(0);
+    expect(links.every((link) => link.getAttribute("href") === "/admin/roles")).toBe(true);
+  });
 });

@@ -11,6 +11,9 @@ export default function AdminTeamsPage() {
       <p className="mt-2">
         <Link href="/admin/skills" className="font-medium text-zinc-900 underline dark:text-zinc-50">
           Kompetanseområder
+        </Link>{" "}
+        <Link href="/admin/roles" className="font-medium text-zinc-900 underline dark:text-zinc-50">
+          Roller
         </Link>
       </p>
       <div className="mt-6">

@@ -381,10 +381,10 @@
       cross-team scope (CL-2, D2 SPEC "Explicit future work"). Deployment is separate and has not been performed.
       Current authoritative behaviour is defined by `docs/features/development-conversations/SPEC.md` (including its
       closeout record) and `docs/SECURITY.md` (invariants 55–72).
-  - **Role expectations** *(separate future feature, unscheduled; neither built nor
-    cancelled)*: `roleDefinitions`, role profiles and their use in planning, reusing the
-    member reference rules. Formerly labelled "D1/D2 — Role expectations"; the label
-    was resolved on 2026-10-11 (see the D1 SPEC "Label resolution").
+  - **Role profiles** *(built 2026-10-28 as feature `role-profiles`)*: admin-maintained `roleDefinitions` and an
+    owner-only target role with a derived comparison; no planning use, no team or admin assignment
+    (`docs/features/role-profiles/SPEC.md`). Formerly the separate, unscheduled "Role expectations" entry, labelled
+    "D1/D2 — Role expectations" until the label was resolved on 2026-10-11 (see the D1 SPEC "Label resolution").
   Only F0, A, B, C1, C2 and D1 exist; later phases are intentions, not commitments, and each
   needs its own approved SPEC.
   *Dated pointer (2026-10-21):* the sentence above is the historical 2026-10-14 planning statement and is not

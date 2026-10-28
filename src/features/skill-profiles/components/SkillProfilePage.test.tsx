@@ -87,6 +87,14 @@ describe("SkillProfilePage", () => {
     expect(rows[1].textContent).toContain("Arkitektur");
   });
 
+  it("shows the approved role-comparison notice directly after the C1 notice (role-profiles TASK-022)", async () => {
+    await renderWith(ok([{ treeId: "t-a", name: "Arkitektur", level: null }]));
+
+    const c1 = screen.getByText(skillProfileCopy.privacyNotice);
+    const approved = screen.getByText(skillProfileCopy.roleComparisonNotice);
+    expect(c1.compareDocumentPosition(approved) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("assessed row: indicator text equals the level name, segments are aria-hidden; level 4 is 'Avansert'", async () => {
     await renderWith(ok([{ treeId: "t-1", name: "Sikkerhet", level: 4 }]));
 

@@ -27,7 +27,11 @@ type ViewState =
  * mutation refetches that canonical `GET` (TASK-013) instead of patching local state. Goals are private to
  * the owner: nothing here offers any other person access.
  */
-export function GoalsPage() {
+/**
+ * `initialTreeId` (role-profiles "Opprett mål", PG-11) opens the create form once, with that tree preselected when it is
+ * an option. Nothing is created until an explicit submit.
+ */
+export function GoalsPage({ initialTreeId }: { initialTreeId?: string } = {}) {
   const [state, setState] = useState<ViewState>({ phase: "loading" });
 
   const { isCurrentGeneration } = useAuthGatedResource((token, generation) => {
@@ -90,6 +94,7 @@ export function GoalsPage() {
     <ReadyView
       data={data}
       token={token}
+      initialTreeId={initialTreeId}
       onUnauthenticated={() => setState({ phase: "signed_out" })}
       onChanged={() => load(token, generation)}
     />
@@ -128,13 +133,15 @@ type LifecycleState = { pending: true } | { pending: false; error: string };
 interface ReadyViewProps {
   data: GoalListResponse;
   token: string;
+  /** The create-form preselection from the page's `treeId` parameter; create mode only. */
+  initialTreeId?: string;
   onUnauthenticated: () => void;
   /** Refetches the canonical GET after a successful mutation. */
   onChanged: () => Promise<void>;
 }
 
-function ReadyView({ data, token, onUnauthenticated, onChanged }: ReadyViewProps) {
-  const [openForm, setOpenForm] = useState<OpenForm>(null);
+function ReadyView({ data, token, initialTreeId, onUnauthenticated, onChanged }: ReadyViewProps) {
+  const [openForm, setOpenForm] = useState<OpenForm>(initialTreeId !== undefined ? { kind: "create" } : null);
   const [lifecycle, setLifecycle] = useState<Record<string, LifecycleState>>({});
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
   const active = data.goals.filter((goal) => goal.status === "active");
@@ -226,6 +233,7 @@ function ReadyView({ data, token, onUnauthenticated, onChanged }: ReadyViewProps
         open={openForm?.kind === "create"}
         onToggle={() => setOpenForm((current) => (current?.kind === "create" ? null : { kind: "create" }))}
         skillOptions={data.skillOptions}
+        initialTreeId={initialTreeId}
         onSubmit={handleCreate}
       />
 
@@ -285,11 +293,13 @@ function CreateGoalEntry({
   open,
   onToggle,
   skillOptions,
+  initialTreeId,
   onSubmit,
 }: {
   open: boolean;
   onToggle: () => void;
   skillOptions: GoalListResponse["skillOptions"];
+  initialTreeId?: string;
   onSubmit: (submit: GoalFormSubmit) => Promise<string | undefined>;
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
@@ -312,7 +322,14 @@ function CreateGoalEntry({
         >
           {goalsCopy.createHeading}
         </h2>
-        {open && <GoalForm skillOptions={skillOptions} onSubmit={onSubmit} onCancel={onToggle} />}
+        {open && (
+          <GoalForm
+            skillOptions={skillOptions}
+            initialTreeId={initialTreeId}
+            onSubmit={onSubmit}
+            onCancel={onToggle}
+          />
+        )}
       </section>
     </div>
   );
