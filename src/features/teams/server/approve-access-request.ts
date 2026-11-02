@@ -1,12 +1,13 @@
 import "server-only";
+import { assertNoErasureRecordInTransaction, runFencedTransaction, writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../domain/app-admin";
 import { accessRequestDocId, readAccessRequestStatusFor } from "../domain/team-access-request";
 import { membershipDocId } from "../domain/team-membership";
 import { applyMembershipGrant } from "./grant-team-membership";
 import { requireAppAdmin } from "./require-app-admin";
-
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
 const REQUESTS_COLLECTION = "teamAccessRequests";
 const MEMBERSHIPS_COLLECTION = "teamMemberships";
 
@@ -43,7 +44,9 @@ function getDefaultCollection(): ApproveAccessRequestCollection {
         .collection(MEMBERSHIPS_COLLECTION)
         .doc(membershipDocId(uid, teamId));
 
-      return db.runTransaction(async (tx): Promise<ApproveOneOutcome> => {
+      return runFencedTransaction(db, uid, async (tx): Promise<ApproveOneOutcome> => {
+        // Writer-only fence on the approving admin's uid, in addition to the target uid fence (TASK-035, W-17).
+        await assertNoErasureRecordInTransaction(db, tx, resolvedBy);
         const requestSnap = await tx.get(requestRef);
         if (!requestSnap.exists) {
           return "not_found";
@@ -75,7 +78,7 @@ function getDefaultCollection(): ApproveAccessRequestCollection {
 
 export type ApproveAccessRequestResult =
   | { ok: true; outcome: ApproveOneOutcome }
-  | { ok: false; error: "unauthenticated" | "forbidden" | "persistence_failed" };
+  | { ok: false; error: AuthRefusal | "forbidden" | "persistence_failed" };
 
 export interface ApproveAccessRequestDeps {
   now?: Date;
@@ -124,7 +127,7 @@ export async function approveAccessRequest(
       now,
     });
     return { ok: true, outcome };
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 }

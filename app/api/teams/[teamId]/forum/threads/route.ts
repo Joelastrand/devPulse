@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { createThread } from "../../../../../../src/features/forum/server/create-thread";
 import { listTeamThreads } from "../../../../../../src/features/forum/server/list-team-threads";
+import { authRefusalStatus, isAuthRefusal } from "../../../../../../src/features/auth/server/auth-refusal";
 
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 const CREATE_ERROR_STATUS: Record<string, number> = {
   sign_in_required: 401,
+  erasure_in_progress: 403,
+  auth_unavailable: 503,
   invalid_input: 400,
   forbidden: 403,
   team_not_found: 404,
@@ -31,7 +34,7 @@ export async function GET(
   const result = await listTeamThreads(token, teamId);
 
   if (!result.ok) {
-    const status = result.error === "unauthenticated" ? 401 : result.error === "forbidden" ? 403 : 500;
+    const status = isAuthRefusal(result.error) ? authRefusalStatus(result.error) : result.error === "forbidden" ? 403 : 500;
     return NextResponse.json({ status: result.error }, { status });
   }
 

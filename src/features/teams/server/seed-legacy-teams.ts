@@ -1,10 +1,11 @@
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { runFencedTransaction, writeRefusalFor } from "../../auth/server/erasure-write-fence";
+import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../domain/app-admin";
 import { LEGACY_TEAM_SEEDS } from "../domain/legacy-team-seed";
 import { requireAppAdmin } from "./require-app-admin";
-
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
 const COLLECTION_NAME = "teams";
 
 /**
@@ -59,12 +60,16 @@ export interface LegacyTeamSeedCollection {
   ): Promise<CreateIfAbsentOutcome>;
 }
 
-function getDefaultCollection(): LegacyTeamSeedCollection {
-  const collection = getFirestoreDb().collection(COLLECTION_NAME);
+/** Each create stamps the seeding admin's uid, so it is fenced on that uid in the same transaction (TASK-035, W-17). */
+function getDefaultCollection(actorUid: string): LegacyTeamSeedCollection {
+  const db = getFirestoreDb();
+  const collection = db.collection(COLLECTION_NAME);
   return {
     async createIfAbsent(teamId, record) {
       try {
-        await collection.doc(teamId).create(record);
+        await runFencedTransaction(db, actorUid, async (tx) => {
+          tx.create(collection.doc(teamId), record);
+        });
         return "created";
       } catch (error) {
         if (isAlreadyExistsError(error)) {
@@ -78,12 +83,12 @@ function getDefaultCollection(): LegacyTeamSeedCollection {
 
 export type LegacyTeamSeedOutcome = {
   teamId: string;
-  result: "created" | "already_exists" | "failed";
+  result: "created" | "already_exists" | "failed" | "erasure_in_progress";
 };
 
 export type SeedLegacyTeamsResult =
   | { ok: true; outcomes: LegacyTeamSeedOutcome[] }
-  | { ok: false; error: "unauthenticated" | "forbidden" };
+  | { ok: false; error: AuthRefusal | "forbidden" };
 
 export interface SeedLegacyTeamsDeps {
   now?: Date;
@@ -123,7 +128,7 @@ export async function seedLegacyTeams(
     return { ok: false, error: admin.error };
   }
 
-  const collection = deps.collection ?? getDefaultCollection();
+  const collection = deps.collection ?? getDefaultCollection(admin.identity.uid);
   const now = deps.now ?? new Date();
   const outcomes: LegacyTeamSeedOutcome[] = [];
 
@@ -136,8 +141,9 @@ export async function seedLegacyTeams(
         createdBy: admin.identity.uid,
       });
       outcomes.push({ teamId: seed.teamId, result: outcome });
-    } catch {
-      outcomes.push({ teamId: seed.teamId, result: "failed" });
+    } catch (error) {
+      const refused = writeRefusalFor(error) === "erasure_in_progress";
+      outcomes.push({ teamId: seed.teamId, result: refused ? "erasure_in_progress" : "failed" });
     }
   }
 

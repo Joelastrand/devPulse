@@ -15,6 +15,7 @@ import {
 } from "./skill-need-catalog";
 import { getDefaultSkillNeedsStore, type SkillNeedsStore } from "./skill-needs-store";
 import { getDefaultSkillContributionStore, type SkillContributionStore } from "./skill-contribution-store";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 
 /**
  * The complete per-need row (SPEC BR-22), built field by field. `state` is the
@@ -34,7 +35,7 @@ export type SkillCoverageResponse =
   /** The membership scan hit its bound: nothing is derived from a known-incomplete cohort. */
   | { availability: "incomplete"; rows: [] };
 
-export type GetTeamSkillCoverageError = "unauthenticated" | "forbidden" | "team_disabled" | "read_failed";
+export type GetTeamSkillCoverageError = AuthRefusal | "forbidden" | "team_disabled" | "read_failed";
 
 export type GetTeamSkillCoverageResult =
   | ({ ok: true } & SkillCoverageResponse)
@@ -102,7 +103,7 @@ function sortRows(rows: SkillCoverageRow[]): SkillCoverageRow[] {
 export function createGetTeamSkillCoverage(deps: GetTeamSkillCoverageDeps) {
   return async function getTeamSkillCoverage(idToken: string, teamId: string): Promise<GetTeamSkillCoverageResult> {
     const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
-    if (!verified.ok) return { ok: false, error: "unauthenticated" };
+    if (!verified.ok) return { ok: false, error: authRefusalFor(verified) };
 
     const member = await requireGenuineMember(verified.identity, teamId, { reads: deps.reads });
     if (!member.ok) return { ok: false, error: member.error };

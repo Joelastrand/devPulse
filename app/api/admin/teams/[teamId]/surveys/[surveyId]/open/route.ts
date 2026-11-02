@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { openSurvey } from "../../../../../../../../src/features/surveys/server/open-survey";
-
+import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../../../../../src/features/auth/server/auth-refusal";
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
@@ -37,7 +37,7 @@ function extractBearerToken(header: string | null): string {
 
 function statusForError(
   error:
-    | "unauthenticated"
+    | AuthRefusal
     | "forbidden"
     | "survey_not_found"
     | "wrong_team"
@@ -48,7 +48,7 @@ function statusForError(
     | "invalid_coordination_state"
     | "persistence_failed",
 ): number {
-  if (error === "unauthenticated") return 401;
+  if (isAuthRefusal(error)) return authRefusalStatus(error);
   if (error === "forbidden") return 403;
   if (error === "survey_not_found" || error === "wrong_team" || error === "team_not_found") return 404;
   if (

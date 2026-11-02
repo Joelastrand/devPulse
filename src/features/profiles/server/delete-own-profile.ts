@@ -1,10 +1,12 @@
 import "server-only";
 import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import { getDefaultUserProfileStore, type UserProfileStore } from "./user-profile-store";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
+import { writeRefusalFor } from "../../auth/server/erasure-write-fence";
 
 export type DeleteOwnProfileResult =
   | { ok: true }
-  | { ok: false; error: "unauthenticated" | "persistence_failed" };
+  | { ok: false; error: AuthRefusal | "persistence_failed" };
 
 export interface DeleteOwnProfileDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
@@ -23,14 +25,14 @@ export async function deleteOwnProfile(
 ): Promise<DeleteOwnProfileResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
   if (!verified.ok) {
-    return { ok: false, error: "unauthenticated" };
+    return { ok: false, error: authRefusalFor(verified) };
   }
 
   const store = deps.store ?? getDefaultUserProfileStore();
   try {
     await store.remove(verified.identity.uid);
     return { ok: true };
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 }

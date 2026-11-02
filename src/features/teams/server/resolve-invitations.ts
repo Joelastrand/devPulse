@@ -1,6 +1,7 @@
 import "server-only";
+import { runFencedTransaction, writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifiedIdentity } from "../../auth/server/verify-identity";
+import { type VerifiedIdentity } from "../../auth/server/verify-identity";
 import { normalizeEmail } from "../domain/normalize-email";
 import { invitationDocId, isValidPendingInvitationFor } from "../domain/team-invitation";
 import { membershipDocId } from "../domain/team-membership";
@@ -54,7 +55,7 @@ function getDefaultCollection(): ResolveInvitationsCollection {
       const invitationRef = db.collection(INVITATIONS_COLLECTION).doc(invitationDocId(teamId, email));
       const membershipRef = db.collection(MEMBERSHIPS_COLLECTION).doc(membershipDocId(uid, teamId));
 
-      return db.runTransaction(async (tx): Promise<ResolveOneOutcome> => {
+      return runFencedTransaction(db, uid, async (tx): Promise<ResolveOneOutcome> => {
         const [invitationSnap, membershipSnap] = await Promise.all([
           tx.get(invitationRef),
           tx.get(membershipRef),
@@ -106,7 +107,7 @@ function getDefaultCollection(): ResolveInvitationsCollection {
 
 export type ResolveInvitationsResult =
   | { ok: true; membershipsCreated: number }
-  | { ok: false; error: "read_failed" | "persistence_failed" };
+  | { ok: false; error: "read_failed" | "erasure_in_progress" | "persistence_failed" };
 
 export interface ResolveInvitationsDeps {
   now?: Date;
@@ -168,8 +169,8 @@ export async function resolveInvitations(
     let outcome: ResolveOneOutcome;
     try {
       outcome = await collection.resolveOne({ teamId, email, uid: identity.uid, now });
-    } catch {
-      return { ok: false, error: "persistence_failed" };
+    } catch (error) {
+      return { ok: false, error: writeRefusalFor(error) };
     }
     if (outcome === "membership_created") {
       membershipsCreated += 1;

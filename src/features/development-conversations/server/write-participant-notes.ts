@@ -1,4 +1,5 @@
 import "server-only";
+import { writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import { isConversationId } from "../domain/conversation-id";
 import type { ConversationContent } from "../domain/content-payload";
 import { classifyStoredShape } from "../domain/stored-owner-conversation";
@@ -41,12 +42,13 @@ export interface WriteParticipantNotesDeps {
 export type WriteParticipantNotesResult =
   | { ok: true }
   | { ok: false; error: "invalid_input"; field: "notes" }
-  | { ok: false; error: "conversation_not_found" | "conversation_completed" | "persistence_failed" };
+  | { ok: false; error: "conversation_not_found" | "conversation_completed" | "erasure_in_progress" | "persistence_failed" };
 
 const OK: WriteParticipantNotesResult = { ok: true };
 const NOT_FOUND: WriteParticipantNotesResult = { ok: false, error: "conversation_not_found" };
 const COMPLETED: WriteParticipantNotesResult = { ok: false, error: "conversation_completed" };
 const FAILED: WriteParticipantNotesResult = { ok: false, error: "persistence_failed" };
+const REFUSED: WriteParticipantNotesResult = { ok: false, error: "erasure_in_progress" };
 const INVALID_NOTES: WriteParticipantNotesResult = { ok: false, error: "invalid_input", field: "notes" };
 
 function defaultDeps(): WriteParticipantNotesDeps {
@@ -121,9 +123,9 @@ export async function writeParticipantNotes(
   if (!isConversationId(conversationId)) return NOT_FOUND;
 
   try {
-    return await deps.store.runTransaction((tx) => writeInTransaction(tx, callerUid, conversationId, parsed.text, deps));
-  } catch {
+    return await deps.store.runParticipantTransaction(callerUid, (tx) => writeInTransaction(tx, callerUid, conversationId, parsed.text, deps));
+  } catch (error) {
     // Any read, key or write failure is operational. The raw error is never surfaced (BR-47).
-    return FAILED;
+    return writeRefusalFor(error) === "erasure_in_progress" ? REFUSED : FAILED;
   }
 }

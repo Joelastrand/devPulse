@@ -72,7 +72,7 @@ Each exclusion is deliberate. D2 is not a performance-management subsystem.
 - Notifications, email or push; calendar integration, reminders, scheduling.
 - Comments, replies, threads, reactions, attachments, co-editing, read receipts,
   last-viewed data.
-- Account-erasure implementation (known limitation).
+- Account-erasure implementation (known limitation; superseded 2026-11-02, see the supersession note at the end of this file).
 - Demo Team fixtures; migration; search over content.
 
 ## Key concepts
@@ -599,7 +599,7 @@ Code constants (never configurable by request, setting or environment variable):
   team-scoped; nothing changes.
 - Participant deletes their Firebase account → `verifyIdToken` fails; no access.
   Index and binding stay until the owner removes the participant or the conversation
-  is deleted (no erasure flow, known limitation).
+  is deleted (no erasure flow, known limitation; superseded 2026-11-02 by the erasure flow in docs/features/account-erasure/SPEC.md).
 - Owner invites self → `invalid_participant`.
 - Snapshot's tree removed → `areaName: null` (BR-45).
 - Index present, owner document missing → participant sees `conversation_not_found`
@@ -1131,7 +1131,7 @@ None. `plannedFor` is a date label (BR-6). No reminders, invitations or time of 
 - Notifications and invitation expiry (CL-24).
 - Live goal references with per-goal revocable consent (own SPEC).
 - Encryption key rotation with a key-version dispatch and re-encryption migration.
-- Account-erasure flow covering both subtrees.
+- Account-erasure flow covering both subtrees (superseded 2026-11-02: docs/features/account-erasure/SPEC.md).
 - Role expectations (`roleDefinitions`), a separate SPEC.
 - Export, print or report of conversations.
 - Batched participant-list verification if the per-entry read cost (see the known
@@ -1344,3 +1344,9 @@ Dated record, added at closeout. The sections above are the planning-time text a
   deployment is a separate explicit step (see "Firestore rules impact"). Because the rules tests are static, live Firestore
   rule behaviour and the `ENCRYPTION_KEY` value of any environment remain unverified in-session. Both need manual checks
   before any deployment.
+
+## Supersession note: account erasure (2026-11-02)
+
+The "no account erasure" and "no erasure flow" limitations in this SPEC are superseded. Account erasure is specified in
+`docs/features/account-erasure/SPEC.md`. Erasure-only override of BR-20 for participant data: the erasure owner cleanup may remove a participant's notes and binding through the erasure-only capability (TASK-019, TASK-027). No other path overrides BR-20.
+Erasure does not claim deletion from provider logs or provider backups (account-erasure BR-19, E-1 to E-3).

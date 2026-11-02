@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { materializeMemberRefs } from "../../../../../../src/features/teams/server/materialize-member-refs";
-
+import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../../../src/features/auth/server/auth-refusal";
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
@@ -28,8 +28,8 @@ export async function POST(
   );
 }
 
-function statusFor(error: "unauthenticated" | "forbidden" | "team_not_found" | "persistence_failed"): number {
-  if (error === "unauthenticated") return 401;
+function statusFor(error: AuthRefusal | "forbidden" | "team_not_found" | "persistence_failed"): number {
+  if (isAuthRefusal(error)) return authRefusalStatus(error);
   if (error === "forbidden") return 403;
   if (error === "team_not_found") return 404;
   return 500;

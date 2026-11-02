@@ -1,12 +1,12 @@
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../../teams/domain/app-admin";
 import { isValidTeamStatus } from "../../teams/domain/team";
 import { requireAppAdmin } from "../../teams/server/require-app-admin";
 import { effectiveLifecycle, isValidSurvey, type Survey } from "../domain/survey";
 import { readActiveSurveyId } from "../domain/team-survey-state";
-
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
 const SURVEYS_COLLECTION = "surveys";
 const TEAMS_COLLECTION = "teams";
 const TEAM_SURVEY_STATE_COLLECTION = "teamSurveyState";
@@ -83,6 +83,7 @@ function getDefaultDb(): OpenSurveyDb {
 
 export type OpenSurveyOutcome =
   | "opened"
+  | "erasure_in_progress"
   | "survey_not_found"
   | "wrong_team"
   | "not_scheduled"
@@ -155,8 +156,12 @@ function toDateOrUndefined(value: unknown): unknown {
 async function decideAndApplyOpen(
   tx: OpenSurveyTransaction,
   params: { teamId: string; surveyId: string; now: Date },
+  actorUid: string,
 ): Promise<OpenSurveyOutcome> {
   const { teamId, surveyId, now } = params;
+
+  // Writer-only fence (TASK-034, W-17): an erasing admin's write is refused inside this transaction, before any write.
+  if ((await tx.get(erasurePath(actorUid))).exists) return "erasure_in_progress";
 
   const surveySnapshot = await tx.get(surveyPath(surveyId));
   const candidate = toCandidateSurvey(
@@ -236,7 +241,11 @@ export interface OpenSurveyResultOk {
 
 export interface OpenSurveyResultErr {
   ok: false;
-  error: "unauthenticated" | "forbidden" | Exclude<OpenSurveyOutcome, "opened"> | "persistence_failed";
+  error: AuthRefusal | "forbidden" | Exclude<OpenSurveyOutcome, "opened"> | "persistence_failed";
+}
+
+function erasurePath(uid: string): string {
+  return `accountErasures/${uid}`;
 }
 
 export type OpenSurveyResult = OpenSurveyResultOk | OpenSurveyResultErr;
@@ -284,7 +293,7 @@ export async function openSurvey(
 
   let outcome: OpenSurveyOutcome;
   try {
-    outcome = await db.runTransaction((tx) => decideAndApplyOpen(tx, { teamId, surveyId, now }));
+    outcome = await db.runTransaction((tx) => decideAndApplyOpen(tx, { teamId, surveyId, now }, admin.identity.uid));
   } catch {
     return { ok: false, error: "persistence_failed" };
   }

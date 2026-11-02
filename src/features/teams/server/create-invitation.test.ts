@@ -6,7 +6,7 @@ import type {
   CreateInvitationInvitationsCollection,
   CreateInvitationMembershipsCollection,
   CreateInvitationTeamsCollection,
-  GetUserByEmail,
+  FindAccount,
 } from "./create-invitation";
 import { createInvitation } from "./create-invitation";
 
@@ -76,7 +76,7 @@ interface RawInvitation {
   teamId: string;
   email: string;
   status: "pending" | "accepted" | "canceled";
-  invitedBy: string;
+  invitedBy: string | null;
 }
 
 function fakeInvitations(
@@ -113,9 +113,9 @@ function fakeInvitations(
   };
 }
 
-function fakeGetUserByEmail(
+function fakeFindAccount(
   accounts: Record<string, { uid: string; emailVerified: boolean }>,
-): GetUserByEmail {
+): FindAccount {
   return vi.fn(async (email: string) => accounts[email] ?? null);
 }
 
@@ -129,7 +129,7 @@ describe("createInvitation", () => {
     const teams = fakeTeams({ "team-1": "active" });
     const { membershipsCollection, grantMembershipCollection } = fakeMembershipStore();
     const invitations = fakeInvitations();
-    const getUserByEmail = fakeGetUserByEmail({
+    const findAccount = fakeFindAccount({
       "dev@example.com": { uid: "user-1", emailVerified: true },
     });
 
@@ -138,7 +138,7 @@ describe("createInvitation", () => {
       teamsCollection: teams,
       membershipsCollection,
       invitationsCollection: invitations,
-      getUserByEmail,
+      findAccount,
       grantMembershipCollection,
       now: NOW,
     });
@@ -154,14 +154,14 @@ describe("createInvitation", () => {
     const teams = fakeTeams({ "team-1": "active" });
     const memberships = fakeMemberships();
     const invitations = fakeInvitations();
-    const getUserByEmail = fakeGetUserByEmail({});
+    const findAccount = fakeFindAccount({});
 
     const result = await createInvitation("token", "team-1", "unknown@example.com", {
       ...baseDeps,
       teamsCollection: teams,
       membershipsCollection: memberships,
       invitationsCollection: invitations,
-      getUserByEmail,
+      findAccount,
       now: NOW,
     });
 
@@ -182,7 +182,7 @@ describe("createInvitation", () => {
     const teams = fakeTeams({ "team-1": "active" });
     const memberships = fakeMemberships();
     const invitations = fakeInvitations();
-    const getUserByEmail = fakeGetUserByEmail({
+    const findAccount = fakeFindAccount({
       "dev@example.com": { uid: "user-1", emailVerified: false },
     });
 
@@ -191,7 +191,7 @@ describe("createInvitation", () => {
       teamsCollection: teams,
       membershipsCollection: memberships,
       invitationsCollection: invitations,
-      getUserByEmail,
+      findAccount,
       now: NOW,
     });
 
@@ -220,14 +220,14 @@ describe("createInvitation", () => {
         invitedBy: ADMIN_UID,
       },
     });
-    const getUserByEmail = fakeGetUserByEmail({});
+    const findAccount = fakeFindAccount({});
 
     const result = await createInvitation("token", "team-1", "Unknown@Example.com", {
       ...baseDeps,
       teamsCollection: teams,
       membershipsCollection: memberships,
       invitationsCollection: invitations,
-      getUserByEmail,
+      findAccount,
       now: NOW,
     });
 
@@ -239,18 +239,18 @@ describe("createInvitation", () => {
     const teams = fakeTeams({ "team-1": "active" });
     const memberships = fakeMemberships();
     const invitations = fakeInvitations();
-    const getUserByEmail = fakeGetUserByEmail({});
+    const findAccount = fakeFindAccount({});
 
     await createInvitation("token", "team-1", "  Dev@Example.COM  ", {
       ...baseDeps,
       teamsCollection: teams,
       membershipsCollection: memberships,
       invitationsCollection: invitations,
-      getUserByEmail,
+      findAccount,
       now: NOW,
     });
 
-    expect(getUserByEmail).toHaveBeenCalledWith("dev@example.com");
+    expect(findAccount).toHaveBeenCalledWith("dev@example.com");
     expect(invitations.writes[0].email).toBe("dev@example.com");
   });
 
@@ -265,14 +265,14 @@ describe("createInvitation", () => {
         invitedBy: ADMIN_UID,
       },
     });
-    const getUserByEmail = fakeGetUserByEmail({});
+    const findAccount = fakeFindAccount({});
 
     const result = await createInvitation("token", "team-1", "unknown@example.com", {
       ...baseDeps,
       teamsCollection: teams,
       membershipsCollection: memberships,
       invitationsCollection: invitations,
-      getUserByEmail,
+      findAccount,
       now: NOW,
     });
 
@@ -292,7 +292,7 @@ describe("createInvitation", () => {
         invitedBy: "some-earlier-admin",
       },
     });
-    const getUserByEmail = fakeGetUserByEmail({
+    const findAccount = fakeFindAccount({
       "dev@example.com": { uid: "user-1", emailVerified: true },
     });
 
@@ -301,7 +301,7 @@ describe("createInvitation", () => {
       teamsCollection: teams,
       membershipsCollection,
       invitationsCollection: invitations,
-      getUserByEmail,
+      findAccount,
       grantMembershipCollection,
       now: NOW,
     });
@@ -322,7 +322,7 @@ describe("createInvitation", () => {
         invitedBy: "some-earlier-admin",
       },
     });
-    const getUserByEmail = fakeGetUserByEmail({
+    const findAccount = fakeFindAccount({
       "dev@example.com": { uid: "user-1", emailVerified: true },
     });
 
@@ -331,7 +331,7 @@ describe("createInvitation", () => {
       teamsCollection: teams,
       membershipsCollection,
       invitationsCollection: invitations,
-      getUserByEmail,
+      findAccount,
       grantMembershipCollection,
       now: NOW,
     });
@@ -352,7 +352,7 @@ describe("createInvitation", () => {
         invitedBy: "some-earlier-admin",
       },
     });
-    const getUserByEmail = fakeGetUserByEmail({
+    const findAccount = fakeFindAccount({
       "dev@example.com": { uid: "user-1", emailVerified: true },
     });
 
@@ -361,7 +361,7 @@ describe("createInvitation", () => {
       teamsCollection: teams,
       membershipsCollection,
       invitationsCollection: invitations,
-      getUserByEmail,
+      findAccount,
       grantMembershipCollection,
       now: NOW,
     });
@@ -387,7 +387,7 @@ describe("createInvitation", () => {
         invitedBy: "some-earlier-admin",
       },
     });
-    const getUserByEmail = fakeGetUserByEmail({
+    const findAccount = fakeFindAccount({
       "dev@example.com": { uid: "user-1", emailVerified: true },
     });
 
@@ -396,7 +396,7 @@ describe("createInvitation", () => {
       teamsCollection: teams,
       membershipsCollection: memberships,
       invitationsCollection: invitations,
-      getUserByEmail,
+      findAccount,
       now: NOW,
     });
 
@@ -411,7 +411,7 @@ describe("createInvitation", () => {
     const teams = fakeTeams({ "team-1": "active" });
     const { membershipsCollection, grantMembershipCollection } = fakeMembershipStore();
     const invitations = fakeInvitations();
-    const getUserByEmail = fakeGetUserByEmail({
+    const findAccount = fakeFindAccount({
       "dev@example.com": { uid: "user-1", emailVerified: true },
     });
     const deps = {
@@ -419,7 +419,7 @@ describe("createInvitation", () => {
       teamsCollection: teams,
       membershipsCollection,
       invitationsCollection: invitations,
-      getUserByEmail,
+      findAccount,
       grantMembershipCollection,
       now: NOW,
     };
@@ -438,7 +438,7 @@ describe("createInvitation", () => {
       "user-1__team-1": { uid: "user-1", teamId: "team-1" },
     });
     const invitations = fakeInvitations();
-    const getUserByEmail = fakeGetUserByEmail({
+    const findAccount = fakeFindAccount({
       "dev@example.com": { uid: "user-1", emailVerified: true },
     });
 
@@ -447,7 +447,7 @@ describe("createInvitation", () => {
       teamsCollection: teams,
       membershipsCollection: memberships,
       invitationsCollection: invitations,
-      getUserByEmail,
+      findAccount,
       now: NOW,
     });
 
@@ -463,7 +463,7 @@ describe("createInvitation", () => {
       // Simulates resolveInvitations' own transaction having already won the race.
       runGrant: vi.fn().mockResolvedValue("already_member"),
     };
-    const getUserByEmail = fakeGetUserByEmail({
+    const findAccount = fakeFindAccount({
       "dev@example.com": { uid: "user-1", emailVerified: true },
     });
 
@@ -472,7 +472,7 @@ describe("createInvitation", () => {
       teamsCollection: teams,
       membershipsCollection: memberships,
       invitationsCollection: invitations,
-      getUserByEmail,
+      findAccount,
       grantMembershipCollection,
       now: NOW,
     });
@@ -484,59 +484,59 @@ describe("createInvitation", () => {
     const teams = fakeTeams({});
     const memberships = fakeMemberships();
     const invitations = fakeInvitations();
-    const getUserByEmail = fakeGetUserByEmail({});
+    const findAccount = fakeFindAccount({});
 
     const result = await createInvitation("token", "missing-team", "dev@example.com", {
       ...baseDeps,
       teamsCollection: teams,
       membershipsCollection: memberships,
       invitationsCollection: invitations,
-      getUserByEmail,
+      findAccount,
     });
 
     expect(result).toEqual({ ok: false, error: "team_not_found" });
-    expect(getUserByEmail).not.toHaveBeenCalled();
+    expect(findAccount).not.toHaveBeenCalled();
     expect(invitations.writes).toHaveLength(0);
   });
 
   it("fails closed for a malformed/unrecognized team status", async () => {
     const teams = fakeTeams({ "team-1": "archived" });
-    const getUserByEmail = fakeGetUserByEmail({});
+    const findAccount = fakeFindAccount({});
 
     const result = await createInvitation("token", "team-1", "dev@example.com", {
       ...baseDeps,
       teamsCollection: teams,
       membershipsCollection: fakeMemberships(),
       invitationsCollection: fakeInvitations(),
-      getUserByEmail,
+      findAccount,
     });
 
     expect(result).toEqual({ ok: false, error: "team_not_found" });
-    expect(getUserByEmail).not.toHaveBeenCalled();
+    expect(findAccount).not.toHaveBeenCalled();
   });
 
   it("rejects a disabled team and creates nothing", async () => {
     const teams = fakeTeams({ "team-1": "disabled" });
     const memberships = fakeMemberships();
     const invitations = fakeInvitations();
-    const getUserByEmail = fakeGetUserByEmail({});
+    const findAccount = fakeFindAccount({});
 
     const result = await createInvitation("token", "team-1", "dev@example.com", {
       ...baseDeps,
       teamsCollection: teams,
       membershipsCollection: memberships,
       invitationsCollection: invitations,
-      getUserByEmail,
+      findAccount,
     });
 
     expect(result).toEqual({ ok: false, error: "team_disabled" });
-    expect(getUserByEmail).not.toHaveBeenCalled();
+    expect(findAccount).not.toHaveBeenCalled();
     expect(invitations.writes).toHaveLength(0);
   });
 
   it("rejects an unauthenticated caller and reads nothing", async () => {
     const teams = fakeTeams({ "team-1": "active" });
-    const getUserByEmail = fakeGetUserByEmail({});
+    const findAccount = fakeFindAccount({});
 
     const result = await createInvitation("bad-token", "team-1", "dev@example.com", {
       verifyToken: vi.fn().mockRejectedValue(new Error("bad token")),
@@ -544,17 +544,17 @@ describe("createInvitation", () => {
       teamsCollection: teams,
       membershipsCollection: fakeMemberships(),
       invitationsCollection: fakeInvitations(),
-      getUserByEmail,
+      findAccount,
     });
 
     expect(result).toEqual({ ok: false, error: "unauthenticated" });
     expect(teams.getStatus).not.toHaveBeenCalled();
-    expect(getUserByEmail).not.toHaveBeenCalled();
+    expect(findAccount).not.toHaveBeenCalled();
   });
 
   it("rejects a non-admin caller and reads nothing", async () => {
     const teams = fakeTeams({ "team-1": "active" });
-    const getUserByEmail = fakeGetUserByEmail({});
+    const findAccount = fakeFindAccount({});
 
     const result = await createInvitation("token", "team-1", "dev@example.com", {
       verifyToken: verifyTokenReturning(verifiedIdentity({ email: "dev@example.com" })),
@@ -562,12 +562,12 @@ describe("createInvitation", () => {
       teamsCollection: teams,
       membershipsCollection: fakeMemberships(),
       invitationsCollection: fakeInvitations(),
-      getUserByEmail,
+      findAccount,
     });
 
     expect(result).toEqual({ ok: false, error: "forbidden" });
     expect(teams.getStatus).not.toHaveBeenCalled();
-    expect(getUserByEmail).not.toHaveBeenCalled();
+    expect(findAccount).not.toHaveBeenCalled();
   });
 
   it("rejects a missing/blank email", async () => {
@@ -594,14 +594,14 @@ describe("createInvitation", () => {
     const teams = fakeTeams({ "team-1": "active" });
     const memberships = fakeMemberships();
     const invitations = fakeInvitations();
-    const getUserByEmail = vi.fn().mockRejectedValue(new Error("simulated Auth outage"));
+    const findAccount = vi.fn().mockRejectedValue(new Error("simulated Auth outage"));
 
     const result = await createInvitation("token", "team-1", "dev@example.com", {
       ...baseDeps,
       teamsCollection: teams,
       membershipsCollection: memberships,
       invitationsCollection: invitations,
-      getUserByEmail,
+      findAccount,
     });
 
     expect(result).toEqual({ ok: false, error: "lookup_failed" });
@@ -629,7 +629,7 @@ describe("createInvitation", () => {
     const grantMembershipCollection: GrantTeamMembershipCollection = {
       runGrant: vi.fn().mockRejectedValue(new Error("simulated firestore outage")),
     };
-    const getUserByEmail = fakeGetUserByEmail({
+    const findAccount = fakeFindAccount({
       "dev@example.com": { uid: "user-1", emailVerified: true },
     });
 
@@ -638,7 +638,7 @@ describe("createInvitation", () => {
       teamsCollection: teams,
       membershipsCollection: memberships,
       invitationsCollection: fakeInvitations(),
-      getUserByEmail,
+      findAccount,
       grantMembershipCollection,
     });
 
@@ -652,14 +652,14 @@ describe("createInvitation", () => {
       setPending: vi.fn().mockRejectedValue(new Error("simulated firestore outage")),
       markAccepted: vi.fn(),
     };
-    const getUserByEmail = fakeGetUserByEmail({});
+    const findAccount = fakeFindAccount({});
 
     const result = await createInvitation("token", "team-1", "unknown@example.com", {
       ...baseDeps,
       teamsCollection: teams,
       membershipsCollection: fakeMemberships(),
       invitationsCollection: invitations,
-      getUserByEmail,
+      findAccount,
     });
 
     expect(result).toEqual({ ok: false, error: "persistence_failed" });
@@ -678,7 +678,7 @@ describe("createInvitation", () => {
       setPending: vi.fn(),
       markAccepted: vi.fn().mockRejectedValue(new Error("simulated firestore outage")),
     };
-    const getUserByEmail = fakeGetUserByEmail({
+    const findAccount = fakeFindAccount({
       "dev@example.com": { uid: "user-1", emailVerified: true },
     });
 
@@ -687,7 +687,7 @@ describe("createInvitation", () => {
       teamsCollection: teams,
       membershipsCollection,
       invitationsCollection: invitations,
-      getUserByEmail,
+      findAccount,
       grantMembershipCollection,
       now: NOW,
     });
@@ -714,7 +714,7 @@ describe("createInvitation", () => {
       setPending: vi.fn(),
       markAccepted: vi.fn().mockRejectedValue(new Error("simulated firestore outage")),
     };
-    const getUserByEmail = fakeGetUserByEmail({
+    const findAccount = fakeFindAccount({
       "dev@example.com": { uid: "user-1", emailVerified: true },
     });
 
@@ -723,7 +723,7 @@ describe("createInvitation", () => {
       teamsCollection: teams,
       membershipsCollection: memberships,
       invitationsCollection: invitations,
-      getUserByEmail,
+      findAccount,
       now: NOW,
     });
 
@@ -758,7 +758,7 @@ describe("createInvitation", () => {
       teamsCollection: teams,
       membershipsCollection: fakeMemberships(),
       invitationsCollection: fakeInvitations(),
-      getUserByEmail: fakeGetUserByEmail({}),
+      findAccount: fakeFindAccount({}),
     });
 
     expect(JSON.stringify(result)).not.toContain("other-admin@example.com");
@@ -774,7 +774,7 @@ describe("createInvitation", () => {
       teamsCollection: fakeTeams({ "team-1": "active" }),
       membershipsCollection: fakeMemberships(),
       invitationsCollection: fakeInvitations(),
-      getUserByEmail: fakeGetUserByEmail({}),
+      findAccount: fakeFindAccount({}),
       now: NOW,
     });
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getOrgSkillProgressOverview } from "../../../../../src/features/skill-trees/server/get-org-skill-progress-overview";
-
+import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../../src/features/auth/server/auth-refusal";
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
@@ -33,8 +33,8 @@ function extractBearerToken(header: string | null): string {
   return match ? match[1] : "";
 }
 
-function statusForError(error: "unauthenticated" | "forbidden" | "read_failed"): number {
-  if (error === "unauthenticated") return 401;
+function statusForError(error: AuthRefusal | "forbidden" | "read_failed"): number {
+  if (isAuthRefusal(error)) return authRefusalStatus(error);
   if (error === "forbidden") return 403;
   return 500;
 }

@@ -5,7 +5,7 @@ import type { SharedGoalSnapshot } from "../domain/shared-goal-snapshot";
 import type { StoredEnvelope } from "../domain/stored-owner-conversation";
 import { changeParticipant, type ChangeParticipantDeps } from "./change-participant";
 import { completeConversation, type CompleteConversationDeps } from "./complete-conversation";
-import type { ConversationStore, ConversationTransaction, RawConversationData } from "./conversation-store-types";
+import type { ConversationTransaction, RawConversationData } from "./conversation-store-types";
 import { deleteConversation } from "./delete-conversation";
 import { createFakeContentCodec, type FakeContentCodec } from "./fake-content-codec";
 import { createFakeConversationStore, type FakeConversationStore } from "./fake-conversation-store";
@@ -184,9 +184,9 @@ interface AttemptReads {
  * A pass-through store that counts what each transaction attempt reads. Attempts are recorded in order, so the retry
  * is visible as a second entry. Nothing is changed.
  */
-function counting(store: FakeConversationStore): { store: ConversationStore; attempts: AttemptReads[] } {
+function counting(store: FakeConversationStore): { store: FakeConversationStore; attempts: AttemptReads[] } {
   const attempts: AttemptReads[] = [];
-  const counted: ConversationStore = {
+  const counted: FakeConversationStore = {
     ...store,
     runTransaction: <T>(work: (tx: ConversationTransaction) => Promise<T>) =>
       store.runTransaction<T>((tx) => {
@@ -222,55 +222,55 @@ const at = (time: Date) => () => new Date(time.getTime());
 
 /** Operation dependencies. Each takes the store to use, so the operation under test can run through the counting store. */
 const deps = {
-  respond: (w: World, store: ConversationStore, time = T_WRITE): RespondToParticipationDeps => ({
+  respond: (w: World, store: FakeConversationStore, time = T_WRITE): RespondToParticipationDeps => ({
     store,
     codec: w.codec,
     clock: at(time),
   }),
-  change: (w: World, store: ConversationStore, time = T_WRITE): ChangeParticipantDeps => ({
-    store,
-    codec: w.codec,
-    refReader: w.refReader,
-    clock: at(time),
-  }),
-  notes: (w: World, store: ConversationStore, time = T_WRITE): WriteParticipantNotesDeps => ({ store, codec: w.codec, clock: at(time) }),
-  complete: (_w: World, store: ConversationStore, time = T_WRITE): CompleteConversationDeps => ({ store, clock: at(time) }),
-  invite: (w: World, store: ConversationStore, time = T_WRITE): InviteParticipantDeps => ({
+  change: (w: World, store: FakeConversationStore, time = T_WRITE): ChangeParticipantDeps => ({
     store,
     codec: w.codec,
     refReader: w.refReader,
     clock: at(time),
   }),
-  goals: (w: World, store: ConversationStore, time = T_WRITE): SetSharedGoalsDeps => ({
+  notes: (w: World, store: FakeConversationStore, time = T_WRITE): WriteParticipantNotesDeps => ({ store, codec: w.codec, clock: at(time) }),
+  complete: (_w: World, store: FakeConversationStore, time = T_WRITE): CompleteConversationDeps => ({ store, clock: at(time) }),
+  invite: (w: World, store: FakeConversationStore, time = T_WRITE): InviteParticipantDeps => ({
+    store,
+    codec: w.codec,
+    refReader: w.refReader,
+    clock: at(time),
+  }),
+  goals: (w: World, store: FakeConversationStore, time = T_WRITE): SetSharedGoalsDeps => ({
     store,
     codec: w.codec,
     goalStore: w.goalReader,
     clock: at(time),
   }),
-  sections: (w: World, store: ConversationStore, time = T_WRITE): UpdateOwnerSectionsDeps => ({
+  sections: (w: World, store: FakeConversationStore, time = T_WRITE): UpdateOwnerSectionsDeps => ({
     store,
     codec: w.codec,
     clock: at(time),
   }),
 };
 
-const accept = (w: World, store: ConversationStore) => acceptInvitation(PARTICIPANT_UID, CONVERSATION_ID, deps.respond(w, store));
-const leave = (w: World, store: ConversationStore, time = T_WRITE) =>
+const accept = (w: World, store: FakeConversationStore) => acceptInvitation(PARTICIPANT_UID, CONVERSATION_ID, deps.respond(w, store));
+const leave = (w: World, store: FakeConversationStore, time = T_WRITE) =>
   leaveParticipation(PARTICIPANT_UID, CONVERSATION_ID, deps.respond(w, store, time));
-const removeParticipant = (w: World, store: ConversationStore, time = T_WRITE) =>
+const removeParticipant = (w: World, store: FakeConversationStore, time = T_WRITE) =>
   changeParticipant(OWNER_UID, CONVERSATION_ID, { participantMemberRef: null }, deps.change(w, store, time));
-const replaceWithCandidate = (w: World, store: ConversationStore, time = T_WRITE) =>
+const replaceWithCandidate = (w: World, store: FakeConversationStore, time = T_WRITE) =>
   changeParticipant(OWNER_UID, CONVERSATION_ID, { participantMemberRef: CANDIDATE_REF }, deps.change(w, store, time));
-const writeNotes = (w: World, store: ConversationStore, text: string) =>
+const writeNotes = (w: World, store: FakeConversationStore, text: string) =>
   writeParticipantNotes(PARTICIPANT_UID, CONVERSATION_ID, text, deps.notes(w, store));
-const complete = (w: World, store: ConversationStore, time = T_WRITE) =>
+const complete = (w: World, store: FakeConversationStore, time = T_WRITE) =>
   completeConversation(OWNER_UID, CONVERSATION_ID, deps.complete(w, store, time));
-const invite = (w: World, store: ConversationStore) => inviteParticipant(OWNER_UID, CONVERSATION_ID, CANDIDATE_REF, deps.invite(w, store));
-const updateTitle = (w: World, store: ConversationStore, title: string, time = T_COMPETE) =>
+const invite = (w: World, store: FakeConversationStore) => inviteParticipant(OWNER_UID, CONVERSATION_ID, CANDIDATE_REF, deps.invite(w, store));
+const updateTitle = (w: World, store: FakeConversationStore, title: string, time = T_COMPETE) =>
   updateOwnerSections(OWNER_UID, CONVERSATION_ID, { title }, deps.sections(w, store, time));
-const setGoals = (w: World, store: ConversationStore, goalIds: unknown) =>
+const setGoals = (w: World, store: FakeConversationStore, goalIds: unknown) =>
   setSharedGoals(OWNER_UID, CONVERSATION_ID, goalIds, deps.goals(w, store));
-const deleteOwn = (w: World, store: ConversationStore) => deleteConversation(OWNER_UID, CONVERSATION_ID, { store });
+const deleteOwn = (w: World, store: FakeConversationStore) => deleteConversation(OWNER_UID, CONVERSATION_ID, { store });
 
 describe("BR-50 (1): completion vs participant write (BR-28, BR-13, BR-17)", () => {
   it("completion commits first: the conflicted note write retries, sees completed, and commits nothing", async () => {
@@ -650,7 +650,7 @@ describe("BR-50 (4): snapshot change vs completion (BR-24 to BR-27, CL-26)", () 
 });
 
 describe("BR-50 (5): delete vs any write (BR-29)", () => {
-  type Run = (w: World, store: ConversationStore) => Promise<unknown>;
+  type Run = (w: World, store: FakeConversationStore) => Promise<unknown>;
   const cases: Array<[string, SeedOptions, Run]> = [
     ["participant note write", { participant: "accepted" }, (w, s) => writeNotes(w, s, "Late note")],
     ["accept", { participant: "pending" }, accept],
@@ -918,7 +918,7 @@ describe("BR-48: each attempt re-reads its authoritative inputs", () => {
 });
 
 describe("TASK-022: a retried transaction applies each effect once (no double-apply)", () => {
-  type Run = (w: World, store: ConversationStore) => Promise<unknown>;
+  type Run = (w: World, store: FakeConversationStore) => Promise<unknown>;
   const cases: Array<[string, SeedOptions, Run]> = [
     ["invitation", {}, invite],
     ["accept", { participant: "pending" }, accept],

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { parseRoadmapItem } from "../domain/roadmap-item";
 import {
   updateRoadmapItem,
@@ -107,6 +107,9 @@ function build(world: World, uid = "user-1") {
       getSkillProgress: async (id) => read("getSkillProgress", () => world.progress[id]),
       getSkillTree: async (id) => read("getSkillTree", () => world.trees[id]),
       listMemberships: async (_t, limit) => read("listMemberships", () => world.teamMembers.slice(0, limit)),
+      touchMembership: (uid, teamId, memberRef) => {
+        ownerTouches.push({ uid, teamId, memberRef });
+      },
       update: (docId, patch) => {
         pending.push({ docId, patch });
       },
@@ -114,6 +117,9 @@ function build(world: World, uid = "user-1") {
   };
 
   const store: UpdateRoadmapStore = {
+    runWriteTransaction(_actorUid, fn) {
+      return store.runTransaction(fn);
+    },
     async runTransaction(fn) {
       const pending: Write[] = [];
       const result = await fn(makeTx(pending));
@@ -160,6 +166,9 @@ async function expectDenied(world: World, body: unknown, error: string, uid = "u
   expect(writes).toEqual([]);
   expect(JSON.stringify(world.roadmap)).toBe(before);
 }
+
+/** Membership touches recorded by the transactional coordination (TASK-038, A-5). Reset by each test that reads it. */
+const ownerTouches: Array<{ uid: string; teamId: string; memberRef: string }> = [];
 
 describe("updateRoadmapItem — authorization", () => {
   it("lets an active ordinary member update", async () => {
@@ -664,5 +673,54 @@ describe("updateRoadmapItem — response and reliability", () => {
     const { writes } = await patch(world, { ownerRef: REF(2), priority: "high" });
     expect(writes).toHaveLength(1);
     await expectDenied(baseWorld(), { priority: "high", ownerRef: REF(9) }, "invalid_owner");
+  });
+});
+
+describe("owner assignment coordinates with membership erasure (TASK-038, A-5)", () => {
+  beforeEach(() => {
+    ownerTouches.length = 0;
+  });
+
+  it("introducing a new owner touches exactly the target membership, inside the same transaction", async () => {
+    const { result } = await patch(baseWorld(), { ownerRef: REF(2) });
+
+    expect(result.ok).toBe(true);
+    expect(ownerTouches).toEqual([expect.objectContaining({ uid: "user-2", memberRef: REF(2) })]);
+  });
+
+  it("an unchanged owner adds no membership touch (no coordination without a new reference)", async () => {
+    const world = baseWorld(plan({ ownerRef: REF(2) }));
+
+    await patch(world, { priority: "high" });
+
+    expect(ownerTouches).toEqual([]);
+  });
+
+  it("clearing the owner adds no membership touch", async () => {
+    const world = baseWorld(plan({ ownerRef: REF(7) }));
+
+    const { result } = await patch(world, { ownerRef: null });
+
+    expect(result.ok).toBe(true);
+    expect(ownerTouches).toEqual([]);
+  });
+
+  it("a stale or erased target membership cannot receive a new owner, and records no touch", async () => {
+    const world = baseWorld();
+    world.teamMembers = [member("user-1", 1)];
+
+    await expectDenied(world, { ownerRef: REF(2) }, "invalid_owner");
+
+    expect(ownerTouches).toEqual([]);
+    expect(JSON.stringify(stored(world))).not.toMatch(/user-2/);
+  });
+
+  it("the touch carries no uid or e-mail into the roadmap record", async () => {
+    const world = baseWorld();
+
+    await patch(world, { ownerRef: REF(2) });
+
+    expect(JSON.stringify(stored(world))).not.toMatch(/user-2|@example/);
+    expect(Object.keys(stored(world))).not.toEqual(expect.arrayContaining(["uid", "email", "memberUid"]));
   });
 });

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { deleteReply } from "../../../../../../../../../src/features/forum/server/delete-reply";
+import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../../../../../../src/features/auth/server/auth-refusal";
 
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
@@ -34,8 +35,9 @@ function extractBearerToken(header: string | null): string {
   return match ? match[1] : "";
 }
 
-function statusForError(error: "sign_in_required" | "forbidden" | "not_found" | "persistence_failed"): number {
+function statusForError(error: AuthRefusal | "sign_in_required" | "forbidden" | "not_found" | "persistence_failed"): number {
   if (error === "sign_in_required") return 401;
+  if (isAuthRefusal(error)) return authRefusalStatus(error);
   if (error === "not_found") return 404;
   if (error === "forbidden") return 403;
   return 500;

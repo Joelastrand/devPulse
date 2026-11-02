@@ -28,6 +28,24 @@ function walk(dir: string): string[] {
 const isTest = (path: string) => /\.test\.tsx?$/.test(path);
 const read = (path: string) => readFileSync(join(ROOT, path), "utf8");
 
+/**
+ * PG-12: exact file-level role-profiles entry; the role store alone holds the `roleDefinitions` literal.
+ * Account erasure (erasure-only persistence metadata, file-exact): the inventory registry names the D1/D2 collections
+ * and fields for the erasure sweep. It has no read, write or consumer path, and no team-skills module may import it.
+ */
+const D1_D2_CONCEPT_EXEMPT_FILES = [
+  "src/features/role-profiles/server/role-store.ts",
+  "src/features/account-erasure/server/inventory.ts",
+  // Account erasure (dated 2026-11-02, DECISION 2): the production cleanup and residual-counter modules reference the minimum approved D1/D2 persistence concepts to erase or verify erasure. They grant no read, display, DTO, route, lead or admin access, and no team-skills module may import them.
+  "src/features/account-erasure/server/erasure-adapters.ts",
+  "src/features/account-erasure/server/erasure-adapters-sweep.ts",
+];
+
+function d1d2ConceptOffenders(files: { path: string; text: string }[]): string[] {
+  const concept = /\b(roleDefinitions|developmentGoals|progressEntries|checkIns)\b/;
+  return files.filter((f) => !isTest(f.path) && !D1_D2_CONCEPT_EXEMPT_FILES.includes(f.path) && concept.test(f.text)).map((f) => f.path);
+}
+
 const C2_ROUTES = walk("app/api/teams").filter((p) => /\/skill-(needs|contribution|coverage)\//.test(p));
 const C2_PRODUCTION = [...walk("src/features/team-skills"), ...C2_ROUTES].filter((p) => !isTest(p));
 
@@ -45,13 +63,42 @@ describe("C2 scope regression — nothing outside the approved surface (BR-35, B
   });
 
   it("no production code introduces D1/D2 concepts", () => {
-    const d = /\b(roleDefinitions|developmentGoals|progressEntries|checkIns)\b/;
-    // PG-12: exact file-level role-profiles entry; the role store alone holds the `roleDefinitions` literal.
-    const ROLE_PROFILES_ROLE_DEFINITION_STORE = ["src/features/role-profiles/server/role-store.ts"];
-    const offenders = [...walk("src"), ...walk("app")].filter(
-      (p) => !isTest(p) && !ROLE_PROFILES_ROLE_DEFINITION_STORE.includes(p) && d.test(read(p)),
-    );
+    const offenders = d1d2ConceptOffenders([...walk("src"), ...walk("app")].filter((p) => !isTest(p)).map((p) => ({ path: p, text: read(p) })));
     expect(offenders).toEqual([]);
+  });
+
+  it("the D1/D2 concept exemptions grant no read, display, DTO, route or admin capability (narrowed C2 invariant, 2026-11-02)", () => {
+    // Invariant (DECISION 2): no unauthorized production consumer may introduce or consume protected D1/D2 concepts. The only
+    // exempt production modules are account-erasure server modules, for erasure and residual verification. None may sit in a
+    // route, a page, a component, a client module or a DTO, so the exemption cannot become a read or display path.
+    for (const path of D1_D2_CONCEPT_EXEMPT_FILES) {
+      expect(path).toMatch(/^src\/features\/[^/]+\/server\//);
+      expect(path).not.toMatch(/\/(components|client|domain|dto)\//);
+      expect(path.startsWith("app/")).toBe(false);
+    }
+  });
+
+  it("the D1/D2 concept rule exempts only the exact approved files, and still flags a sibling of each", () => {
+    const sibling = (path: string) => ({ path, text: `const c = "roleDefinitions";` });
+    expect(
+      d1d2ConceptOffenders([
+        sibling("src/features/account-erasure/server/inventory.ts"),
+        sibling("src/features/account-erasure/server/inventory-sweep.ts"),
+        sibling("src/features/team-skills/server/skill-needs-store.ts"),
+        sibling("src/features/account-erasure/server/inventory.test-helper.ts"),
+      ]),
+    ).toEqual([
+      "src/features/account-erasure/server/inventory-sweep.ts",
+      "src/features/team-skills/server/skill-needs-store.ts",
+      "src/features/account-erasure/server/inventory.test-helper.ts",
+    ]);
+  });
+
+  it("no team-skills production module imports the account-erasure registry (the exemption never becomes a dependency)", () => {
+    const importers = [...walk("src/features/team-skills"), ...walk("app/api/teams")]
+      .filter((p) => !isTest(p))
+      .filter((p) => /account-erasure/.test(read(p)));
+    expect(importers).toEqual([]);
   });
 
   it("C2 production code never reads or writes skillProgress or roadmapItems", () => {

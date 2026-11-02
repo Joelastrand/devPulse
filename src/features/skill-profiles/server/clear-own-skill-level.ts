@@ -3,10 +3,12 @@ import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-
 import { isWellFormedTreeId, readSkillProfileRecord } from "../domain/skill-profile";
 import { getDefaultSkillProfileStore, type SkillProfileStore } from "./skill-profile-store";
 import { stampsForWrite } from "./write-stamps";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
+import { writeRefusalFor } from "../../auth/server/erasure-write-fence";
 
 export type ClearOwnSkillLevelResult =
   | { ok: true; level: null }
-  | { ok: false; error: "unauthenticated" | "skill_unavailable" | "profile_unreadable" | "persistence_failed" };
+  | { ok: false; error: AuthRefusal | "skill_unavailable" | "profile_unreadable" | "persistence_failed" };
 
 export interface ClearOwnSkillLevelDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
@@ -25,7 +27,7 @@ export async function clearOwnSkillLevel(
   deps: ClearOwnSkillLevelDeps = {},
 ): Promise<ClearOwnSkillLevelResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
-  if (!verified.ok) return { ok: false, error: "unauthenticated" };
+  if (!verified.ok) return { ok: false, error: authRefusalFor(verified) };
 
   if (!isWellFormedTreeId(treeId)) return { ok: false, error: "skill_unavailable" };
 
@@ -43,7 +45,7 @@ export async function clearOwnSkillLevel(
       }
       return { ok: true, level: null };
     });
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 }

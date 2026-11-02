@@ -252,6 +252,16 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // accountErasures/{uid} is the account-erasure fence record: its status
+    // is read inside every person-owned write transaction, so a client must
+    // never read or write it. It holds no personal content, only status,
+    // step and timestamps. Server-only access via the Firebase Admin SDK
+    // (src/features/account-erasure/server/), which bypasses these rules. See
+    // docs/features/account-erasure/SPEC.md (BR-4, AE-SI-5).
+    match /accountErasures/{document=**} {
+      allow read, write: if false;
+    }
+
     // Deny everything else by default; no collection is currently intended
     // to be reached directly by the Firebase client SDK.
     match /{document=**} {

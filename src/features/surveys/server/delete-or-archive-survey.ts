@@ -1,10 +1,11 @@
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../../teams/domain/app-admin";
 import { requireAppAdmin } from "../../teams/server/require-app-admin";
 import { effectiveLifecycle, isValidSurvey, type Survey } from "../domain/survey";
-
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
+import { runFencedTransaction, writeRefusalFor } from "../../auth/server/erasure-write-fence";
 const SURVEYS_COLLECTION = "surveys";
 const SURVEY_RESPONSES_COLLECTION = "surveyResponses";
 
@@ -28,17 +29,24 @@ export interface SurveyDocStore {
   setArchivedAt(surveyId: string, archivedAt: Date): Promise<void>;
 }
 
-function getDefaultSurveyDocStore(): SurveyDocStore {
+/** Writer-only: the delete and the archive stamp are fenced on `accountErasures/{actorUid}` in the same transaction (TASK-034, W-17). */
+function getDefaultSurveyDocStore(actorUid: string): SurveyDocStore {
   return {
     async get(surveyId) {
       const snapshot = await getFirestoreDb().collection(SURVEYS_COLLECTION).doc(surveyId).get();
       return { exists: snapshot.exists, data: () => snapshot.data() };
     },
     async delete(surveyId) {
-      await getFirestoreDb().collection(SURVEYS_COLLECTION).doc(surveyId).delete();
+      const db = getFirestoreDb();
+      await runFencedTransaction(db, actorUid, async (tx) => {
+        tx.delete(db.collection(SURVEYS_COLLECTION).doc(surveyId));
+      });
     },
     async setArchivedAt(surveyId, archivedAt) {
-      await getFirestoreDb().collection(SURVEYS_COLLECTION).doc(surveyId).update({ archivedAt });
+      const db = getFirestoreDb();
+      await runFencedTransaction(db, actorUid, async (tx) => {
+        tx.update(db.collection(SURVEYS_COLLECTION).doc(surveyId), { archivedAt });
+      });
     },
   };
 }
@@ -107,7 +115,7 @@ export type DeleteOrArchiveSurveyResult =
   | {
       ok: false;
       error:
-        | "unauthenticated"
+        | AuthRefusal
         | "forbidden"
         | "survey_not_found"
         | "wrong_team"
@@ -165,7 +173,7 @@ export async function deleteOrArchiveSurvey(
     return { ok: false, error: admin.error };
   }
 
-  const surveyDocs = deps.surveyDocs ?? getDefaultSurveyDocStore();
+  const surveyDocs = deps.surveyDocs ?? getDefaultSurveyDocStore(admin.identity.uid);
 
   let snapshot: DeleteOrArchiveSurveyDocSnapshot;
   try {
@@ -209,7 +217,7 @@ export async function deleteOrArchiveSurvey(
 
     await surveyDocs.setArchivedAt(surveyId, now);
     return { ok: true, outcome: "archived" };
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 }

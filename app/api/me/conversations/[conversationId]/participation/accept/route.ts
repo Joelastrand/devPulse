@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { CONVERSATION_ERROR_STATUS, type ConversationErrorCode } from "../../../../../../../src/features/development-conversations/domain/errors";
+import { conversationResponseStatus, type ConversationResponseCode } from "../../../../../../../src/features/development-conversations/domain/errors";
 import { acceptInvitation } from "../../../../../../../src/features/development-conversations/server/respond-to-participation";
 import { verifiedSubject } from "../../../_auth";
 import { readEmptyConversationBody } from "../../../_body";
+import { authRefusalStatus } from "../../../../../../../src/features/auth/server/auth-refusal";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -13,16 +14,17 @@ type RouteContext = { params: Promise<{ conversationId: string }> };
  * no conversation content (D2-SI-3). The re-check of BR-15, BR-9 and BR-21 happens inside the operation's transaction.
  */
 export async function POST(request: Request, { params }: RouteContext) {
-  const subject = await verifiedSubject(request);
-  if (!subject) return fail("unauthenticated", 401);
+  const verified = await verifiedSubject(request);
+  if (!verified.ok) return json({ error: verified.error }, authRefusalStatus(verified.error));
+  const subject = verified.uid;
 
   const body = await readEmptyConversationBody(request);
-  if (!body.ok) return fail(body.error, CONVERSATION_ERROR_STATUS[body.error]);
+  if (!body.ok) return fail(body.error, conversationResponseStatus(body.error));
 
   const { conversationId } = await params;
   const result = await acceptInvitation(subject, conversationId);
-  return result.ok ? json({ state: "accepted" }, 200) : fail(result.error, CONVERSATION_ERROR_STATUS[result.error]);
+  return result.ok ? json({ state: "accepted" }, 200) : fail(result.error, conversationResponseStatus(result.error));
 }
 
 const json = (body: unknown, status: number) => NextResponse.json(body, { status, headers: NO_STORE });
-const fail = (error: ConversationErrorCode, status: number) => json({ error }, status);
+const fail = (error: ConversationResponseCode, status: number) => json({ error }, status);

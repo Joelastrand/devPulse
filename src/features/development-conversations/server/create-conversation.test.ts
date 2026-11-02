@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { CONVERSATION_LIMIT } from "../domain/conversation-constants";
-import { OWNER_DOCUMENT_KEYS, type ConversationStore } from "./conversation-store-types";
+import { OWNER_DOCUMENT_KEYS } from "./conversation-store-types";
 import { createConversation, type CreateConversationDeps } from "./create-conversation";
 import { createFakeContentCodec } from "./fake-content-codec";
 import { createFakeConversationStore } from "./fake-conversation-store";
 import { createFakeTeamEligibilityReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
+import { issueErasureOwnerCleanupCapability } from "./erasure-owner-cleanup-capability";
+import type { FakeConversationStore } from "./fake-conversation-store";
 
 const OWNER_UID = "owner-1";
 const OTHER_UID = "owner-2";
@@ -29,7 +31,7 @@ function teamState(overrides: Partial<FakeTeamEligibilityState> = {}): FakeTeamE
   };
 }
 
-function setup(options: { teams?: FakeTeamEligibilityState; store?: ConversationStore } = {}) {
+function setup(options: { teams?: FakeTeamEligibilityState; store?: FakeConversationStore } = {}) {
   const store = options.store ?? createFakeConversationStore({ generateId: () => "conv-1" });
   const codec = createFakeContentCodec();
   const deps: CreateConversationDeps = {
@@ -134,7 +136,7 @@ describe("createConversation: input and caps (BR-37, BR-39)", () => {
   it("rejects creation at the owner cap with conversation_limit and writes nothing more", async () => {
     const { store, deps } = setup();
     for (let i = 0; i < CONVERSATION_LIMIT; i += 1) {
-      await store.runTransaction(async (tx) => {
+      await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => {
         tx.createOwner(OWNER_UID, `seed-${i}`, {
           teamId: null,
           participantUid: null,
@@ -164,7 +166,7 @@ describe("createConversation: input and caps (BR-37, BR-39)", () => {
 
   it("maps a count failure to persistence_failed and writes nothing", async () => {
     const base = createFakeConversationStore({ generateId: () => "conv-1" });
-    const failing: ConversationStore = {
+    const failing: FakeConversationStore = {
       ...base,
       async countOwner() {
         throw new Error("simulated count failure with a document path");
@@ -220,7 +222,7 @@ describe("createConversation: stored shape (BR-51, BR-52)", () => {
 
   it("maps a failed write transaction to persistence_failed and leaves no owner document", async () => {
     const base = createFakeConversationStore({ generateId: () => "conv-1" });
-    const failingWrite: ConversationStore = {
+    const failingWrite: FakeConversationStore = {
       ...base,
       runTransaction() {
         return Promise.reject(new Error("simulated write failure with a document path"));

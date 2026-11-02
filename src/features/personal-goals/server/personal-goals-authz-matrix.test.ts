@@ -116,19 +116,32 @@ function createFirestoreDouble() {
       return query(name);
     },
     async runTransaction<T>(work: (tx: unknown) => Promise<T>): Promise<T> {
-      const pending = new Map<string, Doc>();
+      // Buffered writes are applied at commit, recorded under the same mutation names the direct calls use.
+      const pending = new Map<string, { kind: "set" | "create" | "delete"; data?: Doc }>();
       const result = await work({
         async get(ref: { path: string }) {
           if (pending.size > 0) throw new Error("transaction read after write");
           return snapshot(ref.path);
         },
         set(ref: { path: string }, data: Doc) {
-          pending.set(ref.path, { ...data });
+          pending.set(ref.path, { kind: "set", data: { ...data } });
+        },
+        create(ref: { path: string }, data: Doc) {
+          pending.set(ref.path, { kind: "create", data: { ...data } });
+        },
+        delete(ref: { path: string }) {
+          pending.set(ref.path, { kind: "delete" });
         },
       });
-      for (const [path, data] of pending) {
-        mutations.push(`set|${path}`);
-        docs.set(path, data);
+      for (const [path, write] of pending) {
+        if (write.kind === "delete") {
+          mutations.push(`delete|${path}`);
+          docs.delete(path);
+          continue;
+        }
+        if (write.kind === "create" && docs.has(path)) throw new Error("ALREADY_EXISTS");
+        mutations.push(`${write.kind === "create" ? "create" : "set"}|${path}`);
+        docs.set(path, write.data as Doc);
       }
       return result;
     },
@@ -300,7 +313,8 @@ describe("authorization matrix — every actor only addresses its own subtree (B
     await env.get(OWNER_A);
     await env.update(OWNER_A, env.ids(OWNER_A)[0], { title: "Nytt" });
     await env.remove(OWNER_A, env.ids(OWNER_A)[0]);
-    expect([...env.topLevelCollections]).toEqual(["userDevelopment"]);
+    // The only top-level collections are the goals subtree and the erasure fence read on `accountErasures` (TASK-026, BR-4(b)).
+    expect([...env.topLevelCollections].sort()).toEqual(["accountErasures", "userDevelopment"]);
     // The only other data source is the injected read-only SkillTree catalog (selector options + tree lookups).
     expect(env.catalog.reads.every((r) => r === "list" || r.startsWith("get:") || r.startsWith("many:"))).toBe(true);
   });

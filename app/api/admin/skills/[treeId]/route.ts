@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { updateSkillTree } from "../../../../../src/features/skill-trees/server/update-skill-tree";
-
+import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../../src/features/auth/server/auth-refusal";
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
@@ -51,14 +51,14 @@ function extractBearerToken(header: string | null): string {
 
 function statusForError(
   error:
-    | "unauthenticated"
+    | AuthRefusal
     | "forbidden"
     | "tree_not_found"
     | "invalid_input"
     | "node_count_mismatch"
     | "persistence_failed",
 ): number {
-  if (error === "unauthenticated") return 401;
+  if (isAuthRefusal(error)) return authRefusalStatus(error);
   if (error === "forbidden") return 403;
   if (error === "tree_not_found") return 404;
   if (error === "invalid_input" || error === "node_count_mismatch") return 400;

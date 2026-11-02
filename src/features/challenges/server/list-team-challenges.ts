@@ -16,6 +16,7 @@ import {
   type Challenge,
   type ChallengeStatus,
 } from "../domain/challenge";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 
 const CHALLENGES_COLLECTION = "challenges";
 const MEMBERSHIPS_COLLECTION = "teamMemberships";
@@ -113,7 +114,7 @@ function toDateOnly(date: Date): string {
 
 export type ListTeamChallengesResult =
   | { ok: true; challenges: TeamChallengeView[] }
-  | { ok: false; error: "unauthenticated" | "forbidden" | "read_failed" };
+  | { ok: false; error: AuthRefusal | "forbidden" | "read_failed" };
 
 /**
  * The read seam for a real `teamMemberships/{uid}__{teamId}` record, mirroring
@@ -177,7 +178,7 @@ async function resolveCanSubmit(
  */
 export type ListTeamChallengesForMemberResult =
   | { ok: true; challenges: TeamChallengeView[]; canSubmit: boolean }
-  | { ok: false; error: "unauthenticated" | "forbidden" | "read_failed" };
+  | { ok: false; error: AuthRefusal | "forbidden" | "read_failed" };
 
 /**
  * The private, unexported core both public operations below share, so
@@ -305,7 +306,7 @@ export async function listTeamChallengesForMember(
 ): Promise<ListTeamChallengesForMemberResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
   if (!verified.ok) {
-    return { ok: false, error: "unauthenticated" };
+    return { ok: false, error: authRefusalFor(verified) };
   }
 
   const authResult = await authorizeTeamAccess(verified.identity, teamId, {

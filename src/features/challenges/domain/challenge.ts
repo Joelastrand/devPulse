@@ -43,9 +43,9 @@ export interface Challenge {
   keyVersion: ChallengeKeyVersion;
   submittedAt: Date;
   resolvedAt?: Date;
-  resolvedBy?: string;
+  resolvedBy?: string | null;
   archivedAt?: Date;
-  archivedBy?: string;
+  archivedBy?: string | null;
 }
 
 /**
@@ -149,7 +149,9 @@ function isValidLifecycleActorPair(timestamp: unknown, actor: unknown): boolean 
     return true;
   }
 
-  return isValidDate(timestamp) && isNonEmptyString(actor);
+  // The actor is a uid, or exactly `null` once that account was erased (account-erasure TASK-023, SPEC A-7). The timestamp
+  // stays, since challenge content is preserved.
+  return isValidDate(timestamp) && (actor === null || isNonEmptyString(actor));
 }
 
 function isNonEmptyString(value: unknown): value is string {

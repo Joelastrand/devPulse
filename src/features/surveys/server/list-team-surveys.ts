@@ -1,6 +1,6 @@
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../../teams/domain/app-admin";
 import { requireAppAdmin } from "../../teams/server/require-app-admin";
 import {
@@ -10,7 +10,7 @@ import {
   type SurveyAccessMode,
   type SurveyLifecycle,
 } from "../domain/survey";
-
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
 const SURVEYS_COLLECTION = "surveys";
 
 /**
@@ -40,7 +40,7 @@ export interface AdminSurveyListEntry {
   openedAt?: Date;
   closedAt?: Date;
   archived: boolean;
-  createdBy: string;
+  createdBy: string | null;
   createdAt: Date;
 }
 
@@ -128,7 +128,7 @@ function toListEntry(survey: Survey, now: Date): AdminSurveyListEntry {
 
 export type ListTeamSurveysResult =
   | { ok: true; surveys: AdminSurveyListEntry[] }
-  | { ok: false; error: "unauthenticated" | "forbidden" | "read_failed" };
+  | { ok: false; error: AuthRefusal | "forbidden" | "read_failed" };
 
 export interface ListTeamSurveysDeps {
   now?: Date;

@@ -5,6 +5,8 @@ import { isValidTeamStatus } from "../../teams/domain/team";
 import { isValidMembershipFor, membershipDocId } from "../../teams/domain/team-membership";
 import { isValidSkillTree, type SkillTreeRecord } from "../domain/skill-tree";
 import { isValidSkillProgress, skillProgressDocId, type SkillProgressRecord } from "../domain/skill-progress";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
+import { runFencedTransaction, writeRefusalFor } from "../../auth/server/erasure-write-fence";
 
 const TEAMS_COLLECTION = "teams";
 const MEMBERSHIPS_COLLECTION = "teamMemberships";
@@ -70,14 +72,18 @@ export interface SkillProgressDocStore {
   update(docId: string, data: Record<string, unknown>): Promise<void>;
 }
 
-function getDefaultSkillProgressDocStore(): SkillProgressDocStore {
+/** The writer is fenced on `accountErasures/{actorUid}` in the same transaction as the update (TASK-031, W-15). */
+function getDefaultSkillProgressDocStore(actorUid: string): SkillProgressDocStore {
   return {
     async get(docId) {
       const snapshot = await getFirestoreDb().collection(SKILL_PROGRESS_COLLECTION).doc(docId).get();
       return { exists: snapshot.exists, data: () => snapshot.data() };
     },
     async update(docId, data) {
-      await getFirestoreDb().collection(SKILL_PROGRESS_COLLECTION).doc(docId).update(data);
+      const db = getFirestoreDb();
+      await runFencedTransaction(db, actorUid, async (tx) => {
+        tx.update(db.collection(SKILL_PROGRESS_COLLECTION).doc(docId), data);
+      });
     },
   };
 }
@@ -147,7 +153,7 @@ export type ReportTeamSkillProgressResult =
   | {
       ok: false;
       error:
-        | "unauthenticated"
+        | AuthRefusal
         | "forbidden"
         | "team_disabled"
         | "not_tracked"
@@ -219,7 +225,7 @@ export async function reportTeamSkillProgress(
 ): Promise<ReportTeamSkillProgressResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
   if (!verified.ok) {
-    return { ok: false, error: "unauthenticated" };
+    return { ok: false, error: authRefusalFor(verified) };
   }
 
   const membershipReader = deps.membershipReader ?? getDefaultMembershipReader();
@@ -253,7 +259,7 @@ export async function reportTeamSkillProgress(
   }
 
   const docId = skillProgressDocId(teamId, treeId);
-  const progress = deps.progress ?? getDefaultSkillProgressDocStore();
+  const progress = deps.progress ?? getDefaultSkillProgressDocStore(verified.identity.uid);
 
   let progressSnapshot: ReportTeamSkillProgressDocSnapshot;
   try {
@@ -296,7 +302,7 @@ export async function reportTeamSkillProgress(
   try {
     await progress.update(docId, { currentNodeId: nodeId, updatedAt: now, updatedBy: verified.identity.uid });
     return { ok: true };
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 }

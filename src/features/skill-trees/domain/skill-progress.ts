@@ -21,7 +21,8 @@ export interface SkillProgressRecord {
   treeId: string;
   currentNodeId: string | null;
   updatedAt: Date;
-  updatedBy: string;
+  /** `null` after the acting account was erased (account-erasure A-6). Accountability only. */
+  updatedBy: string | null;
 }
 
 /**
@@ -66,11 +67,16 @@ export function isValidSkillProgress(data: unknown): data is SkillProgressRecord
     isNonEmptyString(record.treeId) &&
     isValidCurrentNodeId(record.currentNodeId) &&
     isValidDate(record.updatedAt) &&
-    isNonEmptyString(record.updatedBy)
+    isNullableActor(record.updatedBy)
   );
 }
 
 function isValidCurrentNodeId(value: unknown): value is string | null {
+  return value === null || isNonEmptyString(value);
+}
+
+/** An actor uid, or exactly `null` once that account was erased (account-erasure TASK-024, SPEC A-6). */
+function isNullableActor(value: unknown): value is string | null {
   return value === null || isNonEmptyString(value);
 }
 

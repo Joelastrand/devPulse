@@ -1,6 +1,7 @@
 import "server-only";
+import { runFencedTransaction, writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import { getAdminAuth, getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../domain/app-admin";
 import { normalizeEmail } from "../domain/normalize-email";
 import { isValidTeamStatus } from "../domain/team";
@@ -16,7 +17,7 @@ import {
   type GrantTeamMembershipOutcome,
 } from "./grant-team-membership";
 import { requireAppAdmin } from "./require-app-admin";
-
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
 const TEAMS_COLLECTION = "teams";
 const MEMBERSHIPS_COLLECTION = "teamMemberships";
 const INVITATIONS_COLLECTION = "teamInvitations";
@@ -40,7 +41,7 @@ export interface CreateInvitationInvitationsCollection {
   markAccepted(teamId: string, email: string, resolvedUid: string, now: Date): Promise<void>;
 }
 
-export type GetUserByEmail = (
+export type FindAccount = (
   email: string,
 ) => Promise<{ uid: string; emailVerified: boolean } | null>;
 
@@ -65,7 +66,8 @@ function getDefaultMembershipsCollection(): CreateInvitationMembershipsCollectio
   };
 }
 
-function getDefaultInvitationsCollection(): CreateInvitationInvitationsCollection {
+/** `setPending` stamps the inviting admin's uid, so it is fenced on that uid in the same transaction (TASK-035, W-17). */
+function getDefaultInvitationsCollection(actorUid: string): CreateInvitationInvitationsCollection {
   return {
     async get(teamId, email) {
       const snapshot = await getFirestoreDb()
@@ -75,16 +77,19 @@ function getDefaultInvitationsCollection(): CreateInvitationInvitationsCollectio
       return snapshot.exists ? snapshot.data() : undefined;
     },
     async setPending(record) {
-      await getFirestoreDb()
-        .collection(INVITATIONS_COLLECTION)
-        .doc(invitationDocId(record.teamId, record.email))
-        .set(record);
+      const db = getFirestoreDb();
+      const ref = db.collection(INVITATIONS_COLLECTION).doc(invitationDocId(record.teamId, record.email));
+      await runFencedTransaction(db, actorUid, async (tx) => {
+        tx.set(ref, record);
+      });
     },
     async markAccepted(teamId, email, resolvedUid, now) {
-      await getFirestoreDb()
-        .collection(INVITATIONS_COLLECTION)
-        .doc(invitationDocId(teamId, email))
-        .update({ status: "accepted", updatedAt: now, resolvedAt: now, resolvedUid });
+      // The accepted uid is the person whose erasure record is read first, in the same transaction (TASK-030, BR-4(b)).
+      const db = getFirestoreDb();
+      const ref = db.collection(INVITATIONS_COLLECTION).doc(invitationDocId(teamId, email));
+      await runFencedTransaction(db, resolvedUid, async (tx) => {
+        tx.update(ref, { status: "accepted", updatedAt: now, resolvedAt: now, resolvedUid });
+      });
     },
   };
 }
@@ -120,9 +125,9 @@ function isUserNotFoundError(error: unknown): boolean {
   );
 }
 
-async function defaultGetUserByEmail(
+async function defaultFindAccount(
   email: string,
-): ReturnType<GetUserByEmail> {
+): ReturnType<FindAccount> {
   try {
     const user = await getAdminAuth().getUserByEmail(email);
     return { uid: user.uid, emailVerified: user.emailVerified === true };
@@ -146,7 +151,7 @@ export type CreateInvitationResult =
   | {
       ok: false;
       error:
-        | "unauthenticated"
+        | AuthRefusal
         | "forbidden"
         | "invalid_email"
         | "team_not_found"
@@ -162,7 +167,7 @@ export interface CreateInvitationDeps {
   teamsCollection?: CreateInvitationTeamsCollection;
   membershipsCollection?: CreateInvitationMembershipsCollection;
   invitationsCollection?: CreateInvitationInvitationsCollection;
-  getUserByEmail?: GetUserByEmail;
+  findAccount?: FindAccount;
   grantMembershipCollection?: GrantTeamMembershipCollection;
 }
 
@@ -227,10 +232,10 @@ export async function createInvitation(
     return { ok: false, error: "team_disabled" };
   }
 
-  const getUserByEmail = deps.getUserByEmail ?? defaultGetUserByEmail;
+  const findAccount = deps.findAccount ?? defaultFindAccount;
   let account: { uid: string; emailVerified: boolean } | null;
   try {
-    account = await getUserByEmail(email);
+    account = await findAccount(email);
   } catch {
     return { ok: false, error: "lookup_failed" };
   }
@@ -238,7 +243,7 @@ export async function createInvitation(
   const membershipsCollection =
     deps.membershipsCollection ?? getDefaultMembershipsCollection();
   const invitationsCollection =
-    deps.invitationsCollection ?? getDefaultInvitationsCollection();
+    deps.invitationsCollection ?? getDefaultInvitationsCollection(admin.identity.uid);
   const now = deps.now ?? new Date();
 
   if (account) {
@@ -257,8 +262,8 @@ export async function createInvitation(
           uid: account.uid,
           now,
         });
-      } catch {
-        return { ok: false, error: "persistence_failed" };
+      } catch (error) {
+        return { ok: false, error: writeRefusalFor(error) };
       }
       return { ok: true, outcome: "already_member" };
     }
@@ -276,8 +281,8 @@ export async function createInvitation(
           },
           { collection: deps.grantMembershipCollection },
         );
-      } catch {
-        return { ok: false, error: "persistence_failed" };
+      } catch (error) {
+        return { ok: false, error: writeRefusalFor(error) };
       }
 
       try {
@@ -287,8 +292,8 @@ export async function createInvitation(
           uid: account.uid,
           now,
         });
-      } catch {
-        return { ok: false, error: "persistence_failed" };
+      } catch (error) {
+        return { ok: false, error: writeRefusalFor(error) };
       }
 
       return {
@@ -321,8 +326,8 @@ export async function createInvitation(
       createdAt: now,
       updatedAt: now,
     });
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 
   return { ok: true, outcome: "invitation_created" };

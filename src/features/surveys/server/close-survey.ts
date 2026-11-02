@@ -1,11 +1,11 @@
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../../teams/domain/app-admin";
 import { requireAppAdmin } from "../../teams/server/require-app-admin";
 import { effectiveLifecycle, isValidSurvey, type Survey } from "../domain/survey";
 import { readActiveSurveyId } from "../domain/team-survey-state";
-
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
 const SURVEYS_COLLECTION = "surveys";
 const TEAM_SURVEY_STATE_COLLECTION = "teamSurveyState";
 
@@ -69,7 +69,7 @@ function getDefaultDb(): CloseSurveyDb {
   };
 }
 
-export type CloseSurveyOutcome = "closed" | "already_closed" | "survey_not_found" | "not_open";
+export type CloseSurveyOutcome = "closed" | "already_closed" | "survey_not_found" | "not_open" | "erasure_in_progress";
 
 /** Maps raw Firestore document data (Timestamp fields included) into the candidate shape `isValidSurvey` expects. */
 function toCandidateSurvey(surveyId: string, data: unknown): unknown {
@@ -157,8 +157,12 @@ function toDateOrUndefined(value: unknown): unknown {
 async function decideAndApplyClose(
   tx: CloseSurveyTransaction,
   params: { surveyId: string; now: Date },
+  actorUid: string,
 ): Promise<CloseSurveyOutcome> {
   const { surveyId, now } = params;
+
+  // Writer-only fence (TASK-034, W-17): an erasing admin's write is refused inside this transaction, before any write.
+  if ((await tx.get(erasurePath(actorUid))).exists) return "erasure_in_progress";
 
   // READ PHASE — every read completes before any write is issued.
   const surveySnapshot = await tx.get(surveyPath(surveyId));
@@ -207,7 +211,11 @@ export interface CloseSurveyResultOk {
 
 export interface CloseSurveyResultErr {
   ok: false;
-  error: "unauthenticated" | "forbidden" | "survey_not_found" | "not_open" | "persistence_failed";
+  error: AuthRefusal | "forbidden" | "survey_not_found" | "not_open" | "persistence_failed";
+}
+
+function erasurePath(uid: string): string {
+  return `accountErasures/${uid}`;
 }
 
 export type CloseSurveyResult = CloseSurveyResultOk | CloseSurveyResultErr;
@@ -260,7 +268,7 @@ export async function closeSurvey(
 
   let outcome: CloseSurveyOutcome;
   try {
-    outcome = await db.runTransaction((tx) => decideAndApplyClose(tx, { surveyId, now }));
+    outcome = await db.runTransaction((tx) => decideAndApplyClose(tx, { surveyId, now }, admin.identity.uid));
   } catch {
     return { ok: false, error: "persistence_failed" };
   }

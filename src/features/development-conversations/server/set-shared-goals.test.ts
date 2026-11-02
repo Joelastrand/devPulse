@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ConversationContent } from "../domain/content-payload";
 import type { SharedGoalSnapshot } from "../domain/shared-goal-snapshot";
-import type { ConversationStore, RawConversationData } from "./conversation-store-types";
+import type { RawConversationData } from "./conversation-store-types";
 import { createFakeContentCodec, type FakeContentCodec } from "./fake-content-codec";
 import { createFakeConversationStore, type FakeConversationStore } from "./fake-conversation-store";
 import { OTHER_OWNER_UID, NOW, OWNER_UID, PARTICIPANT_UID, seedOwnerConversation } from "./owner-read-test-support";
@@ -103,14 +103,14 @@ function setup(options: { goals?: Record<string, Record<string, unknown>> } = {}
   return { store, codec, goals, deps };
 }
 
-async function rawOwner(store: ConversationStore, ownerUid = OWNER_UID): Promise<RawConversationData> {
+async function rawOwner(store: FakeConversationStore, ownerUid = OWNER_UID): Promise<RawConversationData> {
   const raw = await store.getOwner(ownerUid, CONVERSATION_ID);
   if (raw === undefined) throw new Error("fixture document missing");
   return raw;
 }
 
 /** The decrypted content of the stored owner document, read the way a decrypting reader reads it. */
-async function storedContent(store: ConversationStore, codec: FakeContentCodec): Promise<ConversationContent> {
+async function storedContent(store: FakeConversationStore, codec: FakeContentCodec): Promise<ConversationContent> {
   const raw = await rawOwner(store);
   const envelope = {
     ciphertext: raw.ciphertext,
@@ -492,7 +492,7 @@ describe("setSharedGoals: stored conversation classification (BR-33, BR-53)", ()
   it("maps a transaction failure to persistence_failed without leaking the raw error", async () => {
     const { store, codec, deps } = setup();
     await seedOwnerConversation(store, codec, { conversationId: CONVERSATION_ID });
-    const failing: SetSharedGoalsDeps["store"] = {
+    const failing: FakeConversationStore = {
       ...store,
       runTransaction: async () => {
         throw new Error("simulated transaction failure with a secret path");

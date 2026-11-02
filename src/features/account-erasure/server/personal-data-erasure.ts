@@ -1,0 +1,69 @@
+import { ErasureStepFailure, type BatchResult, type StepHandler } from "./erasure-runner";
+
+/**
+ * The `personal_data` erasure step (TASK-022; SPEC D1, AE-SI-6, I-1, I-2, I-3, I-4). It deletes the erased person's own
+ * personal data: the skill profile (self-assessed levels), the user profile (display name), the personal development goals,
+ * and the role target subtree (I-4 is the whole `roleTarget` subtree, not only its `current` document). These are raw
+ * deletions. No validated shape is required, so a malformed document is still removed (BR-16). Deletion is idempotent, so a
+ * retry after an interruption is safe.
+ *
+ * Order within a batch: skill profile, user profile, then role targets and goals one page at a time. Each batch removes one
+ * unit of data and reports `more`. `done` only when none is left. The port hides the store paths. The production adapter
+ * (TASK-038) must cover the whole `roleTarget` subtree and the whole goals subtree, and its tests must assert that a delete
+ * really removes the id it was given, so a silent no-op cannot make a page repeat.
+ */
+
+export interface PersonalDataErasurePort {
+  skillProfileExists(uid: string): Promise<boolean>;
+  deleteSkillProfile(uid: string): Promise<void>;
+  userProfileExists(uid: string): Promise<boolean>;
+  deleteUserProfile(uid: string): Promise<void>;
+  /** Role-target document ids under the uid's whole `roleTarget` subtree, at most `limit`. */
+  roleTargetIds(uid: string, limit: number): Promise<string[]>;
+  deleteRoleTarget(uid: string, roleTargetId: string): Promise<void>;
+  /** Goal document ids of the uid, at most `limit`. */
+  goalIds(uid: string, limit: number): Promise<string[]>;
+  deleteGoal(uid: string, goalId: string): Promise<void>;
+}
+
+export interface PersonalDataStepDeps {
+  readonly port: PersonalDataErasurePort;
+}
+
+export function createPersonalDataStepHandler(deps: PersonalDataStepDeps): StepHandler {
+  return {
+    runBatch: ({ uid, maxWrites }) => runPersonalDataBatch(deps, uid, maxWrites),
+  };
+}
+
+export async function runPersonalDataBatch(deps: PersonalDataStepDeps, uid: string, maxWrites: number): Promise<BatchResult> {
+  // A zero budget could report "done" while data remains, so it is a programming error, not a batch result.
+  if (maxWrites < 1) throw new ErasureStepFailure("unexpected");
+  const { port } = deps;
+
+  if (await port.skillProfileExists(uid)) {
+    await port.deleteSkillProfile(uid);
+    return "more";
+  }
+  if (await port.userProfileExists(uid)) {
+    await port.deleteUserProfile(uid);
+    return "more";
+  }
+  const roleTargets = await port.roleTargetIds(uid, maxWrites);
+  if (roleTargets.length > 0) {
+    for (const roleTargetId of roleTargets) {
+      await port.deleteRoleTarget(uid, roleTargetId);
+    }
+    return "more";
+  }
+
+  const goals = await port.goalIds(uid, maxWrites);
+  if (goals.length > 0) {
+    for (const goalId of goals) {
+      await port.deleteGoal(uid, goalId);
+    }
+    return "more";
+  }
+
+  return "done";
+}

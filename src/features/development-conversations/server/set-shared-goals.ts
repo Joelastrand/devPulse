@@ -1,4 +1,5 @@
 import "server-only";
+import { writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import { isConversationId } from "../domain/conversation-id";
 import type { SharedGoalSnapshot } from "../domain/shared-goal-snapshot";
 import type { ConversationErrorCode } from "../domain/errors";
@@ -32,11 +33,14 @@ export type SetSharedGoalsResult =
   | { ok: true }
   | {
       ok: false;
-      error: Extract<ConversationErrorCode, "conversation_not_found" | "conversation_completed" | "invalid_goal_selection" | "persistence_failed">;
+      error:
+        | Extract<ConversationErrorCode, "conversation_not_found" | "conversation_completed" | "invalid_goal_selection" | "persistence_failed">
+        | "erasure_in_progress";
     };
 
 const NOT_FOUND: SetSharedGoalsResult = { ok: false, error: "conversation_not_found" };
 const FAILED: SetSharedGoalsResult = { ok: false, error: "persistence_failed" };
+const REFUSED: SetSharedGoalsResult = { ok: false, error: "erasure_in_progress" };
 
 /** An empty list is the clear request. It is the only input that skips the goal reads, since it selects no goal. */
 function isClearRequest(goalIds: unknown): boolean {
@@ -64,7 +68,7 @@ export async function setSharedGoals(
     }
 
     const now = deps.clock();
-    return await deps.store.runTransaction(async (tx): Promise<SetSharedGoalsResult> => {
+    return await deps.store.runOwnerTransaction(ownerUid, async (tx): Promise<SetSharedGoalsResult> => {
       const raw = await tx.getOwner(ownerUid, conversationId);
       if (raw === undefined) return NOT_FOUND;
 
@@ -88,8 +92,8 @@ export async function setSharedGoals(
       tx.updateOwner(ownerUid, conversationId, { updatedAt: new Date(now.getTime()), ...encoded.content });
       return { ok: true };
     });
-  } catch {
-    // Any read, key or write failure is operational. The raw error is never surfaced (BR-47).
-    return FAILED;
+  } catch (error) {
+    // Any read, key or write failure is operational. The raw error is never surfaced (BR-47). A fence refusal is its own code.
+    return writeRefusalFor(error) === "erasure_in_progress" ? REFUSED : FAILED;
   }
 }

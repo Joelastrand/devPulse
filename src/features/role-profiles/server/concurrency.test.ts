@@ -224,9 +224,11 @@ describe("no operation claims a transaction it does not perform", () => {
   );
   const read = (name: string) => readFileSync(`${SERVER_DIR}${name}`, "utf8");
 
-  it("only the role-target store opens a Firestore transaction", () => {
-    const withTransaction = productionServerFiles.filter((name) => /\.runTransaction\(/.test(read(name)));
-    expect(withTransaction).toEqual(["role-target-store.ts"]);
+  it("only the role-target store and the role-definition writer store open a Firestore transaction", () => {
+    // The erasure fence helper opens the transaction for the role-target store (TASK-026, BR-4(b)). The role-definition
+    // writer store (TASK-035, W-17) adds a fenced transaction for create and update only; its reads stay unfenced.
+    const withTransaction = productionServerFiles.filter((name) => /\.runTransaction\(|runFencedTransaction\(/.test(read(name)));
+    expect(withTransaction).toEqual(["role-store.ts", "role-target-store.ts"]);
   });
 
   it("the selection operation reads the role and SkillTrees only through its transactional scope", () => {

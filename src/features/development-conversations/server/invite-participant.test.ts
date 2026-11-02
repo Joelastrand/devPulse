@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { PARTICIPATION_LIMIT } from "../domain/conversation-constants";
-import type { ConversationStore, RawConversationData } from "./conversation-store-types";
+import type { RawConversationData } from "./conversation-store-types";
 import { createFakeContentCodec, type FakeContentCodec } from "./fake-content-codec";
 import { createFakeConversationStore, type FakeConversationStore } from "./fake-conversation-store";
 import { createFakeTeamEligibilityReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
@@ -76,7 +76,7 @@ function setup(options: { members?: SyntheticMember[]; onList?: () => Promise<vo
   return { store, codec, state, reader, deps };
 }
 
-async function rawOwner(store: ConversationStore, ownerUid = OWNER_UID): Promise<RawConversationData> {
+async function rawOwner(store: FakeConversationStore, ownerUid = OWNER_UID): Promise<RawConversationData> {
   const raw = await store.getOwner(ownerUid, CONVERSATION_ID);
   if (raw === undefined) throw new Error("fixture document missing");
   return raw;
@@ -376,7 +376,7 @@ describe("inviteParticipant: operational failures are never invalid_participant"
   it("returns persistence_failed when the participation count read fails", async () => {
     const { store, codec, deps } = setup();
     await seedOwnerConversation(store, codec, { conversationId: CONVERSATION_ID });
-    const failingCount: InviteParticipantDeps["store"] = {
+    const failingCount: FakeConversationStore = {
       ...store,
       countParticipation: async () => {
         throw new Error("simulated count failure");
@@ -396,7 +396,7 @@ describe("inviteParticipant: transaction atomicity (BR-48)", () => {
     const { store, codec, deps } = setup();
     await seedOwnerConversation(store, codec, { conversationId: CONVERSATION_ID });
     const before = await rawOwner(store);
-    const failingOwner: InviteParticipantDeps["store"] = {
+    const failingOwner: FakeConversationStore = {
       ...store,
       runTransaction: (work) =>
         store.runTransaction((tx) =>
@@ -421,7 +421,7 @@ describe("inviteParticipant: transaction atomicity (BR-48)", () => {
     const { store, codec, deps } = setup();
     await seedOwnerConversation(store, codec, { conversationId: CONVERSATION_ID });
     const before = await rawOwner(store);
-    const failingIndex: InviteParticipantDeps["store"] = {
+    const failingIndex: FakeConversationStore = {
       ...store,
       runTransaction: (work) =>
         store.runTransaction((tx) =>
@@ -445,7 +445,7 @@ describe("inviteParticipant: transaction atomicity (BR-48)", () => {
     const { store, codec, deps } = setup();
     await seedOwnerConversation(store, codec, { conversationId: CONVERSATION_ID });
     const before = await rawOwner(store);
-    const failing: InviteParticipantDeps["store"] = {
+    const failing: FakeConversationStore = {
       ...store,
       runTransaction: async () => {
         throw new Error("simulated transaction failure with a secret path");
@@ -498,7 +498,7 @@ describe("inviteParticipant: state changes between resolution and commit", () =>
     // the last step before the transaction, so it is the hook point.
     const { store, codec, state, deps } = setup();
     await seedOwnerConversation(store, codec, { conversationId: CONVERSATION_ID });
-    const removingCount: InviteParticipantDeps["store"] = {
+    const removingCount: FakeConversationStore = {
       ...store,
       countParticipation: async (uid) => {
         delete state.memberships[`${CANDIDATE_UID}__${TEAM_ID}`];
@@ -508,5 +508,17 @@ describe("inviteParticipant: state changes between resolution and commit", () =>
 
     expect(await inviteParticipant(OWNER_UID, CONVERSATION_ID, CANDIDATE_REF, { ...deps, store: removingCount })).toEqual({ ok: true });
     expect((await rawOwner(store)).participantUid).toBe(CANDIDATE_UID);
+  });
+});
+
+describe("inviteParticipant: the invitee is fenced in the same transaction (TASK-038, I-7)", () => {
+  it("passes the invitee's uid as the second fence of the owner transaction", async () => {
+    const { store, codec, deps } = setup();
+    await seedOwnerConversation(store, codec, { conversationId: CONVERSATION_ID });
+    const spy = vi.spyOn(store, "runOwnerTransaction");
+
+    await inviteParticipant(OWNER_UID, CONVERSATION_ID, CANDIDATE_REF, deps);
+
+    expect(spy).toHaveBeenCalledWith(OWNER_UID, expect.any(Function), { secondFence: CANDIDATE_UID });
   });
 });

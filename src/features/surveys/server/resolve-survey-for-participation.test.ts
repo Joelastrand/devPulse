@@ -334,6 +334,54 @@ describe("resolveSurveyForParticipation", () => {
 
       expect(result).toEqual({ ok: true, status: "sign_in_required" });
     });
+
+    it("refuses an authenticated survey with erasure_in_progress for a uid whose erasure is running, never sign_in_required", async () => {
+      const collections = fakeCollections({
+        surveys: {
+          [SURVEY_ID]: surveyDoc({ accessMode: "authenticated", openedAt: new Date("2026-08-15T00:00:00Z") }),
+        },
+        teams: { [TEAM_ID]: teamDoc() },
+        memberships: { [`${MEMBER_UID}__${TEAM_ID}`]: membershipDoc(MEMBER_UID, TEAM_ID) },
+      });
+
+      const result = await resolveSurveyForParticipation(
+        SURVEY_ID,
+        "valid-token",
+        baseDeps(collections, {
+          verifyToken: verifyTokenReturning(identity()),
+          readFence: async () => ({ kind: "in_progress" }),
+        }),
+      );
+
+      expect(result).toEqual({ ok: false, error: "erasure_in_progress" });
+      expect(collections.calls.membership).toBe(0);
+      expect(collections.calls.team).toBe(0);
+    });
+
+    it("reports auth_unavailable, never sign_in_required, when the fence record cannot be read", async () => {
+      const collections = fakeCollections({
+        surveys: {
+          [SURVEY_ID]: surveyDoc({ accessMode: "authenticated", openedAt: new Date("2026-08-15T00:00:00Z") }),
+        },
+        teams: { [TEAM_ID]: teamDoc() },
+        memberships: { [`${MEMBER_UID}__${TEAM_ID}`]: membershipDoc(MEMBER_UID, TEAM_ID) },
+      });
+
+      const result = await resolveSurveyForParticipation(
+        SURVEY_ID,
+        "valid-token",
+        baseDeps(collections, {
+          verifyToken: verifyTokenReturning(identity()),
+          readFence: async () => {
+            throw new Error("firestore unavailable");
+          },
+        }),
+      );
+
+      expect(result).toEqual({ ok: false, error: "auth_unavailable" });
+      expect(collections.calls.membership).toBe(0);
+      expect(collections.calls.team).toBe(0);
+    });
   });
 
   describe("lifecycle", () => {

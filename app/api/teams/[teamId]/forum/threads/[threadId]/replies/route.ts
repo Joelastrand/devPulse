@@ -5,6 +5,8 @@ const BEARER_PATTERN = /^Bearer (.+)$/;
 
 const CREATE_ERROR_STATUS: Record<string, number> = {
   sign_in_required: 401,
+  erasure_in_progress: 403,
+  auth_unavailable: 503,
   invalid_input: 400,
   forbidden: 403,
   not_found: 404,

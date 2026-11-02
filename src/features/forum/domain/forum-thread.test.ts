@@ -50,6 +50,11 @@ describe("isValidForumThread", () => {
     expect(isValidForumThread({ ...valid, createdAt: new Date("not a date") })).toBe(false);
   });
 
+  it("rejects a candidate carrying an erased-placeholder status or erasedAt, even with every active field present", () => {
+    expect(isValidForumThread({ ...valid, status: "erased" })).toBe(false);
+    expect(isValidForumThread({ ...valid, erasedAt: new Date("2026-06-02T00:00:00.000Z") })).toBe(false);
+  });
+
   it("rejects a candidate carrying a deletedAt field — a thread has no tombstone shape", () => {
     expect(isValidForumThread({ ...valid, deletedAt: new Date("2026-06-02T00:00:00.000Z") })).toBe(
       false,

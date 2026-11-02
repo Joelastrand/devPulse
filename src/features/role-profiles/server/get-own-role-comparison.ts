@@ -4,6 +4,7 @@ import { compareWithRole, type ComparisonRow } from "../domain/comparison";
 import { readOwnTargetRole, type RoleTargetDeps } from "./get-own-role-target";
 import { getDefaultSkillTreeReader } from "./skill-tree-seam";
 import { resolveSkillTreeReferences, type RawSkillTreeReader } from "./skill-tree-seam-types";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 
 export interface RoleComparisonDeps extends RoleTargetDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
@@ -21,7 +22,7 @@ export type RoleComparison =
 
 export type GetOwnRoleComparisonResult =
   | { ok: true; comparison: RoleComparison }
-  | { ok: false; error: "unauthenticated" | "persistence_failed" };
+  | { ok: false; error: AuthRefusal | "persistence_failed" };
 
 const UNAVAILABLE: RoleComparison = { state: "target_unavailable", reason: "unavailable" };
 
@@ -36,7 +37,7 @@ export async function getOwnRoleComparison(
   deps: RoleComparisonDeps = {},
 ): Promise<GetOwnRoleComparisonResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
-  if (!verified.ok) return { ok: false, error: "unauthenticated" };
+  if (!verified.ok) return { ok: false, error: authRefusalFor(verified) };
 
   try {
     const target = await readOwnTargetRole(verified.identity.uid, deps);
@@ -58,9 +59,9 @@ export async function getOwnRoleComparison(
 
     const skills = await (deps.readSkills ?? ((token: string) => getOwnSkills(token)))(idToken);
     if (!skills.ok) {
-      return skills.error === "unauthenticated"
-        ? { ok: false, error: "unauthenticated" }
-        : { ok: false, error: "persistence_failed" };
+      return skills.error === "persistence_failed"
+        ? { ok: false, error: "persistence_failed" }
+        : { ok: false, error: skills.error };
     }
 
     const listedTreeIds = new Set(skills.dto.skills.map((skill) => skill.treeId));

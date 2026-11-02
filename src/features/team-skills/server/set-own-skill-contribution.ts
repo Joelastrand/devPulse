@@ -3,9 +3,11 @@ import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-
 import { SKILL_CONTRIBUTION_NOTICE_VERSION } from "../domain/skill-coverage-policy";
 import { requireGenuineMember } from "./genuine-team-membership";
 import { getDefaultSkillContributionStore, type SkillContributionStore } from "./skill-contribution-store";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
+import { writeRefusalFor } from "../../auth/server/erasure-write-fence";
 
 export type SetOwnSkillContributionError =
-  | "unauthenticated"
+  | AuthRefusal
   | "forbidden"
   | "team_disabled"
   | "invalid_input"
@@ -46,13 +48,13 @@ export async function setOwnSkillContribution(
   deps: SetOwnSkillContributionDeps = {},
 ): Promise<SetOwnSkillContributionResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
-  if (!verified.ok) return { ok: false, error: "unauthenticated" };
+  if (!verified.ok) return { ok: false, error: authRefusalFor(verified) };
   const identity = verified.identity;
   const store = deps.store ?? getDefaultSkillContributionStore();
   const now = (deps.now ?? (() => new Date()))();
 
   try {
-    return await store.runTransaction(async (tx): Promise<SetOwnSkillContributionResult> => {
+    return await store.runWriteTransaction(identity.uid, async (tx): Promise<SetOwnSkillContributionResult> => {
       const member = await requireGenuineMember(identity, teamId, { reads: tx.reads });
       if (!member.ok) return { ok: false, error: member.error === "read_failed" ? "persistence_failed" : member.error };
 
@@ -63,7 +65,7 @@ export async function setOwnSkillContribution(
       tx.setField(identity.uid, teamId, { noticeVersion: SKILL_CONTRIBUTION_NOTICE_VERSION, consentedAt: now });
       return { ok: true, contributing: true };
     });
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 }

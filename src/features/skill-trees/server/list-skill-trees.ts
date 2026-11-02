@@ -1,10 +1,10 @@
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../../teams/domain/app-admin";
 import { requireAppAdmin } from "../../teams/server/require-app-admin";
 import { isValidSkillTree, type SkillTreeRecord } from "../domain/skill-tree";
-
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
 const SKILL_TREES_COLLECTION = "skillTrees";
 
 /**
@@ -99,7 +99,7 @@ function toSkillTreeView(treeId: string, tree: SkillTreeRecord): SkillTreeView {
 
 export type ListSkillTreesResult =
   | { ok: true; trees: SkillTreeView[] }
-  | { ok: false; error: "unauthenticated" | "forbidden" | "read_failed" };
+  | { ok: false; error: AuthRefusal | "forbidden" | "read_failed" };
 
 export interface ListSkillTreesDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];

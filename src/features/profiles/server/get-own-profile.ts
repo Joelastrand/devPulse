@@ -2,10 +2,11 @@ import "server-only";
 import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import { isValidUserProfile } from "../domain/user-profile";
 import { getDefaultUserProfileStore, type UserProfileStore } from "./user-profile-store";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 
 export type GetOwnProfileResult =
   | { ok: true; displayName: string | null }
-  | { ok: false; error: "unauthenticated" | "persistence_failed" };
+  | { ok: false; error: AuthRefusal | "persistence_failed" };
 
 export interface GetOwnProfileDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
@@ -25,7 +26,7 @@ export async function getOwnProfile(
 ): Promise<GetOwnProfileResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
   if (!verified.ok) {
-    return { ok: false, error: "unauthenticated" };
+    return { ok: false, error: authRefusalFor(verified) };
   }
 
   const store = deps.store ?? getDefaultUserProfileStore();

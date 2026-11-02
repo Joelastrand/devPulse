@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { CONVERSATION_ERROR_STATUS, type ConversationErrorCode } from "../../../../../src/features/development-conversations/domain/errors";
+import { conversationResponseStatus, type ConversationResponseCode } from "../../../../../src/features/development-conversations/domain/errors";
 import {
   OWNER_DTO_KEYS,
   OWNER_PARTICIPANT_KEYS,
@@ -23,6 +23,7 @@ import { setSharedGoals } from "../../../../../src/features/development-conversa
 import { updateOwnerSections } from "../../../../../src/features/development-conversations/server/update-owner-sections";
 import { verifiedSubject } from "../_auth";
 import { readConversationBody } from "../_body";
+import { authRefusalStatus } from "../../../../../src/features/auth/server/auth-refusal";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -57,12 +58,13 @@ const INVALID_PLAN: PatchPlan = { kind: "invalid" };
  * the owner, accepted participant or pending view. A foreign id and a missing id get the same answer.
  */
 export async function GET(request: Request, { params }: RouteContext) {
-  const subject = await verifiedSubject(request);
-  if (!subject) return fail("unauthenticated", 401);
+  const verified = await verifiedSubject(request);
+  if (!verified.ok) return json({ error: verified.error }, authRefusalStatus(verified.error));
+  const subject = verified.uid;
 
   const { conversationId } = await params;
   const result = await readConversationForCaller(subject, conversationId, productionConversationViewDeps());
-  if (!result.ok) return fail(result.error, CONVERSATION_ERROR_STATUS[result.error]);
+  if (!result.ok) return fail(result.error, conversationResponseStatus(result.error));
   return json(viewDto(result.view), 200);
 }
 
@@ -71,17 +73,18 @@ export async function GET(request: Request, { params }: RouteContext) {
  * `status: "completed"`. Mixed keys, any other status value and any unknown key are `invalid_input`, with no operation called.
  */
 export async function PATCH(request: Request, { params }: RouteContext) {
-  const subject = await verifiedSubject(request);
-  if (!subject) return fail("unauthenticated", 401);
+  const verified = await verifiedSubject(request);
+  if (!verified.ok) return json({ error: verified.error }, authRefusalStatus(verified.error));
+  const subject = verified.uid;
 
   const body = await readConversationBody(request, PATCH_KEYS);
-  if (!body.ok) return fail(body.error, CONVERSATION_ERROR_STATUS[body.error]);
+  if (!body.ok) return fail(body.error, conversationResponseStatus(body.error));
 
   const { conversationId } = await params;
   const plan = planPatch(body.body);
   switch (plan.kind) {
     case "invalid":
-      return fail("invalid_input", CONVERSATION_ERROR_STATUS.invalid_input);
+      return fail("invalid_input", conversationResponseStatus("invalid_input"));
     case "sections":
       return outcome(await updateOwnerSections(subject, conversationId, plan.fields));
     case "goals":
@@ -98,8 +101,9 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 }
 
 export async function DELETE(request: Request, { params }: RouteContext) {
-  const subject = await verifiedSubject(request);
-  if (!subject) return fail("unauthenticated", 401);
+  const verified = await verifiedSubject(request);
+  if (!verified.ok) return json({ error: verified.error }, authRefusalStatus(verified.error));
+  const subject = verified.uid;
 
   const { conversationId } = await params;
   return outcome(await deleteConversation(subject, conversationId));
@@ -161,8 +165,8 @@ function pick(source: object, keys: readonly string[]): Record<string, unknown> 
 }
 
 /** A write's result: `{ ok: true }` as 200, or the stable code and its SPEC status. Nothing else is returned. */
-function outcome(result: { ok: true } | { ok: false; error: ConversationErrorCode }) {
-  return result.ok ? json({ ok: true }, 200) : fail(result.error, CONVERSATION_ERROR_STATUS[result.error]);
+function outcome(result: { ok: true } | { ok: false; error: ConversationResponseCode }) {
+  return result.ok ? json({ ok: true }, 200) : fail(result.error, conversationResponseStatus(result.error));
 }
 
 /**
@@ -171,9 +175,9 @@ function outcome(result: { ok: true } | { ok: false; error: ConversationErrorCod
  */
 async function currentOwnerDto(ownerUid: string, conversationId: string) {
   const result = await readOwnerConversation(ownerUid, conversationId, productionOwnerReadDeps());
-  if (!result.ok) return fail(result.error, CONVERSATION_ERROR_STATUS[result.error]);
+  if (!result.ok) return fail(result.error, conversationResponseStatus(result.error));
   return json(pickOwnerDto(result.conversation), 200);
 }
 
 const json = (body: unknown, status: number) => NextResponse.json(body, { status, headers: NO_STORE });
-const fail = (error: ConversationErrorCode, status: number) => json({ error }, status);
+const fail = (error: ConversationResponseCode, status: number) => json({ error }, status);

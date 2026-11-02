@@ -18,7 +18,8 @@ export interface TeamMembershipRecord {
   teamId: string;
   createdAt: Date;
   createdVia: MembershipSource;
-  grantedBy: string;
+  /** `null` after the granting account was erased (account-erasure A-11). Audit only, never consulted for authorization. */
+  grantedBy: string | null;
   /**
    * Opaque team-scoped handle (see `member-ref.ts`). Written at grant; absent
    * on legacy documents until an explicit admin preparation. Never authorization.
@@ -28,7 +29,8 @@ export interface TeamMembershipRecord {
   role?: "lead";
   /** Paired with `roleUpdatedBy`: the last role assignment/removal (audit only, never consulted for authorization). */
   roleUpdatedAt?: Date;
-  roleUpdatedBy?: string;
+  /** `null` after the account that set the role was erased (account-erasure A-11). Audit only. */
+  roleUpdatedBy?: string | null;
 }
 
 /**

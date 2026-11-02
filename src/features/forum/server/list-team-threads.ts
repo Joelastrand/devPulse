@@ -9,6 +9,7 @@ import {
 } from "../../teams/server/authorize-team-access";
 import { authorTag } from "../domain/author-tag";
 import { isValidForumThread, type ForumThreadRecord } from "../domain/forum-thread";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 
 const FORUM_THREADS_COLLECTION = "forumThreads";
 
@@ -121,7 +122,7 @@ function parseThreadContent(raw: string): DecryptedThreadContent | null {
 
 export type ListTeamThreadsResult =
   | { ok: true; threads: ThreadSummaryView[] }
-  | { ok: false; error: "unauthenticated" | "forbidden" | "read_failed" };
+  | { ok: false; error: AuthRefusal | "forbidden" | "read_failed" };
 
 export interface ListTeamThreadsDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
@@ -167,7 +168,7 @@ export async function listTeamThreads(
 ): Promise<ListTeamThreadsResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
   if (!verified.ok) {
-    return { ok: false, error: "unauthenticated" };
+    return { ok: false, error: authRefusalFor(verified) };
   }
 
   const authResult = await authorizeTeamAccess(verified.identity, teamId, {

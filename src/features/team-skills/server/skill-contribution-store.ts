@@ -1,6 +1,7 @@
 import "server-only";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, type Transaction } from "firebase-admin/firestore";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
+import { runFencedTransaction } from "../../auth/server/erasure-write-fence";
 import { membershipDocId } from "../../teams/domain/team-membership";
 import { SKILL_CONTRIBUTION_FIELD, type SkillContributionRecord } from "../domain/skill-contribution";
 import type { GenuineMembershipReads } from "./genuine-team-membership";
@@ -29,7 +30,13 @@ export interface RawMembershipDoc {
 }
 
 export interface SkillContributionStore {
+  /** Read-only transaction (get-own). Unfenced by design: an erasing person's own read stays available. */
   runTransaction<T>(fn: (tx: SkillContributionTx) => Promise<T>): Promise<T>;
+  /**
+   * Writer-only transaction (set/withdraw). Reads `accountErasures/{actorUid}` first, in the same transaction, and
+   * refuses with `ErasureWriteRefused` while a record exists (TASK-031, W-10).
+   */
+  runWriteTransaction<T>(actorUid: string, fn: (tx: SkillContributionTx) => Promise<T>): Promise<T>;
   /** Raw membership documents of a team (`where teamId ==`, no composite index); consumed by the coverage reader. */
   listMembershipsForCoverage(teamId: string, limit: number): Promise<RawMembershipDoc[]>;
 }
@@ -41,31 +48,40 @@ export interface SkillContributionStore {
  * between makes the commit fail instead of being recreated.
  */
 export function getDefaultSkillContributionStore(): SkillContributionStore {
+  const runWith = <T>(
+    fn: (tx: SkillContributionTx) => Promise<T>,
+    runner: (work: (tx: Transaction) => Promise<T>) => Promise<T>,
+  ): Promise<T> => {
+    const db = getFirestoreDb();
+    const membershipRef = (uid: string, teamId: string) =>
+      db.collection(MEMBERSHIPS_COLLECTION).doc(membershipDocId(uid, teamId));
+    return runner((tx) =>
+      fn({
+        reads: {
+          async getTeamStatus(teamId) {
+            const snapshot = await tx.get(db.collection(TEAMS_COLLECTION).doc(teamId));
+            return snapshot.exists ? snapshot.data()?.status : undefined;
+          },
+          async getMembership(uid, teamId) {
+            const snapshot = await tx.get(membershipRef(uid, teamId));
+            return snapshot.exists ? snapshot.data() : undefined;
+          },
+        },
+        setField(uid, teamId, record) {
+          tx.update(membershipRef(uid, teamId), { [SKILL_CONTRIBUTION_FIELD]: record });
+        },
+        deleteField(uid, teamId) {
+          tx.update(membershipRef(uid, teamId), { [SKILL_CONTRIBUTION_FIELD]: FieldValue.delete() });
+        },
+      }),
+    );
+  };
   return {
     runTransaction(fn) {
-      const db = getFirestoreDb();
-      const membershipRef = (uid: string, teamId: string) =>
-        db.collection(MEMBERSHIPS_COLLECTION).doc(membershipDocId(uid, teamId));
-      return db.runTransaction((tx) =>
-        fn({
-          reads: {
-            async getTeamStatus(teamId) {
-              const snapshot = await tx.get(db.collection(TEAMS_COLLECTION).doc(teamId));
-              return snapshot.exists ? snapshot.data()?.status : undefined;
-            },
-            async getMembership(uid, teamId) {
-              const snapshot = await tx.get(membershipRef(uid, teamId));
-              return snapshot.exists ? snapshot.data() : undefined;
-            },
-          },
-          setField(uid, teamId, record) {
-            tx.update(membershipRef(uid, teamId), { [SKILL_CONTRIBUTION_FIELD]: record });
-          },
-          deleteField(uid, teamId) {
-            tx.update(membershipRef(uid, teamId), { [SKILL_CONTRIBUTION_FIELD]: FieldValue.delete() });
-          },
-        }),
-      );
+      return runWith(fn, (work) => getFirestoreDb().runTransaction(work));
+    },
+    runWriteTransaction(actorUid, fn) {
+      return runWith(fn, (work) => runFencedTransaction(getFirestoreDb(), actorUid, work));
     },
     async listMembershipsForCoverage(teamId, limit) {
       const snapshot = await getFirestoreDb()

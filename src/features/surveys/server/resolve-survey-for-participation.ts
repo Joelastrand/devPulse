@@ -1,7 +1,6 @@
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
-import { verifyIdToken } from "../../auth/server/verify-identity";
+import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import { isValidTeamStatus } from "../../teams/domain/team";
 import { isValidMembershipFor, membershipDocId } from "../../teams/domain/team-membership";
 import { effectiveLifecycle, isValidSurvey, type Survey } from "../domain/survey";
@@ -161,11 +160,12 @@ export type ResolveSurveyForParticipationResult =
   | { ok: true; status: "scheduled"; survey: SafeSurveyParticipationView }
   | { ok: true; status: "closed"; survey: SafeSurveyParticipationView }
   | { ok: true; status: "answerable"; survey: SafeSurveyParticipationView }
-  | { ok: false; error: "read_failed" };
+  | { ok: false; error: "read_failed" | "erasure_in_progress" | "auth_unavailable" };
 
 export interface ResolveSurveyForParticipationDeps {
   now?: Date;
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
+  readFence?: VerifyIdTokenDeps["readFence"];
   collections?: ResolveSurveyForParticipationCollections;
 }
 
@@ -223,9 +223,14 @@ export async function resolveSurveyForParticipation(
       return { ok: true, status: "sign_in_required" };
     }
 
-    const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
+    const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken, readFence: deps.readFence });
     if (!verified.ok) {
-      return { ok: true, status: "sign_in_required" };
+      // Genuine rejection stays `sign_in_required`; the erasure fence and Auth unavailability keep their own outcomes
+      // (D-AUTHFAIL, approved 2026-10-28) so a caller is never told to sign in while its erasure is running.
+      if (verified.error === "invalid_token") {
+        return { ok: true, status: "sign_in_required" };
+      }
+      return { ok: false, error: verified.error };
     }
 
     let rawMembership: unknown;

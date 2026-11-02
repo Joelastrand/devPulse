@@ -1,10 +1,12 @@
 import { parseStoredRoleDefinition, type RoleAdminDto, type RoleDefinition } from "../domain/role-definition";
 import { requireAppAdmin, type RequireAppAdminDeps } from "../../teams/server/require-app-admin";
 import { toAdminRoleDto } from "./role-admin-mapping";
-import { getDefaultRoleStore } from "./role-store";
+import { getDefaultRoleWriteStore } from "./role-store";
+import { writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import { isAddressableRoleId, type RoleStore } from "./role-store-types";
 import { getDefaultSkillTreeReader } from "./skill-tree-seam";
 import { resolveSkillTreeReferences, type RawSkillTreeReader } from "./skill-tree-seam-types";
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
 
 export interface SetRoleArchivedDeps extends RequireAppAdminDeps {
   store?: RoleStore;
@@ -14,7 +16,7 @@ export interface SetRoleArchivedDeps extends RequireAppAdminDeps {
 
 export type SetRoleArchivedResult =
   | { ok: true; role: RoleAdminDto }
-  | { ok: false; error: "unauthenticated" | "forbidden" | "invalid_input" | "not_found" | "persistence_failed" };
+  | { ok: false; error: AuthRefusal | "forbidden" | "invalid_input" | "not_found" | "persistence_failed" };
 
 /**
  * Admin archive or restore (BR-5, AD-6, PG-6). Archive sets `archivedAt` and `archivedBy`; restore removes both.
@@ -39,7 +41,7 @@ export async function setRoleArchived(
   if (!isAddressableRoleId(roleId)) return { ok: false, error: "not_found" };
 
   try {
-    const store = deps.store ?? getDefaultRoleStore();
+    const store = deps.store ?? getDefaultRoleWriteStore(admin.identity.uid);
     const raw = await store.get(roleId);
     const parsed = raw === undefined ? undefined : parseStoredRoleDefinition(raw);
     if (!parsed?.ok) {
@@ -61,7 +63,7 @@ export async function setRoleArchived(
     );
     const next: RoleDefinition = { ...current, archivedAt: archived ? (current.archivedAt ?? now) : undefined };
     return { ok: true, role: toAdminRoleDto(roleId, next, references) };
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 }

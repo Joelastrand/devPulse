@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { closeSurvey } from "../../../../../../../../src/features/surveys/server/close-survey";
-
+import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../../../../../src/features/auth/server/auth-refusal";
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
@@ -40,9 +40,9 @@ function extractBearerToken(header: string | null): string {
 }
 
 function statusForError(
-  error: "unauthenticated" | "forbidden" | "survey_not_found" | "not_open" | "persistence_failed",
+  error: AuthRefusal | "forbidden" | "survey_not_found" | "not_open" | "persistence_failed",
 ): number {
-  if (error === "unauthenticated") return 401;
+  if (isAuthRefusal(error)) return authRefusalStatus(error);
   if (error === "forbidden") return 403;
   if (error === "survey_not_found") return 404;
   if (error === "not_open") return 409;

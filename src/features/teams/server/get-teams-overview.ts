@@ -1,9 +1,6 @@
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import {
-  verifyIdToken,
-  type VerifyIdTokenDeps,
-} from "../../auth/server/verify-identity";
+import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import { isAppAdmin, type IsAppAdminDeps } from "../domain/app-admin";
 import { isValidTeamStatus } from "../domain/team";
 import { isValidAccessRequestStatus } from "../domain/team-access-request";
@@ -15,6 +12,7 @@ import {
   resolveInvitations,
   type ResolveInvitationsCollection,
 } from "./resolve-invitations";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 
 const MEMBERSHIPS_COLLECTION = "teamMemberships";
 const REQUESTS_COLLECTION = "teamAccessRequests";
@@ -80,7 +78,7 @@ function getDefaultCollection(): TeamsOverviewCollection {
 
 export type GetTeamsOverviewResult =
   | { ok: true; teams: TeamOverviewEntry[] }
-  | { ok: false; error: "unauthenticated" | "read_failed" };
+  | { ok: false; error: AuthRefusal | "read_failed" };
 
 export interface GetTeamsOverviewDeps {
   now?: Date;
@@ -132,7 +130,7 @@ export async function getTeamsOverview(
 ): Promise<GetTeamsOverviewResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
   if (!verified.ok) {
-    return { ok: false, error: "unauthenticated" };
+    return { ok: false, error: authRefusalFor(verified) };
   }
   const identity = verified.identity;
 
@@ -141,7 +139,8 @@ export async function getTeamsOverview(
     collection: deps.resolveInvitationsCollection,
   });
   if (!resolveResult.ok) {
-    return { ok: false, error: "read_failed" };
+    // A fence refusal for the viewer is reported as such (TASK-030); any other resolution failure stays a read failure.
+    return { ok: false, error: resolveResult.error === "erasure_in_progress" ? "erasure_in_progress" : "read_failed" };
   }
 
   const activeResult = await listActiveTeams({ collection: deps.activeTeamsCollection });

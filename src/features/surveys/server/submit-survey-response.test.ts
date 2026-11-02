@@ -258,6 +258,56 @@ describe("submitSurveyResponse", () => {
       expect(participationDocs(store)).toHaveLength(0);
     });
 
+    it("accepts a public submission carrying a token whose erasure is in progress, exactly as without a token", async () => {
+      const seed = {
+        "surveys/survey-1": surveyDoc(),
+        "teams/team-42": teamDoc(),
+      };
+      const withoutToken = createInMemoryFirestore(seed);
+      const withFencedToken = createInMemoryFirestore(seed);
+
+      const anonymous = await submitSurveyResponse(SURVEY_ID, VALID_ANSWERS, undefined, baseDeps(withoutToken.db));
+      const fenced = await submitSurveyResponse(
+        SURVEY_ID,
+        VALID_ANSWERS,
+        "erasing-token",
+        baseDeps(withFencedToken.db, {
+          verifyToken: verifyTokenReturning(identity()),
+          readFence: async () => ({ kind: "in_progress" }),
+        }),
+      );
+
+      expect(anonymous).toEqual({ ok: true });
+      expect(fenced).toEqual({ ok: true });
+      expect(withFencedToken.totalCommittedWrites).toBe(withoutToken.totalCommittedWrites);
+      expect(participationDocs(withFencedToken.store)).toHaveLength(0);
+      expect(Object.keys(responseDocs(withFencedToken.store)[0]).sort()).toEqual(
+        Object.keys(responseDocs(withoutToken.store)[0]).sort(),
+      );
+    });
+
+    it("accepts a public submission when the fence record cannot be read, without attaching any identity", async () => {
+      const { db, store } = createInMemoryFirestore({
+        "surveys/survey-1": surveyDoc(),
+        "teams/team-42": teamDoc(),
+      });
+
+      const result = await submitSurveyResponse(
+        SURVEY_ID,
+        VALID_ANSWERS,
+        "token",
+        baseDeps(db, {
+          verifyToken: verifyTokenReturning(identity()),
+          readFence: async () => {
+            throw new Error("firestore unavailable");
+          },
+        }),
+      );
+
+      expect(result).toEqual({ ok: true });
+      expect(participationDocs(store)).toHaveLength(0);
+    });
+
     it("allows repeated submissions from the same visitor to all succeed independently", async () => {
       const { db, store } = createInMemoryFirestore({
         "surveys/survey-1": surveyDoc(),
@@ -387,6 +437,28 @@ describe("submitSurveyResponse", () => {
       expect(sharedKeys).toEqual([]);
     });
 
+    it("refuses an authenticated submission with erasure_in_progress when the transaction finds an erasure record, writing nothing", async () => {
+      // The verify-time fence admits (the record appears only after verification), so the transaction's own read must refuse.
+      const fake = createInMemoryFirestore({
+        "surveys/survey-1": surveyDoc({ accessMode: "authenticated" }),
+        "teams/team-42": teamDoc(),
+        "teamMemberships/member-1__team-42": membershipDoc(MEMBER_UID, TEAM_ID),
+        "accountErasures/member-1": { status: "in_progress", step: "forum" },
+      });
+
+      const result = await submitSurveyResponse(
+        SURVEY_ID,
+        VALID_ANSWERS,
+        "token",
+        baseDeps(fake.db, { verifyToken: verifyTokenReturning(identity()), readFence: async () => ({ kind: "none" }) }),
+      );
+
+      expect(result).toEqual({ ok: false, error: "erasure_in_progress" });
+      expect(responseDocs(fake.store)).toHaveLength(0);
+      expect(participationDocs(fake.store)).toHaveLength(0);
+      expect(fake.totalCommittedWrites).toBe(0);
+    });
+
     it("rejects a submission with no token", async () => {
       const { db, store } = createInMemoryFirestore({
         "surveys/survey-1": surveyDoc({ accessMode: "authenticated" }),
@@ -413,6 +485,51 @@ describe("submitSurveyResponse", () => {
       );
 
       expect(result).toEqual({ ok: false, error: "unauthenticated" });
+      expect(responseDocs(store)).toHaveLength(0);
+    });
+
+    it("refuses an authenticated submission with erasure_in_progress for a fenced uid, writing nothing", async () => {
+      const { db, store } = createInMemoryFirestore({
+        "surveys/survey-1": surveyDoc({ accessMode: "authenticated" }),
+        "teams/team-42": teamDoc(),
+        [`teamMemberships/${MEMBER_UID}__${TEAM_ID}`]: membershipDoc(MEMBER_UID, TEAM_ID),
+      });
+
+      const result = await submitSurveyResponse(
+        SURVEY_ID,
+        VALID_ANSWERS,
+        "erasing-token",
+        baseDeps(db, {
+          verifyToken: verifyTokenReturning(identity()),
+          readFence: async () => ({ kind: "in_progress" }),
+        }),
+      );
+
+      expect(result).toEqual({ ok: false, error: "erasure_in_progress" });
+      expect(responseDocs(store)).toHaveLength(0);
+      expect(participationDocs(store)).toHaveLength(0);
+    });
+
+    it("reports auth_unavailable, never unauthenticated, for an authenticated submission whose fence read fails", async () => {
+      const { db, store } = createInMemoryFirestore({
+        "surveys/survey-1": surveyDoc({ accessMode: "authenticated" }),
+        "teams/team-42": teamDoc(),
+        [`teamMemberships/${MEMBER_UID}__${TEAM_ID}`]: membershipDoc(MEMBER_UID, TEAM_ID),
+      });
+
+      const result = await submitSurveyResponse(
+        SURVEY_ID,
+        VALID_ANSWERS,
+        "token",
+        baseDeps(db, {
+          verifyToken: verifyTokenReturning(identity()),
+          readFence: async () => {
+            throw new Error("firestore unavailable");
+          },
+        }),
+      );
+
+      expect(result).toEqual({ ok: false, error: "auth_unavailable" });
       expect(responseDocs(store)).toHaveLength(0);
     });
 

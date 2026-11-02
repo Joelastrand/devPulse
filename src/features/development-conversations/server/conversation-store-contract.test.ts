@@ -11,6 +11,7 @@ import {
   type ConversationStore,
   type OwnerDocumentWrite,
 } from "./conversation-store-types";
+import { issueErasureOwnerCleanupCapability } from "./erasure-owner-cleanup-capability";
 
 /**
  * Shared contract (TASK-005 acceptance: "fake and production share the contract test"). Every case runs against the Admin
@@ -123,7 +124,7 @@ describe.each(implementations)("conversation store contract — $name", ({ creat
 
   describe("owner documents", () => {
     it("writes the sixteen canonical keys and reads them back as Dates, with no extra key", async () => {
-      await store.runTransaction(async (tx) => tx.createOwner(OWNER, "conv-1", ownerDoc()));
+      await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.createOwner(OWNER, "conv-1", ownerDoc()));
       const stored = await store.getOwner(OWNER, "conv-1");
       expect(Object.keys(stored ?? {}).sort()).toEqual(CANONICAL_OWNER_KEYS);
       expect(stored?.createdAt).toEqual(T1);
@@ -136,7 +137,7 @@ describe.each(implementations)("conversation store contract — $name", ({ creat
 
     it("never persists a field the write shape does not declare", async () => {
       const withExtra = { ...ownerDoc(), title: "must not persist", ownerUid: OWNER } as OwnerDocumentWrite;
-      await store.runTransaction(async (tx) => tx.createOwner(OWNER, "conv-1", withExtra));
+      await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.createOwner(OWNER, "conv-1", withExtra));
       const stored = (await store.getOwner(OWNER, "conv-1")) ?? {};
       expect(stored).not.toHaveProperty("title");
       expect(stored).not.toHaveProperty("ownerUid");
@@ -145,55 +146,55 @@ describe.each(implementations)("conversation store contract — $name", ({ creat
 
     it("refuses to write a canonical key that is undefined, rather than storing it as absent", async () => {
       const broken = { ...ownerDoc(), keyCheck: undefined } as unknown as OwnerDocumentWrite;
-      await expect(store.runTransaction(async (tx) => tx.setOwner(OWNER, "conv-1", broken))).rejects.toThrow();
+      await expect(store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.setOwner(OWNER, "conv-1", broken))).rejects.toThrow();
       expect(await store.getOwner(OWNER, "conv-1")).toBeUndefined();
     });
 
     it("createOwner fails when the document already exists, and never overwrites it", async () => {
-      await store.runTransaction(async (tx) => tx.createOwner(OWNER, "conv-1", ownerDoc({ status: "open" })));
-      await expect(store.runTransaction(async (tx) => tx.createOwner(OWNER, "conv-1", ownerDoc({ status: "completed" })))).rejects.toThrow();
+      await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.createOwner(OWNER, "conv-1", ownerDoc({ status: "open" })));
+      await expect(store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.createOwner(OWNER, "conv-1", ownerDoc({ status: "completed" })))).rejects.toThrow();
       expect((await store.getOwner(OWNER, "conv-1"))?.status).toBe("open");
     });
 
     it("setOwner replaces the whole document and leaves other documents untouched", async () => {
-      await store.runTransaction(async (tx) => {
+      await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => {
         tx.createOwner(OWNER, "conv-1", ownerDoc());
         tx.createOwner(OWNER, "conv-2", ownerDoc({ teamId: "team-b" }));
       });
-      await store.runTransaction(async (tx) => tx.setOwner(OWNER, "conv-1", ownerDoc({ status: "completed", completedAt: T2 })));
+      await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.setOwner(OWNER, "conv-1", ownerDoc({ status: "completed", completedAt: T2 })));
       expect((await store.getOwner(OWNER, "conv-1"))?.status).toBe("completed");
       expect((await store.getOwner(OWNER, "conv-2"))?.teamId).toBe("team-b");
     });
 
     it("updateOwner changes only the given keys, clears with null, and never creates a document", async () => {
-      await store.runTransaction(async (tx) => tx.createOwner(OWNER, "conv-1", ownerDoc({ plannedFor: "2026-02-01" })));
-      await store.runTransaction(async (tx) => tx.updateOwner(OWNER, "conv-1", { plannedFor: null, updatedAt: T2 }));
+      await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.createOwner(OWNER, "conv-1", ownerDoc({ plannedFor: "2026-02-01" })));
+      await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.updateOwner(OWNER, "conv-1", { plannedFor: null, updatedAt: T2 }));
       const stored = await store.getOwner(OWNER, "conv-1");
       expect(stored?.plannedFor).toBeNull();
       expect(stored?.updatedAt).toEqual(T2);
       expect(stored?.teamId).toBe("team-a");
-      await expect(store.runTransaction(async (tx) => tx.updateOwner(OWNER, "absent", { status: "completed" }))).rejects.toThrow();
+      await expect(store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.updateOwner(OWNER, "absent", { status: "completed" }))).rejects.toThrow();
       expect(await store.getOwner(OWNER, "absent")).toBeUndefined();
     });
 
     it("refuses an update that sets no canonical key, as the Admin SDK does", async () => {
-      await store.runTransaction(async (tx) => tx.createOwner(OWNER, "conv-1", ownerDoc()));
-      await expect(store.runTransaction(async (tx) => tx.updateOwner(OWNER, "conv-1", {}))).rejects.toThrow();
-      await expect(store.runTransaction(async (tx) => tx.updateOwner(OWNER, "conv-1", { status: undefined }))).rejects.toThrow();
+      await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.createOwner(OWNER, "conv-1", ownerDoc()));
+      await expect(store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.updateOwner(OWNER, "conv-1", {}))).rejects.toThrow();
+      await expect(store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.updateOwner(OWNER, "conv-1", { status: undefined }))).rejects.toThrow();
       expect((await store.getOwner(OWNER, "conv-1"))?.status).toBe("open");
     });
 
     it("copies a Date in an update, so the caller's later change does not reach the stored document", async () => {
-      await store.runTransaction(async (tx) => tx.createOwner(OWNER, "conv-1", ownerDoc()));
+      await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.createOwner(OWNER, "conv-1", ownerDoc()));
       const updatedAt = new Date(T2);
-      await store.runTransaction(async (tx) => tx.updateOwner(OWNER, "conv-1", { updatedAt }));
+      await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.updateOwner(OWNER, "conv-1", { updatedAt }));
       updatedAt.setFullYear(1999);
       expect((await store.getOwner(OWNER, "conv-1"))?.updatedAt).toEqual(T2);
     });
 
     it("deleteOwner removes the document, and deleting an absent document is not an error", async () => {
-      await store.runTransaction(async (tx) => tx.createOwner(OWNER, "conv-1", ownerDoc()));
-      await store.runTransaction(async (tx) => {
+      await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.createOwner(OWNER, "conv-1", ownerDoc()));
+      await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => {
         tx.deleteOwner(OWNER, "conv-1");
         tx.deleteOwner(OWNER, "never-existed");
       });
@@ -201,7 +202,7 @@ describe.each(implementations)("conversation store contract — $name", ({ creat
     });
 
     it("returns copies: changing a returned value does not change the stored document", async () => {
-      await store.runTransaction(async (tx) => tx.createOwner(OWNER, "conv-1", ownerDoc()));
+      await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.createOwner(OWNER, "conv-1", ownerDoc()));
       const first = await store.getOwner(OWNER, "conv-1");
       if (first?.createdAt instanceof Date) first.createdAt.setFullYear(1999);
       if (first) first.status = "completed";
@@ -213,7 +214,7 @@ describe.each(implementations)("conversation store contract — $name", ({ creat
 
   describe("bounded owner reads", () => {
     it("lists the window newest first and leaves out documents without createdAt", async () => {
-      await store.runTransaction(async (tx) => {
+      await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => {
         tx.createOwner(OWNER, "old", ownerDoc({ createdAt: T1 }));
         tx.createOwner(OWNER, "new", ownerDoc({ createdAt: T3 }));
         tx.createOwner(OWNER, "mid", ownerDoc({ createdAt: T2 }));
@@ -245,7 +246,7 @@ describe.each(implementations)("conversation store contract — $name", ({ creat
     });
 
     it("counts every owner document, including malformed and missing-createdAt documents", async () => {
-      await store.runTransaction(async (tx) => tx.createOwner(OWNER, "good", ownerDoc()));
+      await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.createOwner(OWNER, "good", ownerDoc()));
       harness.seedRawOwner(OWNER, "no-created-at", { status: "open" });
       harness.seedRawOwner("someone-else", "other", { createdAt: T1 });
       expect(await store.countOwner(OWNER)).toBe(2);
@@ -254,7 +255,7 @@ describe.each(implementations)("conversation store contract — $name", ({ creat
 
   describe("participant index", () => {
     it("writes exactly the two index keys and reads them back", async () => {
-      await store.runTransaction(async (tx) => tx.setParticipation(CALLER, "conv-1", { ownerUid: OWNER, invitedAt: T1 }));
+      await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.setParticipation(CALLER, "conv-1", { ownerUid: OWNER, invitedAt: T1 }));
       expect(await store.getParticipation(CALLER, "conv-1")).toEqual({ ownerUid: OWNER, invitedAt: T1 });
     });
 
@@ -263,7 +264,7 @@ describe.each(implementations)("conversation store contract — $name", ({ creat
         ownerUid: string;
         invitedAt: Date;
       };
-      await store.runTransaction(async (tx) => tx.setParticipation(CALLER, "conv-1", withExtra));
+      await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.setParticipation(CALLER, "conv-1", withExtra));
       expect(Object.keys((await store.getParticipation(CALLER, "conv-1")) ?? {}).sort()).toEqual(["invitedAt", "ownerUid"]);
     });
 
@@ -272,7 +273,7 @@ describe.each(implementations)("conversation store contract — $name", ({ creat
     });
 
     it("lists the window by invitedAt newest first, and leaves out entries without invitedAt", async () => {
-      await store.runTransaction(async (tx) => {
+      await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => {
         tx.setParticipation(CALLER, "early", { ownerUid: OWNER, invitedAt: T1 });
         tx.setParticipation(CALLER, "late", { ownerUid: OWNER, invitedAt: T3 });
       });
@@ -284,7 +285,7 @@ describe.each(implementations)("conversation store contract — $name", ({ creat
     });
 
     it("keeps the index subtree of one caller apart from the owner subtree", async () => {
-      await store.runTransaction(async (tx) => {
+      await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => {
         tx.createOwner(CALLER, "conv-1", ownerDoc());
         tx.setParticipation(OWNER, "conv-2", { ownerUid: CALLER, invitedAt: T1 });
       });
@@ -296,7 +297,7 @@ describe.each(implementations)("conversation store contract — $name", ({ creat
 
   describe("transactions across both subtrees", () => {
     it("commits the owner and index writes together", async () => {
-      await store.runTransaction(async (tx) => {
+      await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => {
         tx.createOwner(OWNER, "conv-1", ownerDoc());
         tx.setParticipation(CALLER, "conv-1", { ownerUid: OWNER, invitedAt: T1 });
       });
@@ -306,7 +307,7 @@ describe.each(implementations)("conversation store contract — $name", ({ creat
 
     it("commits neither write when the second write fails", async () => {
       await expect(
-        store.runTransaction(async (tx) => {
+        store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => {
           tx.createOwner(OWNER, "conv-1", ownerDoc());
           await Promise.resolve();
           throw new Error("injected failure on the second write");
@@ -317,7 +318,7 @@ describe.each(implementations)("conversation store contract — $name", ({ creat
 
     it("rejects a read after a write, and commits nothing", async () => {
       await expect(
-        store.runTransaction(async (tx) => {
+        store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => {
           tx.createOwner(OWNER, "conv-1", ownerDoc());
           await tx.getOwner(OWNER, "conv-1");
         }),
@@ -326,8 +327,8 @@ describe.each(implementations)("conversation store contract — $name", ({ creat
     });
 
     it("reads inside the transaction see the committed state", async () => {
-      await store.runTransaction(async (tx) => tx.createOwner(OWNER, "conv-1", ownerDoc()));
-      const seen = await store.runTransaction(async (tx) => (await tx.getOwner(OWNER, "conv-1"))?.teamId);
+      await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.createOwner(OWNER, "conv-1", ownerDoc()));
+      const seen = await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => (await tx.getOwner(OWNER, "conv-1"))?.teamId);
       expect(seen).toBe("team-a");
     });
   });

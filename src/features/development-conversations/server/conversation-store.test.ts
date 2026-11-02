@@ -1,9 +1,11 @@
 import { readFileSync } from "node:fs";
 import { Timestamp } from "firebase-admin/firestore";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ErasureWriteRefused } from "../../auth/server/erasure-write-fence";
 import { getDefaultConversationStore } from "./conversation-store";
 import { createAdminFirestoreDouble, type AdminFirestoreDouble } from "./conversation-store-test-support";
 import { CONVERSATION_RAW_READ_LIMIT, type OwnerDocumentWrite } from "./conversation-store-types";
+import { issueErasureOwnerCleanupCapability } from "./erasure-owner-cleanup-capability";
 
 /**
  * Admin-store specifics: the literal storage paths, the bounded query shapes, the Timestamp boundary, error propagation
@@ -55,12 +57,12 @@ describe("Admin conversation store", () => {
 
   describe("paths", () => {
     it("writes the owner document under the owner's conversations subtree", async () => {
-      await getDefaultConversationStore().runTransaction(async (tx) => tx.createOwner("owner-1", "conv-1", ownerDoc()));
+      await getDefaultConversationStore().runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.createOwner("owner-1", "conv-1", ownerDoc()));
       expect([...double.documents.keys()]).toEqual([OWNER_PATH]);
     });
 
     it("writes the index document under the participant's index subtree, keyed by the participant uid", async () => {
-      await getDefaultConversationStore().runTransaction(async (tx) =>
+      await getDefaultConversationStore().runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) =>
         tx.setParticipation("participant-1", "conv-1", { ownerUid: "owner-1", invitedAt: T1 }),
       );
       expect([...double.documents.keys()]).toEqual([INDEX_PATH]);
@@ -69,7 +71,7 @@ describe("Admin conversation store", () => {
 
   describe("write shape", () => {
     it("persists exactly the sixteen canonical keys, the dates as Timestamps, and the envelope as given", async () => {
-      await getDefaultConversationStore().runTransaction(async (tx) => tx.createOwner("owner-1", "conv-1", ownerDoc()));
+      await getDefaultConversationStore().runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.createOwner("owner-1", "conv-1", ownerDoc()));
       const stored = double.documents.get(OWNER_PATH) ?? {};
       expect(Object.keys(stored).sort()).toEqual(
         [
@@ -98,7 +100,7 @@ describe("Admin conversation store", () => {
     });
 
     it("persists the index as exactly ownerUid and a Timestamp invitedAt", async () => {
-      await getDefaultConversationStore().runTransaction(async (tx) =>
+      await getDefaultConversationStore().runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) =>
         tx.setParticipation("participant-1", "conv-1", { ownerUid: "owner-1", invitedAt: T1 }),
       );
       const stored = double.documents.get(INDEX_PATH) ?? {};
@@ -107,8 +109,8 @@ describe("Admin conversation store", () => {
     });
 
     it("patches only the given keys, and writes Timestamps for dates in the patch", async () => {
-      await getDefaultConversationStore().runTransaction(async (tx) => tx.createOwner("owner-1", "conv-1", ownerDoc()));
-      await getDefaultConversationStore().runTransaction(async (tx) => tx.updateOwner("owner-1", "conv-1", { updatedAt: T2, plannedFor: null }));
+      await getDefaultConversationStore().runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.createOwner("owner-1", "conv-1", ownerDoc()));
+      await getDefaultConversationStore().runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.updateOwner("owner-1", "conv-1", { updatedAt: T2, plannedFor: null }));
       const stored = double.documents.get(OWNER_PATH) ?? {};
       expect(stored.updatedAt).toBeInstanceOf(Timestamp);
       expect(stored.plannedFor).toBeNull();
@@ -159,7 +161,10 @@ describe("Admin conversation store", () => {
       // Count aggregations are bounded by the collection (BR-37) and need no limit; every other list read must have one.
       const statements = CONVERSATION_SOURCE.split(";");
       const listed = statements.filter(
-        (statement) => statement.includes("subtree(") && statement.includes(".get()") && !statement.includes(".count()"),
+        (statement) =>
+          (statement.includes("ownerConversationsCollection(") || statement.includes("participationIndexCollection(")) &&
+          statement.includes(".get()") &&
+          !statement.includes(".count()"),
       );
       expect(listed.length).toBeGreaterThan(0);
       for (const statement of listed) expect(statement).toContain(".limit(");
@@ -186,5 +191,75 @@ describe("Admin conversation store", () => {
       holder.db = { collection: () => { throw failure; } };
       await expect(getDefaultConversationStore().getOwner("owner-1", "conv-1")).rejects.toBe(failure);
     });
+  });
+});
+
+describe("owner transaction fence (TASK-027, BR-4(b))", () => {
+  let fenceDouble: AdminFirestoreDouble;
+
+  beforeEach(() => {
+    fenceDouble = createAdminFirestoreDouble();
+    holder.db = fenceDouble.db;
+  });
+
+  it("commits the owner write when no erasure record exists", async () => {
+    await getDefaultConversationStore().runOwnerTransaction("owner-1", async (tx) => tx.createOwner("owner-1", "conv-1", ownerDoc()));
+
+    expect(fenceDouble.documents.has(OWNER_PATH)).toBe(true);
+  });
+
+  it("refuses before any owner write when an erasure record exists, and writes nothing", async () => {
+    fenceDouble.documents.set("accountErasures/owner-1", { status: "in_progress" });
+
+    await expect(
+      getDefaultConversationStore().runOwnerTransaction("owner-1", async (tx) => tx.createOwner("owner-1", "conv-1", ownerDoc())),
+    ).rejects.toBeInstanceOf(ErasureWriteRefused);
+    expect(fenceDouble.documents.has(OWNER_PATH)).toBe(false);
+  });
+
+  it("refuses a malformed erasure record too (fail closed)", async () => {
+    fenceDouble.documents.set("accountErasures/owner-1", { status: 7, unexpected: true });
+
+    await expect(
+      getDefaultConversationStore().runOwnerTransaction("owner-1", async (tx) => tx.createOwner("owner-1", "conv-1", ownerDoc())),
+    ).rejects.toBeInstanceOf(ErasureWriteRefused);
+    expect(fenceDouble.documents.has(OWNER_PATH)).toBe(false);
+  });
+});
+
+describe("participant transaction fence (TASK-028, BR-4(b))", () => {
+  let participantDouble: AdminFirestoreDouble;
+
+  beforeEach(() => {
+    participantDouble = createAdminFirestoreDouble();
+    holder.db = participantDouble.db;
+  });
+
+  it("commits the participant write when the caller has no erasure record", async () => {
+    participantDouble.documents.set(INDEX_PATH, { ownerUid: "owner-1", invitedAt: T1 });
+
+    await getDefaultConversationStore().runParticipantTransaction("participant-1", async (tx) =>
+      tx.deleteParticipation("participant-1", "conv-1"),
+    );
+
+    expect(participantDouble.documents.has(INDEX_PATH)).toBe(false);
+  });
+
+  it("refuses before any participant write when the caller's erasure record exists, and changes nothing", async () => {
+    participantDouble.documents.set(INDEX_PATH, { ownerUid: "owner-1", invitedAt: T1 });
+    participantDouble.documents.set("accountErasures/participant-1", { status: "in_progress" });
+
+    await expect(
+      getDefaultConversationStore().runParticipantTransaction("participant-1", async (tx) => tx.deleteParticipation("participant-1", "conv-1")),
+    ).rejects.toBeInstanceOf(ErasureWriteRefused);
+    expect(participantDouble.documents.has(INDEX_PATH)).toBe(true);
+  });
+
+  it("does not run the participant work when the caller's erasure record exists", async () => {
+    participantDouble.documents.set("accountErasures/participant-1", { status: "in_progress" });
+    const work = vi.fn(async () => undefined);
+
+    await expect(getDefaultConversationStore().runParticipantTransaction("participant-1", work)).rejects.toBeInstanceOf(ErasureWriteRefused);
+    expect(work).not.toHaveBeenCalled();
   });
 });

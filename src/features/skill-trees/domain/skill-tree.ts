@@ -34,9 +34,9 @@ export interface SkillTreeRecord {
   name: string;
   nodes: SkillNode[];
   createdAt: Date;
-  createdBy: string;
+  createdBy: string | null;
   updatedAt?: Date;
-  updatedBy?: string;
+  updatedBy?: string | null;
 }
 
 /**
@@ -80,7 +80,7 @@ export function isValidSkillTree(data: unknown): data is SkillTreeRecord {
     isNonEmptyString(record.name) &&
     isValidNodesArray(record.nodes) &&
     isValidDate(record.createdAt) &&
-    isNonEmptyString(record.createdBy) &&
+    isNullableActor(record.createdBy) &&
     isValidUpdatedPair(record.updatedAt, record.updatedBy)
   );
 }
@@ -120,7 +120,7 @@ function isValidUpdatedPair(updatedAt: unknown, updatedBy: unknown): boolean {
     return true;
   }
 
-  return isValidDate(updatedAt) && isNonEmptyString(updatedBy);
+  return isValidDate(updatedAt) && isNullableActor(updatedBy);
 }
 
 function isNonEmptyString(value: unknown): value is string {
@@ -129,4 +129,12 @@ function isNonEmptyString(value: unknown): value is string {
 
 function isValidDate(value: unknown): value is Date {
   return value instanceof Date && !Number.isNaN(value.getTime());
+}
+
+/**
+ * An actor uid, or exactly `null` once that account was erased (account-erasure TASK-023, SPEC A-2). Any other value,
+ * including an empty string or a non-string, is malformed.
+ */
+function isNullableActor(value: unknown): value is string | null {
+  return value === null || isNonEmptyString(value);
 }

@@ -1,6 +1,7 @@
 import { Timestamp } from "firebase-admin/firestore";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { applyGoalChange, createGoal, parseStoredGoal, type Goal } from "../domain/goal";
+import { ErasureWriteRefused } from "../../auth/server/erasure-write-fence";
 import { getDefaultGoalStore } from "./goal-store";
 
 const holder = vi.hoisted(() => ({ db: undefined as unknown }));
@@ -14,6 +15,8 @@ interface Script {
   docData?: Data;
   count?: number;
   fail?: Error;
+  /** The `accountErasures/{uid}` record the fence read sees; absent by default (TASK-026). */
+  erasure?: unknown;
 }
 
 /** Recording double of the Admin Firestore surface the store uses; records the exact call chain, never contacts Firebase. */
@@ -72,11 +75,21 @@ function createRecordingDb(script: Script = {}) {
         async get(ref: { path: string; id: string }) {
           log.push(`tx.get|${ref.path}`);
           fail();
+          if (ref.path.startsWith("accountErasures/")) {
+            return { exists: script.erasure !== undefined, id: ref.id, data: () => script.erasure };
+          }
           return { exists: script.docData !== undefined, id: ref.id, data: () => script.docData };
         },
         set(ref: { path: string }, data: Data) {
           log.push(`tx.set|${ref.path}`);
           written.push({ op: "set", path: ref.path, data });
+        },
+        create(ref: { path: string }, data: Data) {
+          log.push(`tx.create|${ref.path}`);
+          written.push({ op: "create", path: ref.path, data });
+        },
+        delete(ref: { path: string }) {
+          log.push(`tx.delete|${ref.path}`);
         },
       });
     },
@@ -121,8 +134,9 @@ describe("goal store (Admin SDK) — owner-scoped paths", () => {
     await store.runTransaction("owner-a", "goal1", async (tx) => tx.read());
     await store.delete("owner-a", "goal1");
     expect(log.length).toBeGreaterThan(0);
-    for (const entry of log.filter((e) => e !== "runTransaction")) {
-      expect(entry.replace(/^tx\.(get|set)\|/, "").startsWith(PATH)).toBe(true);
+    // The erasure fence read is the one read outside the goals subtree (TASK-026, BR-4(b)).
+    for (const entry of log.filter((e) => e !== "runTransaction" && !e.startsWith("tx.get|accountErasures/"))) {
+      expect(entry.replace(/^tx\.(get|set|create|delete)\|/, "").startsWith(PATH)).toBe(true);
     }
   });
 
@@ -132,7 +146,9 @@ describe("goal store (Admin SDK) — owner-scoped paths", () => {
     await store.delete("owner-b", "same-id");
     expect(log).toEqual([
       "userDevelopment/owner-b/goals|orderBy(createdAt,desc)|limit(101)|get",
-      "userDevelopment/owner-b/goals/same-id|delete",
+      "runTransaction",
+      "tx.get|accountErasures/owner-b",
+      "tx.delete|userDevelopment/owner-b/goals/same-id",
     ]);
   });
 
@@ -230,7 +246,7 @@ describe("goal store (Admin SDK) — create and canonical keys (BR-6, BR-7, BR-1
   it("writes exactly the canonical keys of a minimal active goal, via create (never overwrite)", async () => {
     const { written, log } = install();
     const id = await store.create("u1", activeGoal());
-    expect(log).toEqual([`userDevelopment/u1/goals/${id}|create`]);
+    expect(log).toEqual(["runTransaction", "tx.get|accountErasures/u1", `tx.create|userDevelopment/u1/goals/${id}`]);
     expect(written).toHaveLength(1);
     expect(written[0].op).toBe("create");
     expect(Object.keys(written[0].data).sort()).toEqual(["createdAt", "status", "title", "updatedAt"]);
@@ -266,7 +282,11 @@ describe("goal store (Admin SDK) — create and canonical keys (BR-6, BR-7, BR-1
     const injected = install();
     const id = await getDefaultGoalStore({ generateId: () => "fixedGoalId123" }).create("u1", activeGoal());
     expect(id).toBe("fixedGoalId123");
-    expect(injected.log).toEqual(["userDevelopment/u1/goals/fixedGoalId123|create"]);
+    expect(injected.log).toEqual([
+      "runTransaction",
+      "tx.get|accountErasures/u1",
+      "tx.create|userDevelopment/u1/goals/fixedGoalId123",
+    ]);
 
     install();
     const auto = await store.create("u1", activeGoal());
@@ -276,7 +296,7 @@ describe("goal store (Admin SDK) — create and canonical keys (BR-6, BR-7, BR-1
   it.each(["x", "_", "-", "_a", "a__", "a".repeat(128)])("accepts the boundary-valid goal id %j", async (goalId) => {
     const { log } = install();
     await store.delete("owner-a", goalId);
-    expect(log).toEqual([`userDevelopment/owner-a/goals/${goalId}|delete`]);
+    expect(log).toEqual(["runTransaction", "tx.get|accountErasures/owner-a", `tx.delete|userDevelopment/owner-a/goals/${goalId}`]);
   });
 
   it("persists only the canonical keys even if the goal object carries extra properties", async () => {
@@ -352,7 +372,12 @@ describe("goal store (Admin SDK) — transaction and delete", () => {
       await tx.read();
       tx.write(goal);
     });
-    expect(log).toEqual(["runTransaction", "tx.get|userDevelopment/u1/goals/goal1", "tx.set|userDevelopment/u1/goals/goal1"]);
+    expect(log).toEqual([
+      "runTransaction",
+      "tx.get|accountErasures/u1",
+      "tx.get|userDevelopment/u1/goals/goal1",
+      "tx.set|userDevelopment/u1/goals/goal1",
+    ]);
     expect(Object.keys(written[0].data).sort()).toEqual(["completedAt", "createdAt", "status", "title", "updatedAt"]);
   });
 
@@ -370,9 +395,36 @@ describe("goal store (Admin SDK) — transaction and delete", () => {
     await expect(store.runTransaction("u1", "goal1", async (tx) => tx.write(activeGoal()))).rejects.toThrow("not read as existing");
   });
 
-  it("deletes by owner and id without any read", async () => {
+  it("deletes by owner and id, reading only the erasure fence first", async () => {
     const { log } = install({ docData: { malformed: true } });
     await store.delete("u1", "goal1");
-    expect(log).toEqual(["userDevelopment/u1/goals/goal1|delete"]);
+    expect(log).toEqual(["runTransaction", "tx.get|accountErasures/u1", "tx.delete|userDevelopment/u1/goals/goal1"]);
+  });
+});
+
+describe("goal store (Admin SDK) — erasure fence on every write (TASK-026, BR-4(b))", () => {
+  it.each([
+    ["a valid in-progress record", { status: "in_progress" }],
+    ["a malformed record", "not-a-record"],
+  ])("create with %s refuses as ErasureWriteRefused and writes nothing", async (_label, erasure) => {
+    const { log, written } = install({ erasure });
+    await expect(store.create("u1", activeGoal())).rejects.toBeInstanceOf(ErasureWriteRefused);
+    expect(log).toEqual(["runTransaction", "tx.get|accountErasures/u1"]);
+    expect(written).toEqual([]);
+  });
+
+  it("delete with an erasure record refuses and deletes nothing", async () => {
+    const { log } = install({ erasure: { status: "in_progress" } });
+    await expect(store.delete("u1", "goal1")).rejects.toBeInstanceOf(ErasureWriteRefused);
+    expect(log).toEqual(["runTransaction", "tx.get|accountErasures/u1"]);
+  });
+
+  it("a transaction with an erasure record refuses before the goal is read or written", async () => {
+    const { log, written } = install({ erasure: "not-a-record", docData: { title: "x" } });
+    const work = vi.fn(async () => "done");
+    await expect(store.runTransaction("u1", "goal1", work)).rejects.toBeInstanceOf(ErasureWriteRefused);
+    expect(work).not.toHaveBeenCalled();
+    expect(log).toEqual(["runTransaction", "tx.get|accountErasures/u1"]);
+    expect(written).toEqual([]);
   });
 });

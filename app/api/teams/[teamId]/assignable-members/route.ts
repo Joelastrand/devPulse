@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { listAssignableMembers } from "../../../../../src/features/teams/server/list-assignable-members";
+import { authRefusalStatus, isAuthRefusal } from "../../../../../src/features/auth/server/auth-refusal";
 
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
@@ -22,7 +23,7 @@ export async function GET(
 
   if (!result.ok) {
     const status =
-      result.error === "unauthenticated" ? 401 : result.error === "forbidden" ? 403 : 500;
+      isAuthRefusal(result.error) ? authRefusalStatus(result.error) : result.error === "forbidden" ? 403 : 500;
     return NextResponse.json({ status: result.error }, { status });
   }
 

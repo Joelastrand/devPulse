@@ -1,10 +1,10 @@
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../domain/app-admin";
 import type { Team } from "../domain/team";
 import { requireAppAdmin } from "./require-app-admin";
-
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
 const COLLECTION_NAME = "teams";
 
 /**
@@ -35,7 +35,7 @@ function getDefaultCollection(): TeamListCollection {
 
 export type ListTeamsResult =
   | { ok: true; teams: Team[] }
-  | { ok: false; error: "unauthenticated" | "forbidden" | "read_failed" };
+  | { ok: false; error: AuthRefusal | "forbidden" | "read_failed" };
 
 export interface ListTeamsDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];

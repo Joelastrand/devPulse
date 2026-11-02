@@ -1,6 +1,7 @@
 import "server-only";
 import { Timestamp } from "firebase-admin/firestore";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
+import { runFencedTransaction } from "../../auth/server/erasure-write-fence";
 import { toStoredGoalData, type Goal } from "../domain/goal";
 import {
   GOAL_RAW_READ_LIMIT,
@@ -63,13 +64,16 @@ function toRawGoalData(data: Record<string, unknown>): RawGoalData {
  */
 export function getDefaultGoalStore(options: { generateId?: () => string } = {}): GoalStore {
   return {
-    async create(ownerUid, goal) {
-      const collection = goalsCollection(ownerUid);
+    async create(owner, goal) {
+      const collection = goalsCollection(owner);
       const injectedId = options.generateId?.();
       if (injectedId !== undefined) assertGoalIdSegment(injectedId);
       const ref = injectedId !== undefined ? collection.doc(injectedId) : collection.doc();
       assertGoalIdSegment(ref.id);
-      await ref.create(toFirestoreGoalData(goal));
+      // The erasure fence is read first, in the same transaction (TASK-026, BR-4(b)).
+      await runFencedTransaction(getFirestoreDb(), owner, async (tx) => {
+        tx.create(ref, toFirestoreGoalData(goal));
+      });
       return ref.id;
     },
 
@@ -107,9 +111,10 @@ export function getDefaultGoalStore(options: { generateId?: () => string } = {})
       return snapshot.exists ? toRawGoalData(snapshot.data() ?? {}) : undefined;
     },
 
-    async runTransaction(ownerUid, goalId, work) {
-      const ref = goalRef(ownerUid, goalId);
-      return getFirestoreDb().runTransaction(async (tx) => {
+    async runTransaction(owner, goalId, work) {
+      const ref = goalRef(owner, goalId);
+      // The fence read precedes the goal read and every buffered write (TASK-026, BR-4(b)).
+      return runFencedTransaction(getFirestoreDb(), owner, async (tx) => {
         let existed = false;
         return work({
           async read() {
@@ -125,8 +130,11 @@ export function getDefaultGoalStore(options: { generateId?: () => string } = {})
       });
     },
 
-    async delete(ownerUid, goalId) {
-      await goalRef(ownerUid, goalId).delete();
+    async delete(owner, goalId) {
+      const ref = goalRef(owner, goalId);
+      await runFencedTransaction(getFirestoreDb(), owner, async (tx) => {
+        tx.delete(ref);
+      });
     },
   };
 }

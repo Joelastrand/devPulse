@@ -41,11 +41,11 @@ export interface RoadmapItemRecord {
   ownerRef?: string;
   completedAt?: Date;
   archivedAt?: Date;
-  archivedBy?: string;
+  archivedBy?: string | null;
   createdAt: Date;
-  createdBy: string;
+  createdBy: string | null;
   updatedAt: Date;
-  updatedBy: string;
+  updatedBy: string | null;
 }
 
 /**
@@ -111,9 +111,9 @@ export function parseRoadmapItem(
     !isRoadmapPriority(r.priority) ||
     !isRoadmapStatus(r.status) ||
     !isValidDate(r.createdAt) ||
-    !isNonEmptyString(r.createdBy) ||
+    !isNullableActor(r.createdBy) ||
     !isValidDate(r.updatedAt) ||
-    !isNonEmptyString(r.updatedBy)
+    !isNullableActor(r.updatedBy)
   ) {
     return null;
   }
@@ -140,7 +140,7 @@ export function parseRoadmapItem(
   if (archivedAtPresent !== archivedByPresent) {
     return null;
   }
-  if (archivedAtPresent && (!isValidDate(r.archivedAt) || !isNonEmptyString(r.archivedBy))) {
+  if (archivedAtPresent && (!isValidDate(r.archivedAt) || !isNullableActor(r.archivedBy))) {
     return null;
   }
 
@@ -161,7 +161,7 @@ export function parseRoadmapItem(
   if (isValidDate(r.completedAt)) item.completedAt = r.completedAt;
   if (archivedAtPresent) {
     item.archivedAt = r.archivedAt as Date;
-    item.archivedBy = r.archivedBy as string;
+    item.archivedBy = r.archivedBy as string | null;
   }
   return item;
 }
@@ -193,4 +193,12 @@ function isNonEmptyString(value: unknown): value is string {
 
 function isValidDate(value: unknown): value is Date {
   return value instanceof Date && !Number.isNaN(value.getTime());
+}
+
+/**
+ * An actor uid, or exactly `null` once that account was erased (account-erasure TASK-024, SPEC A-4). Any other value,
+ * including an empty string or a non-string, is malformed.
+ */
+function isNullableActor(value: unknown): value is string | null {
+  return value === null || isNonEmptyString(value);
 }

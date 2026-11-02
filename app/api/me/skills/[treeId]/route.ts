@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { clearOwnSkillLevel } from "../../../../../src/features/skill-profiles/server/clear-own-skill-level";
 import { setOwnSkillLevel } from "../../../../../src/features/skill-profiles/server/set-own-skill-level";
-
+import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../../src/features/auth/server/auth-refusal";
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 type RouteContext = { params: Promise<{ treeId: string }> };
@@ -46,14 +46,14 @@ function extractBearerToken(header: string | null): string {
 
 function statusForError(
   error:
-    | "unauthenticated"
+    | AuthRefusal
     | "invalid_request"
     | "invalid_input"
     | "skill_unavailable"
     | "profile_unreadable"
     | "persistence_failed",
 ): number {
-  if (error === "unauthenticated") return 401;
+  if (isAuthRefusal(error)) return authRefusalStatus(error);
   if (error === "invalid_request" || error === "invalid_input") return 400;
   if (error === "skill_unavailable") return 404;
   if (error === "profile_unreadable") return 409;

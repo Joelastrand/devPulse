@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { completeConversation, type CompleteConversationDeps } from "./complete-conversation";
-import type { ConversationStore, ConversationTransaction, RawConversationData } from "./conversation-store-types";
+import type { ConversationTransaction, RawConversationData } from "./conversation-store-types";
 import { createFakeContentCodec, type FakeContentCodec } from "./fake-content-codec";
 import { createFakeConversationStore, type FakeConversationStore } from "./fake-conversation-store";
 import { type FakeTeamEligibilityState, createFakeTeamEligibilityReader } from "./fake-team-eligibility";
@@ -60,18 +60,18 @@ async function seed(
   }
 }
 
-async function ownerOf(store: ConversationStore, ownerUid = OWNER_UID): Promise<RawConversationData> {
+async function ownerOf(store: FakeConversationStore, ownerUid = OWNER_UID): Promise<RawConversationData> {
   const raw = await store.getOwner(ownerUid, CONVERSATION_ID);
   if (raw === undefined) throw new Error("fixture document missing");
   return raw;
 }
 
-async function indexOf(store: ConversationStore, callerUid = PARTICIPANT_UID): Promise<RawConversationData | undefined> {
+async function indexOf(store: FakeConversationStore, callerUid = PARTICIPANT_UID): Promise<RawConversationData | undefined> {
   return store.getParticipation(callerUid, CONVERSATION_ID);
 }
 
 /** Owner and index documents together, so a test can prove that a refused or failed call changed nothing. */
-async function stateOf(store: ConversationStore) {
+async function stateOf(store: FakeConversationStore) {
   return { owner: await store.getOwner(OWNER_UID, CONVERSATION_ID), index: await indexOf(store) };
 }
 
@@ -95,7 +95,7 @@ function envelopeOf(raw: RawConversationData) {
 }
 
 /** A store whose transactions run `work` through `decorate`, so one write inside the completion can be made to fail. */
-function decoratedStore(store: FakeConversationStore, decorate: (tx: ConversationTransaction) => ConversationTransaction): ConversationStore {
+function decoratedStore(store: FakeConversationStore, decorate: (tx: ConversationTransaction) => ConversationTransaction): FakeConversationStore {
   return {
     ...store,
     runTransaction: <T>(work: (tx: ConversationTransaction) => Promise<T>) => store.runTransaction<T>((tx) => work(decorate(tx))),
@@ -280,7 +280,7 @@ describe("completeConversation: remaining failure cases and commit order (BR-47,
     const { store, deps } = setupValue;
     await seed(setupValue, "pending");
     const before = await stateOf(store);
-    const failingCommit: ConversationStore = {
+    const failingCommit: FakeConversationStore = {
       ...store,
       runTransaction: <T>(work: (tx: ConversationTransaction) => Promise<T>) =>
         store.runTransaction<T>(async (tx) => {

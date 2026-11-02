@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { removeTeamMember } from "../../../../../../../src/features/teams/server/remove-team-member";
 import { setTeamMemberRole } from "../../../../../../../src/features/teams/server/set-team-member-role";
-
+import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../../../../src/features/auth/server/auth-refusal";
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
@@ -21,8 +21,8 @@ export async function DELETE(
 
   if (!result.ok) {
     const status =
-      result.error === "unauthenticated"
-        ? 401
+      isAuthRefusal(result.error)
+        ? authRefusalStatus(result.error)
         : result.error === "forbidden"
           ? 403
           : 500;
@@ -76,9 +76,9 @@ export async function PATCH(
 
 /** `team_disabled` is 400, matching the other admin routes that gate a write on team status (invitations, skill tracking). */
 function statusForRoleError(
-  error: "unauthenticated" | "forbidden" | "invalid_input" | "not_a_member" | "team_disabled" | "persistence_failed",
+  error: AuthRefusal | "forbidden" | "invalid_input" | "not_a_member" | "team_disabled" | "persistence_failed",
 ): number {
-  if (error === "unauthenticated") return 401;
+  if (isAuthRefusal(error)) return authRefusalStatus(error);
   if (error === "forbidden") return 403;
   if (error === "invalid_input" || error === "team_disabled") return 400;
   if (error === "not_a_member") return 404;

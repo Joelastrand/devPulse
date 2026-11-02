@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { deleteThread } from "../../../../../../../src/features/forum/server/delete-thread";
 import { getThreadWithReplies } from "../../../../../../../src/features/forum/server/get-thread-with-replies";
+import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../../../../src/features/auth/server/auth-refusal";
 
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
@@ -25,6 +26,10 @@ export async function GET(
     return NextResponse.json({ status: result.error }, { status });
   }
 
+  // The erased-thread placeholder nests its replies (SPEC "Reader DTO for the placeholder"); an active thread keeps them beside it.
+  if (!("replies" in result)) {
+    return NextResponse.json({ status: "ok", thread: result.thread }, { status: 200 });
+  }
   return NextResponse.json({ status: "ok", thread: result.thread, replies: result.replies }, { status: 200 });
 }
 
@@ -52,15 +57,16 @@ function extractBearerToken(header: string | null): string {
   return match ? match[1] : "";
 }
 
-function statusForReadError(error: "unauthenticated" | "forbidden" | "not_found" | "read_failed"): number {
-  if (error === "unauthenticated") return 401;
+function statusForReadError(error: AuthRefusal | "forbidden" | "not_found" | "read_failed"): number {
+  if (isAuthRefusal(error)) return authRefusalStatus(error);
   if (error === "forbidden") return 403;
   if (error === "not_found") return 404;
   return 500;
 }
 
-function statusForDeleteError(error: "sign_in_required" | "forbidden" | "not_found" | "persistence_failed"): number {
+function statusForDeleteError(error: AuthRefusal | "sign_in_required" | "forbidden" | "not_found" | "persistence_failed"): number {
   if (error === "sign_in_required") return 401;
+  if (isAuthRefusal(error)) return authRefusalStatus(error);
   if (error === "not_found") return 404;
   if (error === "forbidden") return 403;
   return 500;

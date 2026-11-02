@@ -6,6 +6,8 @@ const BEARER_PATTERN = /^Bearer (.+)$/;
 
 const STATUS: Record<string, number> = {
   unauthenticated: 401,
+  erasure_in_progress: 403,
+  auth_unavailable: 503,
   forbidden: 403,
   invalid_request: 400,
   invalid_input: 400,

@@ -1,4 +1,7 @@
+
+import { isErasureOwnerCleanupCapability } from "./erasure-owner-cleanup-capability";
 import "server-only";
+import { ErasureWriteRefused } from "../../auth/server/erasure-write-fence";
 import { READ_WINDOW } from "../domain/conversation-constants";
 import { createFakeTeamEligibilityReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
 import {
@@ -37,6 +40,8 @@ type Records = Map<string, Record<string, unknown>>;
 
 /** Test-only seams. Production code never receives this type. */
 export interface FakeConversationStore extends ConversationStore {
+  /** Test only: one unfenced transaction across both subtrees. Production code never receives this member. */
+  runTransaction<T>(work: (tx: ConversationTransaction) => Promise<T>): Promise<T>;
   /** Test only: stores a raw document as given, bypassing the canonical write shape, to exercise malformed reads. */
   seedRawOwner(ownerUid: string, conversationId: string, data: RawConversationData): void;
   /** Test only: stores a raw index document as given, bypassing the canonical write shape. */
@@ -120,12 +125,14 @@ function applyOwnerPatch(existing: Record<string, unknown>, patch: OwnerDocument
  * seen by the retry, but a change made during an attempt is not isolated from that attempt's reads.
  */
 export function createFakeConversationStore(
-  options: { generateId?: () => string; teams?: FakeTeamEligibilityState } = {},
+  options: { generateId?: () => string; teams?: FakeTeamEligibilityState; erasingUids?: readonly string[] } = {},
 ): FakeConversationStore {
   let records: Records = new Map();
   let sequence = 0;
   const teams = options.teams ?? emptyTeamFixtures();
   let conflictsLeft = 0;
+  /** Uids whose erasure record exists; the owner transaction refuses for them (TASK-027). */
+  const erasingUids = new Set(options.erasingUids ?? []);
   let beforeRetryHook: ((discardedAttempt: number) => void | Promise<void>) | undefined;
   const generateId = options.generateId ?? (() => {
     sequence += 1;
@@ -157,6 +164,21 @@ export function createFakeConversationStore(
       assertUidSegment(ownerUid);
       return childrenOf(records, ownerPrefix(ownerUid)).length;
     },
+
+    async listOwnerIdsForErasure(ownerUid, limit) {
+      assertUidSegment(ownerUid);
+      return childrenOf(records, ownerPrefix(ownerUid))
+        .slice(0, limit)
+        .map(({ id }) => id);
+    },
+
+    async listParticipationIdsForErasure(callerUid, limit) {
+      assertUidSegment(callerUid);
+      return childrenOf(records, indexPrefix(callerUid))
+        .slice(0, limit)
+        .map(({ id }) => id);
+    },
+
 
     async getOwner(ownerUid, conversationId) {
       const stored = records.get(keyOf(ownerDocumentPath(ownerUid, conversationId)));
@@ -192,6 +214,23 @@ export function createFakeConversationStore(
         records = draft;
         return result;
       }
+    },
+
+    runErasureCleanupTransaction(capability, work) {
+      if (!isErasureOwnerCleanupCapability(capability)) return Promise.reject(new Error("erasure cleanup capability required"));
+      return this.runTransaction(work);
+    },
+
+    runOwnerTransaction(ownerUid, work) {
+      // Mirrors the production fence: a refused owner write runs no work and commits nothing (TASK-027, BR-4(b)).
+      if (erasingUids.has(ownerUid)) return Promise.reject(new ErasureWriteRefused());
+      return this.runTransaction(work);
+    },
+
+    runParticipantTransaction(callerUid, work) {
+      // The participant's own erasure record refuses the write the same way (TASK-028, BR-4(b)).
+      if (erasingUids.has(callerUid)) return Promise.reject(new ErasureWriteRefused());
+      return this.runTransaction(work);
     },
 
     scheduleCommitConflicts(count, beforeRetry) {
@@ -244,6 +283,9 @@ export function createFakeConversationStore(
         if (wrote) throw readAfterWrite();
         const stored = draft.get(keyOf(participationDocumentPath(callerUid, conversationId)));
         return stored === undefined ? undefined : copyRecord(stored);
+      },
+      touchMembership() {
+        wrote = true;
       },
       setParticipation(callerUid, conversationId, index: ParticipationIndexWrite) {
         wrote = true;

@@ -1,10 +1,10 @@
 import "server-only";
 import { getAdminAuth, getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../domain/app-admin";
 import { isValidPendingAccessRequestForTeam } from "../domain/team-access-request";
 import { requireAppAdmin } from "./require-app-admin";
-
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
 const REQUESTS_COLLECTION = "teamAccessRequests";
 
 /** One pending access request row for admin display (BR-30). */
@@ -52,7 +52,7 @@ function defaultGetUser(uid: string) {
 
 export type ListTeamAccessRequestsResult =
   | { ok: true; requests: PendingAccessRequest[] }
-  | { ok: false; error: "unauthenticated" | "forbidden" | "read_failed" };
+  | { ok: false; error: AuthRefusal | "forbidden" | "read_failed" };
 
 export interface ListTeamAccessRequestsDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];

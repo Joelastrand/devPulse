@@ -200,18 +200,23 @@ describe("getThreadWithReplies", () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("expected ok result");
+    if ("status" in result.thread) throw new Error("expected an active thread");
     expect(result.thread.title).toBe("Thread title");
     expect(result.thread.body).toBe("Thread body");
     expect(result.thread.authorTag).toBe(authorTag(TEAM_ID, MEMBER_UID));
     expect(result.thread.isOwnThread).toBe(true);
 
+    if (!("replies" in result)) throw new Error("expected active replies");
+    if (!("replies" in result)) throw new Error("expected active replies");
     expect(result.replies.map((r) => r.replyId)).toEqual(["reply-older", "reply-newer"]);
+    if (!("replies" in result)) throw new Error("expected active replies");
     const older = result.replies[0];
     if (older.isDeleted) throw new Error("expected active reply");
     expect(older.body).toBe("Older reply");
     expect(older.authorTag).toBe(authorTag(TEAM_ID, OTHER_AUTHOR_UID));
     expect(older.isOwnReply).toBe(false);
 
+    if (!("replies" in result)) throw new Error("expected active replies");
     const newer = result.replies[1];
     if (newer.isDeleted) throw new Error("expected active reply");
     expect(newer.body).toBe("Newer reply");
@@ -361,6 +366,7 @@ describe("getThreadWithReplies", () => {
 
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error("expected ok result");
+      if (!("replies" in result)) throw new Error("expected active replies");
       expect(result.replies.map((r) => r.replyId)).toEqual(["valid-reply"]);
     });
 
@@ -376,6 +382,7 @@ describe("getThreadWithReplies", () => {
 
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error("expected ok result");
+      if (!("replies" in result)) throw new Error("expected active replies");
       expect(result.replies.map((r) => r.replyId)).toEqual(["valid-reply"]);
     });
 
@@ -394,6 +401,7 @@ describe("getThreadWithReplies", () => {
 
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error("expected ok result");
+      if (!("replies" in result)) throw new Error("expected active replies");
       expect(result.replies.map((r) => r.replyId)).toEqual(["valid-reply"]);
     });
 
@@ -409,6 +417,7 @@ describe("getThreadWithReplies", () => {
 
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error("expected ok result");
+      if (!("replies" in result)) throw new Error("expected active replies");
       expect(result.replies.map((r) => r.replyId)).toEqual(["own-reply"]);
     });
 
@@ -423,6 +432,7 @@ describe("getThreadWithReplies", () => {
 
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error("expected ok result");
+      if (!("replies" in result)) throw new Error("expected active replies");
       expect(result.replies).toEqual([]);
     });
 
@@ -438,6 +448,7 @@ describe("getThreadWithReplies", () => {
 
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error("expected ok result");
+      if (!("replies" in result)) throw new Error("expected active replies");
       expect(result.replies.map((r) => r.replyId)).toEqual(["valid-reply"]);
     });
   });
@@ -465,8 +476,10 @@ describe("getThreadWithReplies", () => {
 
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error("expected ok result");
+      if (!("replies" in result)) throw new Error("expected active replies");
       expect(result.replies.map((r) => r.replyId)).toEqual(["reply-before", "reply-deleted", "reply-after"]);
 
+      if (!("replies" in result)) throw new Error("expected active replies");
       const deleted = result.replies[1];
       expect(deleted.isDeleted).toBe(true);
       expect(deleted.body).toBeNull();
@@ -542,10 +555,14 @@ describe("getThreadWithReplies", () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("expected ok result");
+    if (!("replies" in result)) throw new Error("expected active replies");
     expect(result.replies).toHaveLength(THREAD_REPLIES_LIMIT);
+    if (!("replies" in result)) throw new Error("expected active replies");
     expect(result.replies[0].replyId).toBe("reply-0");
+    if (!("replies" in result)) throw new Error("expected active replies");
     expect(result.replies[THREAD_REPLIES_LIMIT - 1].replyId).toBe(`reply-${THREAD_REPLIES_LIMIT - 1}`);
 
+    if (!("replies" in result)) throw new Error("expected active replies");
     const createdAtValues = result.replies.map((r) => new Date(r.createdAt).getTime());
     const sorted = [...createdAtValues].sort((a, b) => a - b);
     expect(createdAtValues).toEqual(sorted);
@@ -581,6 +598,7 @@ describe("getThreadWithReplies", () => {
     if (!result.ok) throw new Error("expected ok result");
     for (const forbiddenKey of ["authorUid", "ciphertext", "iv", "authTag", "keyVersion", "deletedAt", "deletedBy", "teamId"]) {
       expect(result.thread).not.toHaveProperty(forbiddenKey);
+      if (!("replies" in result)) throw new Error("expected active replies");
       for (const reply of result.replies) {
         expect(reply).not.toHaveProperty(forbiddenKey);
       }

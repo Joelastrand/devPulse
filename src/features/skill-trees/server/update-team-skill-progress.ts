@@ -1,11 +1,12 @@
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../../teams/domain/app-admin";
 import { requireAppAdmin } from "../../teams/server/require-app-admin";
 import { isValidSkillTree, type SkillTreeRecord } from "../domain/skill-tree";
 import { isValidSkillProgress, skillProgressDocId, type SkillProgressRecord } from "../domain/skill-progress";
-
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
+import { runFencedTransaction, writeRefusalFor } from "../../auth/server/erasure-write-fence";
 const SKILL_TREES_COLLECTION = "skillTrees";
 const SKILL_PROGRESS_COLLECTION = "skillProgress";
 
@@ -27,14 +28,18 @@ export interface SkillProgressDocStore {
   update(docId: string, data: Record<string, unknown>): Promise<void>;
 }
 
-function getDefaultSkillProgressDocStore(): SkillProgressDocStore {
+/** The writer is fenced on `accountErasures/{actorUid}` in the same transaction as the update (TASK-031, W-15). */
+function getDefaultSkillProgressDocStore(actorUid: string): SkillProgressDocStore {
   return {
     async get(docId) {
       const snapshot = await getFirestoreDb().collection(SKILL_PROGRESS_COLLECTION).doc(docId).get();
       return { exists: snapshot.exists, data: () => snapshot.data() };
     },
     async update(docId, data) {
-      await getFirestoreDb().collection(SKILL_PROGRESS_COLLECTION).doc(docId).update(data);
+      const db = getFirestoreDb();
+      await runFencedTransaction(db, actorUid, async (tx) => {
+        tx.update(db.collection(SKILL_PROGRESS_COLLECTION).doc(docId), data);
+      });
     },
   };
 }
@@ -105,7 +110,7 @@ export type UpdateTeamSkillProgressResult =
   | { ok: true }
   | {
       ok: false;
-      error: "unauthenticated" | "forbidden" | "not_tracked" | "tree_not_found" | "invalid_input" | "persistence_failed";
+      error: AuthRefusal | "forbidden" | "not_tracked" | "tree_not_found" | "invalid_input" | "persistence_failed";
     };
 
 export interface UpdateTeamSkillProgressDeps {
@@ -162,7 +167,7 @@ export async function updateTeamSkillProgress(
   }
 
   const docId = skillProgressDocId(teamId, treeId);
-  const progress = deps.progress ?? getDefaultSkillProgressDocStore();
+  const progress = deps.progress ?? getDefaultSkillProgressDocStore(admin.identity.uid);
 
   let progressSnapshot: UpdateTeamSkillProgressDocSnapshot;
   try {
@@ -205,7 +210,7 @@ export async function updateTeamSkillProgress(
   try {
     await progress.update(docId, { currentNodeId: nodeId, updatedAt: now, updatedBy: admin.identity.uid });
     return { ok: true };
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 }

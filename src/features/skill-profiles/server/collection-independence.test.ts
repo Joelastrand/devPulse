@@ -8,6 +8,8 @@ import { setOwnSkillLevel } from "./set-own-skill-level";
  * recording Firestore fake that also holds seeded `skillProgress`,
  * `roadmapItems` and `teamMemberships` documents. A personal level mutation may
  * read/write only `skillProfiles` (and read `skillTrees` for PUT validation).
+ * The one additional read is the erasure fence, `accountErasures/{uid}`, which every
+ * skill-profile write reads first in its own transaction (TASK-025, BR-4(b)).
  */
 const access = vi.hoisted(() => {
   const state = {
@@ -40,6 +42,9 @@ const access = vi.hoisted(() => {
           state.writes.push(ref.collection);
         },
         update(ref: { collection: string; key: string }) {
+          state.writes.push(ref.collection);
+        },
+        delete(ref: { collection: string; key: string }) {
           state.writes.push(ref.collection);
         },
       };
@@ -94,28 +99,67 @@ describe("skill-profile mutations are independent of team/product collections (B
     const result = await setOwnSkillLevel("t", "ts", { level: 3 }, { verifyToken });
 
     expect(result).toEqual({ ok: true, level: 3 });
-    expect([...new Set(access.state.reads)].sort()).toEqual(["skillProfiles", "skillTrees"]);
+    expect([...new Set(access.state.reads)].sort()).toEqual(["accountErasures", "skillProfiles", "skillTrees"]);
     expect(access.state.writes).toEqual(["skillProfiles"]);
     expectNoUnrelatedAccess();
   });
 
-  it("DELETE-one reads and writes only skillProfiles and never touches unrelated collections", async () => {
+  it("DELETE-one reads the fence then the profile, writes only skillProfiles, and never touches unrelated collections", async () => {
     const result = await clearOwnSkillLevel("t", "go", { verifyToken });
 
     expect(result).toEqual({ ok: true, level: null });
-    expect(access.state.reads).toEqual(["skillProfiles"]);
+    expect(access.state.reads).toEqual(["accountErasures", "skillProfiles"]);
     expect(access.state.writes).toEqual(["skillProfiles"]);
     expectNoUnrelatedAccess();
   });
 
-  it("DELETE-all writes only skillProfiles, reads nothing, and never touches unrelated collections", async () => {
+  it("DELETE-all reads only the fence, writes only skillProfiles, and never touches unrelated collections", async () => {
     const result = await deleteOwnSkillProfile("t", { verifyToken });
 
     expect(result).toEqual({ ok: true });
-    expect(access.state.reads).toEqual([]);
+    expect(access.state.reads).toEqual(["accountErasures"]);
     expect(access.state.writes).toEqual(["skillProfiles"]);
-    expect(access.state.touched).toEqual(["skillProfiles"]);
+    expect([...access.state.touched].sort()).toEqual(["accountErasures", "skillProfiles"]);
     expectNoUnrelatedAccess();
+  });
+
+  describe("erasure fence on every skill-profile write (TASK-025, BR-4(b))", () => {
+    it.each([
+      ["a valid in-progress record", { status: "in_progress" }],
+      ["a malformed record", "not-a-record"],
+    ])("PUT with %s refuses as erasure_in_progress, reads nothing else, and writes nothing", async (_label, record) => {
+      access.state.docs.set("accountErasures/user-1", record as Record<string, unknown>);
+
+      const result = await setOwnSkillLevel("t", "ts", { level: 3 }, { verifyToken });
+
+      expect(result).toEqual({ ok: false, error: "erasure_in_progress" });
+      expect(access.state.reads).toEqual(["accountErasures"]);
+      expect(access.state.writes).toEqual([]);
+      expectNoUnrelatedAccess();
+    });
+
+    it("DELETE-one with an erasure record refuses as erasure_in_progress and leaves the level in place", async () => {
+      access.state.docs.set("accountErasures/user-1", { status: "in_progress" });
+
+      const result = await clearOwnSkillLevel("t", "go", { verifyToken });
+
+      expect(result).toEqual({ ok: false, error: "erasure_in_progress" });
+      expect(access.state.writes).toEqual([]);
+      expect(access.state.docs.get("skillProfiles/user-1")).toEqual({ levels: { go: 2 } });
+    });
+
+    it.each([
+      ["a valid in-progress record", { status: "in_progress" }],
+      ["a malformed record", "not-a-record"],
+    ])("DELETE-all with %s refuses as erasure_in_progress and deletes nothing", async (_label, record) => {
+      access.state.docs.set("accountErasures/user-1", record as Record<string, unknown>);
+
+      const result = await deleteOwnSkillProfile("t", { verifyToken });
+
+      expect(result).toEqual({ ok: false, error: "erasure_in_progress" });
+      expect(access.state.reads).toEqual(["accountErasures"]);
+      expect(access.state.writes).toEqual([]);
+    });
   });
 
   it("failed and rejected mutations also leave unrelated collections untouched", async () => {

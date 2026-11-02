@@ -1,7 +1,7 @@
 import "server-only";
 import { FieldPath } from "firebase-admin/firestore";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../../teams/domain/app-admin";
 import { requireAppAdmin } from "../../teams/server/require-app-admin";
 import { isValidTeamStatus, type TeamStatus } from "../../teams/domain/team";
@@ -13,6 +13,7 @@ import {
   type SkillNodeView,
   type SkillTreesReader,
 } from "./list-skill-trees";
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
 
 const SKILL_PROGRESS_COLLECTION = "skillProgress";
 const TEAMS_COLLECTION = "teams";
@@ -47,7 +48,7 @@ export interface OrgSkillProgressTreeView {
 
 export type GetOrgSkillProgressOverviewResult =
   | { ok: true; trees: OrgSkillProgressTreeView[] }
-  | { ok: false; error: "unauthenticated" | "forbidden" | "read_failed" };
+  | { ok: false; error: AuthRefusal | "forbidden" | "read_failed" };
 
 /** One raw `skillProgress` document, paired with its Firestore-assigned id (never itself part of the returned DTO — BR-25). */
 export interface RawSkillProgressDoc {

@@ -7,10 +7,12 @@ import {
 } from "../domain/role-definition";
 import { requireAppAdmin, type RequireAppAdminDeps } from "../../teams/server/require-app-admin";
 import { toAdminRoleDto } from "./role-admin-mapping";
-import { getDefaultRoleStore } from "./role-store";
+import { getDefaultRoleWriteStore } from "./role-store";
+import { writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import { isAddressableRoleId, type RoleFieldChanges, type RoleStore } from "./role-store-types";
 import { getDefaultSkillTreeReader } from "./skill-tree-seam";
 import { resolveSkillTreeReferences, type RawSkillTreeReader } from "./skill-tree-seam-types";
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
 
 export interface UpdateRoleDeps extends RequireAppAdminDeps {
   store?: RoleStore;
@@ -28,7 +30,7 @@ export type UpdateRoleResult =
   | {
       ok: false;
       error:
-        | "unauthenticated"
+        | AuthRefusal
         | "forbidden"
         | "invalid_input"
         | "not_found"
@@ -63,7 +65,7 @@ export async function updateRole(
   if (!isAddressableRoleId(roleId)) return { ok: false, error: "not_found" };
 
   try {
-    const store = deps.store ?? getDefaultRoleStore();
+    const store = deps.store ?? getDefaultRoleWriteStore(admin.identity.uid);
     const raw = await store.get(roleId);
     const parsed = raw === undefined ? undefined : parseStoredRoleDefinition(raw);
     if (!parsed?.ok) {
@@ -107,7 +109,7 @@ export async function updateRole(
       next.description = description;
     }
     return { ok: true, role: toAdminRoleDto(roleId, next, references) };
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 }

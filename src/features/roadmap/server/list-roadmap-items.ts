@@ -26,6 +26,7 @@ import {
 } from "../domain/roadmap-item";
 import { compareRoadmapPlans } from "../domain/roadmap-sort";
 import { isTargetReached } from "../domain/roadmap-target";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 
 const ROADMAP_COLLECTION = "roadmapItems";
 const SKILL_PROGRESS_COLLECTION = "skillProgress";
@@ -77,7 +78,7 @@ export interface RoadmapItemView {
 
 export type ListRoadmapItemsResult =
   | { ok: true; items: RoadmapItemView[]; canEdit: boolean; truncated: boolean }
-  | { ok: false; error: "unauthenticated" | "forbidden" | "read_failed" };
+  | { ok: false; error: AuthRefusal | "forbidden" | "read_failed" };
 
 export interface RawDoc {
   id: string;
@@ -203,7 +204,7 @@ export async function listRoadmapItems(
 ): Promise<ListRoadmapItemsResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
   if (!verified.ok) {
-    return { ok: false, error: "unauthenticated" };
+    return { ok: false, error: authRefusalFor(verified) };
   }
   const callerUid = verified.identity.uid;
 

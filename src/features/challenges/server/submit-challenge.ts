@@ -6,6 +6,8 @@ import { isValidTeamStatus } from "../../teams/domain/team";
 import { isValidMembershipFor, membershipDocId } from "../../teams/domain/team-membership";
 import type { ChallengeKeyVersion } from "../domain/challenge";
 import { validateChallengeText } from "../domain/challenge-text";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
+import { runFencedTransaction, writeRefusalFor } from "../../auth/server/erasure-write-fence";
 
 const CHALLENGES_COLLECTION = "challenges";
 const TEAMS_COLLECTION = "teams";
@@ -39,8 +41,21 @@ export interface ChallengesCollection {
   add(record: ChallengeRecord): Promise<{ id: string }>;
 }
 
-function getDefaultChallengesCollection(): ChallengesCollection {
-  return getFirestoreDb().collection(CHALLENGES_COLLECTION);
+/**
+ * Writer-only: the single create runs in a transaction that reads `accountErasures/{actorUid}` first (TASK-033, W-13). The
+ * submission stays anonymous; the fence keys on the submitter's verified uid only to refuse new content during erasure.
+ */
+function getDefaultChallengesCollection(actorUid: string): ChallengesCollection {
+  return {
+    async add(record) {
+      const db = getFirestoreDb();
+      const ref = db.collection(CHALLENGES_COLLECTION).doc();
+      await runFencedTransaction(db, actorUid, async (tx) => {
+        tx.create(ref, record);
+      });
+      return { id: ref.id };
+    },
+  };
 }
 
 /**
@@ -90,7 +105,7 @@ export type SubmitChallengeResult =
   | {
       ok: false;
       error:
-        | "sign_in_required"
+        | "sign_in_required" | AuthRefusal
         | "invalid_input"
         | "forbidden"
         | "team_not_found"
@@ -127,11 +142,9 @@ export interface SubmitChallengeDeps {
  * `active`, BR-7) → encrypt the validated text server-side with a fresh IV
  * → persist one `challenges/{auto-id}` document.
  *
- * No Firestore transaction is used — a single-document write with no
- * cross-document invariant to protect (unlike `submitSurveyResponse`'s
- * paired response/participation write), so a plain fresh team-status read
- * immediately before the single `.add()` is sufficient (mirrors
- * `createSurvey`'s simpler plain-read pattern).
+ * The membership and team-status reads are plain reads. The single create runs in a fenced transaction
+ * (TASK-033, W-13): the submitter's erasure record is read in that transaction before the create, so a refusal writes
+ * nothing. Only the single document is written, with no cross-document invariant to protect.
  *
  * Returns only success/failure — never a generated `challengeId`, never the
  * submitted text (mirrors `submitSurveyResponse`'s response-minimization
@@ -152,7 +165,7 @@ export async function submitChallenge(
 ): Promise<SubmitChallengeResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
   if (!verified.ok) {
-    return { ok: false, error: "sign_in_required" };
+    return { ok: false, error: verified.error === "invalid_token" ? "sign_in_required" : authRefusalFor(verified) };
   }
 
   const validated = validateChallengeText(rawText);
@@ -208,11 +221,11 @@ export async function submitChallenge(
     submittedAt: deps.now ?? new Date(),
   };
 
-  const collection = deps.collection ?? getDefaultChallengesCollection();
+  const collection = deps.collection ?? getDefaultChallengesCollection(verified.identity.uid);
   try {
     await collection.add(record);
     return { ok: true };
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 }

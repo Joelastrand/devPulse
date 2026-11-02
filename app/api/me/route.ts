@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getOwnAdminStatus } from "../../../src/features/teams/server/get-own-admin-status";
+import { authRefusalStatus } from "../../../src/features/auth/server/auth-refusal";
 
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
@@ -16,7 +17,7 @@ export async function GET(request: Request) {
   const result = await getOwnAdminStatus(token);
 
   if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: 401 });
+    return NextResponse.json({ error: result.error }, { status: authRefusalStatus(result.error) });
   }
 
   return NextResponse.json({ isAdmin: result.isAdmin }, { status: 200 });

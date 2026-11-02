@@ -3,6 +3,13 @@ import { resolveSurveyForParticipation } from "../../../../src/features/surveys/
 
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
+/** Fence refusals keep their own statuses (D-AUTHFAIL): 403 erasure in progress, 503 auth unavailable. */
+const RESOLVE_ERROR_STATUS = {
+  read_failed: 500,
+  erasure_in_progress: 403,
+  auth_unavailable: 503,
+} as const;
+
 /**
  * Thin, unauthenticated-reachable read backing `/survey/{surveyId}`
  * (docs/features/managed-surveys/SPEC.md — TASK-007). A missing/invalid
@@ -24,7 +31,7 @@ export async function GET(
   const result = await resolveSurveyForParticipation(surveyId, idToken || undefined);
 
   if (!result.ok) {
-    return NextResponse.json({ status: "read_failed" }, { status: 500 });
+    return NextResponse.json({ status: result.error }, { status: RESOLVE_ERROR_STATUS[result.error] });
   }
 
   if (result.status === "not_found" || result.status === "sign_in_required" || result.status === "forbidden") {

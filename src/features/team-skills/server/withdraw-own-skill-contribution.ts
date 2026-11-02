@@ -3,8 +3,10 @@ import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-
 import { SKILL_CONTRIBUTION_FIELD } from "../domain/skill-contribution";
 import { resolveGenuineTeamMembership } from "./genuine-team-membership";
 import { getDefaultSkillContributionStore, type SkillContributionStore } from "./skill-contribution-store";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
+import { writeRefusalFor } from "../../auth/server/erasure-write-fence";
 
-export type WithdrawOwnSkillContributionError = "unauthenticated" | "forbidden" | "persistence_failed";
+export type WithdrawOwnSkillContributionError = AuthRefusal | "forbidden" | "persistence_failed";
 
 export type WithdrawOwnSkillContributionResult =
   | { ok: true; contributing: false }
@@ -27,12 +29,12 @@ export async function withdrawOwnSkillContribution(
   deps: WithdrawOwnSkillContributionDeps = {},
 ): Promise<WithdrawOwnSkillContributionResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
-  if (!verified.ok) return { ok: false, error: "unauthenticated" };
+  if (!verified.ok) return { ok: false, error: authRefusalFor(verified) };
   const identity = verified.identity;
   const store = deps.store ?? getDefaultSkillContributionStore();
 
   try {
-    return await store.runTransaction(async (tx): Promise<WithdrawOwnSkillContributionResult> => {
+    return await store.runWriteTransaction(identity.uid, async (tx): Promise<WithdrawOwnSkillContributionResult> => {
       const genuine = await resolveGenuineTeamMembership(identity, teamId, { reads: tx.reads });
       if (!genuine.ok) return { ok: false, error: "persistence_failed" };
       if (genuine.relationship === "denied") return { ok: false, error: "forbidden" };
@@ -43,7 +45,7 @@ export async function withdrawOwnSkillContribution(
       }
       return { ok: true, contributing: false };
     });
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 }

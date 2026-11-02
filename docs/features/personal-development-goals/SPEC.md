@@ -786,7 +786,7 @@ Feature-specific implications; the policy itself is not restated.
 | SI-13 | Titles are inert text only (never HTML/Markdown) and are never logged. |
 | SI-14 | Foreign goal ids reveal no owner information (structurally missing under the caller's path). |
 | SI-15 | No `collectionGroup` goal query is permitted. |
-| SI-16 | Account erasure is a known limitation (no deletion flow). |
+| SI-16 | Account erasure is a known limitation (no deletion flow). *Superseded 2026-11-02 by docs/features/account-erasure/SPEC.md.* |
 | SI-17 | Operator/Admin-SDK access to goals is an accepted residual risk, not a product entitlement. |
 | SI-18 | A malformed goal's existence and opaque id may be revealed to its owner only, as a delete-only `{ goalId }` recovery item; no malformed content, failure reason or stored field is ever returned. |
 
@@ -1063,3 +1063,9 @@ No open product decisions remain.
 Role expectations are built as the separate `role-profiles` feature (`docs/features/role-profiles/SPEC.md`). The
 statements above that describe role expectations as a future, unscheduled feature are historical (2026-10-14 planning).
 D1 itself is unchanged except for the approved "Opprett mål" prefill seam, which is described in that feature.
+
+## Supersession note: account erasure (2026-11-02)
+
+The "no account erasure" and "no erasure flow" limitations in this SPEC are superseded. Account erasure is specified in
+`docs/features/account-erasure/SPEC.md`. Goals are erased with their owner's account; the goal title is not claimed erased from provider logs or backups.
+Erasure does not claim deletion from provider logs or provider backups (account-erasure BR-19, E-1 to E-3).

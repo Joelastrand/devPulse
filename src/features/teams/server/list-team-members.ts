@@ -1,12 +1,12 @@
 import "server-only";
 import { getAdminAuth, getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import { getDisplayNames, type ProfileBatchReader } from "../../profiles/server/get-display-names";
 import type { IsAppAdminDeps } from "../domain/app-admin";
 import { memberRefOf } from "../domain/member-ref";
 import { extractMemberUid, membershipRoleOf, type MembershipRole } from "../domain/team-membership";
 import { requireAppAdmin } from "./require-app-admin";
-
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
 const MEMBERSHIPS_COLLECTION = "teamMemberships";
 
 /**
@@ -62,7 +62,7 @@ function defaultGetUser(uid: string) {
 
 export type ListTeamMembersResult =
   | { ok: true; members: TeamMember[] }
-  | { ok: false; error: "unauthenticated" | "forbidden" | "read_failed" };
+  | { ok: false; error: AuthRefusal | "forbidden" | "read_failed" };
 
 export interface ListTeamMembersDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];

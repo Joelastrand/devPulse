@@ -205,6 +205,38 @@ describe("fetchThreadDetail default gateway", () => {
     );
   }
 
+  it("rebuilds an erased-thread placeholder with only its id, status, and createdAt (TASK-015)", async () => {
+    stubFetch(200, {
+      status: "ok",
+      thread: {
+        threadId: "t1",
+        status: "erased",
+        createdAt: "2026-01-10T10:00:00.000Z",
+        title: "must not survive",
+        authorTag: "48D73D",
+        replies: [
+          { replyId: "r1", isDeleted: true, body: null, authorTag: null, isOwnReply: false, createdAt: "2026-01-10T11:00:00.000Z" },
+        ],
+      },
+    });
+
+    const result = await fetchThreadDetail("token", "team-1", "t1");
+
+    expect(result).toEqual({
+      status: "ok",
+      thread: { threadId: "t1", status: "erased", createdAt: "2026-01-10T10:00:00.000Z" },
+      replies: [
+        { replyId: "r1", isDeleted: true, body: null, authorTag: null, isOwnReply: false, createdAt: "2026-01-10T11:00:00.000Z" },
+      ],
+    });
+  });
+
+  it("rejects an erased-thread placeholder missing its createdAt as read_failed", async () => {
+    stubFetch(200, { status: "ok", thread: { threadId: "t1", status: "erased" }, replies: [] });
+
+    expect(await fetchThreadDetail("token", "team-1", "t1")).toEqual({ status: "read_failed" });
+  });
+
   it("rebuilds a thread with an active and a tombstoned reply", async () => {
     stubFetch(200, {
       status: "ok",

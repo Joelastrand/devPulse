@@ -3,10 +3,12 @@ import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-
 import { normalizeDisplayName } from "../domain/display-name";
 import { isValidUserProfile } from "../domain/user-profile";
 import { getDefaultUserProfileStore, type UserProfileStore } from "./user-profile-store";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
+import { writeRefusalFor } from "../../auth/server/erasure-write-fence";
 
 export type SetOwnProfileResult =
   | { ok: true; displayName: string }
-  | { ok: false; error: "unauthenticated" | "invalid_input" | "persistence_failed" };
+  | { ok: false; error: AuthRefusal | "invalid_input" | "persistence_failed" };
 
 export interface SetOwnProfileDeps {
   now?: Date;
@@ -29,7 +31,7 @@ export async function setOwnProfile(
 ): Promise<SetOwnProfileResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
   if (!verified.ok) {
-    return { ok: false, error: "unauthenticated" };
+    return { ok: false, error: authRefusalFor(verified) };
   }
 
   const normalized = normalizeDisplayName(displayName);
@@ -46,7 +48,7 @@ export async function setOwnProfile(
       updatedAt: now,
     }));
     return { ok: true, displayName: normalized.displayName };
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 }

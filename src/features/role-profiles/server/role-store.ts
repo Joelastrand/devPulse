@@ -1,6 +1,7 @@
 import "server-only";
 import { FieldValue, Timestamp, type Transaction } from "firebase-admin/firestore";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
+import { runFencedTransaction } from "../../auth/server/erasure-write-fence";
 import type { StoredRoleDefinition } from "../domain/role-definition";
 import { ROLE_LIST_WINDOW } from "../domain/role-definition";
 import {
@@ -18,6 +19,42 @@ const TIMESTAMP_FIELDS: ReadonlySet<string> = new Set(["createdAt", "updatedAt",
 
 function rolesCollection() {
   return getFirestoreDb().collection(ROLES_COLLECTION);
+}
+
+/**
+ * Writer-only role store for an admin's create and update (TASK-035, W-17). Both writes run in a transaction that reads
+ * `accountErasures/{actorUid}` first. Reads delegate to `getDefaultRoleStore`, unchanged.
+ */
+export function getDefaultRoleWriteStore(actorUid: string, options: { generateId?: () => string } = {}): RoleStore {
+  const reads = getDefaultRoleStore(options);
+  return {
+    ...reads,
+    async create(role) {
+      const injectedId = options.generateId?.();
+      if (injectedId !== undefined) assertRoleIdSegment(injectedId);
+      const db = getFirestoreDb();
+      const ref = injectedId !== undefined ? rolesCollection().doc(injectedId) : rolesCollection().doc();
+      assertRoleIdSegment(ref.id);
+      await runFencedTransaction(db, actorUid, async (tx) => {
+        tx.create(ref, toFirestoreRoleData(role));
+      });
+      return ref.id;
+    },
+    async update(roleId, changes: RoleFieldChanges) {
+      assertMutableRoleChanges(changes);
+      const data: Record<string, unknown> = {};
+      for (const [field, value] of Object.entries(changes.set)) {
+        data[field] = toFirestoreFieldValue(field, value);
+      }
+      for (const field of changes.unset) {
+        data[field] = FieldValue.delete();
+      }
+      const db = getFirestoreDb();
+      await runFencedTransaction(db, actorUid, async (tx) => {
+        tx.update(roleRef(roleId), data);
+      });
+    },
+  };
 }
 
 function roleRef(roleId: string) {

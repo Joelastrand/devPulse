@@ -1,6 +1,6 @@
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../../teams/domain/app-admin";
 import { isValidTeamStatus } from "../../teams/domain/team";
 import { requireAppAdmin } from "../../teams/server/require-app-admin";
@@ -9,7 +9,8 @@ import {
   type ValidateCreateSurveyInputResult,
 } from "../domain/create-survey-input";
 import type { SurveyAccessMode } from "../domain/survey";
-
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
+import { writeRefusalFor, runFencedTransaction } from "../../auth/server/erasure-write-fence";
 const SURVEYS_COLLECTION = "surveys";
 const TEAMS_COLLECTION = "teams";
 
@@ -35,8 +36,18 @@ export interface SurveysCollection {
   add(record: SurveyRecord): Promise<{ id: string }>;
 }
 
-function getDefaultSurveysCollection(): SurveysCollection {
-  return getFirestoreDb().collection(SURVEYS_COLLECTION);
+/** Writer-only: the create (which stamps `createdBy`) runs in a transaction that reads `accountErasures/{actorUid}` first (TASK-034, W-17). */
+function getDefaultSurveysCollection(actorUid: string): SurveysCollection {
+  return {
+    async add(record) {
+      const db = getFirestoreDb();
+      const ref = db.collection(SURVEYS_COLLECTION).doc();
+      await runFencedTransaction(db, actorUid, async (tx) => {
+        tx.create(ref, record);
+      });
+      return { id: ref.id };
+    },
+  };
 }
 
 /**
@@ -70,7 +81,7 @@ export type CreateSurveyResult =
   | {
       ok: false;
       error:
-        | "unauthenticated"
+        | AuthRefusal
         | "forbidden"
         | InvalidInputError
         | "team_not_found"
@@ -167,12 +178,12 @@ export async function createSurvey(
     createdBy: admin.identity.uid,
   };
 
-  const collection = deps.collection ?? getDefaultSurveysCollection();
+  const collection = deps.collection ?? getDefaultSurveysCollection(admin.identity.uid);
 
   try {
     const { id } = await collection.add(record);
     return { ok: true, surveyId: id };
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 }

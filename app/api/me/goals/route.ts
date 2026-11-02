@@ -5,6 +5,7 @@ import { createPersonalGoal } from "../../../../src/features/personal-goals/serv
 import type { CreatePersonalGoalResult } from "../../../../src/features/personal-goals/server/create-personal-goal";
 import { getPersonalGoals } from "../../../../src/features/personal-goals/server/get-personal-goals";
 import { readCreateGoalRequest } from "../../../../src/features/personal-goals/server/goal-request-body";
+import { type AuthRefusal, authRefusalFor, authRefusalStatus } from "../../../../src/features/auth/server/auth-refusal";
 
 const BEARER_PATTERN = /^Bearer (.+)$/;
 const NO_STORE = { "Cache-Control": "no-store" };
@@ -24,8 +25,9 @@ const CREATE_ERROR_STATUS: Record<Extract<CreatePersonalGoalResult, { ok: false 
  * logic; a body that names an owner is rejected as an unknown key. `GET` and `POST` only.
  */
 export async function GET(request: Request) {
-  const subject = await authenticate(request);
-  if (!subject) return fail("unauthenticated", 401);
+  const verified = await authenticate(request);
+  if (!verified.ok) return json({ error: verified.error }, authRefusalStatus(verified.error));
+  const subject = verified.uid;
 
   const result = await getPersonalGoals(subject);
   if (!result.ok) return fail("persistence_failed", 500);
@@ -44,8 +46,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const subject = await authenticate(request);
-  if (!subject) return fail("unauthenticated", 401);
+  const verified = await authenticate(request);
+  if (!verified.ok) return json({ error: verified.error }, authRefusalStatus(verified.error));
+  const subject = verified.uid;
 
   const body = await readCreateGoalRequest(request);
   if (!body.ok) return fail(body.error, 400);
@@ -56,10 +59,12 @@ export async function POST(request: Request) {
 }
 
 /** The verified token's uid, or `null` for a missing, malformed or unverifiable token. */
-async function authenticate(request: Request): Promise<string | null> {
+async function authenticate(request: Request): Promise<{ ok: true; uid: string } | { ok: false; error: AuthRefusal }> {
   const match = BEARER_PATTERN.exec(request.headers.get("authorization") ?? "");
   const verified = await verifyIdToken(match ? match[1] : "");
-  return verified.ok ? verified.identity.uid : null;
+  return verified.ok
+    ? { ok: true, uid: verified.identity.uid }
+    : { ok: false, error: authRefusalFor(verified) };
 }
 
 /** Field-by-field allow-list of a goal DTO (SI-10), independent of what the operation returned. */

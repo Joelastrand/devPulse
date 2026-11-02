@@ -39,6 +39,10 @@ export const forumCopy = {
     deletedReplyPlaceholder: "Innlegget er fjernet.",
     backToList: "Tilbake til forumet",
   },
+  erasedThread: {
+    title: "Slettet tråd",
+    description: "Innholdet i denne tråden er ikke lenger tilgjengelig. Svarene fra andre er bevart.",
+  },
   replyForm: {
     heading: "Svar på tråden",
     bodyLabel: "Svar",

@@ -1,16 +1,19 @@
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../domain/app-admin";
 import { isValidPendingInvitationForTeam } from "../domain/team-invitation";
 import { requireAppAdmin } from "./require-app-admin";
-
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
 const INVITATIONS_COLLECTION = "teamInvitations";
 
-/** One pending invitation row for admin display (BR-30). */
+/**
+ * One pending invitation row for admin display (BR-30). `invitedBy` is `null` when the inviting account was erased
+ * (account-erasure TASK-017): the row is still shown, with no inviter identity of any kind.
+ */
 export interface PendingInvitation {
   email: string;
-  invitedBy: string;
+  invitedBy: string | null;
   createdAt: Date;
 }
 
@@ -46,7 +49,7 @@ function getDefaultCollection(): TeamInvitationsCollection {
 
 export type ListTeamInvitationsResult =
   | { ok: true; invitations: PendingInvitation[] }
-  | { ok: false; error: "unauthenticated" | "forbidden" | "read_failed" };
+  | { ok: false; error: AuthRefusal | "forbidden" | "read_failed" };
 
 export interface ListTeamInvitationsDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];

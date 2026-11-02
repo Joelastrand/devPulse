@@ -20,7 +20,8 @@ describe("production owner route dependencies", () => {
 
   it("supplies the store, codec, D1 snapshot seam and server clock for the goal-set write", () => {
     const deps = productionSetSharedGoalsDeps();
-    expect(typeof deps.store.runTransaction).toBe("function");
+    expect(typeof deps.store.runOwnerTransaction).toBe("function");
+    expect("runTransaction" in deps.store).toBe(false);
     expect(typeof deps.codec.encodeContent).toBe("function");
     expect(typeof deps.codec.probeKey).toBe("function");
     expect(typeof deps.goalStore.get).toBe("function");

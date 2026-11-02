@@ -9,7 +9,9 @@ import {
 } from "../../teams/server/authorize-team-access";
 import { authorTag } from "../domain/author-tag";
 import { isValidForumThread } from "../domain/forum-thread";
+import { isErasedForumThread } from "../domain/forum-erased-thread";
 import { isForumReplyDeleted, isValidForumReply } from "../domain/forum-reply";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 
 const FORUM_THREADS_COLLECTION = "forumThreads";
 const FORUM_REPLIES_COLLECTION = "forumReplies";
@@ -191,12 +193,26 @@ function parseThreadContent(raw: string): DecryptedThreadContent | null {
   return { title: record.title, body: record.body };
 }
 
+/**
+ * The reader DTO for an erased-thread placeholder (TASK-015, SPEC "Reader DTO for the placeholder": `{ threadId, status:
+ * "erased", createdAt, replies }`). It deliberately has no title, body, `authorTag`, or `isOwnThread`, so no author
+ * identity or content can reach a client through this shape. Its replies are nested, as the SPEC specifies.
+ */
+export interface ErasedThreadView {
+  threadId: string;
+  status: "erased";
+  createdAt: string;
+  replies: ReplyView[];
+}
+
 export type GetThreadWithRepliesResult =
   | { ok: true; thread: ThreadDetailView; replies: ReplyView[] }
-  | { ok: false; error: "unauthenticated" | "forbidden" | "not_found" | "read_failed" };
+  | { ok: true; thread: ErasedThreadView }
+  | { ok: false; error: AuthRefusal | "forbidden" | "not_found" | "read_failed" };
 
 export interface GetThreadWithRepliesDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
+  readFence?: VerifyIdTokenDeps["readFence"];
   allowList?: AuthorizeTeamAccessDeps["allowList"];
   authCollection?: AuthorizeTeamAccessDeps["collection"];
   threadReader?: ForumThreadReader;
@@ -238,9 +254,9 @@ export async function getThreadWithReplies(
   threadId: string,
   deps: GetThreadWithRepliesDeps = {},
 ): Promise<GetThreadWithRepliesResult> {
-  const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
+  const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken, readFence: deps.readFence });
   if (!verified.ok) {
-    return { ok: false, error: "unauthenticated" };
+    return { ok: false, error: authRefusalFor(verified) };
   }
 
   const authResult = await authorizeTeamAccess(verified.identity, teamId, {
@@ -264,6 +280,28 @@ export async function getThreadWithReplies(
 
   if (rawThread === undefined) {
     return { ok: false, error: "not_found" };
+  }
+
+  // The erased-thread placeholder (TASK-015, SPEC "Reader DTO for the placeholder"): no title, body, or author. Its replies
+  // by other people keep their own DTO, so the reply list is still read and classified exactly as for an active thread.
+  const erasedCandidate = toCandidateErasedThread(rawThread);
+  if (isErasedForumThread(erasedCandidate)) {
+    if (erasedCandidate.teamId !== teamId) {
+      return { ok: false, error: "not_found" };
+    }
+    const erasedReplies = await readReplyViews(threadId, teamId, verified.identity.uid, deps);
+    if (erasedReplies === null) {
+      return { ok: false, error: "read_failed" };
+    }
+    return {
+      ok: true,
+      thread: {
+        threadId,
+        status: "erased",
+        createdAt: erasedCandidate.createdAt.toISOString(),
+        replies: erasedReplies,
+      },
+    };
   }
 
   const candidateThread = toCandidateThread(rawThread);
@@ -294,12 +332,44 @@ export async function getThreadWithReplies(
     return { ok: false, error: "read_failed" };
   }
 
+  const replies = await readReplyViews(threadId, teamId, verified.identity.uid, deps);
+  if (replies === null) {
+    return { ok: false, error: "read_failed" };
+  }
+
+  return {
+    ok: true,
+    thread: {
+      threadId,
+      title: threadContent.title,
+      body: threadContent.body,
+      authorTag: authorTag(teamId, candidateThread.authorUid),
+      isOwnThread: candidateThread.authorUid === verified.identity.uid,
+      createdAt: candidateThread.createdAt.toISOString(),
+    },
+    replies,
+  };
+}
+
+/**
+ * Reads and classifies a thread's replies, oldest-first. Shared by the active and the erased-placeholder branches so
+ * both apply the same fail-closed validation, team cross-check, and tombstone mapping (BR-20, BR-26, BR-35, BR-56).
+ * Returns `null` when the reply read itself fails.
+ */
+async function readReplyViews(
+  threadId: string,
+  teamId: string,
+  viewerUid: string,
+  deps: GetThreadWithRepliesDeps,
+): Promise<ReplyView[] | null> {
   const repliesReader = deps.repliesReader ?? getDefaultForumRepliesReader();
+  const decryptContent = deps.decryptContent ?? decrypt;
+
   let rawReplies: RawReplyDoc[];
   try {
     rawReplies = await repliesReader.listOrderedForThread(threadId);
   } catch {
-    return { ok: false, error: "read_failed" };
+    return null;
   }
 
   const replies: ReplyView[] = [];
@@ -312,7 +382,7 @@ export async function getThreadWithReplies(
       continue;
     }
 
-    if (candidate.teamId !== candidateThread.teamId) {
+    if (candidate.teamId !== teamId) {
       // Defense-in-depth: never trust the reader's own query scoping alone
       // (BR-35) — a reply whose own persisted teamId doesn't match its
       // parent thread's teamId is excluded even if the reader returned it.
@@ -351,21 +421,24 @@ export async function getThreadWithReplies(
       isDeleted: false,
       body: replyBody,
       authorTag: authorTag(teamId, candidate.authorUid),
-      isOwnReply: candidate.authorUid === verified.identity.uid,
+      isOwnReply: candidate.authorUid === viewerUid,
       createdAt: candidate.createdAt.toISOString(),
     });
   }
 
+  return replies;
+}
+
+/** Maps a raw erased-thread document (Timestamp dates included) into the candidate shape `isErasedForumThread` expects. */
+function toCandidateErasedThread(data: unknown): unknown {
+  if (typeof data !== "object" || data === null) {
+    return undefined;
+  }
+
+  const record = data as Record<string, unknown>;
   return {
-    ok: true,
-    thread: {
-      threadId,
-      title: threadContent.title,
-      body: threadContent.body,
-      authorTag: authorTag(teamId, candidateThread.authorUid),
-      isOwnThread: candidateThread.authorUid === verified.identity.uid,
-      createdAt: candidateThread.createdAt.toISOString(),
-    },
-    replies,
+    ...record,
+    createdAt: toDateOrUndefined(record.createdAt),
+    erasedAt: toDateOrUndefined(record.erasedAt),
   };
 }

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { CONVERSATION_ERROR_STATUS, type ConversationErrorCode } from "../../../../src/features/development-conversations/domain/errors";
+import { conversationResponseStatus, type ConversationResponseCode } from "../../../../src/features/development-conversations/domain/errors";
 import {
   OWNER_PARTICIPANT_KEYS,
   OWNER_SUMMARY_KEYS,
@@ -15,6 +15,7 @@ import {
 import { readParticipations } from "../../../../src/features/development-conversations/server/read-participations";
 import { verifiedSubject } from "./_auth";
 import { readConversationBody } from "./_body";
+import { authRefusalStatus } from "../../../../src/features/auth/server/auth-refusal";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -27,14 +28,15 @@ const CREATE_KEYS: ReadonlySet<string> = new Set(["title", "plannedFor", "teamId
  * serialises an approved DTO. It makes no authorization decision.
  */
 export async function GET(request: Request) {
-  const subject = await verifiedSubject(request);
-  if (!subject) return fail("unauthenticated", 401);
+  const verified = await verifiedSubject(request);
+  if (!verified.ok) return json({ error: verified.error }, authRefusalStatus(verified.error));
+  const subject = verified.uid;
 
   const owned = await readOwnerConversations(subject, productionOwnerReadDeps());
-  if (!owned.ok) return fail(owned.error, CONVERSATION_ERROR_STATUS[owned.error]);
+  if (!owned.ok) return fail(owned.error, conversationResponseStatus(owned.error));
 
   const participating = await readParticipations(subject);
-  if (!participating.ok) return fail(participating.error, CONVERSATION_ERROR_STATUS[participating.error]);
+  if (!participating.ok) return fail(participating.error, conversationResponseStatus(participating.error));
 
   // BR-33: summaries first in the operation's order, then recovery items. No re-sort, no interleaving, no added metadata.
   return json(
@@ -53,18 +55,19 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const subject = await verifiedSubject(request);
-  if (!subject) return fail("unauthenticated", 401);
+  const verified = await verifiedSubject(request);
+  if (!verified.ok) return json({ error: verified.error }, authRefusalStatus(verified.error));
+  const subject = verified.uid;
 
   const body = await readConversationBody(request, CREATE_KEYS);
-  if (!body.ok) return fail(body.error, CONVERSATION_ERROR_STATUS[body.error]);
+  if (!body.ok) return fail(body.error, conversationResponseStatus(body.error));
 
   const result = await createConversation(subject, {
     title: body.body.title,
     plannedFor: body.body.plannedFor,
     teamId: body.body.teamId,
   });
-  if (!result.ok) return fail(result.error, CONVERSATION_ERROR_STATUS[result.error]);
+  if (!result.ok) return fail(result.error, conversationResponseStatus(result.error));
   return json({ conversationId: result.conversationId }, 201);
 }
 
@@ -80,4 +83,4 @@ function pick(source: object, keys: readonly string[]): Record<string, unknown> 
 }
 
 const json = (body: unknown, status: number) => NextResponse.json(body, { status, headers: NO_STORE });
-const fail = (error: ConversationErrorCode, status: number) => json({ error }, status);
+const fail = (error: ConversationResponseCode, status: number) => json({ error }, status);

@@ -1,11 +1,11 @@
 import "server-only";
-import { getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { destroyMembershipForRemoval } from "../../account-erasure/server/membership-destruction-adapter";
+import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../domain/app-admin";
 import { membershipDocId } from "../domain/team-membership";
 import { requireAppAdmin } from "./require-app-admin";
-
-const MEMBERSHIPS_COLLECTION = "teamMemberships";
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
+import { writeRefusalFor } from "../../auth/server/erasure-write-fence";
 
 /**
  * The write seam this operation depends on, satisfied in production by a
@@ -15,20 +15,23 @@ export interface RemoveMemberCollection {
   remove(uid: string, teamId: string): Promise<void>;
 }
 
+/**
+ * Ordinary removal destroys the membership instance through the lifecycle boundary (TASK-038, owner decision 2026-11-02):
+ * the memberRef-dependent references (roadmap owner, participant bindings) are cleared before the membership is deleted, and
+ * the delete is conditioned on those references being gone, in one transaction. The removed member's own erasure fence is
+ * read in that transaction (BR-4(b)); a fenced member refuses with `erasure_in_progress` and nothing is cleared.
+ */
 function getDefaultCollection(): RemoveMemberCollection {
   return {
     async remove(uid, teamId) {
-      await getFirestoreDb()
-        .collection(MEMBERSHIPS_COLLECTION)
-        .doc(membershipDocId(uid, teamId))
-        .delete();
+      await destroyMembershipForRemoval(uid, membershipDocId(uid, teamId));
     },
   };
 }
 
 export type RemoveTeamMemberResult =
   | { ok: true }
-  | { ok: false; error: "unauthenticated" | "forbidden" | "persistence_failed" };
+  | { ok: false; error: AuthRefusal | "forbidden" | "persistence_failed" | "erasure_in_progress" };
 
 export interface RemoveTeamMemberDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
@@ -64,7 +67,7 @@ export async function removeTeamMember(
   try {
     await collection.remove(uid, teamId);
     return { ok: true };
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 }

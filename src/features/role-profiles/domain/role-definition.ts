@@ -28,9 +28,9 @@ export interface RoleDefinition {
 
 /** Persisted role-definition document, keyed by `roleId`, as read from Firestore (AD-1). Timestamps are already `Date`s. */
 export interface StoredRoleDefinition extends RoleDefinition {
-  createdBy: string;
-  updatedBy?: string;
-  archivedBy?: string;
+  createdBy: string | null;
+  updatedBy?: string | null;
+  archivedBy?: string | null;
 }
 
 /** Browser-facing role (BR-6). Explicit allow-list; built only by `toRoleDto`. */
@@ -168,19 +168,20 @@ export function parseStoredRoleDefinition(data: unknown): ParseStoredRoleDefinit
   if (!validExpectations.ok) {
     return { ok: false };
   }
-  if (!isValidDate(createdAt) || typeof createdBy !== "string" || createdBy.length === 0) {
+  // An actor field is a uid, or exactly `null` once that account was erased (account-erasure TASK-023, SPEC A-3).
+  if (!isValidDate(createdAt) || !isNullableActor(createdBy)) {
     return { ok: false };
   }
   if (updatedAt !== undefined && (!isValidDate(updatedAt) || updatedAt < createdAt)) {
     return { ok: false };
   }
-  if (updatedBy !== undefined && typeof updatedBy !== "string") {
+  if (updatedBy !== undefined && !isNullableActor(updatedBy)) {
     return { ok: false };
   }
   if (archivedAt !== undefined && !isValidDate(archivedAt)) {
     return { ok: false };
   }
-  if (archivedBy !== undefined && typeof archivedBy !== "string") {
+  if (archivedBy !== undefined && !isNullableActor(archivedBy)) {
     return { ok: false };
   }
 
@@ -344,4 +345,9 @@ export function validateRolePatch(input: unknown): ValidateRolePatchResult {
     patch.expectations = expectations.expectations;
   }
   return { ok: true, patch };
+}
+
+/** An actor uid, or exactly `null` once that account was erased (account-erasure TASK-023, SPEC A-3). */
+function isNullableActor(value: unknown): value is string | null {
+  return value === null || (typeof value === "string" && value.length > 0);
 }

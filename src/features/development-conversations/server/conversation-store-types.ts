@@ -1,3 +1,5 @@
+
+import type { ErasureOwnerCleanupCapability } from "./erasure-owner-cleanup-capability";
 import "server-only";
 import { READ_WINDOW } from "../domain/conversation-constants";
 import { isConversationId } from "../domain/conversation-id";
@@ -165,12 +167,23 @@ export interface ConversationTransaction {
   /** Replaces the participant index document with the canonical keys of `index`. */
   setParticipation(callerUid: string, conversationId: string, index: ParticipationIndexWrite): void;
   deleteParticipation(callerUid: string, conversationId: string): void;
+  /**
+   * Transactional coordination with membership destruction (TASK-038, I-7). Writes the candidate's membership document with its
+   * own unchanged `memberRef`, so a concurrent destruction of that membership conflicts with this transaction. Fails if the
+   * membership is absent. Called only after every read.
+   */
+  touchMembership(uid: string, teamId: string, memberRef: string): void;
 }
 
 /**
  * The conversation store. Each method takes the verified uid of the caller (owner or participant) as its first
  * argument. There is no query across owners, and no group-wide query. Every read is a point read or a bounded query.
  */
+export interface OwnerTransactionOptions {
+  /** A second person-owned uid fenced in the same transaction, for example the invitee of a participant invitation. */
+  readonly secondFence?: string;
+}
+
 export interface ConversationStore {
   /** A new, valid conversation id in the owner's subtree. Allocation only, no write. */
   newOwnerId(ownerUid: string): string;
@@ -180,6 +193,16 @@ export interface ConversationStore {
   scanOwnerMissingCreatedAt(ownerUid: string): Promise<MissingCreatedAtScan>;
   /** `count()` over the owner subtree, malformed documents included (BR-37). */
   countOwner(ownerUid: string): Promise<number>;
+  /**
+   * Erasure only (account-erasure TASK-018). Conversation ids in the owner subtree, malformed and createdAt-less documents
+   * included, at most `limit`. A keys-only read; it returns ids and never document contents. No user-facing route uses it.
+   */
+  listOwnerIdsForErasure(ownerUid: string, limit: number): Promise<string[]>;
+  /**
+   * Erasure only (account-erasure TASK-018). Conversation ids in the caller's participant index subtree, orphaned entries
+   * included, at most `limit`. A keys-only read. No user-facing route uses it.
+   */
+  listParticipationIdsForErasure(callerUid: string, limit: number): Promise<string[]>;
   /** Point read. `undefined` when absent. A read failure rejects and is never reported as absence. */
   getOwner(ownerUid: string, conversationId: string): Promise<RawConversationData | undefined>;
   /** `orderBy invitedAt desc`, `limit(READ_WINDOW + 1)` (BR-34). Index entries without `invitedAt` are not in this window. */
@@ -188,8 +211,33 @@ export interface ConversationStore {
   countParticipation(callerUid: string): Promise<number>;
   /** Point read of an index entry. Finding one grants no access (BR-21). */
   getParticipation(callerUid: string, conversationId: string): Promise<RawConversationData | undefined>;
-  /** One Firestore transaction across both subtrees (BR-48). Firestore may re-run `work`. */
-  runTransaction<T>(work: (tx: ConversationTransaction) => Promise<T>): Promise<T>;
+  /**
+   * The erasure owner cleanup's transaction across both subtrees (TASK-027, TASK-038). It runs without the owner fence, so the
+   * erased person's own erasure record cannot refuse the erasure's own cleanup. It accepts only a capability minted by an approved
+   * erasure module; any other value is refused before any read or write. Product code has no unfenced transaction surface.
+   */
+  runErasureCleanupTransaction<T>(
+    capability: ErasureOwnerCleanupCapability,
+    work: (tx: ConversationTransaction) => Promise<T>,
+  ): Promise<T>;
+  /**
+   * The owner-side transaction (TASK-027, BR-4(b)). It reads `accountErasures/{ownerUid}` first, in the same transaction, and
+   * refuses while a record exists. Owner routes use it. Participant routes use `runParticipantTransaction`.
+   */
+  /**
+   * `options.secondFence`, when set, is a second person-owned uid whose erasure record is read in the same transaction before
+   * any write. The invitation uses it for the invitee's participation index (BR-4(b), TASK-038 I-7).
+   */
+  runOwnerTransaction<T>(
+    ownerUid: string,
+    work: (tx: ConversationTransaction) => Promise<T>,
+    options?: OwnerTransactionOptions,
+  ): Promise<T>;
+  /**
+   * The participant-side transaction (TASK-028, BR-4(b)). It reads `accountErasures/{callerUid}` first, keyed by the acting
+   * participant, and refuses while a record exists. Participant routes use it.
+   */
+  runParticipantTransaction<T>(callerUid: string, work: (tx: ConversationTransaction) => Promise<T>): Promise<T>;
 }
 
 /** The canonical owner record, built field by field from the write shape. Unknown input keys are dropped. */

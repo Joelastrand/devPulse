@@ -286,6 +286,19 @@ raw individual survey responses.
   member's current email resolved on demand from Firebase Auth, never
   from a persisted/stale copy — and remove any member's `teamMemberships`
   document.
+  **Lifecycle amendment (owner decision, 2026-11-02).** Removing a membership also removes the membership-instance
+  references that cannot safely outlive its `memberRef`. The sequence is fixed (`membership-destruction.ts`): each round first
+  checks the removed member's erasure fence; each participant binding is then cleared in its own owner transaction, with the
+  existing neutral removal semantics; a final transaction re-reads the fence and the membership, clears each roadmap `ownerRef`
+  that names it to the roadmap's unassigned representation, and deletes the membership only when no roadmap or binding
+  reference remains. The membership is never deleted while a reference is still present, and the delete is conditioned on that
+  check in the final transaction. The binding clears are separate transactions, not one boundary with the delete. A removal
+  refused by the fence before the final transaction writes no roadmap or membership change. Bindings cleared in an earlier round
+  of the same removal stay cleared; they only remove this membership's references. Preserved business records stay (roadmap
+  items keep their planning data; conversations keep owner content). The removal does not persist any historical identity, and
+  it is not an account erasure. Authorization for removal is unchanged. The removed member's erasure fence applies (account-erasure
+  BR-4(b), owner decision 2026-11-02): the fence subject is the removed member's uid, never the admin's; a fenced member is
+  refused with `erasure_in_progress`.
 - **BR-30**: An app admin can view a team's pending invitations and
   pending access requests.
 
@@ -724,3 +737,11 @@ rationale on each). Non-blocking items accepted for this PoC phase:
 - Whether `/teams` should page/paginate as the number of admin-created
   teams grows is deferred; out of scope until real usage suggests it's
   needed.
+
+## Behaviour note: removal and the erasure fence (2026-11-02)
+
+Ordinary removal (BR-29) clears the removed member's roadmap `ownerRef` and participant bindings before it deletes the membership:
+bindings in their own owner transactions, roadmap owners in the final transaction, which deletes the membership only when no
+reference remains. The removed member's erasure record is read in the per-round check and again in the final transaction
+(account-erasure BR-4(b)). See
+`docs/features/account-erasure/SPEC.md`, decision log "ordinary removal and the target-person fence".

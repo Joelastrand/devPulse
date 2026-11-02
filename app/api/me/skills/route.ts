@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { deleteOwnSkillProfile } from "../../../../src/features/skill-profiles/server/delete-own-skill-profile";
 import { getOwnSkills } from "../../../../src/features/skill-profiles/server/get-own-skills";
+import { authRefusalStatus, isAuthRefusal } from "../../../../src/features/auth/server/auth-refusal";
 
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
@@ -13,7 +14,7 @@ export async function GET(request: Request) {
   const result = await getOwnSkills(extractBearerToken(request.headers.get("authorization")));
 
   if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: result.error === "unauthenticated" ? 401 : 500 });
+    return NextResponse.json({ error: result.error }, { status: isAuthRefusal(result.error) ? authRefusalStatus(result.error) : 500 });
   }
 
   const { skills, truncated, profile } = result.dto;
@@ -32,7 +33,7 @@ export async function DELETE(request: Request) {
   const result = await deleteOwnSkillProfile(extractBearerToken(request.headers.get("authorization")));
 
   if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: result.error === "unauthenticated" ? 401 : 500 });
+    return NextResponse.json({ error: result.error }, { status: isAuthRefusal(result.error) ? authRefusalStatus(result.error) : 500 });
   }
   return NextResponse.json({ ok: true }, { status: 200 });
 }

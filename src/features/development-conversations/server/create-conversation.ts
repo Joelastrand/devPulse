@@ -5,6 +5,7 @@ import { normalizePlannedFor } from "../domain/plan-date";
 import { normalizeTitle } from "../domain/text-rules";
 import { encodeContent as encodeContentWithKey, probeKey as probeKeyOnce } from "./content-codec";
 import type { EncodeContentResult, ProbeKeyResult } from "./content-codec";
+import { writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import { getDefaultConversationStore } from "./conversation-store";
 import type { ConversationStore } from "./conversation-store-types";
 import {
@@ -43,7 +44,7 @@ export interface CreateConversationInput {
 export type CreateConversationResult =
   | { ok: true; conversationId: string }
   | { ok: false; error: "invalid_input"; field: "title" | "plannedFor" | "teamId" }
-  | { ok: false; error: "conversation_limit" | "persistence_failed" };
+  | { ok: false; error: "conversation_limit" | "erasure_in_progress" | "persistence_failed" };
 
 function defaultDeps(): CreateConversationDeps {
   return {
@@ -110,7 +111,7 @@ export async function createConversation(
   const now = deps.clock();
   try {
     const conversationId = deps.store.newOwnerId(ownerUid);
-    await deps.store.runTransaction(async (tx) => {
+    await deps.store.runOwnerTransaction(ownerUid, async (tx) => {
       tx.createOwner(ownerUid, conversationId, {
         teamId,
         participantUid: null,
@@ -127,7 +128,7 @@ export async function createConversation(
       });
     });
     return { ok: true, conversationId };
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 }

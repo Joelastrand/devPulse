@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { CONVERSATION_ERROR_STATUS, type ConversationErrorCode } from "../../../../../../src/features/development-conversations/domain/errors";
+import { conversationResponseStatus, type ConversationResponseCode } from "../../../../../../src/features/development-conversations/domain/errors";
 import { productionSelectableMembersDeps } from "../../../../../../src/features/development-conversations/server/owner-route-deps";
 import { readSelectableMembers } from "../../../../../../src/features/development-conversations/server/read-selectable-members";
 import { verifiedSubject } from "../../_auth";
+import { authRefusalStatus } from "../../../../../../src/features/auth/server/auth-refusal";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -14,8 +15,9 @@ type RouteContext = { params: Promise<{ conversationId: string }> };
  * and this route serialises exactly the DTO keys. Nothing here decides access, and the response grants no authority.
  */
 export async function GET(request: Request, { params }: RouteContext) {
-  const subject = await verifiedSubject(request);
-  if (!subject) return fail("unauthenticated");
+  const verified = await verifiedSubject(request);
+  if (!verified.ok) return json({ error: verified.error }, authRefusalStatus(verified.error));
+  const subject = verified.uid;
 
   const { conversationId } = await params;
   const result = await readSelectableMembers(subject, conversationId, productionSelectableMembersDeps());
@@ -37,4 +39,4 @@ export async function GET(request: Request, { params }: RouteContext) {
 }
 
 const json = (body: unknown, status: number) => NextResponse.json(body, { status, headers: NO_STORE });
-const fail = (error: ConversationErrorCode) => json({ error }, CONVERSATION_ERROR_STATUS[error]);
+const fail = (error: ConversationResponseCode) => json({ error }, conversationResponseStatus(error));

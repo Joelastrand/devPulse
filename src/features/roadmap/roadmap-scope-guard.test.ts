@@ -83,7 +83,15 @@ describe("Team Roadmap scope guard (TASK-012)", () => {
       // Every write targets the roadmap-owned collection; other collections are read-only dependencies.
       const writes = [...text.matchAll(/\btx\.(?:create|update|set|delete)\(\s*db\./g)].length;
       const roadmapWrites = [...text.matchAll(/\btx\.(?:create|update|set|delete)\(\s*db\.collection\(ROADMAP_COLLECTION\)/g)].length;
-      expect(roadmapWrites, file).toBe(writes);
+      // Narrow exception (TASK-038 A-5, approved 2026-11-02): the owner-assignment transactions of create and update each
+      // contain exactly one membership write, the no-semantic-change update of the TARGET membership's own memberRef. It is
+      // the write/write dependency with membership erasure. Any other membership write still fails this guard.
+      const membershipTouches = [...text.matchAll(/\btx\.update\(\s*db\.collection\(MEMBERSHIPS_COLLECTION\)/g)].length;
+      const approvedTouchFiles = ["src/features/roadmap/server/create-roadmap-item.ts", "src/features/roadmap/server/update-roadmap-item.ts"];
+      expect(membershipTouches, file).toBe(approvedTouchFiles.includes(file) ? 1 : 0);
+      if (membershipTouches === 1) expect(text, file).toMatch(/tx\.update\(\s*db\.collection\(MEMBERSHIPS_COLLECTION\)[\s\S]*?\{\s*memberRef\s*\}\s*\)/);
+      expect(roadmapWrites + membershipTouches, file).toBe(writes);
+      for (const match of text.matchAll(/MEMBERSHIPS_COLLECTION = "([^"]+)"/g)) expect(match[1]).toBe("teamMemberships");
       for (const match of text.matchAll(/ROADMAP_COLLECTION = "([^"]+)"/g)) expect(match[1]).toBe("roadmapItems");
     }
   });
@@ -131,7 +139,15 @@ describe("Team Roadmap scope guard (TASK-012)", () => {
           ],
         },
       ],
-      fieldOverrides: [],
+      // Account erasure AE-IDX-1 (SPEC "Firestore rules and index implications"): the only approved single-field override. It is
+      // the exact entry, so any other override, or a different index scope, still fails this pin.
+      fieldOverrides: [
+        {
+          collectionGroup: "conversations",
+          fieldPath: "participantUid",
+          indexes: [{ queryScope: "COLLECTION_GROUP", order: "ASCENDING" }],
+        },
+      ],
     });
   });
 

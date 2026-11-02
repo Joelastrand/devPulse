@@ -44,6 +44,9 @@ function fakeOnline(options: { initial?: Record<string, unknown>; presenterExist
       },
     },
     presenter: {
+      async hasErasureRecord() {
+        return false;
+      },
       async userExists() {
         log.push("userExists");
         return options.presenterExists ?? true;

@@ -50,6 +50,20 @@ const APPROVED_COLLECTION_REFERENCES = [
 ];
 /** Approved by the task for the deny-rule config pin (TASK-006); allowed but not required to exist yet. */
 const APPROVED_WHEN_PRESENT_COLLECTION_REFERENCES = ["src/lib/firebase/firestore-deployment-config.test.ts"];
+/**
+ * Account erasure (erasure-only persistence metadata, file-exact): the inventory registry names `skillProfiles` (I-1) for
+ * the erasure sweep, and its test pins that row. It grants C1 no read, write or shape access; no directory is exempt.
+ */
+const APPROVED_ERASURE_METADATA_COLLECTION_REFERENCES = [
+  "src/features/account-erasure/server/inventory.ts",
+  "src/features/account-erasure/server/inventory.test.ts",
+  // Account erasure (dated 2026-11-02, DECISION 2): the personal-data cleanup (`skillProfiles/{uid}` deletion, I-1) and the residual counter for the same registry row. Deletion and existence checks only: no read of levels, no shape use, no display or aggregation.
+  "src/features/account-erasure/server/erasure-adapters.ts",
+  "src/features/account-erasure/server/erasure-adapters.test.ts",
+  "src/features/account-erasure/server/erasure-adapters-sweep.ts",
+  "src/features/account-erasure/server/erasure-adapters-sweep.test.ts",
+  "src/features/account-erasure/server/erasure-end-to-end.test.ts",
+];
 
 /** Dimension 2: files outside the feature that may import `src/features/skill-profiles/server/**`. */
 const APPROVED_SERVER_IMPORTERS = [
@@ -187,7 +201,11 @@ const C2_GUARD_FILE = "src/features/team-skills/team-skills-scope-guard.test.ts"
 const isGuarded = (path: string) => path !== GUARD_FILE && path !== C2_GUARD_FILE;
 
 function collectionReferenceViolations(files: SourceFile[]): string[] {
-  const allowed = new Set([...APPROVED_COLLECTION_REFERENCES, ...APPROVED_WHEN_PRESENT_COLLECTION_REFERENCES]);
+  const allowed = new Set([
+    ...APPROVED_COLLECTION_REFERENCES,
+    ...APPROVED_WHEN_PRESENT_COLLECTION_REFERENCES,
+    ...APPROVED_ERASURE_METADATA_COLLECTION_REFERENCES,
+  ]);
   return files
     .filter((file) => isGuarded(file.path) && COLLECTION_TOKEN.test(file.text) && !allowed.has(file.path))
     .map((file) => file.path);
@@ -359,9 +377,25 @@ describe("C1 scope guard — collection reference allow-list (Dimension 1)", () 
   it("the files that reference the collection identifier equal the approved C1 set", () => {
     const found = realFiles.filter((f) => isGuarded(f.path) && COLLECTION_TOKEN.test(f.text)).map((f) => f.path);
     const required = new Set(APPROVED_COLLECTION_REFERENCES);
-    expect(found.filter((p) => !required.has(p) && !APPROVED_WHEN_PRESENT_COLLECTION_REFERENCES.includes(p))).toEqual([]);
+    expect(
+      found.filter(
+        (p) =>
+          !required.has(p) &&
+          !APPROVED_WHEN_PRESENT_COLLECTION_REFERENCES.includes(p) &&
+          !APPROVED_ERASURE_METADATA_COLLECTION_REFERENCES.includes(p),
+      ),
+    ).toEqual([]);
     expect(APPROVED_COLLECTION_REFERENCES.filter((p) => !found.includes(p))).toEqual([]);
     expect(collectionReferenceViolations(realFiles)).toEqual([]);
+  });
+
+  it("the erasure metadata exemption is file-exact: a sibling erasure file naming skillProfiles is still flagged", () => {
+    expect(
+      collectionReferenceViolations([
+        virtual("src/features/account-erasure/server/inventory-sweep.ts", `const c = "skillProfiles";`),
+        virtual("src/features/account-erasure/server/erasure-runner.ts", `const c = "skillProfiles";`),
+      ]),
+    ).toEqual(["src/features/account-erasure/server/inventory-sweep.ts", "src/features/account-erasure/server/erasure-runner.ts"]);
   });
 
   it("fails for an unapproved file referencing the collection, including a C2-style reader", () => {
@@ -685,8 +719,10 @@ describe("C1 scope guard — reverse/static independence (BR-23/BR-24 reverse di
     const outsideC1 = realFiles.filter(
       (f) => isGuarded(f.path) && !f.path.startsWith(C1_FEATURE_DIR) && !f.path.startsWith(C1_ROUTE_DIR) && COLLECTION_TOKEN.test(f.text),
     );
-    expect(outsideC1.map((f) => f.path)).toEqual(
-      APPROVED_WHEN_PRESENT_COLLECTION_REFERENCES.filter((p) => outsideC1.some((f) => f.path === p)),
+    expect(outsideC1.map((f) => f.path).sort()).toEqual(
+      [...APPROVED_WHEN_PRESENT_COLLECTION_REFERENCES, ...APPROVED_ERASURE_METADATA_COLLECTION_REFERENCES]
+        .filter((p) => outsideC1.some((f) => f.path === p))
+        .sort(),
     );
   });
 });

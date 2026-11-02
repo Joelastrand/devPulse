@@ -619,3 +619,9 @@ Appended at C2 closeout; approved F0 text above is not rewritten.
   no access to any personal data or richer output, and changes neither `authorizeTeamAccess` nor
   `resolveTeamRole`. Any further lead capability needs its own specification. See `docs/SECURITY.md`
   invariants 22 and 33.
+
+## Supersession note: account erasure (2026-11-02)
+
+The "no account erasure" and "no erasure flow" limitations in this SPEC are superseded. Account erasure is specified in
+`docs/features/account-erasure/SPEC.md`. The user profile (display name) and membership are erased with the account; an admin's removal of a member is fenced by that member's erasure record (BR-4(b)).
+Erasure does not claim deletion from provider logs or provider backups (account-erasure BR-19, E-1 to E-3).

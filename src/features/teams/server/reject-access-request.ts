@@ -1,10 +1,11 @@
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../domain/app-admin";
 import { accessRequestDocId, readAccessRequestStatusFor } from "../domain/team-access-request";
 import { requireAppAdmin } from "./require-app-admin";
-
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
+import { assertNoErasureRecordInTransaction, writeRefusalFor } from "../../auth/server/erasure-write-fence";
 const REQUESTS_COLLECTION = "teamAccessRequests";
 
 export type RejectOneOutcome = "rejected" | "already_rejected" | "not_pending" | "not_found";
@@ -34,6 +35,8 @@ function getDefaultCollection(): RejectAccessRequestCollection {
       const requestRef = db.collection(REQUESTS_COLLECTION).doc(accessRequestDocId(uid, teamId));
 
       return db.runTransaction(async (tx): Promise<RejectOneOutcome> => {
+        // Writer-only fence on the rejecting admin's uid (TASK-035, W-17).
+        await assertNoErasureRecordInTransaction(db, tx, resolvedBy);
         const requestSnap = await tx.get(requestRef);
         if (!requestSnap.exists) {
           return "not_found";
@@ -56,7 +59,7 @@ function getDefaultCollection(): RejectAccessRequestCollection {
 
 export type RejectAccessRequestResult =
   | { ok: true; outcome: RejectOneOutcome }
-  | { ok: false; error: "unauthenticated" | "forbidden" | "persistence_failed" };
+  | { ok: false; error: AuthRefusal | "forbidden" | "persistence_failed" };
 
 export interface RejectAccessRequestDeps {
   now?: Date;
@@ -100,7 +103,7 @@ export async function rejectAccessRequest(
       now,
     });
     return { ok: true, outcome };
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 }

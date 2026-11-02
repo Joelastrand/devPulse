@@ -15,6 +15,7 @@ import {
   deleteReply,
   deleteThread,
   fetchThreadDetail,
+  type ErasedThreadDetailView,
   type ReplyView,
   type ThreadDetailView,
 } from "../client/forum-gateway";
@@ -25,7 +26,12 @@ import { ReplyForm } from "./ReplyForm";
 type LoadResult =
   | { status: "not_found" }
   | { status: "error" }
-  | { status: "loaded"; thread: ThreadDetailView; replies: ReplyView[]; isAdmin: boolean };
+  | {
+      status: "loaded";
+      thread: ThreadDetailView | ErasedThreadDetailView;
+      replies: ReplyView[];
+      isAdmin: boolean;
+    };
 
 /**
  * A `forbidden`/`not_found` result is rendered identically (BR-16) — never a
@@ -173,18 +179,29 @@ export function ThreadDetail({ teamId, threadId }: { teamId: string; threadId: s
   }
 
   const { thread, replies, isAdmin } = result;
-  const canDeleteThread = thread.isOwnThread || isAdmin;
+  // An erased thread has no author or content. Only an app admin may delete it, and replies cannot be added (TASK-015).
+  const isErased = "status" in thread;
+  const canDeleteThread = isErased ? isAdmin : thread.isOwnThread || isAdmin;
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader
-        title={thread.title}
-        description={`${forumCopy.authorTagLabel(thread.authorTag)} · ${formatSurveyDate(new Date(thread.createdAt))}`}
-      />
+      {isErased ? (
+        <PageHeader
+          title={forumCopy.erasedThread.title}
+          description={`${forumCopy.erasedThread.description} · ${formatSurveyDate(new Date(thread.createdAt))}`}
+        />
+      ) : (
+        <PageHeader
+          title={thread.title}
+          description={`${forumCopy.authorTagLabel(thread.authorTag)} · ${formatSurveyDate(new Date(thread.createdAt))}`}
+        />
+      )}
 
-      <Card as="section" variant="bordered" padding="md" aria-label={thread.title}>
-        <p className="whitespace-pre-wrap break-words text-zinc-900 dark:text-zinc-50">{thread.body}</p>
-      </Card>
+      {!isErased && (
+        <Card as="section" variant="bordered" padding="md" aria-label={thread.title}>
+          <p className="whitespace-pre-wrap break-words text-zinc-900 dark:text-zinc-50">{thread.body}</p>
+        </Card>
+      )}
 
       {canDeleteThread && (
         <DeleteConfirmation
@@ -227,12 +244,14 @@ export function ThreadDetail({ teamId, threadId }: { teamId: string; threadId: s
           </ul>
         )}
 
-        <ReplyForm
-          idToken={token}
-          teamId={teamId}
-          threadId={threadId}
-          onSubmitted={() => loadForGeneration(token, generation)}
-        />
+        {!isErased && (
+          <ReplyForm
+            idToken={token}
+            teamId={teamId}
+            threadId={threadId}
+            onSubmitted={() => loadForGeneration(token, generation)}
+          />
+        )}
       </section>
     </div>
   );

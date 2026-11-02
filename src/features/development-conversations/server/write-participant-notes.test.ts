@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { NOTE_MAX_BYTES } from "../domain/conversation-constants";
 import { changeParticipant } from "./change-participant";
-import type { ConversationStore, ConversationTransaction, RawConversationData } from "./conversation-store-types";
+import type { ConversationTransaction, RawConversationData } from "./conversation-store-types";
 import { createFakeContentCodec, type FakeContentCodec } from "./fake-content-codec";
 import { createFakeConversationStore, type FakeConversationStore } from "./fake-conversation-store";
 import { createFakeTeamEligibilityReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
@@ -67,7 +67,7 @@ async function seedAccepted(setupValue: Setup, status: "open" | "completed" = "o
   setupValue.store.seedRawParticipation(PARTICIPANT_UID, CONVERSATION_ID, { ownerUid: OWNER_UID, invitedAt: NOW });
 }
 
-async function rawOwner(store: ConversationStore, ownerUid = OWNER_UID): Promise<RawConversationData> {
+async function rawOwner(store: FakeConversationStore, ownerUid = OWNER_UID): Promise<RawConversationData> {
   const raw = await store.getOwner(ownerUid, CONVERSATION_ID);
   if (raw === undefined) throw new Error("fixture document missing");
   return raw;
@@ -460,7 +460,7 @@ describe("writeParticipantNotes: validation before any read (BR-20, BR-40)", () 
     await seedAccepted(setupValue);
     let reads = 0;
     let probes = 0;
-    const countingStore: ConversationStore = {
+    const countingStore: FakeConversationStore = {
       ...store,
       runTransaction: async (work) => {
         reads += 1;
@@ -501,9 +501,9 @@ interface AttemptCounts {
   mutations: string[];
 }
 
-function observe(store: FakeConversationStore): { store: ConversationStore; counts: AttemptCounts } {
+function observe(store: FakeConversationStore): { store: FakeConversationStore; counts: AttemptCounts } {
   const counts: AttemptCounts = { attempts: 0, index: 0, owner: 0, team: 0, membership: 0, mutations: [] };
-  const observed: ConversationStore = {
+  const observed: FakeConversationStore = {
     ...store,
     runTransaction: <T>(work: (tx: ConversationTransaction) => Promise<T>) =>
       store.runTransaction<T>((tx) => {
@@ -822,7 +822,7 @@ describe("writeParticipantNotes: failure injection and public result (BR-47, BR-
     const { store, codec, deps } = setupValue;
     await seedAccepted(setupValue);
     const before = await rawOwner(store);
-    const failingCommit: ConversationStore = {
+    const failingCommit: FakeConversationStore = {
       ...store,
       runTransaction: <T>(work: (tx: ConversationTransaction) => Promise<T>) =>
         store.runTransaction<T>(async (tx) => {
@@ -845,7 +845,7 @@ describe("writeParticipantNotes: failure injection and public result (BR-47, BR-
     await seedAccepted(setupValue);
     const before = await rawOwner(store);
     const indexBefore = await store.getParticipation(PARTICIPANT_UID, CONVERSATION_ID);
-    const failingUpdate: ConversationStore = {
+    const failingUpdate: FakeConversationStore = {
       ...store,
       runTransaction: <T>(work: (tx: ConversationTransaction) => Promise<T>) =>
         store.runTransaction<T>((tx) =>

@@ -1,11 +1,11 @@
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../domain/app-admin";
 import { normalizeEmail } from "../domain/normalize-email";
 import { invitationDocId, readInvitationStatusFor } from "../domain/team-invitation";
 import { requireAppAdmin } from "./require-app-admin";
-
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
 const INVITATIONS_COLLECTION = "teamInvitations";
 
 export interface CancelInvitationCollection {
@@ -36,7 +36,7 @@ export type CancelInvitationResult =
   | { ok: true }
   | {
       ok: false;
-      error: "unauthenticated" | "forbidden" | "invalid_email" | "persistence_failed";
+      error: AuthRefusal | "forbidden" | "invalid_email" | "persistence_failed";
     };
 
 export interface CancelInvitationDeps {

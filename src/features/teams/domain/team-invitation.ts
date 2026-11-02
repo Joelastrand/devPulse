@@ -15,11 +15,15 @@ export function isValidInvitationStatus(value: unknown): value is InvitationStat
  * always normalized (trim + lowercase) before storage — used only for
  * matching a future verified sign-in, never copied into `teamMemberships`.
  */
+/**
+ * `invitedBy` is the inviting admin's uid. It is `null` only after that account was erased (account-erasure TASK-017,
+ * SPEC A-10). The invitation itself is preserved, and the null grants and removes no authorization by itself.
+ */
 export interface TeamInvitationRecord {
   teamId: string;
   email: string;
   status: InvitationStatus;
-  invitedBy: string;
+  invitedBy: string | null;
   createdAt: Date;
   updatedAt: Date;
   resolvedAt?: Date;
@@ -59,9 +63,16 @@ export function isValidPendingInvitationFor(
     record.teamId === expected.teamId &&
     record.email === expected.email &&
     record.status === "pending" &&
-    typeof record.invitedBy === "string" &&
-    record.invitedBy.length > 0
+    isValidInviter(record.invitedBy)
   );
+}
+
+/**
+ * The only accepted `invitedBy` values: a non-empty uid, or exactly `null` for an invitation whose inviter was erased
+ * (account-erasure TASK-017). A missing field, an empty string, or any other type is malformed and rejected.
+ */
+function isValidInviter(value: unknown): value is string | null {
+  return value === null || (typeof value === "string" && value.length > 0);
 }
 
 /**
@@ -110,7 +121,6 @@ export function isValidPendingInvitationForTeam(
     typeof record.email === "string" &&
     record.email.length > 0 &&
     record.status === "pending" &&
-    typeof record.invitedBy === "string" &&
-    record.invitedBy.length > 0
+    isValidInviter(record.invitedBy)
   );
 }

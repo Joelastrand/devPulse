@@ -1,6 +1,7 @@
 import "server-only";
 import { FieldPath, FieldValue } from "firebase-admin/firestore";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
+import { runFencedTransaction } from "../../auth/server/erasure-write-fence";
 import type { SelfAssessedLevel } from "../domain/self-assessed-level";
 
 const SKILL_PROFILES_COLLECTION = "skillProfiles";
@@ -82,12 +83,18 @@ export function getDefaultSkillProfileStore(): SkillProfileStore {
       return snapshot.exists ? snapshot.data() : undefined;
     },
     async delete(uid) {
-      await getFirestoreDb().collection(SKILL_PROFILES_COLLECTION).doc(uid).delete();
+      const db = getFirestoreDb();
+      const profileRef = db.collection(SKILL_PROFILES_COLLECTION).doc(uid);
+      // The erasure fence is read first, in the same transaction (TASK-025, BR-4(b)).
+      await runFencedTransaction(db, uid, async (tx) => {
+        tx.delete(profileRef);
+      });
     },
     async runTransaction(uid, work) {
       const db = getFirestoreDb();
       const profileRef = db.collection(SKILL_PROFILES_COLLECTION).doc(uid);
-      return db.runTransaction(async (tx) =>
+      // The fence read precedes every read and buffered mutation of `work` (TASK-025, BR-4(b)).
+      return runFencedTransaction(db, uid, async (tx) =>
         work({
           async readProfile() {
             const snapshot = await tx.get(profileRef);

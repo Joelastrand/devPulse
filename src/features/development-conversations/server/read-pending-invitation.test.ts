@@ -13,6 +13,7 @@ import {
   TEAM_ID,
   seedOwnerConversation,
 } from "./owner-read-test-support";
+import { issueErasureOwnerCleanupCapability } from "./erasure-owner-cleanup-capability";
 
 // Synthetic fixtures only (invariant 15). No real person, team or wellbeing data.
 const CONVERSATION_ID = "conv-1";
@@ -73,7 +74,7 @@ function setup(
 
 /** Writes the caller's canonical participation index, as the invitation transaction does. */
 async function seedIndex(store: ConversationStore, callerUid: string, ownerUid = OWNER_UID): Promise<void> {
-  await store.runTransaction(async (tx) => {
+  await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => {
     tx.setParticipation(callerUid, CONVERSATION_ID, { ownerUid, invitedAt: new Date(NOW.getTime() + 1000) });
   });
 }

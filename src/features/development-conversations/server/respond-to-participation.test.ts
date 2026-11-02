@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ConversationStore, ConversationTransaction, RawConversationData } from "./conversation-store-types";
+import type { ConversationTransaction, RawConversationData } from "./conversation-store-types";
 import { createFakeContentCodec, type FakeContentCodec } from "./fake-content-codec";
 import { createFakeConversationStore, type FakeConversationStore } from "./fake-conversation-store";
 import type { FakeTeamEligibilityState } from "./fake-team-eligibility";
@@ -17,6 +17,7 @@ import {
 import type { DecryptOutcome, StoredEnvelope } from "../domain/stored-owner-conversation";
 import type { SharedGoalSnapshot } from "../domain/shared-goal-snapshot";
 import { ContentKeyError } from "./content-codec";
+import { issueErasureOwnerCleanupCapability } from "./erasure-owner-cleanup-capability";
 
 /** Synthetic fixtures only (invariant 15). No real person, team or wellbeing data. */
 const CONVERSATION_ID = "conv-1";
@@ -51,14 +52,14 @@ function setup(state: FakeTeamEligibilityState = rosterTeam([OWNER_UID, PARTICIP
   return { store, codec, state, deps };
 }
 
-async function seedIndex(store: ConversationStore, callerUid: string, ownerUid: string): Promise<void> {
-  await store.runTransaction(async (tx) => {
+async function seedIndex(store: FakeConversationStore, callerUid: string, ownerUid: string): Promise<void> {
+  await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => {
     tx.setParticipation(callerUid, CONVERSATION_ID, { ownerUid, invitedAt: NOW });
   });
 }
 
 /** A pending invitation to the participant, with an index entry, as TASK-014 leaves it. */
-async function seedPending(store: ConversationStore, codec: FakeContentCodec): Promise<void> {
+async function seedPending(store: FakeConversationStore, codec: FakeContentCodec): Promise<void> {
   await seedOwnerConversation(store, codec, {
     conversationId: CONVERSATION_ID,
     participant: { uid: PARTICIPANT_UID, state: "pending" },
@@ -68,7 +69,7 @@ async function seedPending(store: ConversationStore, codec: FakeContentCodec): P
 
 /** An accepted participant with notes, as TASK-019 leaves it. */
 async function seedAccepted(
-  store: ConversationStore,
+  store: FakeConversationStore,
   codec: FakeContentCodec,
   options: { status?: "open" | "completed" } = {},
 ): Promise<void> {
@@ -82,16 +83,16 @@ async function seedAccepted(
   await seedIndex(store, PARTICIPANT_UID, OWNER_UID);
 }
 
-async function rawOwner(store: ConversationStore, ownerUid = OWNER_UID): Promise<RawConversationData | undefined> {
+async function rawOwner(store: FakeConversationStore, ownerUid = OWNER_UID): Promise<RawConversationData | undefined> {
   return store.getOwner(ownerUid, CONVERSATION_ID);
 }
 
-async function rawIndex(store: ConversationStore, callerUid = PARTICIPANT_UID): Promise<RawConversationData | undefined> {
+async function rawIndex(store: FakeConversationStore, callerUid = PARTICIPANT_UID): Promise<RawConversationData | undefined> {
   return store.getParticipation(callerUid, CONVERSATION_ID);
 }
 
 /** Owner and index documents together, so a test can prove that a refused call wrote nothing. */
-async function stateOf(store: ConversationStore) {
+async function stateOf(store: FakeConversationStore) {
   return {
     owner: await rawOwner(store),
     ownerOfOther: await rawOwner(store, OTHER_OWNER_UID),
@@ -101,7 +102,7 @@ async function stateOf(store: ConversationStore) {
 }
 
 /** The decrypted content, read the way a decrypting reader reads it. */
-async function storedContent(store: ConversationStore, codec: FakeContentCodec) {
+async function storedContent(store: FakeConversationStore, codec: FakeContentCodec) {
   const raw = await rawOwner(store);
   if (raw === undefined) throw new Error("fixture document missing");
   const envelope = {
@@ -117,7 +118,7 @@ async function storedContent(store: ConversationStore, codec: FakeContentCodec) 
 }
 
 /** A store whose transaction fails on the index delete, after the owner update was buffered. */
-function failingIndexDeleteStore(store: FakeConversationStore): ConversationStore {
+function failingIndexDeleteStore(store: FakeConversationStore): FakeConversationStore {
   return {
     ...store,
     runTransaction: <T>(work: (tx: ConversationTransaction) => Promise<T>) =>
@@ -177,7 +178,7 @@ function spyCodec(base: FakeContentCodec): { codec: FakeContentCodec; calls: { p
 }
 
 /** A store whose transactions run `work` through `decorate`, so one write can be made to fail. */
-function withTransaction(store: FakeConversationStore, decorate: (tx: ConversationTransaction) => ConversationTransaction): ConversationStore {
+function withTransaction(store: FakeConversationStore, decorate: (tx: ConversationTransaction) => ConversationTransaction): FakeConversationStore {
   return {
     ...store,
     runTransaction: <T>(work: (tx: ConversationTransaction) => Promise<T>) => store.runTransaction<T>((tx) => work(decorate(tx))),
@@ -503,7 +504,7 @@ describe("leaveParticipation: decline and leave share one path (BR-17, IMPL-1)",
     const { store, codec, deps } = setup();
     await seedAccepted(store, codec);
     const before = await stateOf(store);
-    const broken: ConversationStore = {
+    const broken: FakeConversationStore = {
       ...store,
       runTransaction: async () => {
         throw new Error("injected failure");
@@ -697,9 +698,9 @@ describe("acceptInvitation: envelope, probe and timestamps", () => {
 });
 
 /** Counts each transaction attempt and the team and membership reads inside it. Wraps the transaction; changes nothing. */
-function countAcceptReads(store: FakeConversationStore): { store: ConversationStore; counts: { attempts: number; team: number; membership: number } } {
+function countAcceptReads(store: FakeConversationStore): { store: FakeConversationStore; counts: { attempts: number; team: number; membership: number } } {
   const counts = { attempts: 0, team: 0, membership: 0 };
-  const observed: ConversationStore = {
+  const observed: FakeConversationStore = {
     ...store,
     runTransaction: <T>(work: (tx: ConversationTransaction) => Promise<T>) =>
       store.runTransaction<T>((tx) => {

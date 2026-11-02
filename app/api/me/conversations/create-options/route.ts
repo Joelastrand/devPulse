@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { CONVERSATION_ERROR_STATUS, type ConversationErrorCode } from "../../../../../src/features/development-conversations/domain/errors";
+import { conversationResponseStatus, type ConversationResponseCode } from "../../../../../src/features/development-conversations/domain/errors";
 import { readCreateOptions } from "../../../../../src/features/development-conversations/server/read-create-options";
 import { verifiedSubject } from "../_auth";
+import { authRefusalStatus } from "../../../../../src/features/auth/server/auth-refusal";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -11,8 +12,9 @@ const NO_STORE = { "Cache-Control": "no-store" };
  * and maps the stable code. It makes no eligibility decision and reads no request input.
  */
 export async function GET(request: Request) {
-  const subject = await verifiedSubject(request);
-  if (!subject) return fail("unauthenticated");
+  const verified = await verifiedSubject(request);
+  if (!verified.ok) return json({ error: verified.error }, authRefusalStatus(verified.error));
+  const subject = verified.uid;
 
   const result = await readCreateOptions(subject);
   if (!result.ok) return fail(result.error);
@@ -27,4 +29,4 @@ export async function GET(request: Request) {
 }
 
 const json = (body: unknown, status: number) => NextResponse.json(body, { status, headers: NO_STORE });
-const fail = (error: ConversationErrorCode) => json({ error }, CONVERSATION_ERROR_STATUS[error]);
+const fail = (error: ConversationResponseCode) => json({ error }, conversationResponseStatus(error));

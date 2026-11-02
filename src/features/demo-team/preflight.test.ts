@@ -62,6 +62,9 @@ function fakePresenter(exists = true) {
   return {
     calls,
     presenter: {
+      async hasErasureRecord() {
+        return false;
+      },
       async userExists(uid: string) {
         calls.push(uid);
         return exists;
@@ -166,6 +169,31 @@ describe("online preflight — presenter and adapters", () => {
     expect(reads).toEqual([]);
   });
 
+  it("refuses an erasing or erased presenter with zero reads and no write (TASK-036, BR-20)", async () => {
+    const { operations, manifest } = buildPlan();
+    const r = fakeReader(new Map());
+    const result = await runDemoPreflight({
+      config: onlineConfig,
+      operations,
+      manifest,
+      crypto: realCrypto,
+      online: {
+        reader: r.reader,
+        presenter: {
+          async userExists() {
+            return true;
+          },
+          async hasErasureRecord(uid: string) {
+            expect(uid).toBe(PRESENTER);
+            return true;
+          },
+        },
+      },
+    });
+    expect(result).toEqual({ ok: false, error: { category: "presenter-erasure-record" }, classifications: [] });
+    expect(r.calls).toEqual([]);
+  });
+
   it("reports lookup failure as a category without raw exception text", async () => {
     const { operations, manifest } = buildPlan();
     const r = fakeReader(new Map());
@@ -177,6 +205,9 @@ describe("online preflight — presenter and adapters", () => {
       online: {
         reader: r.reader,
         presenter: {
+          async hasErasureRecord() {
+            return false;
+          },
           async userExists() {
             throw new Error(`token ${PRIVATE_KEY_SENTINEL}`);
           },
@@ -477,7 +508,7 @@ describe("read-only guarantees (BR-25, BR-28)", () => {
       return [...body.matchAll(/^\s{2}(\w+)\(/gm)].map((m) => m[1]);
     };
     expect(members("DemoReader")).toEqual(["get"]);
-    expect(members("DemoPresenterLookup")).toEqual(["userExists"]);
+    expect(members("DemoPresenterLookup")).toEqual(["userExists", "hasErasureRecord"]);
   });
 });
 

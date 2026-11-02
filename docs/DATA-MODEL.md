@@ -153,3 +153,20 @@ Feature spec: `docs/features/role-profiles/SPEC.md`. Two collections, both writt
 
 Derived, never stored: the comparison and the list of active roles. No composite index (`firestore.indexes.json` unchanged).
 Client Firestore access to `roleDefinitions` is denied by an explicit deny-only rule.
+
+## Account erasure shapes (account-erasure, 2026-11-02)
+
+Source of truth: `docs/features/account-erasure/SPEC.md`. These are conceptual shapes, not the schema.
+
+- **AccountErasure** (`accountErasures/{uid}`, server-only, Implemented). The document id is the uid, the only record that may
+  carry it while the erasure runs (AE-SI-5). Fields: `status` (`in_progress` | `auth_deleted` | `completed`), `step`,
+  `startedAt`, `updatedAt`, optional `completedAt` and `expireAt` (set on completion; the TTL policy is configured by the operator,
+  an operator action under the TASK-045 gate), and an optional `errorCode` from a fixed enum. It holds no e-mail, team, memberRef,
+  content or free text.
+- **Erased-thread placeholder** (`forumThreads/{threadId}` when other people replied, Implemented). Shape
+  `{ teamId, createdAt, erasedAt, status: "erased" }`. No title, body, author or `authorTag`.
+- **Erased-actor marker** (Implemented). The constant `"erased"`, written as `deletedBy` on other people's reply tombstones. It is
+  not a uid. The DTO never exposes it as an identity.
+- **Neutral participant block** (conversation DTO, Implemented). After the erased person's participation is removed, the participant
+  block is `{ state: "none" }` with the existing no-participant copy. It carries no uid, memberRef, notes or invitation timestamps,
+  and no historical marker is persisted (amended 2026-10-29).

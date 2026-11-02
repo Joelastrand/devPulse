@@ -12,6 +12,8 @@ import { describe, expect, it } from "vitest";
 const ROOT = process.cwd();
 const STORE_FILE = "src/features/team-skills/server/skill-contribution-store.ts";
 const DOMAIN_FILE = "src/features/team-skills/domain/skill-contribution.ts";
+/** Account erasure registry (erasure-only persistence metadata; exact file, no directory exemption). */
+const ERASURE_REGISTRY_FILE = "src/features/account-erasure/server/inventory.ts";
 const OWN_STATE_OPERATIONS = [
   "src/features/team-skills/server/get-own-skill-contribution.ts",
   "src/features/team-skills/server/set-own-skill-contribution.ts",
@@ -48,8 +50,15 @@ describe("participation boundary (source scan)", () => {
     expect(filesContaining(/skill-contribution-store/)).toEqual([...OWN_STATE_OPERATIONS, COVERAGE_OPERATION].sort());
   });
 
-  it("keeps the literal membership field name in the domain module only", () => {
-    expect(filesContaining("skillContribution")).toEqual([DOMAIN_FILE]);
+  it("keeps the literal membership field name in the domain module only (plus the erasure registry, file-exact)", () => {
+    // Account erasure: the inventory registry names the persisted field so the erasure sweep can find it. Exact file only.
+    expect(filesContaining("skillContribution").filter((p) => p !== ERASURE_REGISTRY_FILE)).toEqual([DOMAIN_FILE]);
+  });
+
+  it("the erasure registry is the only account-erasure file that names the membership field", () => {
+    expect(filesContaining("skillContribution").filter((p) => p.startsWith("src/features/account-erasure/"))).toEqual([
+      ERASURE_REGISTRY_FILE,
+    ]);
   });
 
   it("keeps participation store and server internals out of client components", () => {

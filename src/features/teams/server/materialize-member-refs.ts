@@ -1,12 +1,13 @@
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../domain/app-admin";
 import { generateMemberRef, memberRefOf } from "../domain/member-ref";
 import { isValidTeamStatus } from "../domain/team";
 import { extractMemberUid, membershipDocId } from "../domain/team-membership";
 import { requireAppAdmin } from "./require-app-admin";
-
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
+import { assertNoErasureRecordInTransaction, writeRefusalFor } from "../../auth/server/erasure-write-fence";
 const TEAMS_COLLECTION = "teams";
 const MEMBERSHIPS_COLLECTION = "teamMemberships";
 
@@ -30,6 +31,11 @@ export interface RawMembership {
 export interface MaterializeTransaction {
   getTeamStatus(): Promise<unknown>;
   listMemberships(limit: number): Promise<RawMembership[]>;
+  /**
+   * Reads the erasure record of a member whose membership this run would write, in the same transaction (BR-4(b)). Throws
+   * while a record exists. The member is the subject; the admin who runs the backfill is not.
+   */
+  assertNoErasureRecord(uid: string): Promise<void>;
   setMemberRef(id: string, memberRef: string): void;
 }
 
@@ -58,6 +64,9 @@ function getDefaultCollection(): MaterializeMemberRefsCollection {
             );
             return snapshot.docs.map((doc) => ({ id: doc.id, data: doc.data() }));
           },
+          async assertNoErasureRecord(uid) {
+            await assertNoErasureRecordInTransaction(db, tx, uid);
+          },
           setMemberRef(id, memberRef) {
             pending.push({ id, memberRef });
           },
@@ -73,13 +82,13 @@ function getDefaultCollection(): MaterializeMemberRefsCollection {
 
 export type MaterializeMemberRefsResult =
   | { ok: true; materialized: number; alreadyHad: number; truncated: boolean }
-  | { ok: false; error: "unauthenticated" | "forbidden" | "team_not_found" | "persistence_failed" };
+  | { ok: false; error: AuthRefusal | "forbidden" | "team_not_found" | "persistence_failed" | "erasure_in_progress" };
 
 export interface MaterializeMemberRefsDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
   allowList?: IsAppAdminDeps["allowList"];
   collection?: MaterializeMemberRefsCollection;
-  generateRef?: () => string;
+  createKey?: () => string;
 }
 
 function isSafeId(value: unknown): value is string {
@@ -119,7 +128,7 @@ export async function materializeMemberRefs(
   }
 
   const collection = deps.collection ?? getDefaultCollection();
-  const generateRef = deps.generateRef ?? generateMemberRef;
+  const createKey = deps.createKey ?? generateMemberRef;
 
   try {
     return await collection.run(teamId, async (tx): Promise<MaterializeMemberRefsResult> => {
@@ -152,10 +161,19 @@ export async function materializeMemberRefs(
         }
       }
 
+      // Every membership this run writes is first checked against its member's erasure record, in this transaction. A single
+      // refusal aborts the whole run, so the update set commits or none does (BR-4(b)).
+      for (const membership of missing) {
+        const uid = extractMemberUid(membership.data);
+        // Unreachable after the filter above; failing closed here keeps a fence from being skipped by a future change.
+        if (uid === null) throw new Error("membership without a uid");
+        await tx.assertNoErasureRecord(uid);
+      }
+
       for (const { id } of missing) {
-        let ref = generateRef();
+        let ref = createKey();
         while (held.has(ref)) {
-          ref = generateRef();
+          ref = createKey();
         }
         held.add(ref);
         tx.setMemberRef(id, ref);
@@ -168,7 +186,7 @@ export async function materializeMemberRefs(
         truncated,
       };
     });
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 }

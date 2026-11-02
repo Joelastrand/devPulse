@@ -5,6 +5,7 @@ import {
   objectBody,
   pickRoleFields,
 } from "../../../../../src/features/role-profiles/server/admin-role-request";
+import { authRefusalStatus, isAuthRefusal } from "../../../../../src/features/auth/server/auth-refusal";
 
 /**
  * Admin-only role edit (SPEC "Role catalog (admin)"). `roleId` comes only from the route param. A malformed role id gets
@@ -34,7 +35,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ro
 }
 
 function statusForError(error: Extract<UpdateRoleResult, { ok: false }>["error"]): number {
-  if (error === "unauthenticated") return 401;
+  if (isAuthRefusal(error)) return authRefusalStatus(error);
   if (error === "forbidden") return 403;
   if (error === "invalid_input") return 400;
   if (error === "not_found" || error === "skill_not_found") return 404;

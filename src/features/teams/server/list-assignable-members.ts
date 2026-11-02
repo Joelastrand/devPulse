@@ -6,6 +6,7 @@ import { arrangeAssignableMembers, type AssignableCandidate } from "../domain/as
 import { memberRefOf } from "../domain/member-ref";
 import { extractMemberUid } from "../domain/team-membership";
 import { authorizeTeamAccess, type AuthorizeTeamAccessDeps } from "./authorize-team-access";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 
 const MEMBERSHIPS_COLLECTION = "teamMemberships";
 
@@ -28,7 +29,7 @@ export interface AssignableMember {
 
 export type ListAssignableMembersResult =
   | { ok: true; members: AssignableMember[]; unavailableCount: number; truncated: boolean }
-  | { ok: false; error: "unauthenticated" | "forbidden" | "read_failed" };
+  | { ok: false; error: AuthRefusal | "forbidden" | "read_failed" };
 
 /** Read seam for this operation's own read; Firestore in production, an in-memory fake in tests. */
 export interface AssignableMembersStore {
@@ -97,7 +98,7 @@ export async function listAssignableMembers(
 ): Promise<ListAssignableMembersResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
   if (!verified.ok) {
-    return { ok: false, error: "unauthenticated" };
+    return { ok: false, error: authRefusalFor(verified) };
   }
   const callerUid = verified.identity.uid;
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getTeamsOverview } from "../../../src/features/teams/server/get-teams-overview";
+import { authRefusalStatus, isAuthRefusal } from "../../../src/features/auth/server/auth-refusal";
 
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
@@ -15,7 +16,7 @@ export async function GET(request: Request) {
   const result = await getTeamsOverview(token);
 
   if (!result.ok) {
-    const status = result.error === "unauthenticated" ? 401 : 500;
+    const status = isAuthRefusal(result.error) ? authRefusalStatus(result.error) : 500;
     return NextResponse.json({ status: result.error }, { status });
   }
 

@@ -264,7 +264,7 @@ Invariants 37–54 are SI-1…SI-18 of that SPEC, in order (invariant *n* = SI-*
 50. A foreign goal id reveals no owner information: it is structurally missing under the
     caller's path (SI-14).
 51. No `collectionGroup` goal query is permitted (SI-15).
-52. Account erasure is a known limitation: there is no deletion flow (SI-16).
+52. Account erasure exists (see the account-erasure invariants below). A personal goal is erased with its owner's account, and the goal title is not claimed erased from provider logs or backups (SI-16 superseded 2026-11-02).
 53. Operator or Admin-SDK access to goal data is an accepted residual risk, not a product
     entitlement (SI-17).
 54. A malformed goal's existence and opaque id may be revealed to its owner only, as a
@@ -335,6 +335,41 @@ stated here in the form the feature implements; the SPEC holds the full rules.
 
 D1 makes no claim of anonymity, differential privacy, or encryption of titles beyond the
 platform's storage guarantees, and does not claim operators cannot access the data.
+
+## Account erasure invariants (AE-SI, 2026-11-02)
+
+Source: `docs/features/account-erasure/SPEC.md`. These are the durable invariants of the erasure of a person's data.
+
+- **AE-SI-1 Self-only initiation.** Only the verified person, for their own uid, can start or resume an erasure. No admin,
+  lead, team member, operator-facing route, or other user can initiate it for someone else.
+- **AE-SI-2 No cross-person exposure.** Erasure responses, errors, and status never contain another person's data, uid,
+  e-mail, or membership identifier.
+- **AE-SI-3 Fence.** While a record exists for a uid, no person-owned data is created or mutated for that uid, and no
+  protected route accepts the uid's requests except the erasure endpoint.
+- **AE-SI-4 Ordering.** Auth deletion is the last step that depends on the person's authentication. No state exists in
+  which Auth is deleted while person-owned data is still reachable through a route.
+- **AE-SI-5 Residual record.** The only record that may still carry the uid is the fence record. It holds the uid as its
+  document id, a status, a step, timestamps, an `expireAt`, and an error code from a fixed enum. It holds no e-mail,
+  team, memberRef, content, or free text.
+- **AE-SI-6 Content removal.** Erased authored content (forum title and body and ciphertext, reply content,
+  `participantNotes`, the person's owned conversations including owner notes and next steps) is removed, not retained in
+  plain or encrypted form.
+- **AE-SI-7 No retained linkage.** After completion no stored record contains the erased uid, e-mail, `participantUid`,
+  `authorUid`, or `memberRef` for that person, except the transient fence record (AE-SI-5). Nulled actor fields are nulled,
+  not replaced with anything derived from the uid.
+- **AE-SI-8 Anonymity preserved.** Erasure does not join, infer, or delete anonymous `surveyResponses` or challenge content.
+  It does not make an anonymous record easier to correlate with a person. Erasing forum authorship does not reveal or
+  preserve a former `authorTag`.
+- **AE-SI-9 No collateral deletion.** Erasure never deletes another person's authored content, owner-authored content in
+  another person's conversation, team, survey, challenge, skill tree, or role definition merely because the erased person
+  acted on or participated in it.
+- **AE-SI-10 Recent authentication.** Starting an erasure requires a verified token whose `auth_time` is within the window
+  (BR-3). Possession of an older bearer token is not sufficient.
+- **AE-SI-11 Irreversible.** No undo, recovery, grace period, or restore exists.
+- **AE-SI-12 No content logging.** Erasure logs only status, step, and error code. It never logs uid, e-mail, content,
+  ciphertext, or payloads in application logs.
+- **AE-SI-13 Demo isolation.** Demo tooling never creates, recreates, or writes person-owned data for a uid that has an
+  erasure record or no current Auth user.
 
 ## Feature review checklist
 

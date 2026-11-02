@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { seedLegacyTeams } from "../../../../../src/features/teams/server/seed-legacy-teams";
+import { authRefusalStatus, isAuthRefusal } from "../../../../../src/features/auth/server/auth-refusal";
 
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
@@ -16,7 +17,7 @@ export async function POST(request: Request) {
   const result = await seedLegacyTeams(token);
 
   if (!result.ok) {
-    const status = result.error === "unauthenticated" ? 401 : 403;
+    const status = isAuthRefusal(result.error) ? authRefusalStatus(result.error) : 403;
     return NextResponse.json({ error: result.error }, { status });
   }
 

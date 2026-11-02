@@ -1,10 +1,11 @@
 import "server-only";
+import { runFencedTransaction, writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../domain/app-admin";
 import type { TeamStatus } from "../domain/team";
 import { requireAppAdmin } from "./require-app-admin";
-
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
 const COLLECTION_NAME = "teams";
 
 /** The persisted shape of one `teams` document. */
@@ -25,15 +26,25 @@ export interface TeamsCollection {
   add(record: TeamRecord): Promise<{ id: string }>;
 }
 
-function getDefaultCollection(): TeamsCollection {
-  return getFirestoreDb().collection(COLLECTION_NAME);
+/** Writer-only: the create (stamps the admin's uid) runs in a transaction that reads `accountErasures/{actorUid}` first (TASK-035, W-17). */
+function getDefaultCollection(actorUid: string): TeamsCollection {
+  return {
+    async add(record) {
+      const db = getFirestoreDb();
+      const ref = db.collection(COLLECTION_NAME).doc();
+      await runFencedTransaction(db, actorUid, async (tx) => {
+        tx.create(ref, record);
+      });
+      return { id: ref.id };
+    },
+  };
 }
 
 export type CreateTeamResult =
   | { ok: true; teamId: string }
   | {
       ok: false;
-      error: "unauthenticated" | "forbidden" | "invalid_name" | "persistence_failed";
+      error: AuthRefusal | "forbidden" | "invalid_name" | "persistence_failed";
     };
 
 export interface CreateTeamDeps {
@@ -74,12 +85,12 @@ export async function createTeam(
     createdBy: admin.identity.uid,
   };
 
-  const collection = deps.collection ?? getDefaultCollection();
+  const collection = deps.collection ?? getDefaultCollection(admin.identity.uid);
 
   try {
     const { id } = await collection.add(record);
     return { ok: true, teamId: id };
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 }

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { CONVERSATION_ERROR_STATUS, type ConversationErrorCode } from "../../../../../../src/features/development-conversations/domain/errors";
+import { conversationResponseStatus, type ConversationResponseCode } from "../../../../../../src/features/development-conversations/domain/errors";
 import { leaveParticipation } from "../../../../../../src/features/development-conversations/server/respond-to-participation";
 import { verifiedSubject } from "../../_auth";
 import { readEmptyConversationBody } from "../../_body";
+import { type AuthRefusal, authRefusalStatus } from "../../../../../../src/features/auth/server/auth-refusal";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -13,15 +14,16 @@ type RouteContext = { params: Promise<{ conversationId: string }> };
  * because the operation chooses the branch from the stored state. Success is `204` with no body. Takes no body.
  */
 export async function DELETE(request: Request, { params }: RouteContext) {
-  const subject = await verifiedSubject(request);
-  if (!subject) return fail("unauthenticated", 401);
+  const verified = await verifiedSubject(request);
+  if (!verified.ok) return fail(verified.error, authRefusalStatus(verified.error));
+  const subject = verified.uid;
 
   const body = await readEmptyConversationBody(request);
-  if (!body.ok) return fail(body.error, CONVERSATION_ERROR_STATUS[body.error]);
+  if (!body.ok) return fail(body.error, conversationResponseStatus(body.error));
 
   const { conversationId } = await params;
   const result = await leaveParticipation(subject, conversationId);
-  return result.ok ? new NextResponse(null, { status: 204, headers: NO_STORE }) : fail(result.error, CONVERSATION_ERROR_STATUS[result.error]);
+  return result.ok ? new NextResponse(null, { status: 204, headers: NO_STORE }) : fail(result.error, conversationResponseStatus(result.error));
 }
 
-const fail = (error: ConversationErrorCode, status: number) => NextResponse.json({ error }, { status, headers: NO_STORE });
+const fail = (error: ConversationResponseCode | AuthRefusal, status: number) => NextResponse.json({ error }, { status, headers: NO_STORE });

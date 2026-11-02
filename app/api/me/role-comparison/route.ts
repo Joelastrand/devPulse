@@ -4,6 +4,7 @@ import {
   type RoleComparison,
   type RoleComparisonRow,
 } from "../../../../src/features/role-profiles/server/get-own-role-comparison";
+import { authRefusalStatus, isAuthRefusal } from "../../../../src/features/auth/server/auth-refusal";
 
 const BEARER_PATTERN = /^Bearer (.+)$/;
 const NO_STORE = { "Cache-Control": "no-store" };
@@ -35,7 +36,7 @@ export async function GET(request: Request) {
   try {
     const result = await getOwnRoleComparison(match ? match[1] : "");
     if (!result.ok) {
-      const status = result.error === "unauthenticated" ? 401 : 500;
+      const status = isAuthRefusal(result.error) ? authRefusalStatus(result.error) : 500;
       return NextResponse.json({ error: result.error }, { status, headers: NO_STORE });
     }
     return NextResponse.json(toResponseBody(result.comparison), { status: 200, headers: NO_STORE });

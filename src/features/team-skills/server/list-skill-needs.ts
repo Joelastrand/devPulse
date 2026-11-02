@@ -17,6 +17,7 @@ import {
   type SkillNeedCatalogReader,
 } from "./skill-need-catalog";
 import { getDefaultSkillNeedsStore, type SkillNeedsStore } from "./skill-needs-store";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 
 /** The complete per-need contract (SPEC BR-4, BR-22). Built field by field; no ids, timestamps, audit fields or counts. */
 export interface SkillNeedView {
@@ -42,7 +43,7 @@ export type ListSkillNeedsResult =
       needsTruncated: boolean;
       viewer: SkillNeedsViewer;
     }
-  | { ok: false; error: "unauthenticated" | "forbidden" | "read_failed" };
+  | { ok: false; error: AuthRefusal | "forbidden" | "read_failed" };
 
 export interface ListSkillNeedsDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
@@ -70,7 +71,7 @@ export async function listSkillNeeds(
 ): Promise<ListSkillNeedsResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
   if (!verified.ok) {
-    return { ok: false, error: "unauthenticated" };
+    return { ok: false, error: authRefusalFor(verified) };
   }
 
   const authorized = await authorizeTeamAccess(verified.identity, teamId, {

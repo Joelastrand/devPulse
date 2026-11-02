@@ -1,12 +1,13 @@
 import "server-only";
 import { FieldValue } from "firebase-admin/firestore";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../domain/app-admin";
 import { isValidTeamStatus } from "../domain/team";
 import { isValidMembershipFor, membershipDocId, type MembershipRole } from "../domain/team-membership";
 import { requireAppAdmin } from "./require-app-admin";
-
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
+import { assertNoErasureRecordInTransaction, writeRefusalFor } from "../../auth/server/erasure-write-fence";
 const TEAMS_COLLECTION = "teams";
 const MEMBERSHIPS_COLLECTION = "teamMemberships";
 
@@ -36,7 +37,8 @@ export interface SetTeamMemberRoleCollection {
   run<T>(uid: string, teamId: string, work: (tx: RoleTransaction) => Promise<T>): Promise<T>;
 }
 
-function getDefaultCollection(): SetTeamMemberRoleCollection {
+/** The acting admin's uid fences the role update in the same transaction (TASK-035, W-17). */
+function getDefaultCollection(actorUid: string): SetTeamMemberRoleCollection {
   return {
     async run(uid, teamId, work) {
       const db = getFirestoreDb();
@@ -44,6 +46,7 @@ function getDefaultCollection(): SetTeamMemberRoleCollection {
       const teamRef = db.collection(TEAMS_COLLECTION).doc(teamId);
 
       return db.runTransaction(async (tx) => {
+        await assertNoErasureRecordInTransaction(db, tx, actorUid);
         // Firestore requires every read before the first write; `work` reads
         // lazily and writes last, and `update` is only queued here.
         let pendingUpdate: Record<string, unknown> | undefined;
@@ -77,7 +80,7 @@ export type SetTeamMemberRoleResult =
   | { ok: true; role: MembershipRole }
   | {
       ok: false;
-      error: "unauthenticated" | "forbidden" | "invalid_input" | "not_a_member" | "team_disabled" | "persistence_failed";
+      error: AuthRefusal | "forbidden" | "invalid_input" | "not_a_member" | "team_disabled" | "persistence_failed";
     };
 
 export interface SetTeamMemberRoleDeps {
@@ -129,7 +132,7 @@ export async function setTeamMemberRole(
     return { ok: false, error: "invalid_input" };
   }
 
-  const collection = deps.collection ?? getDefaultCollection();
+  const collection = deps.collection ?? getDefaultCollection(admin.identity.uid);
   const now = deps.now ?? new Date();
 
   try {
@@ -154,7 +157,7 @@ export async function setTeamMemberRole(
     });
 
     return outcome === "updated" ? { ok: true, role } : { ok: false, error: outcome };
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 }

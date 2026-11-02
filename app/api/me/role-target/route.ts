@@ -4,6 +4,7 @@ import { clearOwnRoleTarget } from "../../../../src/features/role-profiles/serve
 import { getOwnRoleTarget } from "../../../../src/features/role-profiles/server/get-own-role-target";
 import { readSetRoleTargetRequest } from "../../../../src/features/role-profiles/server/role-target-request-body";
 import { setOwnRoleTarget } from "../../../../src/features/role-profiles/server/set-own-role-target";
+import { type AuthRefusal, authRefusalFor, authRefusalStatus } from "../../../../src/features/auth/server/auth-refusal";
 
 const BEARER_PATTERN = /^Bearer (.+)$/;
 const NO_STORE = { "Cache-Control": "no-store" };
@@ -12,10 +13,12 @@ const NO_STORE = { "Cache-Control": "no-store" };
  * The owner's target role (SPEC API "Personal target role (owner)"). The only subject is the uid of the verified bearer
  * token: no uid in the path, query, body or response (BR-10). Responses are never cached.
  */
-async function authenticate(request: Request): Promise<string | null> {
+async function authenticate(request: Request): Promise<{ ok: true; uid: string } | { ok: false; error: AuthRefusal }> {
   const match = BEARER_PATTERN.exec(request.headers.get("authorization") ?? "");
   const verified = await verifyIdToken(match ? match[1] : "");
-  return verified.ok ? verified.identity.uid : null;
+  return verified.ok
+    ? { ok: true, uid: verified.identity.uid }
+    : { ok: false, error: authRefusalFor(verified) };
 }
 
 function fail(error: string, status: number) {
@@ -23,8 +26,9 @@ function fail(error: string, status: number) {
 }
 
 export async function GET(request: Request) {
-  const uid = await authenticate(request);
-  if (!uid) return fail("unauthenticated", 401);
+  const verified = await authenticate(request);
+  if (!verified.ok) return fail(verified.error, authRefusalStatus(verified.error));
+  const uid = verified.uid;
 
   try {
     return NextResponse.json(await getOwnRoleTarget(uid), { status: 200, headers: NO_STORE });
@@ -34,8 +38,9 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const uid = await authenticate(request);
-  if (!uid) return fail("unauthenticated", 401);
+  const verified = await authenticate(request);
+  if (!verified.ok) return fail(verified.error, authRefusalStatus(verified.error));
+  const uid = verified.uid;
 
   const body = await readSetRoleTargetRequest(request);
   if (!body.ok) return fail("invalid_request", 400);
@@ -53,8 +58,9 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const uid = await authenticate(request);
-  if (!uid) return fail("unauthenticated", 401);
+  const verified = await authenticate(request);
+  if (!verified.ok) return fail(verified.error, authRefusalStatus(verified.error));
+  const uid = verified.uid;
 
   try {
     await clearOwnRoleTarget(uid);

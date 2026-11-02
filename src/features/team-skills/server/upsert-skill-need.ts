@@ -12,9 +12,10 @@ import { requireGenuineLead } from "./genuine-team-membership";
 import type { SkillNeedView } from "./list-skill-needs";
 import { toCandidateSkillTree } from "./skill-need-catalog";
 import { getDefaultSkillNeedWriteStore, type SkillNeedWriteStore } from "./skill-needs-store";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 
 export type UpsertSkillNeedError =
-  | "unauthenticated"
+  | AuthRefusal
   | "forbidden"
   | "team_disabled"
   | "invalid_request"
@@ -52,7 +53,7 @@ export async function upsertSkillNeed(
   deps: UpsertSkillNeedDeps = {},
 ): Promise<UpsertSkillNeedResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
-  if (!verified.ok) return { ok: false, error: "unauthenticated" };
+  if (!verified.ok) return { ok: false, error: authRefusalFor(verified) };
   const identity = verified.identity;
 
   const store = deps.store ?? getDefaultSkillNeedWriteStore();

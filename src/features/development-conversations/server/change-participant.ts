@@ -1,4 +1,5 @@
 import "server-only";
+import { writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import { PARTICIPATION_LIMIT } from "../domain/conversation-constants";
 import { isConversationId } from "../domain/conversation-id";
 import type { ConversationContent } from "../domain/content-payload";
@@ -48,10 +49,17 @@ export type ChangeParticipantResult =
   | { ok: true; noop?: true }
   | {
       ok: false;
-      error: "invalid_input" | "invalid_participant" | "conversation_completed" | "conversation_not_found" | "persistence_failed";
+      error:
+        | "invalid_input"
+        | "invalid_participant"
+        | "conversation_completed"
+        | "conversation_not_found"
+        | "erasure_in_progress"
+        | "persistence_failed";
     };
 
 const OK: ChangeParticipantResult = { ok: true };
+const REFUSED: ChangeParticipantResult = { ok: false, error: "erasure_in_progress" };
 const NOOP: ChangeParticipantResult = { ok: true, noop: true };
 const NOT_FOUND: ChangeParticipantResult = { ok: false, error: "conversation_not_found" };
 const INVALID: ChangeParticipantResult = { ok: false, error: "invalid_participant" };
@@ -195,6 +203,8 @@ async function replaceInTransaction(
     ...contentPatch,
   });
   if (current !== null) tx.deleteParticipation(current.uid, conversationId);
+  // Coordination with membership destruction (TASK-038, I-7): the new candidate's membership is touched in this transaction.
+  tx.touchMembership(prepared.candidateUid, prepared.teamId, prepared.memberRef);
   tx.setParticipation(prepared.candidateUid, conversationId, { ownerUid, invitedAt: new Date(now.getTime()) });
   return OK;
 }
@@ -215,15 +225,23 @@ export async function changeParticipant(
 
   try {
     if (parsed.memberRef === null) {
-      return await deps.store.runTransaction((tx) => removeInTransaction(tx, ownerUid, conversationId, deps, deps.clock()));
+      return await deps.store.runOwnerTransaction(ownerUid, (tx) =>
+        removeInTransaction(tx, ownerUid, conversationId, deps, deps.clock()),
+      );
     }
 
     const prepared = await prepareReplacement(ownerUid, conversationId, parsed.memberRef, deps);
     if (!prepared.ok) return prepared.result;
     const { replacement } = prepared;
-    return await deps.store.runTransaction((tx) => replaceInTransaction(tx, ownerUid, conversationId, replacement, deps, deps.clock()));
-  } catch {
-    // Any read, key or write failure is operational. The raw error is never surfaced (BR-47).
-    return FAILED;
+    // A replacement writes the new candidate's binding and participation index, so the candidate's erasure record is read in
+    // the same transaction before any write (BR-4(b), TASK-038 I-7).
+    return await deps.store.runOwnerTransaction(
+      ownerUid,
+      (tx) => replaceInTransaction(tx, ownerUid, conversationId, replacement, deps, deps.clock()),
+      { secondFence: replacement.candidateUid },
+    );
+  } catch (error) {
+    // Any read, key or write failure is operational. The raw error is never surfaced (BR-47). A fence refusal is its own code.
+    return writeRefusalFor(error) === "erasure_in_progress" ? REFUSED : FAILED;
   }
 }

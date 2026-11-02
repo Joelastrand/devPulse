@@ -28,5 +28,6 @@ export interface Team {
   name: string;
   status: TeamStatus;
   createdAt: Date;
-  createdBy: string;
+  /** `null` after the creating account was erased (account-erasure A-12). Accountability only. */
+  createdBy: string | null;
 }

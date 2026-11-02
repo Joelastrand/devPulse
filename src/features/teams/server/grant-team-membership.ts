@@ -1,4 +1,5 @@
 import "server-only";
+import { assertNoErasureRecordInTransaction, runFencedTransaction } from "../../auth/server/erasure-write-fence";
 import type { DocumentReference, Transaction } from "firebase-admin/firestore";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { generateMemberRef } from "../domain/member-ref";
@@ -14,7 +15,7 @@ export interface MembershipGrantRecord {
   teamId: string;
   createdAt: Date;
   createdVia: MembershipSource;
-  grantedBy: string;
+  grantedBy: string | null;
 }
 
 /**
@@ -63,7 +64,9 @@ function getDefaultCollection(): GrantTeamMembershipCollection {
       const ref = db
         .collection(MEMBERSHIPS_COLLECTION)
         .doc(membershipDocId(record.uid, record.teamId));
-      return db.runTransaction(async (tx) => {
+      return runFencedTransaction(db, record.uid, async (tx) => {
+        // The acting admin's erasure record is read in the same transaction too (TASK-035, W-17).
+        if (record.grantedBy !== null) await assertNoErasureRecordInTransaction(db, tx, record.grantedBy);
         const snapshot = await tx.get(ref);
         return applyMembershipGrant(tx, ref, snapshot.exists, record);
       });

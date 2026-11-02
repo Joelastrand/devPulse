@@ -26,10 +26,10 @@ export interface AdminTeamMemberEntry {
   hasMemberRef: boolean;
 }
 
-/** One pending invitation row (BR-30). */
+/** One pending invitation row (BR-30). `invitedBy` is `null` after the inviter's erasure (TASK-017); the UI never shows it. */
 export interface AdminPendingInvitationEntry {
   email: string;
-  invitedBy: string;
+  invitedBy: string | null;
   createdAt: string;
 }
 
@@ -299,7 +299,8 @@ function isAdminPendingInvitationEntry(value: unknown): value is AdminPendingInv
     return false;
   }
   const { email, invitedBy, createdAt } = value as Record<string, unknown>;
-  return isNonEmptyString(email) && isNonEmptyString(invitedBy) && isNonEmptyString(createdAt);
+  // `null` is the erased-inviter state (TASK-017): no identity. Any other non-string or empty value is still rejected.
+  return isNonEmptyString(email) && (invitedBy === null || isNonEmptyString(invitedBy)) && isNonEmptyString(createdAt);
 }
 
 function parseFetchTeamInvitationsResponse(body: unknown): FetchTeamInvitationsResult {

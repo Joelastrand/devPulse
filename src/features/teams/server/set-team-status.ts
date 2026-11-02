@@ -1,10 +1,10 @@
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../domain/app-admin";
 import type { TeamStatus } from "../domain/team";
 import { requireAppAdmin } from "./require-app-admin";
-
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
 const COLLECTION_NAME = "teams";
 
 /**
@@ -28,7 +28,7 @@ function getDefaultCollection(): TeamStatusCollection {
 
 export type SetTeamStatusResult =
   | { ok: true }
-  | { ok: false; error: "unauthenticated" | "forbidden" | "persistence_failed" };
+  | { ok: false; error: AuthRefusal | "forbidden" | "persistence_failed" };
 
 export interface SetTeamStatusDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];

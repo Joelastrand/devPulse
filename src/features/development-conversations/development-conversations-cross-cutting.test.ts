@@ -446,13 +446,14 @@ describe("roles, admin status, e-mail and display name never grant access (D2-SI
 
 describe("an unauthenticated request has no subject (D2-SI-1)", () => {
   it("a missing or unverifiable bearer token yields no subject, and a verified token yields only the token's uid", async () => {
-    verifyIdTokenMock.mockResolvedValue({ ok: false });
-    expect(await verifiedSubject(new Request("https://example.test/"))).toBeNull();
-    expect(await verifiedSubject(new Request("https://example.test/", { headers: { authorization: "Bearer bad.token" } }))).toBeNull();
+    verifyIdTokenMock.mockResolvedValue({ ok: false, error: "invalid_token" });
+    expect((await verifiedSubject(new Request("https://example.test/"))).ok).toBe(false);
+    expect((await verifiedSubject(new Request("https://example.test/", { headers: { authorization: "Bearer bad.token" } }))).ok).toBe(false);
 
     verifyIdTokenMock.mockResolvedValue({ ok: true, identity: { uid: PARTICIPANT_UID } });
-    expect(await verifiedSubject(new Request("https://example.test/", { headers: { authorization: "Bearer good.token" } }))).toBe(
-      PARTICIPANT_UID,
-    );
+    expect(await verifiedSubject(new Request("https://example.test/", { headers: { authorization: "Bearer good.token" } }))).toEqual({
+      ok: true,
+      uid: PARTICIPANT_UID,
+    });
   });
 });

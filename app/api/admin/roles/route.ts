@@ -6,6 +6,7 @@ import {
   objectBody,
   pickRoleFields,
 } from "../../../../src/features/role-profiles/server/admin-role-request";
+import { authRefusalStatus, isAuthRefusal } from "../../../../src/features/auth/server/auth-refusal";
 
 /**
  * Admin-only role catalog (SPEC "Role catalog (admin)"). `GET` lists a window of roles and `POST` creates one. Kept
@@ -46,14 +47,14 @@ export async function POST(request: Request) {
 }
 
 function statusForListError(error: Extract<ListRolesForAdminResult, { ok: false }>["error"]): number {
-  if (error === "unauthenticated") return 401;
+  if (isAuthRefusal(error)) return authRefusalStatus(error);
   if (error === "forbidden") return 403;
   if (error === "invalid_input") return 400;
   return 500;
 }
 
 function statusForCreateError(error: Extract<CreateRoleResult, { ok: false }>["error"]): number {
-  if (error === "unauthenticated") return 401;
+  if (isAuthRefusal(error)) return authRefusalStatus(error);
   if (error === "forbidden") return 403;
   if (error === "invalid_input") return 400;
   if (error === "skill_not_found") return 404;

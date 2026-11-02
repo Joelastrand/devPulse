@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SharedGoalSnapshot } from "../domain/shared-goal-snapshot";
-import { OWNER_DOCUMENT_KEYS, type ConversationStore, type RawConversationData } from "./conversation-store-types";
+import { OWNER_DOCUMENT_KEYS, type RawConversationData } from "./conversation-store-types";
 import { createFakeContentCodec, type FakeContentCodec } from "./fake-content-codec";
 import { createFakeConversationStore, type FakeConversationStore } from "./fake-conversation-store";
 import { OTHER_OWNER_UID, NOW, OWNER_UID, PARTICIPANT_UID, seedOwnerConversation } from "./owner-read-test-support";
@@ -27,14 +27,14 @@ function setup(): { store: FakeConversationStore; codec: FakeContentCodec; deps:
   return { store, codec, deps, setNow: (date) => (now = date) };
 }
 
-async function rawOwner(store: ConversationStore, ownerUid = OWNER_UID): Promise<RawConversationData> {
+async function rawOwner(store: FakeConversationStore, ownerUid = OWNER_UID): Promise<RawConversationData> {
   const raw = await store.getOwner(ownerUid, CONVERSATION_ID);
   if (raw === undefined) throw new Error("fixture document missing");
   return raw;
 }
 
 /** The decrypted content of the stored owner document, read the way a decrypting reader reads it. */
-async function storedContent(store: ConversationStore, codec: FakeContentCodec) {
+async function storedContent(store: FakeConversationStore, codec: FakeContentCodec) {
   const raw = await rawOwner(store);
   const envelope = {
     ciphertext: raw.ciphertext,
@@ -272,7 +272,7 @@ describe("updateOwnerSections: unreadable or absent documents (BR-33, BR-53, IMP
   it("reports persistence_failed when the transaction fails, with no path or content in the result", async () => {
     const { store, codec, deps } = setup();
     await seedOwnerConversation(store, codec, { conversationId: CONVERSATION_ID });
-    const failing: ConversationStore = {
+    const failing: FakeConversationStore = {
       ...store,
       runTransaction() {
         return Promise.reject(new Error("simulated failure with a document path"));
@@ -369,15 +369,16 @@ describe("updateOwnerSections: one-field updates preserve every other field (BR-
 describe("updateOwnerSections: validation runs before any read, codec call or transaction", () => {
   function countingDeps(deps: UpdateOwnerSectionsDeps) {
     const calls: string[] = [];
-    const store: ConversationStore = {
-      ...deps.store,
+    const fakeStore = deps.store as FakeConversationStore;
+    const store: FakeConversationStore = {
+      ...fakeStore,
       getOwner: (ownerUid, conversationId) => {
         calls.push("getOwner");
         return deps.store.getOwner(ownerUid, conversationId);
       },
       runTransaction: (work) => {
         calls.push("runTransaction");
-        return deps.store.runTransaction(work);
+        return fakeStore.runTransaction(work);
       },
     };
     const codec = {
@@ -444,7 +445,7 @@ describe("updateOwnerSections: transactional read on retry (BR-49, no stale-payl
   it("re-reads the committed payload when the transaction is re-run, so a retry cannot undo a concurrent write", async () => {
     const { store, codec, deps } = setup();
     await seedOwnerConversation(store, codec, { conversationId: CONVERSATION_ID, ownerNotes: "Before" });
-    const retrying: ConversationStore = {
+    const retrying: FakeConversationStore = {
       ...store,
       async runTransaction(work) {
         // The first attempt reads the old payload, then conflicts. A concurrent owner-notes write commits before the retry.

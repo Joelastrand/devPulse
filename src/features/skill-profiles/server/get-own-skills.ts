@@ -4,10 +4,11 @@ import { readSkillProfileRecord, selectVisibleLevels } from "../domain/skill-pro
 import type { OwnSkillsDto } from "../domain/skill-profile-view";
 import { getDefaultSkillCatalogReader, readSkillCatalog, type SkillCatalogReader } from "./skill-catalog";
 import { getDefaultSkillProfileStore, type SkillProfileStore } from "./skill-profile-store";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 
 export type GetOwnSkillsResult =
   | { ok: true; dto: OwnSkillsDto }
-  | { ok: false; error: "unauthenticated" | "persistence_failed" };
+  | { ok: false; error: AuthRefusal | "persistence_failed" };
 
 export interface GetOwnSkillsDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
@@ -22,7 +23,7 @@ export interface GetOwnSkillsDeps {
  */
 export async function getOwnSkills(idToken: string, deps: GetOwnSkillsDeps = {}): Promise<GetOwnSkillsResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
-  if (!verified.ok) return { ok: false, error: "unauthenticated" };
+  if (!verified.ok) return { ok: false, error: authRefusalFor(verified) };
 
   const store = deps.store ?? getDefaultSkillProfileStore();
   const catalogReader = deps.catalogReader ?? getDefaultSkillCatalogReader();

@@ -78,7 +78,7 @@ export interface Survey {
   closedAt?: Date;
   archivedAt?: Date;
   createdAt: Date;
-  createdBy: string;
+  createdBy: string | null;
 }
 
 /**
@@ -175,7 +175,7 @@ export function isValidSurvey(
     isValidOptionalDate(record.closedAt) &&
     isValidOptionalDate(record.archivedAt) &&
     isValidDate(record.createdAt) &&
-    isNonEmptyString(record.createdBy)
+    isNullableActor(record.createdBy)
   );
 }
 
@@ -189,4 +189,12 @@ function isValidDate(value: unknown): value is Date {
 
 function isValidOptionalDate(value: unknown): value is Date | undefined {
   return value === undefined || isValidDate(value);
+}
+
+/**
+ * An actor uid, or exactly `null` once that account was erased (account-erasure TASK-023, SPEC A-1). Any other value,
+ * including an empty string or a non-string, is malformed.
+ */
+function isNullableActor(value: unknown): value is string | null {
+  return value === null || isNonEmptyString(value);
 }

@@ -8,6 +8,7 @@ import type {
   ForumThreadsCollection,
   MembershipReader,
   TeamStatusReader,
+  ThreadTransactionScope,
 } from "./create-thread";
 import { createThread } from "./create-thread";
 import type { ForumThreadRecord } from "../domain/forum-thread";
@@ -69,14 +70,19 @@ function membershipDoc(uid: string, teamId: string): Record<string, unknown> {
   return { uid, teamId, createdAt: new Date("2026-08-01T00:00:00Z"), createdVia: "admin_direct", grantedBy: "admin" };
 }
 
-function baseDeps(overrides: Partial<CreateThreadDeps> = {}): CreateThreadDeps {
+/** The transaction scope fakes. Any part can be replaced by a test. The runner passes the scope straight through (no fence). */
+type ScopeOverrides = Partial<ThreadTransactionScope> & Pick<CreateThreadDeps, "verifyToken" | "now">;
+
+function baseDeps(overrides: ScopeOverrides = {}): CreateThreadDeps {
+  const scope: ThreadTransactionScope = {
+    membershipReader: overrides.membershipReader ?? fakeMembershipReader(membershipDoc(MEMBER_UID, TEAM_ID)),
+    teamStatusReader: overrides.teamStatusReader ?? fakeTeamStatusReader("active"),
+    collection: overrides.collection ?? fakeForumThreadsCollection(),
+  };
   return {
-    verifyToken: verifyTokenReturning(identity()),
-    membershipReader: fakeMembershipReader(membershipDoc(MEMBER_UID, TEAM_ID)),
-    teamStatusReader: fakeTeamStatusReader("active"),
-    collection: fakeForumThreadsCollection(),
-    now: NOW,
-    ...overrides,
+    verifyToken: overrides.verifyToken ?? verifyTokenReturning(identity()),
+    runThreadTransaction: (_uid, work) => work(scope),
+    now: overrides.now ?? NOW,
   };
 }
 

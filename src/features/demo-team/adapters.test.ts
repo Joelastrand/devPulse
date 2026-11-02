@@ -231,6 +231,15 @@ describe("presenter lookup adapter", () => {
     expect(rec.getUserCalls).toEqual(["presenter-1"]);
   });
 
+  it("reports an erasure record by existence only, reading only the accountErasures path (TASK-036)", async () => {
+    const { sdk, rec } = fakeSdk({ docs: { "accountErasures/presenter-1": { status: "in_progress", step: "forum" } } });
+    const { presenter } = build(sdk);
+    await expect(presenter.hasErasureRecord("presenter-1")).resolves.toBe(true);
+    await expect(presenter.hasErasureRecord("presenter-2")).resolves.toBe(false);
+    expect(rec.gets).toEqual(["accountErasures/presenter-1", "accountErasures/presenter-2"]);
+    expect(JSON.stringify(await presenter.hasErasureRecord("presenter-1"))).toBe("true");
+  });
+
   it("maps auth/user-not-found to false", async () => {
     const { sdk } = fakeSdk({ getUserError: { code: "auth/user-not-found", message: "secret detail" } });
     await expect(build(sdk).presenter.userExists("p")).resolves.toBe(false);

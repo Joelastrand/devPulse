@@ -25,7 +25,7 @@ export interface AdminSurveyEntry {
   openedAt?: string;
   closedAt?: string;
   archived: boolean;
-  createdBy: string;
+  createdBy: string | null;
   createdAt: string;
 }
 
@@ -77,7 +77,7 @@ function isAdminSurveyEntry(value: unknown): value is AdminSurveyEntry {
     isOptionalString(record.openedAt) &&
     isOptionalString(record.closedAt) &&
     typeof record.archived === "boolean" &&
-    isNonEmptyString(record.createdBy) &&
+    (record.createdBy === null || isNonEmptyString(record.createdBy)) &&
     isNonEmptyString(record.createdAt)
   );
 }

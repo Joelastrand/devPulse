@@ -224,3 +224,59 @@ describe("Firestore deployment configuration", () => {
     expect(skillProgressIndexes).toHaveLength(0);
   });
 });
+
+describe("account-erasure Firestore configuration (TASK-008)", () => {
+  it("denies all client-SDK access to accountErasures unconditionally, with an explicit block before the catch-all", () => {
+    const rules = readRepoFile("firestore.rules");
+
+    expect(rules).toMatch(/match\s+\/accountErasures\/\{document=\*\*\}\s*\{\s*allow read, write: if false;/);
+    expect(rules.indexOf("match /accountErasures/")).toBeLessThan(rules.indexOf("match /{document=**}"));
+  });
+
+  it("declares the AE-IDX-1 collection-group index on conversations.participantUid", () => {
+    const indexes = JSON.parse(readRepoFile("firestore.indexes.json")) as {
+      fieldOverrides: Array<{
+        collectionGroup: string;
+        fieldPath: string;
+        indexes: Array<{ queryScope: string; order?: string }>;
+      }>;
+    };
+
+    const overrides = indexes.fieldOverrides.filter(
+      (override) => override.collectionGroup === "conversations" && override.fieldPath === "participantUid",
+    );
+    expect(overrides).toEqual([
+      {
+        collectionGroup: "conversations",
+        fieldPath: "participantUid",
+        indexes: [{ queryScope: "COLLECTION_GROUP", order: "ASCENDING" }],
+      },
+    ]);
+  });
+
+  it("exempts no AE-IDX-2 field from automatic single-field indexing (no override with an empty index list)", () => {
+    const indexes = JSON.parse(readRepoFile("firestore.indexes.json")) as {
+      fieldOverrides: Array<{ collectionGroup: string; fieldPath: string; indexes: unknown[] }>;
+    };
+    const aeIdx2Fields = [
+      "uid",
+      "authorUid",
+      "participantUid",
+      "createdBy",
+      "updatedBy",
+      "archivedBy",
+      "resolvedBy",
+      "deletedBy",
+      "grantedBy",
+      "roleUpdatedBy",
+      "invitedBy",
+      "resolvedUid",
+      "email",
+    ];
+
+    const exemptions = indexes.fieldOverrides.filter(
+      (override) => aeIdx2Fields.includes(override.fieldPath) && override.indexes.length === 0,
+    );
+    expect(exemptions).toEqual([]);
+  });
+});

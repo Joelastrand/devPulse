@@ -5,6 +5,7 @@ import { getDefaultRoleStore } from "./role-store";
 import type { RoleStore } from "./role-store-types";
 import { getDefaultSkillTreeReader } from "./skill-tree-seam";
 import { resolveSkillTreeReferences, type RawSkillTreeReader } from "./skill-tree-seam-types";
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
 
 export interface ListRolesForAdminDeps extends RequireAppAdminDeps {
   store?: RoleStore;
@@ -17,7 +18,7 @@ export interface ListRolesForAdminInput {
 
 export type ListRolesForAdminResult =
   | { ok: true; roles: RoleAdminDto[]; truncated: boolean }
-  | { ok: false; error: "unauthenticated" | "forbidden" | "invalid_input" | "persistence_failed" };
+  | { ok: false; error: AuthRefusal | "forbidden" | "invalid_input" | "persistence_failed" };
 
 interface ReadableRole {
   roleId: string;

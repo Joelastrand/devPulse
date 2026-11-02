@@ -1,5 +1,7 @@
+import { ErasureWriteRefused } from "../../auth/server/erasure-write-fence";
 import { describe, expect, it, vi } from "vitest";
 import { isMemberRef } from "../domain/member-ref";
+import { membershipDocId } from "../domain/team-membership";
 import {
   materializeMemberRefs,
   type MaterializeMemberRefsCollection,
@@ -43,6 +45,8 @@ function member(uid: string, extra: Doc = {}, teamId = "team-1"): [string, Doc] 
  */
 function fakeCollection(seed: {
   memberships: Array<[string, Doc]>;
+  /** uids whose erasure record exists: their memberships cannot be written. */
+  erasingUids?: string[];
   teams?: Record<string, unknown>;
   beforeCommit?: (memberships: Map<string, Doc>) => void;
   failCommit?: boolean;
@@ -50,6 +54,7 @@ function fakeCollection(seed: {
   const memberships = new Map<string, Doc>(seed.memberships);
   const teams = seed.teams ?? { "team-1": "active" };
   const log = { runs: 0, writes: [] as Array<{ id: string; memberRef: string }> };
+  const erasing = new Set(seed.erasingUids ?? []);
 
   const collection: MaterializeMemberRefsCollection = {
     async run(teamId, work) {
@@ -64,6 +69,9 @@ function fakeCollection(seed: {
             .filter(([, data]) => data.teamId === teamId)
             .slice(0, limit)
             .map(([id, data]) => ({ id, data: { ...data } }));
+        },
+        async assertNoErasureRecord(uid) {
+          if (erasing.has(uid)) throw new ErasureWriteRefused();
         },
         setMemberRef(id, memberRef) {
           pending.push({ id, memberRef });
@@ -185,13 +193,13 @@ describe("materializeMemberRefs — preparation", () => {
     const fake = fakeCollection({
       memberships: [member("u1", { memberRef: VALID_REF }), member("u2")],
     });
-    const generateRef = vi.fn().mockReturnValueOnce(VALID_REF).mockReturnValueOnce(OTHER_VALID_REF);
+    const createKey = vi.fn().mockReturnValueOnce(VALID_REF).mockReturnValueOnce(OTHER_VALID_REF);
 
-    const result = await run(fake, { generateRef });
+    const result = await run(fake, { createKey });
 
     expect(result).toMatchObject({ ok: true, materialized: 1 });
     expect(fake.memberships.get("u2__team-1")?.memberRef).toBe(OTHER_VALID_REF);
-    expect(generateRef).toHaveBeenCalledTimes(2);
+    expect(createKey).toHaveBeenCalledTimes(2);
   });
 
   it("prepares 120 legacy memberships in a single transaction", async () => {
@@ -293,5 +301,44 @@ describe("materializeMemberRefs — atomicity", () => {
     };
     const result = await materializeMemberRefs("token", "team-1", { ...asAdmin, collection });
     expect(result).toEqual({ ok: false, error: "persistence_failed" });
+  });
+});
+
+describe("materializeMemberRefs — erasure fence (BR-4(b), target member)", () => {
+  it("refuses the whole run with erasure_in_progress when a member being written is erasing, and writes nothing", async () => {
+    const fake = fakeCollection({
+      memberships: [member("u1"), member("u2")],
+      erasingUids: ["u2"],
+    });
+
+    const result = await run(fake);
+
+    expect(result).toEqual({ ok: false, error: "erasure_in_progress" });
+    expect(fake.log.writes).toEqual([]);
+    expect(fake.memberships.get(membershipDocId("u1", "team-1"))).not.toHaveProperty("memberRef");
+  });
+
+  it("fences the member, not the admin: an erasing admin does not block materializing another member", async () => {
+    const fake = fakeCollection({
+      memberships: [member("u1")],
+      erasingUids: ["admin-1"],
+    });
+
+    const result = await run(fake);
+
+    expect(result).toMatchObject({ ok: true, materialized: 1 });
+    expect(fake.log.writes).toHaveLength(1);
+  });
+
+  it("writes nothing for a member whose ref is already valid, so that member is not fenced for a write it never makes", async () => {
+    const fake = fakeCollection({
+      memberships: [member("u1", { memberRef: VALID_REF }), member("u2")],
+      erasingUids: ["u1"],
+    });
+
+    const result = await run(fake);
+
+    expect(result).toMatchObject({ ok: true, materialized: 1, alreadyHad: 1 });
+    expect(fake.log.writes.map((w) => w.id)).toEqual([membershipDocId("u2", "team-1")]);
   });
 });

@@ -5,6 +5,7 @@ import { getDisplayNames, type ProfileBatchReader } from "../../profiles/server/
 import { isValidTeamStatus } from "../domain/team";
 import { extractMemberUid, membershipRoleOf } from "../domain/team-membership";
 import { authorizeTeamAccess, type AuthorizeTeamAccessDeps } from "./authorize-team-access";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 
 const TEAMS_COLLECTION = "teams";
 const MEMBERSHIPS_COLLECTION = "teamMemberships";
@@ -29,7 +30,7 @@ export interface TeamRosterEntry {
 
 export type ListTeamRosterResult =
   | { ok: true; members: TeamRosterEntry[]; truncated: boolean }
-  | { ok: false; error: "unauthenticated" | "forbidden" | "read_failed" };
+  | { ok: false; error: AuthRefusal | "forbidden" | "read_failed" };
 
 /** Read seam for the roster's own reads, satisfied by Firestore in production and an in-memory fake in tests. */
 export interface TeamRosterStore {
@@ -110,7 +111,7 @@ export async function listTeamRoster(
 ): Promise<ListTeamRosterResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
   if (!verified.ok) {
-    return { ok: false, error: "unauthenticated" };
+    return { ok: false, error: authRefusalFor(verified) };
   }
   const callerUid = verified.identity.uid;
 

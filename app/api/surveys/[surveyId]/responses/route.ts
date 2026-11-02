@@ -7,6 +7,8 @@ const ERROR_STATUS: Record<string, number> = {
   invalid_submission: 400,
   survey_unavailable: 409,
   unauthenticated: 401,
+  erasure_in_progress: 403,
+  auth_unavailable: 503,
   forbidden: 403,
   already_submitted: 409,
   encryption_failed: 500,

@@ -4,8 +4,9 @@ import { isWellFormedTreeId } from "../../skill-profiles/domain/skill-profile";
 import { skillNeedDocId } from "../domain/skill-need";
 import { requireGenuineLead } from "./genuine-team-membership";
 import { getDefaultSkillNeedWriteStore, type SkillNeedWriteStore } from "./skill-needs-store";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 
-export type DeleteSkillNeedError = "unauthenticated" | "forbidden" | "team_disabled" | "persistence_failed";
+export type DeleteSkillNeedError = AuthRefusal | "forbidden" | "team_disabled" | "persistence_failed";
 
 export type DeleteSkillNeedResult = { ok: true } | { ok: false; error: DeleteSkillNeedError };
 
@@ -28,7 +29,7 @@ export async function deleteSkillNeed(
   deps: DeleteSkillNeedDeps = {},
 ): Promise<DeleteSkillNeedResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
-  if (!verified.ok) return { ok: false, error: "unauthenticated" };
+  if (!verified.ok) return { ok: false, error: authRefusalFor(verified) };
   const identity = verified.identity;
 
   const store = deps.store ?? getDefaultSkillNeedWriteStore();

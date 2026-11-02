@@ -1,11 +1,12 @@
 import "server-only";
+import { runFencedTransaction, writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../../teams/domain/app-admin";
 import { requireAppAdmin } from "../../teams/server/require-app-admin";
 import type { SkillTreeRecord } from "../domain/skill-tree";
 import { buildSkillNodes, validateSkillNodeLabels, validateSkillTreeName } from "../domain/skill-tree-input";
-
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
 const SKILL_TREES_COLLECTION = "skillTrees";
 
 /**
@@ -19,15 +20,25 @@ export interface SkillTreesCollection {
   add(record: SkillTreeRecord): Promise<{ id: string }>;
 }
 
-function getDefaultCollection(): SkillTreesCollection {
-  return getFirestoreDb().collection(SKILL_TREES_COLLECTION);
+/** Writer-only: the create (stamps the admin's uid) runs in a transaction that reads `accountErasures/{actorUid}` first (TASK-035, W-17). */
+function getDefaultCollection(actorUid: string): SkillTreesCollection {
+  return {
+    async add(record) {
+      const db = getFirestoreDb();
+      const ref = db.collection(SKILL_TREES_COLLECTION).doc();
+      await runFencedTransaction(db, actorUid, async (tx) => {
+        tx.create(ref, record);
+      });
+      return { id: ref.id };
+    },
+  };
 }
 
 export type CreateSkillTreeResult =
   | { ok: true; treeId: string }
   | {
       ok: false;
-      error: "unauthenticated" | "forbidden" | "invalid_input" | "persistence_failed";
+      error: AuthRefusal | "forbidden" | "invalid_input" | "persistence_failed";
     };
 
 export interface CreateSkillTreeDeps {
@@ -82,12 +93,12 @@ export async function createSkillTree(
     createdBy: admin.identity.uid,
   };
 
-  const collection = deps.collection ?? getDefaultCollection();
+  const collection = deps.collection ?? getDefaultCollection(admin.identity.uid);
 
   try {
     const { id } = await collection.add(record);
     return { ok: true, treeId: id };
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 }

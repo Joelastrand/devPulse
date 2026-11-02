@@ -1,12 +1,13 @@
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { runFencedTransaction, writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import type { IsAppAdminDeps } from "../../teams/domain/app-admin";
 import { requireAppAdmin } from "../../teams/server/require-app-admin";
 import { isValidTeamStatus } from "../../teams/domain/team";
 import { isValidSkillTree } from "../domain/skill-tree";
 import { skillProgressDocId, type SkillProgressRecord } from "../domain/skill-progress";
-
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
 const SKILL_TREES_COLLECTION = "skillTrees";
 const TEAMS_COLLECTION = "teams";
 const SKILL_PROGRESS_COLLECTION = "skillProgress";
@@ -95,14 +96,18 @@ export interface SkillProgressStore {
   set(docId: string, record: SkillProgressRecord): Promise<void>;
 }
 
-function getDefaultSkillProgressStore(): SkillProgressStore {
+/** The writer is fenced on `accountErasures/{actorUid}` in the same transaction as the write (TASK-031, W-15). */
+function getDefaultSkillProgressStore(actorUid: string): SkillProgressStore {
   return {
     async get(docId) {
       const snapshot = await getFirestoreDb().collection(SKILL_PROGRESS_COLLECTION).doc(docId).get();
       return { exists: snapshot.exists, data: () => snapshot.data() };
     },
     async set(docId, record) {
-      await getFirestoreDb().collection(SKILL_PROGRESS_COLLECTION).doc(docId).set(record);
+      const db = getFirestoreDb();
+      await runFencedTransaction(db, actorUid, async (tx) => {
+        tx.set(db.collection(SKILL_PROGRESS_COLLECTION).doc(docId), record);
+      });
     },
   };
 }
@@ -111,7 +116,7 @@ export type StartTeamSkillTrackingResult =
   | { ok: true }
   | {
       ok: false;
-      error: "unauthenticated" | "forbidden" | "tree_not_found" | "team_not_found" | "team_disabled" | "persistence_failed";
+      error: AuthRefusal | "forbidden" | "tree_not_found" | "team_not_found" | "team_disabled" | "persistence_failed";
     };
 
 export interface StartTeamSkillTrackingDeps {
@@ -189,7 +194,7 @@ export async function startTeamSkillTracking(
   }
 
   const docId = skillProgressDocId(teamId, treeId);
-  const progress = deps.progress ?? getDefaultSkillProgressStore();
+  const progress = deps.progress ?? getDefaultSkillProgressStore(admin.identity.uid);
 
   let progressSnapshot: StartTeamSkillTrackingDocSnapshot;
   try {
@@ -213,7 +218,7 @@ export async function startTeamSkillTracking(
   try {
     await progress.set(docId, record);
     return { ok: true };
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 }

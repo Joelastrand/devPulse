@@ -8,6 +8,7 @@ import * as createReplyModule from "./create-reply";
 import { REPLY_CAPACITY_LIMIT } from "./create-reply";
 import type {
   CreateReplyDeps,
+  ReplyTransactionScope,
   ForumRepliesCollection,
   MembershipReader,
   ReplyCountReader,
@@ -107,16 +108,21 @@ function threadRecord(overrides: Partial<ForumThreadRecord> = {}): ForumThreadRe
   };
 }
 
-function baseDeps(overrides: Partial<CreateReplyDeps> = {}): CreateReplyDeps {
+/** The transaction scope fakes. Any part can be replaced by a test. The runner passes the scope straight through (no fence). */
+type ScopeOverrides = Partial<ReplyTransactionScope> & Pick<CreateReplyDeps, "verifyToken" | "now">;
+
+function baseDeps(overrides: ScopeOverrides = {}): CreateReplyDeps {
+  const scope: ReplyTransactionScope = {
+    membershipReader: overrides.membershipReader ?? fakeMembershipReader(membershipDoc(MEMBER_UID, TEAM_ID)),
+    teamStatusReader: overrides.teamStatusReader ?? fakeTeamStatusReader("active"),
+    threadReader: overrides.threadReader ?? fakeThreadReader(threadRecord()),
+    replyCountReader: overrides.replyCountReader ?? fakeReplyCountReader(0),
+    collection: overrides.collection ?? fakeForumRepliesCollection(),
+  };
   return {
-    verifyToken: verifyTokenReturning(identity()),
-    membershipReader: fakeMembershipReader(membershipDoc(MEMBER_UID, TEAM_ID)),
-    teamStatusReader: fakeTeamStatusReader("active"),
-    threadReader: fakeThreadReader(threadRecord()),
-    replyCountReader: fakeReplyCountReader(0),
-    collection: fakeForumRepliesCollection(),
-    now: NOW,
-    ...overrides,
+    verifyToken: overrides.verifyToken ?? verifyTokenReturning(identity()),
+    runReplyTransaction: (_uid, work) => work(scope),
+    now: overrides.now ?? NOW,
   };
 }
 

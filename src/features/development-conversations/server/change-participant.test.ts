@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { PARTICIPATION_LIMIT } from "../domain/conversation-constants";
 import { changeParticipant, type ChangeParticipantDeps } from "./change-participant";
-import type { ConversationStore, RawConversationData } from "./conversation-store-types";
+import type { RawConversationData } from "./conversation-store-types";
 import { createFakeContentCodec, type FakeContentCodec } from "./fake-content-codec";
 import { createFakeConversationStore, type FakeConversationStore } from "./fake-conversation-store";
 import { createFakeTeamEligibilityReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
@@ -75,7 +75,7 @@ function setup(): Setup {
   return { store, codec, state, reader, deps };
 }
 
-async function rawOwner(store: ConversationStore, ownerUid = OWNER_UID): Promise<RawConversationData> {
+async function rawOwner(store: FakeConversationStore, ownerUid = OWNER_UID): Promise<RawConversationData> {
   const raw = await store.getOwner(ownerUid, CONVERSATION_ID);
   if (raw === undefined) throw new Error("fixture document missing");
   return raw;
@@ -288,7 +288,7 @@ describe("changeParticipant: removal (BR-16, CL-21)", () => {
     const { store, deps } = setupValue;
     await seedAcceptedWithNotes(setupValue);
     const before = await rawOwner(store);
-    const failingIndex: ChangeParticipantDeps["store"] = {
+    const failingIndex: FakeConversationStore = {
       ...store,
       runTransaction: (work) =>
         store.runTransaction((tx) =>
@@ -313,7 +313,7 @@ describe("changeParticipant: removal (BR-16, CL-21)", () => {
     const setupValue = setup();
     const { store, deps } = setupValue;
     await seedAcceptedWithNotes(setupValue);
-    const failing: ChangeParticipantDeps["store"] = {
+    const failing: FakeConversationStore = {
       ...store,
       runTransaction: () => Promise.reject(new Error("raw firestore detail")),
     };
@@ -444,7 +444,7 @@ describe("changeParticipant: replacement (BR-10, BR-16)", () => {
     const { store, deps } = setupValue;
     await seedAcceptedWithNotes(setupValue);
     const before = await rawOwner(store);
-    const failingNewIndex: ChangeParticipantDeps["store"] = {
+    const failingNewIndex: FakeConversationStore = {
       ...store,
       runTransaction: (work) =>
         store.runTransaction((tx) =>
@@ -479,5 +479,18 @@ describe("changeParticipant: replacement (BR-10, BR-16)", () => {
     expect(reader.listCalls).toBe(0);
     codec.setKeyFailure(null);
     expect(await rawOwner(store)).toEqual(before);
+  });
+});
+
+describe("changeParticipant: the replacement candidate is fenced in the same transaction (TASK-038, I-7)", () => {
+  it("passes the new candidate's uid as the second fence of the owner transaction", async () => {
+    const setupValue = setup();
+    const { store, deps } = setupValue;
+    await seedAcceptedWithNotes(setupValue);
+    const spy = vi.spyOn(store, "runOwnerTransaction");
+
+    await changeParticipant(OWNER_UID, CONVERSATION_ID, { participantMemberRef: CANDIDATE_REF }, deps);
+
+    expect(spy).toHaveBeenCalledWith(OWNER_UID, expect.any(Function), { secondFence: CANDIDATE_UID });
   });
 });

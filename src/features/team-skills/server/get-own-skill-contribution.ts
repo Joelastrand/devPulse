@@ -3,8 +3,9 @@ import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-
 import { isEffectiveSkillContribution } from "../domain/skill-contribution";
 import { resolveGenuineTeamMembership } from "./genuine-team-membership";
 import { getDefaultSkillContributionStore, type SkillContributionStore } from "./skill-contribution-store";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 
-export type GetOwnSkillContributionError = "unauthenticated" | "forbidden" | "persistence_failed";
+export type GetOwnSkillContributionError = AuthRefusal | "forbidden" | "persistence_failed";
 
 export type GetOwnSkillContributionResult =
   | { ok: true; contributing: boolean; canOptIn: boolean }
@@ -27,7 +28,7 @@ export async function getOwnSkillContribution(
   deps: GetOwnSkillContributionDeps = {},
 ): Promise<GetOwnSkillContributionResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
-  if (!verified.ok) return { ok: false, error: "unauthenticated" };
+  if (!verified.ok) return { ok: false, error: authRefusalFor(verified) };
   const identity = verified.identity;
   const store = deps.store ?? getDefaultSkillContributionStore();
 

@@ -1,13 +1,11 @@
 import "server-only";
-import {
-  verifyIdToken,
-  type VerifyIdTokenDeps,
-} from "../../auth/server/verify-identity";
+import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import { isAppAdmin, type IsAppAdminDeps } from "../domain/app-admin";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 
 export type GetOwnAdminStatusResult =
   | { ok: true; isAdmin: boolean }
-  | { ok: false; error: "unauthenticated" };
+  | { ok: false; error: AuthRefusal };
 
 export interface GetOwnAdminStatusDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
@@ -35,7 +33,7 @@ export async function getOwnAdminStatus(
     verifyToken: deps.verifyToken,
   });
   if (!verified.ok) {
-    return { ok: false, error: "unauthenticated" };
+    return { ok: false, error: authRefusalFor(verified) };
   }
 
   return {

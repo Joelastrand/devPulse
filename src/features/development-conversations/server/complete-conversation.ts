@@ -1,4 +1,5 @@
 import "server-only";
+import { writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import { isConversationId } from "../domain/conversation-id";
 import { classifyStoredShape } from "../domain/stored-owner-conversation";
 import { getDefaultConversationStore } from "./conversation-store";
@@ -25,12 +26,13 @@ export interface CompleteConversationDeps {
 
 export type CompleteConversationResult =
   | { ok: true }
-  | { ok: false; error: "conversation_not_found" | "invalid_transition" | "persistence_failed" };
+  | { ok: false; error: "conversation_not_found" | "invalid_transition" | "erasure_in_progress" | "persistence_failed" };
 
 const OK: CompleteConversationResult = { ok: true };
 const NOT_FOUND: CompleteConversationResult = { ok: false, error: "conversation_not_found" };
 const INVALID_TRANSITION: CompleteConversationResult = { ok: false, error: "invalid_transition" };
 const FAILED: CompleteConversationResult = { ok: false, error: "persistence_failed" };
+const REFUSED: CompleteConversationResult = { ok: false, error: "erasure_in_progress" };
 
 /** The participant fields that a pending withdrawal clears. Written as `null`, never omitted (BR-16, BR-13). */
 const CLEARED_PARTICIPANT_FIELDS = {
@@ -91,12 +93,12 @@ export async function completeConversation(
   if (!isConversationId(conversationId)) return NOT_FOUND;
 
   try {
-    return await deps.store.runTransaction(async (tx) => {
+    return await deps.store.runOwnerTransaction(ownerUid, async (tx) => {
       const raw = await tx.getOwner(ownerUid, conversationId);
       return applyCompletion(tx, ownerUid, conversationId, raw, deps.clock());
     });
-  } catch {
-    // Any read or write failure is operational. The raw error is never surfaced (BR-47).
-    return FAILED;
+  } catch (error) {
+    // Any read or write failure is operational. The raw error is never surfaced (BR-47). A fence refusal is its own code.
+    return writeRefusalFor(error) === "erasure_in_progress" ? REFUSED : FAILED;
   }
 }

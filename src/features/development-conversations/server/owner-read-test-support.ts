@@ -1,8 +1,9 @@
+
+import type { FakeConversationStore } from "./fake-conversation-store";
 import "server-only";
 import type { ConversationContent } from "../domain/content-payload";
 import type { ConversationStatus } from "../domain/conversation-status";
 import type { SharedGoalSnapshot } from "../domain/shared-goal-snapshot";
-import type { ConversationStore } from "./conversation-store-types";
 import type { FakeContentCodec } from "./fake-content-codec";
 import type { FakeTeamEligibilityState } from "./fake-team-eligibility";
 
@@ -51,7 +52,7 @@ export interface SeedOwnerConversationOptions {
  * fixture options vary; the plaintext content lives inside the fake codec's envelope, never in the stored plain fields.
  */
 export async function seedOwnerConversation(
-  store: ConversationStore,
+  store: FakeConversationStore,
   codec: FakeContentCodec,
   options: SeedOwnerConversationOptions,
 ): Promise<void> {

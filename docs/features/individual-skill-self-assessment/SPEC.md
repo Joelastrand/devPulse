@@ -79,7 +79,7 @@ person's own current self-report.
 - A radar/radial chart or any chart (BR-29).
 - A separate skill-definition concept, user-selected skill subsets, suggestions
   from team data.
-- An account-deletion framework (none exists; see BR-33).
+- An account-deletion framework (none existed when this SPEC was written; superseded 2026-11-02 by docs/features/account-erasure/SPEC.md; see BR-33).
 - `/me` shell/tabs, `Mål`, `Samtaler`, `Oversikt` entries.
 - Demo Team fixture changes.
 
@@ -187,7 +187,7 @@ modified by this specification work.
     pins those blocks and asserts "no composite index" for `userProfiles`. The
     catch-all already denies unlisted collections, but the convention (and the pins)
     require an explicit block for every collection.
-11. **No account-deletion flow exists** for any user data.
+11. **No account-deletion flow exists** for any user data. *(Superseded 2026-11-02: account erasure, docs/features/account-erasure/SPEC.md.)*
 
 ## Actors and access
 | Actor | Read own profile | Write own profile | Read another person's profile |
@@ -911,3 +911,9 @@ APIs are unchanged, and `/me/skills` remains person-owned and shows no team info
   replaced by a fixed `k = 5` (C2 decision P2). Constraints #1, #3–#6 were honoured (opt-in per team,
   per-skill cohort, no `skillProfiles` writes, no persisted coverage, `treeId` identity).
 - **Demo.** C2 added no Demo Team personal assessments.
+
+## Supersession note: account erasure (2026-11-02)
+
+The "no account erasure" and "no erasure flow" limitations in this SPEC are superseded. Account erasure is specified in
+`docs/features/account-erasure/SPEC.md`. The skill profile is erased with its owner's account (AE-SI-6).
+Erasure does not claim deletion from provider logs or provider backups (account-erasure BR-19, E-1 to E-3).

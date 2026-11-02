@@ -1,14 +1,11 @@
 import "server-only";
-import {
-  verifyIdToken,
-  type VerifiedIdentity,
-  type VerifyIdTokenDeps,
-} from "../../auth/server/verify-identity";
+import { type VerifiedIdentity, verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import { isAppAdmin, type IsAppAdminDeps } from "../domain/app-admin";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 
 export type RequireAppAdminResult =
   | { ok: true; identity: VerifiedIdentity }
-  | { ok: false; error: "unauthenticated" | "forbidden" };
+  | { ok: false; error: AuthRefusal | "forbidden" };
 
 export interface RequireAppAdminDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
@@ -33,7 +30,7 @@ export async function requireAppAdmin(
     verifyToken: deps.verifyToken,
   });
   if (!verified.ok) {
-    return { ok: false, error: "unauthenticated" };
+    return { ok: false, error: authRefusalFor(verified) };
   }
 
   if (!isAppAdmin(verified.identity, { allowList: deps.allowList })) {

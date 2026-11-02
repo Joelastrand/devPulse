@@ -32,6 +32,13 @@ export interface ThreadDetailView {
   createdAt: string;
 }
 
+/** The erased-thread placeholder (TASK-015). It has no title, body, or author fields, by design. */
+export interface ErasedThreadDetailView {
+  threadId: string;
+  status: "erased";
+  createdAt: string;
+}
+
 export type ReplyView =
   | {
       replyId: string;
@@ -85,11 +92,21 @@ function toThreadSummaryView(value: unknown): ThreadSummaryView | undefined {
   };
 }
 
-function toThreadDetailView(value: unknown): ThreadDetailView | undefined {
+function toErasedThreadDetailView(record: Record<string, unknown>): ErasedThreadDetailView | undefined {
+  if (!isNonEmptyString(record.threadId) || !isNonEmptyString(record.createdAt)) {
+    return undefined;
+  }
+  return { threadId: record.threadId, status: "erased", createdAt: record.createdAt };
+}
+
+function toThreadDetailView(value: unknown): ThreadDetailView | ErasedThreadDetailView | undefined {
   if (typeof value !== "object" || value === null) {
     return undefined;
   }
   const record = value as Record<string, unknown>;
+  if (record.status === "erased") {
+    return toErasedThreadDetailView(record);
+  }
   if (
     !isNonEmptyString(record.threadId) ||
     typeof record.title !== "string" ||
@@ -301,7 +318,7 @@ export async function createThread(
 // --- Thread detail -------------------------------------------------------
 
 export type FetchThreadDetailResult =
-  | { status: "ok"; thread: ThreadDetailView; replies: ReplyView[] }
+  | { status: "ok"; thread: ThreadDetailView | ErasedThreadDetailView; replies: ReplyView[] }
   | { status: ReadErrorStatus | "not_found" };
 
 function parseFetchThreadDetailResult(value: unknown): FetchThreadDetailResult {
@@ -311,11 +328,16 @@ function parseFetchThreadDetailResult(value: unknown): FetchThreadDetailResult {
   const record = value as Record<string, unknown>;
   if (record.status === "ok") {
     const thread = toThreadDetailView(record.thread);
-    if (!thread || !Array.isArray(record.replies)) {
+    // The erased placeholder nests its replies inside `thread`; an active thread keeps them beside it (SPEC DTO).
+    const rawReplies =
+      typeof record.thread === "object" && record.thread !== null && (record.thread as { status?: unknown }).status === "erased"
+        ? (record.thread as { replies?: unknown }).replies
+        : record.replies;
+    if (!thread || !Array.isArray(rawReplies)) {
       return { status: "read_failed" };
     }
     const replies: ReplyView[] = [];
-    for (const item of record.replies) {
+    for (const item of rawReplies) {
       const view = toReplyView(item);
       if (!view) {
         return { status: "read_failed" };

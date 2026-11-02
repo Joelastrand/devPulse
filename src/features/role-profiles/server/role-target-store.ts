@@ -1,6 +1,7 @@
 import "server-only";
 import { Timestamp } from "firebase-admin/firestore";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
+import { runFencedTransaction } from "../../auth/server/erasure-write-fence";
 import { getRoleInTransaction, toRawRoleData } from "./role-store";
 import { createTransactionSkillTreeReader } from "./skill-tree-seam";
 import { assertSubjectUidSegment, type RoleTargetStore, type RoleTargetWrite } from "./role-target-store-types";
@@ -36,12 +37,17 @@ export function getDefaultRoleTargetStore(): RoleTargetStore {
     },
 
     async delete(subjectUid) {
-      await roleTargetRef(subjectUid).delete();
+      const ref = roleTargetRef(subjectUid);
+      // The erasure fence is read first, in the same transaction (TASK-026, BR-4(b)).
+      await runFencedTransaction(getFirestoreDb(), subjectUid, async (tx) => {
+        tx.delete(ref);
+      });
     },
 
     async runSelection(subjectUid, work) {
       const ref = roleTargetRef(subjectUid);
-      return getFirestoreDb().runTransaction(async (tx) => {
+      // The fence read precedes the role and SkillTree reads and the single target write (TASK-026, BR-4(b)).
+      return runFencedTransaction(getFirestoreDb(), subjectUid, async (tx) => {
         let written = false;
         return work({
           async readRole(roleId) {

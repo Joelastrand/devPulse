@@ -41,21 +41,26 @@ function docRef(collection: string, id: string) {
   };
 }
 
-function query(collection: string, filters: Array<[string, unknown]>, max = Infinity) {
+/** A query over one collection, or (group true) over every collection with that id. Results carry refs and a size. */
+function query(collection: string, filters: Array<[string, unknown]>, max = Infinity, group = false) {
+  const inScope = (path: string) => (group ? path.split("/").at(-2) === collection : path.startsWith(`${collection}/`));
   return {
-    limit: (count: number) => query(collection, filters, count),
+    limit: (count: number) => query(collection, filters, count, group),
+    where: (field: string, _op: string, value: unknown) => query(collection, [...filters, [field, value]], max, group),
+    select: () => query(collection, filters, max, group),
     async get() {
-      const docs = [...db.entries()]
-        .filter(([path]) => path.startsWith(`${collection}/`))
+      const found = [...db.entries()]
+        .filter(([path]) => inScope(path))
         .filter(([, data]) => filters.every(([field, value]) => data[field] === value))
         .slice(0, max)
-        .map(([path, data]) => ({ id: path.split("/")[1], data: () => ({ ...data }) }));
-      return { docs };
+        .map(([path, data]) => ({ id: path.split("/").at(-1), ref: { path }, data: () => ({ ...data }) }));
+      return { docs: found, size: found.length };
     },
   };
 }
 
 const fakeDb = {
+  collectionGroup: (name: string) => query(name, [], Infinity, true),
   collection: (name: string) => ({
     doc: (id: string) => docRef(name, id),
     where: (field: string, _op: string, value: unknown) => query(name, [[field, value]]),
@@ -63,8 +68,10 @@ const fakeDb = {
   async runTransaction<T>(work: (tx: unknown) => Promise<T>): Promise<T> {
     const writes: Array<() => void> = [];
     const tx = {
-      get: async (ref: { path: string }) => snapshot(ref.path),
+      // A document reads its snapshot; a query reads its documents (transactional reads are recorded here).
+      get: async (ref: { path?: string; get?: () => Promise<unknown> }) => (ref.path !== undefined ? snapshot(ref.path) : ref.get?.()),
       set: (ref: { path: string }, data: Doc) => void writes.push(() => void db.set(ref.path, { ...data })),
+      delete: (ref: { path: string }) => void writes.push(() => void db.delete(ref.path)),
       update: (ref: { path: string }, fields: Doc) => {
         updateLog.push({ path: ref.path, fields });
         writes.push(() => applyUpdate(ref.path, fields));
@@ -241,13 +248,34 @@ describe("opt-in (setOwnSkillContribution)", () => {
     expect(await read("u1", "team-2")).toEqual({ ok: true, contributing: false, canOptIn: true });
   });
 
+  it("refuses an opt-in with erasure_in_progress while the caller's erasure record exists, and writes nothing", async () => {
+    db.set(PATH("u1"), membership("u1"));
+    db.set("accountErasures/u1", { status: "in_progress", step: "forum" });
+
+    const result = await setOwnSkillContribution("t", TEAM, { noticeVersion: VERSION }, { verifyToken: verifyAs("u1") });
+
+    expect(result).toEqual({ ok: false, error: "erasure_in_progress" });
+    expect(await read("u1", TEAM)).toEqual({ ok: true, contributing: false, canOptIn: true });
+  });
+
+  it("refuses a withdrawal with erasure_in_progress while the caller's erasure record exists, and keeps the field", async () => {
+    db.set(PATH("u1"), membership("u1"));
+    await optIn("u1");
+    db.set("accountErasures/u1", { status: "in_progress", step: "forum" });
+
+    const result = await withdrawOwnSkillContribution("t", TEAM, { verifyToken: verifyAs("u1") });
+
+    expect(result).toEqual({ ok: false, error: "erasure_in_progress" });
+    expect(await read("u1", TEAM)).toEqual({ ok: true, contributing: true, canOptIn: true });
+  });
+
   it("never recreates a membership removed concurrently (commit fails, nothing resurrected)", async () => {
     db.set(PATH("u1"), membership("u1"));
     const real = getDefaultSkillContributionStore();
     const racing = {
       ...real,
-      runTransaction: <T>(fn: Parameters<typeof real.runTransaction<T>>[0]) =>
-        real.runTransaction((tx) =>
+      runWriteTransaction: <T>(actorUid: string, fn: Parameters<typeof real.runWriteTransaction<T>>[1]) =>
+        real.runWriteTransaction(actorUid, (tx) =>
           fn({
             ...tx,
             setField(uid, teamId, record) {
@@ -270,6 +298,7 @@ describe("opt-in (setOwnSkillContribution)", () => {
   it("a read failure is persistence_failed, never forbidden", async () => {
     const failing = {
       runTransaction: () => Promise.reject(new Error("boom")),
+      runWriteTransaction: () => Promise.reject(new Error("boom")),
       listMembershipsForCoverage: () => Promise.resolve([]),
     };
     expect(await setOwnSkillContribution("t", TEAM, { noticeVersion: VERSION }, { verifyToken: verifyAs("u1"), store: failing })).toEqual({

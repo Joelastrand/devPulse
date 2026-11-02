@@ -411,7 +411,9 @@ describe("deleteReply", () => {
 
     expect(detail.ok).toBe(true);
     if (!detail.ok) throw new Error("expected ok result");
+    if ("status" in detail.thread) throw new Error("expected an active thread");
     expect(detail.thread.title).toBe("T");
+    if (!("replies" in detail)) throw new Error("expected active replies");
     const untouched = detail.replies.find((r) => r.replyId === "reply-other");
     expect(untouched).toMatchObject({ isDeleted: false, body: "Untouched reply" });
   });
@@ -615,24 +617,27 @@ describe("deleteReply", () => {
 
       const created = await createReply("token", TEAM_ID, THREAD_ID, "A genuinely secret reply body", {
         verifyToken: verifyTokenReturning(memberIdentity()),
-        membershipReader: {
-          async getMembership(uid, teamId) {
-            return uid === AUTHOR_UID && teamId === TEAM_ID ? { uid, teamId } : undefined;
-          },
-        },
-        teamStatusReader: { async getTeamStatus() { return "active"; } },
-        threadReader: {
-          async getThread() {
-            return {
-              teamId: TEAM_ID,
-              authorUid: AUTHOR_UID,
-              createdAt: new Date("2026-08-01T00:00:00Z"),
-              ...encrypt(JSON.stringify({ title: "T", body: "B" })),
-            };
-          },
-        },
-        replyCountReader: { async countRepliesForThread() { return 0; } },
-        collection: store,
+        runReplyTransaction: (_uid, work) =>
+          work({
+            membershipReader: {
+              async getMembership(uid, teamId) {
+                return uid === AUTHOR_UID && teamId === TEAM_ID ? { uid, teamId } : undefined;
+              },
+            },
+            teamStatusReader: { async getTeamStatus() { return "active"; } },
+            threadReader: {
+              async getThread() {
+                return {
+                  teamId: TEAM_ID,
+                  authorUid: AUTHOR_UID,
+                  createdAt: new Date("2026-08-01T00:00:00Z"),
+                  ...encrypt(JSON.stringify({ title: "T", body: "B" })),
+                };
+              },
+            },
+            replyCountReader: { async countRepliesForThread() { return 0; } },
+            collection: store,
+          }),
       });
       expect(created).toEqual({ ok: true });
       const replyId = store.lastId();
@@ -662,6 +667,7 @@ describe("deleteReply", () => {
 
       expect(detail.ok).toBe(true);
       if (!detail.ok) throw new Error("expected ok result");
+      if (!("replies" in detail)) throw new Error("expected active replies");
       const tombstoned = detail.replies.find((r) => r.replyId === replyId);
       expect(tombstoned).toEqual({
         replyId,

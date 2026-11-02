@@ -69,6 +69,31 @@ const APPROVED_COLLECTION_REFERENCES = [
   // `userDevelopment/{uid}/roleTarget/current`; it grants no goal store, goal route, goal DTO or collectionGroup access.
   "src/features/role-profiles/server/role-target-store.ts",
   "src/features/role-profiles/server/role-target-store.test.ts",
+  // Account erasure (erasure-only persistence metadata, file-exact): the registry names `userDevelopment` paths for the
+  // erasure sweep and its test pins those rows. It is not a D1 store and grants no goal access.
+  "src/features/account-erasure/server/inventory.ts",
+  "src/features/account-erasure/server/inventory.test.ts",
+  // Account erasure (dated 2026-11-02, DECISION 2): the production erasure adapters and their tests read or delete the owner subtrees (`userDevelopment/{uid}/goals`, `roleTarget`) for approved erasure and residual verification only. Cleanup and verification only: no display, aggregation, ranking, admin inspection or feature reuse.
+  "src/features/account-erasure/server/erasure-adapters.ts",
+  "src/features/account-erasure/server/erasure-adapters.test.ts",
+  "src/features/account-erasure/server/erasure-adapters-sweep.ts",
+  "src/features/account-erasure/server/erasure-adapters-sweep.test.ts",
+  "src/features/account-erasure/server/erasure-adapters-conversations.ts",
+  "src/features/account-erasure/server/erasure-adapters-conversations.test.ts",
+  "src/features/account-erasure/server/erasure-end-to-end.test.ts",
+  "src/features/account-erasure/server/production-composition.test.ts",
+];
+/**
+ * Account erasure (erasure-only persistence metadata, file-exact): the inventory registry is the one place that names the
+ * `collectionGroup` locator for I-8 (`conversations.participantUid`, AE-IDX-1). It is not a D1 query. Only this file is
+ * exempt from the no-collectionGroup rule; no directory or prefix is.
+ */
+const APPROVED_ERASURE_COLLECTION_GROUP_REFERENCES: readonly string[] = [
+  "src/features/account-erasure/server/inventory.ts",
+  "src/features/account-erasure/server/inventory.test.ts",
+  // Account erasure (dated 2026-11-02, DECISION 2): the TASK-019 participant-binding discovery (`conversations.participantUid`, AE-IDX-1) and the residual counter that mirrors the same registry row. Erasure-only, keys-only reads.
+  "src/features/account-erasure/server/erasure-adapters-conversations.ts",
+  "src/features/account-erasure/server/erasure-adapters-sweep.ts",
 ];
 /**
  * TASK-002 pins the rules block; allowed when present, never required. The pin lives beside the existing
@@ -395,7 +420,7 @@ const COLLECTION_GROUP = /\bcollectionGroup\b/;
 const GOALS_LITERAL = /["'`]goals["'`]/;
 function collectionGroupViolations(files: SourceFile[]): string[] {
   return files
-    .filter((f) => isGuarded(f.path) && COLLECTION_GROUP.test(f.text))
+    .filter((f) => isGuarded(f.path) && COLLECTION_GROUP.test(f.text) && !APPROVED_ERASURE_COLLECTION_GROUP_REFERENCES.includes(f.path))
     .filter((f) => isD1(f.path) || COLLECTION_TOKEN.test(f.text) || GOALS_LITERAL.test(f.text))
     .map((f) => f.path);
 }
@@ -841,6 +866,15 @@ describe("D1 scope guard — importer allow-list (dimension 2)", () => {
 describe("D1 scope guard — no collectionGroup (dimension 3)", () => {
   it("passes on the real tree", () => {
     expect(collectionGroupViolations(realFiles)).toEqual([]);
+  });
+
+  it("the account-erasure exemption is file-exact: a sibling erasure file using collectionGroup is still flagged", () => {
+    expect(
+      collectionGroupViolations([
+        virtual("src/features/account-erasure/server/inventory-sweep.ts", `db.collectionGroup("goals").get();`),
+        virtual("src/features/account-erasure/server/erasure-runner.ts", `db.collectionGroup("goals").get();`),
+      ]),
+    ).toEqual(["src/features/account-erasure/server/inventory-sweep.ts", "src/features/account-erasure/server/erasure-runner.ts"]);
   });
 
   it("fails inside the D1 feature in any form, and elsewhere only beside goals or the collection", () => {

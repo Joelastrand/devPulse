@@ -1,10 +1,11 @@
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../../teams/domain/app-admin";
 import { requireAppAdmin } from "../../teams/server/require-app-admin";
 import { effectiveChallengeStatus, isValidChallenge, type Challenge } from "../domain/challenge";
-
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
+import { runFencedTransaction, writeRefusalFor } from "../../auth/server/erasure-write-fence";
 const CHALLENGES_COLLECTION = "challenges";
 
 /** A raw Firestore document read, abstracted so a test double never needs a real `firebase-admin` snapshot. */
@@ -26,7 +27,8 @@ export interface ChallengeDocStore {
   update(challengeId: string, data: Record<string, unknown>): Promise<void>;
 }
 
-function getDefaultChallengeDocStore(): ChallengeDocStore {
+/** Writer-only: the update is fenced on `accountErasures/{actorUid}` in the same transaction (TASK-034, W-17). */
+function getDefaultChallengeDocStore(actorUid: string): ChallengeDocStore {
   return {
     async get(challengeId) {
       const snapshot = await getFirestoreDb()
@@ -36,7 +38,10 @@ function getDefaultChallengeDocStore(): ChallengeDocStore {
       return { exists: snapshot.exists, data: () => snapshot.data() };
     },
     async update(challengeId, data) {
-      await getFirestoreDb().collection(CHALLENGES_COLLECTION).doc(challengeId).update(data);
+      const db = getFirestoreDb();
+      await runFencedTransaction(db, actorUid, async (tx) => {
+        tx.update(db.collection(CHALLENGES_COLLECTION).doc(challengeId), data);
+      });
     },
   };
 }
@@ -77,7 +82,7 @@ export type ResolveChallengeResult =
   | {
       ok: false;
       error:
-        | "unauthenticated"
+        | AuthRefusal
         | "forbidden"
         | "not_found"
         | "wrong_team"
@@ -140,7 +145,7 @@ export async function resolveChallenge(
     return { ok: false, error: admin.error };
   }
 
-  const docs = deps.docs ?? getDefaultChallengeDocStore();
+  const docs = deps.docs ?? getDefaultChallengeDocStore(admin.identity.uid);
 
   let snapshot: ResolveChallengeDocSnapshot;
   try {
@@ -171,7 +176,7 @@ export async function resolveChallenge(
   try {
     await docs.update(challengeId, { resolvedAt: now, resolvedBy: admin.identity.uid });
     return { ok: true };
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 }

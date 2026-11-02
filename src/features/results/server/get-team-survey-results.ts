@@ -1,9 +1,6 @@
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import {
-  verifyIdToken,
-  type VerifyIdTokenDeps,
-} from "../../auth/server/verify-identity";
+import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import {
   authorizeTeamAccess,
   type AuthorizeTeamAccessDeps,
@@ -18,6 +15,7 @@ import {
   type CandidateResponseRecord,
   type DimensionMeans,
 } from "../domain/aggregation";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 
 const SURVEYS_COLLECTION = "surveys";
 const SURVEY_RESPONSES_COLLECTION = "surveyResponses";
@@ -187,7 +185,7 @@ function toDateOrUndefined(value: unknown): unknown {
 
 export type GetTeamSurveyResultsResult =
   | { ok: true; teamId: string; results: SurveyResultEntry[] }
-  | { ok: false; error: "unauthenticated" | "forbidden" | "read_failed" };
+  | { ok: false; error: AuthRefusal | "forbidden" | "read_failed" };
 
 export interface GetTeamSurveyResultsDeps {
   now?: Date;
@@ -240,7 +238,7 @@ export async function getTeamSurveyResults(
 ): Promise<GetTeamSurveyResultsResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
   if (!verified.ok) {
-    return { ok: false, error: "unauthenticated" };
+    return { ok: false, error: authRefusalFor(verified) };
   }
 
   const authResult = await authorizeTeamAccess(verified.identity, teamId, {

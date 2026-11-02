@@ -1,22 +1,20 @@
 import "server-only";
 import { encrypt } from "../../../lib/encryption/encryption";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import {
-  verifyIdToken,
-  type VerifiedIdentity,
-  type VerifyIdTokenDeps,
-} from "../../auth/server/verify-identity";
+import { type VerifiedIdentity, verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import { isValidTeamStatus } from "../../teams/domain/team";
 import { isValidMembershipFor, membershipDocId } from "../../teams/domain/team-membership";
 import { validateSurveyAnswers, type SurveyAnswers } from "../domain/answers";
 import { participationDocId, type SurveyParticipationRecord } from "../domain/survey-participation";
 import { effectiveLifecycle, isValidSurvey, type Survey } from "../domain/survey";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 
 const SURVEYS_COLLECTION = "surveys";
 const TEAMS_COLLECTION = "teams";
 const MEMBERSHIPS_COLLECTION = "teamMemberships";
 const SURVEY_RESPONSES_COLLECTION = "surveyResponses";
 const SURVEY_PARTICIPATIONS_COLLECTION = "surveyParticipations";
+const ACCOUNT_ERASURES_COLLECTION = "accountErasures";
 
 function surveyPath(surveyId: string): string {
   return `${SURVEYS_COLLECTION}/${surveyId}`;
@@ -32,6 +30,10 @@ function membershipPath(uid: string, teamId: string): string {
 
 function participationPath(uid: string, surveyId: string): string {
   return `${SURVEY_PARTICIPATIONS_COLLECTION}/${participationDocId(uid, surveyId)}`;
+}
+
+function erasurePath(uid: string): string {
+  return `${ACCOUNT_ERASURES_COLLECTION}/${uid}`;
 }
 
 function responsePath(responseId: string): string {
@@ -142,7 +144,7 @@ export type SubmitOutcome =
   | "submitted"
   | "invalid_submission"
   | "survey_unavailable"
-  | "unauthenticated"
+  | AuthRefusal
   | "forbidden"
   | "already_submitted"
   | "encryption_failed";
@@ -178,6 +180,8 @@ async function decideAndApplySubmission(
     surveyId: string;
     answers: SurveyAnswers;
     identity: VerifiedIdentity | null;
+    /** Set when a presented token was refused by the erasure fence or Auth (TASK-009); `null` otherwise. */
+    identityRefusal: AuthRefusal | null;
     now: Date;
     newResponseId: () => string;
   },
@@ -208,7 +212,14 @@ async function decideAndApplySubmission(
 
   if (survey.accessMode === "authenticated") {
     if (identity === null) {
-      return "unauthenticated";
+      return params.identityRefusal ?? "unauthenticated";
+    }
+
+    // Writer-only fence (TASK-033, W-13): the participation write is person-linked, so an erasing person is refused
+    // inside this transaction, before any write. A public submission writes no person-linked record and is not fenced.
+    const erasureSnapshot = await tx.get(erasurePath(identity.uid));
+    if (erasureSnapshot.exists) {
+      return "erasure_in_progress";
     }
 
     const membershipSnapshot = await tx.get(membershipPath(identity.uid, survey.teamId));
@@ -283,6 +294,7 @@ export type SubmitSurveyResponseClock = () => Date;
 export interface SubmitSurveyResponseDeps {
   now?: SubmitSurveyResponseClock;
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
+  readFence?: VerifyIdTokenDeps["readFence"];
   db?: SubmitSurveyResponseDb;
 }
 
@@ -350,10 +362,13 @@ export async function submitSurveyResponse(
   }
 
   let identity: VerifiedIdentity | null = null;
+  let identityRefusal: AuthRefusal | null = null;
   if (idToken) {
-    const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
+    const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken, readFence: deps.readFence });
     if (verified.ok) {
       identity = verified.identity;
+    } else if (verified.error !== "invalid_token") {
+      identityRefusal = authRefusalFor(verified);
     }
     // An invalid/revoked token is not itself a fatal `submitSurveyResponse`
     // error — it simply yields no identity, exactly like an absent token.
@@ -371,6 +386,7 @@ export async function submitSurveyResponse(
         surveyId,
         answers: validated.data,
         identity,
+        identityRefusal,
         // Called fresh on every invocation of this callback — i.e. once
         // per Firestore transaction attempt, including retries — never
         // hoisted out and reused across attempts.

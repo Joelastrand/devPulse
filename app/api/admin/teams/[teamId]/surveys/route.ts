@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSurvey } from "../../../../../../src/features/surveys/server/create-survey";
 import { listTeamSurveys } from "../../../../../../src/features/surveys/server/list-team-surveys";
-
+import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../../../src/features/auth/server/auth-refusal";
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
@@ -58,15 +58,15 @@ function extractBearerToken(header: string | null): string {
   return match ? match[1] : "";
 }
 
-function statusForListError(error: "unauthenticated" | "forbidden" | "read_failed"): number {
-  if (error === "unauthenticated") return 401;
+function statusForListError(error: AuthRefusal | "forbidden" | "read_failed"): number {
+  if (isAuthRefusal(error)) return authRefusalStatus(error);
   if (error === "forbidden") return 403;
   return 500;
 }
 
 function statusForCreateError(
   error:
-    | "unauthenticated"
+    | AuthRefusal
     | "forbidden"
     | "invalid_input"
     | "invalid_access_mode"
@@ -79,7 +79,7 @@ function statusForCreateError(
     | "team_disabled"
     | "persistence_failed",
 ): number {
-  if (error === "unauthenticated") return 401;
+  if (isAuthRefusal(error)) return authRefusalStatus(error);
   if (error === "forbidden") return 403;
   if (error === "team_not_found") return 404;
   if (error === "team_disabled") return 409;

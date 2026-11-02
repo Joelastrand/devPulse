@@ -96,6 +96,9 @@ function build(world: World, uid = "user-1", email = `${uid}@example.com`) {
           membershipQueries += 1;
           return world.teamMembers.slice(0, limit);
         }),
+      touchMembership: (uid, teamId, memberRef) => {
+        ownerTouches.push({ uid, teamId, memberRef });
+      },
       create: (docId, data) => {
         pending.push({ docId, data });
       },
@@ -103,6 +106,9 @@ function build(world: World, uid = "user-1", email = `${uid}@example.com`) {
   };
 
   const store: CreateRoadmapStore = {
+    runWriteTransaction(_actorUid, fn) {
+      return store.runTransaction(fn);
+    },
     async runTransaction(fn) {
       // Optimistic-concurrency fake: a commit that finds its slot taken re-runs the callback.
       for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -144,6 +150,9 @@ async function expectDenied(world: World, body: unknown, error: string, uid = "u
   expect(writes).toEqual([]);
   expect(world.roadmap).toEqual({});
 }
+
+/** Membership touches recorded by the transactional coordination (TASK-038, A-5). Reset by each test that reads it. */
+const ownerTouches: Array<{ uid: string; teamId: string; memberRef: string }> = [];
 
 describe("createRoadmapItem — authorization", () => {
   it("lets an active ordinary member create", async () => {
@@ -540,6 +549,9 @@ describe("createRoadmapItem — concurrency", () => {
       async runTransaction() {
         throw new Error("secret internal detail");
       },
+      async runWriteTransaction() {
+        throw new Error("secret internal detail");
+      },
     };
     const result = await createRoadmapItem("t", "team-1", valid, ctx.deps);
     expect(result).toEqual({ ok: false, error: "persistence_failed" });
@@ -551,15 +563,23 @@ describe("createRoadmapItem — concurrency", () => {
     const ctx = build(world);
     const inner = ctx.deps.store!;
     let commits = 0;
+    const afterCommit = () => {
+      commits += 1;
+      // Committed. Anything re-read now is gone/changed: tracking stopped, tree deleted, owner left.
+      world.progress = {};
+      world.trees = {};
+      world.teamMembers = [];
+      world.memberships = {};
+    };
     ctx.deps.store = {
       async runTransaction(fn) {
         const result = await inner.runTransaction(fn);
-        commits += 1;
-        // Committed. Anything re-read now is gone/changed: tracking stopped, tree deleted, owner left.
-        world.progress = {};
-        world.trees = {};
-        world.teamMembers = [];
-        world.memberships = {};
+        afterCommit();
+        return result;
+      },
+      async runWriteTransaction(actorUid, fn) {
+        const result = await inner.runWriteTransaction(actorUid, fn);
+        afterCommit();
         return result;
       },
     };

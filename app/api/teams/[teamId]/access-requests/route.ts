@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAccessRequest } from "../../../../../src/features/teams/server/create-access-request";
-
+import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../../src/features/auth/server/auth-refusal";
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
@@ -36,9 +36,9 @@ function extractBearerToken(header: string | null): string {
 }
 
 function statusForError(
-  error: "unauthenticated" | "unverified" | "team_disabled" | "read_failed" | "persistence_failed",
+  error: AuthRefusal | "unverified" | "team_disabled" | "read_failed" | "persistence_failed",
 ): number {
-  if (error === "unauthenticated") return 401;
+  if (isAuthRefusal(error)) return authRefusalStatus(error);
   if (error === "unverified" || error === "team_disabled") return 400;
   return 500;
 }

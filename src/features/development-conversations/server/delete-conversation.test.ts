@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import type { ConversationStore, ConversationTransaction, RawConversationData } from "./conversation-store-types";
+import type { ConversationTransaction, RawConversationData } from "./conversation-store-types";
 import { deleteConversation, type DeleteConversationDeps } from "./delete-conversation";
 import { createFakeConversationStore, type FakeConversationStore } from "./fake-conversation-store";
 
@@ -63,7 +63,7 @@ describe("deleteConversation (BR-5, BR-29)", () => {
     const base = createFakeConversationStore();
     base.seedRawOwner(OWNER_UID, CONVERSATION_ID, ownerData({ participantUid: PARTICIPANT_UID }));
     base.seedRawParticipation(PARTICIPANT_UID, CONVERSATION_ID, { ownerUid: OWNER_UID, invitedAt: new Date() });
-    const failingIndexDelete: ConversationStore = {
+    const failingIndexDelete: FakeConversationStore = {
       ...base,
       runTransaction(work) {
         return base.runTransaction((tx) =>
@@ -132,7 +132,7 @@ describe("deleteConversation (BR-5, BR-29)", () => {
 
   it("maps a read failure to persistence_failed without a message", async () => {
     const base = createFakeConversationStore();
-    const failingRead: ConversationStore = {
+    const failingRead: FakeConversationStore = {
       ...base,
       runTransaction() {
         return Promise.reject(new Error("simulated read failure with a document path"));

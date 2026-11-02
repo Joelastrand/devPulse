@@ -144,6 +144,17 @@ const ALLOWED_COLLECTIONS = ["teams", "teamMemberships", "teamSkillNeeds", "skil
 /** Closed allow-list of cross-feature imports for C2 `server/` and `domain/` production files. */
 const CROSS_FEATURE_IMPORTS: Array<{ prefix: string; only?: string[] }> = [
   { prefix: "src/features/auth/server/verify-identity" },
+  // TASK-009: the pure refusal mapping (one file, no verifier) used by protected services.
+  { prefix: "src/features/auth/server/auth-refusal" },
+  // TASK-031: the writer-only fenced transaction and refusal mapping for the contribution writes.
+  {
+    prefix: "src/features/auth/server/erasure-write-fence",
+    only: [
+      `${C2_DIR}server/skill-contribution-store.ts`,
+      `${C2_DIR}server/set-own-skill-contribution.ts`,
+      `${C2_DIR}server/withdraw-own-skill-contribution.ts`,
+    ],
+  },
   { prefix: "src/features/skill-profiles/domain/" },
   { prefix: "src/features/skill-trees/domain/" },
   { prefix: "src/features/teams/domain/" },
@@ -320,9 +331,22 @@ function outsideStoreTestViolations(files: SourceFile[]): string[] {
     .map((f) => f.path);
 }
 
+/**
+ * Account erasure (erasure-only persistence metadata, file-exact): the inventory registry names the team-skills
+ * collection and field so the erasure sweep can find them. It is not a C2 owner: it has no read, write or consumer
+ * path, and no team-skills module may import it. Only this exact file is exempt from the owner-set check.
+ */
+const ERASURE_PERSISTENCE_METADATA_FILES = ["src/features/account-erasure/server/inventory.ts"];
+
 function identifierSetMismatches(files: SourceFile[], identifier: RegExp, expected: string[], label: string): string[] {
   const actual = files
-    .filter((f) => isGuarded(f.path) && !isTest(f.path) && identifier.test(stripComments(f.text)))
+    .filter(
+      (f) =>
+        isGuarded(f.path) &&
+        !isTest(f.path) &&
+        !ERASURE_PERSISTENCE_METADATA_FILES.includes(f.path) &&
+        identifier.test(stripComments(f.text)),
+    )
     .map((f) => f.path)
     .sort();
   return [
@@ -441,7 +465,8 @@ function routeViolations(files: SourceFile[]): string[] {
   for (const p of actual.filter((p) => !expected.includes(p))) out.push(`${p}: unapproved C2 route file`);
   for (const route of routes.filter((r) => expected.includes(r.path))) {
     const { resolved, bare } = specifiers(route);
-    const allowed = C2_ROUTE_IMPORTS[route.path].map((name) => `${C2_DIR}server/${name}`);
+    // TASK-009: the pure auth refusal mapping (one file, no verifier) for protected status mapping.
+    const allowed = [...C2_ROUTE_IMPORTS[route.path].map((name) => `${C2_DIR}server/${name}`), "src/features/auth/server/auth-refusal"];
     for (const t of resolved) if (!allowed.includes(t)) out.push(`${route.path}: imports ${t}`);
     for (const b of bare) if (b !== "next/server") out.push(`${route.path}: imports ${b}`);
     if (exportedMethods(route.text).join() !== C2_ROUTE_METHODS[route.path].join()) out.push(`${route.path}: method surface changed`);
@@ -757,6 +782,18 @@ describe("C2 scope guard — persistence ownership and participation consumers (
     expect(testReferenceMismatches(realFiles, /\bteamSkillNeeds\b/, SKILL_NEEDS_COLLECTION_TEST_FILES)).toEqual([]);
     expect(identifierSetMismatches(realFiles, /\bskillContribution\b/, SKILL_CONTRIBUTION_FIELD_FILES, "skillContribution reference")).toEqual([]);
     expect(testReferenceMismatches(realFiles, /\bskillContribution\b/, SKILL_CONTRIBUTION_FIELD_TEST_FILES)).toEqual([]);
+  });
+
+  it("the erasure metadata exemption is file-exact: a sibling erasure file naming the needs collection is still flagged", () => {
+    const owners = [virtual(SKILL_NEEDS_COLLECTION_FILES[0], `const c = "teamSkillNeeds";`)];
+    expect(
+      identifierSetMismatches(
+        [...owners, virtual("src/features/account-erasure/server/inventory-sweep.ts", `const c = "teamSkillNeeds";`)],
+        /\bteamSkillNeeds\b/,
+        SKILL_NEEDS_COLLECTION_FILES,
+        "teamSkillNeeds reference",
+      ),
+    ).toEqual(["unexpected teamSkillNeeds reference: src/features/account-erasure/server/inventory-sweep.ts"]);
   });
 
   it("fails for a second file naming the needs collection or the participation field, in production or in an unlisted test", () => {

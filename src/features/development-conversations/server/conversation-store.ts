@@ -1,6 +1,10 @@
+
+import { isErasureOwnerCleanupCapability } from "./erasure-owner-cleanup-capability";
 import "server-only";
+import { membershipDocId } from "../../teams/domain/team-membership";
 import { Timestamp, type DocumentData, type Firestore, type Transaction } from "firebase-admin/firestore";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
+import { assertNoErasureRecordInTransaction, runFencedTransaction } from "../../auth/server/erasure-write-fence";
 import { READ_WINDOW } from "../domain/conversation-constants";
 import { createTransactionTeamEligibilityReader } from "./team-eligibility";
 import {
@@ -26,21 +30,37 @@ import {
   type RawConversationWindow,
 } from "./conversation-store-types";
 
+const MEMBERSHIPS_COLLECTION = "teamMemberships";
+
 const CREATED_AT_FIELD = "createdAt";
 const INVITED_AT_FIELD = "invitedAt";
 
-/**
- * Resolves a path built by the types module into an Admin document reference. The segments come from the types module
- * (never caller-built), so no literal storage name is written here.
+/*
+ * The storage paths are written here with named collection constants, so the erasure inventory guard can resolve every
+ * collection name statically. Validation still runs in the types module (`ownerDocumentPath`,
+ * `participationDocumentPath`), so the same inputs are rejected and the same references are produced as before.
  */
-function documentRef(db: Firestore, segments: readonly string[]) {
-  const [parent, parentId, subcollection, id] = segments;
-  return db.collection(parent).doc(parentId).collection(subcollection).doc(id);
+
+/** The owner conversation document under the owner's subtree (the path shape is owned by the types module). */
+function ownerDocumentRef(db: Firestore, ownerUid: string, conversationId: string) {
+  const [, uid, , id] = ownerDocumentPath(ownerUid, conversationId);
+  return db.collection(USER_DEVELOPMENT_COLLECTION).doc(uid).collection(OWNER_CONVERSATIONS_SUBCOLLECTION).doc(id);
 }
 
-/** The owner subtree or the index subtree of one uid, as a collection reference. */
-function subtree(db: Firestore, uid: string, subcollection: string) {
-  return db.collection(USER_DEVELOPMENT_COLLECTION).doc(uid).collection(subcollection);
+/** The participant index document under the caller's subtree (the path shape is owned by the types module). */
+function participationDocumentRef(db: Firestore, callerUid: string, conversationId: string) {
+  const [, uid, , id] = participationDocumentPath(callerUid, conversationId);
+  return db.collection(USER_DEVELOPMENT_COLLECTION).doc(uid).collection(PARTICIPATION_INDEX_SUBCOLLECTION).doc(id);
+}
+
+/** The owner's conversations subtree, as a collection reference. */
+function ownerConversationsCollection(db: Firestore, uid: string) {
+  return db.collection(USER_DEVELOPMENT_COLLECTION).doc(uid).collection(OWNER_CONVERSATIONS_SUBCOLLECTION);
+}
+
+/** The participant index subtree of one uid, as a collection reference. */
+function participationIndexCollection(db: Firestore, uid: string) {
+  return db.collection(USER_DEVELOPMENT_COLLECTION).doc(uid).collection(PARTICIPATION_INDEX_SUBCOLLECTION);
 }
 
 /**
@@ -83,9 +103,9 @@ function windowOf(docs: Array<{ id: string; data(): DocumentData }>): RawConvers
 /** Transaction adapter over the Admin transaction. Paths come from the types module; writes use the canonical records. */
 function transactionAdapter(db: Firestore, tx: Transaction): ConversationTransaction {
   const owner = (ownerUid: string, conversationId: string) =>
-    documentRef(db, ownerDocumentPath(ownerUid, conversationId));
+    ownerDocumentRef(db, ownerUid, conversationId);
   const index = (callerUid: string, conversationId: string) =>
-    documentRef(db, participationDocumentPath(callerUid, conversationId));
+    participationDocumentRef(db, callerUid, conversationId);
   return {
     teamEligibility: createTransactionTeamEligibilityReader(db, tx),
     async getOwner(ownerUid, conversationId) {
@@ -103,6 +123,9 @@ function transactionAdapter(db: Firestore, tx: Transaction): ConversationTransac
     },
     deleteOwner(ownerUid, conversationId) {
       tx.delete(owner(ownerUid, conversationId));
+    },
+    touchMembership(uid, teamId, memberRef) {
+      tx.update(db.collection(MEMBERSHIPS_COLLECTION).doc(membershipDocId(uid, teamId)), { memberRef });
     },
     async getParticipation(callerUid, conversationId) {
       const snapshot = await tx.get(index(callerUid, conversationId));
@@ -126,14 +149,14 @@ export function getDefaultConversationStore(): ConversationStore {
   return {
     newOwnerId(ownerUid) {
       assertUidSegment(ownerUid);
-      const id = subtree(getFirestoreDb(), ownerUid, OWNER_CONVERSATIONS_SUBCOLLECTION).doc().id;
+      const id = ownerConversationsCollection(getFirestoreDb(), ownerUid).doc().id;
       assertConversationIdSegment(id);
       return id;
     },
 
     async listOwnerWindow(ownerUid) {
       assertUidSegment(ownerUid);
-      const snapshot = await subtree(getFirestoreDb(), ownerUid, OWNER_CONVERSATIONS_SUBCOLLECTION)
+      const snapshot = await ownerConversationsCollection(getFirestoreDb(), ownerUid)
         .orderBy(CREATED_AT_FIELD, "desc")
         .limit(CONVERSATION_RAW_READ_LIMIT)
         .get();
@@ -142,7 +165,7 @@ export function getDefaultConversationStore(): ConversationStore {
 
     async scanOwnerMissingCreatedAt(ownerUid): Promise<MissingCreatedAtScan> {
       assertUidSegment(ownerUid);
-      const snapshot = await subtree(getFirestoreDb(), ownerUid, OWNER_CONVERSATIONS_SUBCOLLECTION)
+      const snapshot = await ownerConversationsCollection(getFirestoreDb(), ownerUid)
         .select(CREATED_AT_FIELD)
         .limit(CONVERSATION_RAW_READ_LIMIT)
         .get();
@@ -157,18 +180,32 @@ export function getDefaultConversationStore(): ConversationStore {
 
     async countOwner(ownerUid) {
       assertUidSegment(ownerUid);
-      const snapshot = await subtree(getFirestoreDb(), ownerUid, OWNER_CONVERSATIONS_SUBCOLLECTION).count().get();
+      const snapshot = await ownerConversationsCollection(getFirestoreDb(), ownerUid).count().get();
       return snapshot.data().count;
     },
 
+    async listOwnerIdsForErasure(ownerUid, limit) {
+      assertUidSegment(ownerUid);
+      // `select()` with no fields: a keys-only read, so malformed and createdAt-less documents are included.
+      const snapshot = await ownerConversationsCollection(getFirestoreDb(), ownerUid).select().limit(limit).get();
+      return snapshot.docs.map((doc) => doc.id);
+    },
+
+    async listParticipationIdsForErasure(callerUid, limit) {
+      assertUidSegment(callerUid);
+      const snapshot = await participationIndexCollection(getFirestoreDb(), callerUid).select().limit(limit).get();
+      return snapshot.docs.map((doc) => doc.id);
+    },
+
+
     async getOwner(ownerUid, conversationId) {
-      const snapshot = await documentRef(getFirestoreDb(), ownerDocumentPath(ownerUid, conversationId)).get();
+      const snapshot = await ownerDocumentRef(getFirestoreDb(), ownerUid, conversationId).get();
       return snapshot.exists ? toRawData(snapshot.data() ?? {}) : undefined;
     },
 
     async listParticipationWindow(callerUid) {
       assertUidSegment(callerUid);
-      const snapshot = await subtree(getFirestoreDb(), callerUid, PARTICIPATION_INDEX_SUBCOLLECTION)
+      const snapshot = await participationIndexCollection(getFirestoreDb(), callerUid)
         .orderBy(INVITED_AT_FIELD, "desc")
         .limit(CONVERSATION_RAW_READ_LIMIT)
         .get();
@@ -177,18 +214,42 @@ export function getDefaultConversationStore(): ConversationStore {
 
     async countParticipation(callerUid) {
       assertUidSegment(callerUid);
-      const snapshot = await subtree(getFirestoreDb(), callerUid, PARTICIPATION_INDEX_SUBCOLLECTION).count().get();
+      const snapshot = await participationIndexCollection(getFirestoreDb(), callerUid).count().get();
       return snapshot.data().count;
     },
 
     async getParticipation(callerUid, conversationId) {
-      const snapshot = await documentRef(getFirestoreDb(), participationDocumentPath(callerUid, conversationId)).get();
+      const snapshot = await participationDocumentRef(getFirestoreDb(), callerUid, conversationId).get();
       return snapshot.exists ? toRawData(snapshot.data() ?? {}) : undefined;
     },
 
-    runTransaction(work) {
+    runErasureCleanupTransaction(capability, work) {
+      // Refused before any read or write unless this module family minted the capability (TASK-038 decision, 2026-11-02).
+      if (!isErasureOwnerCleanupCapability(capability)) {
+        return Promise.reject(new Error("erasure cleanup capability required"));
+      }
       const db = getFirestoreDb();
       return db.runTransaction((tx) => work(transactionAdapter(db, tx)));
+    },
+
+    runOwnerTransaction(ownerUid, work, options) {
+      const db = getFirestoreDb();
+      // The erasure fence is read first, in the same transaction (TASK-027, BR-4(b)).
+      if (options?.secondFence === undefined) {
+        return runFencedTransaction(db, ownerUid, (tx) => work(transactionAdapter(db, tx)));
+      }
+      // An invitation also writes the invitee's participation index, so the invitee's fence is read in the same transaction (TASK-038).
+      return db.runTransaction(async (tx) => {
+        await assertNoErasureRecordInTransaction(db, tx, ownerUid);
+        await assertNoErasureRecordInTransaction(db, tx, options.secondFence as string);
+        return work(transactionAdapter(db, tx));
+      });
+    },
+
+    runParticipantTransaction(callerUid, work) {
+      const db = getFirestoreDb();
+      // The acting participant's erasure record is read first (TASK-028, BR-4(b)).
+      return runFencedTransaction(db, callerUid, (tx) => work(transactionAdapter(db, tx)));
     },
   };
 }

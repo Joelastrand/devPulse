@@ -1474,3 +1474,9 @@ architecture decisions for v1, made under the brief's explicit "prefer the
 smallest useful v1" guidance — not open questions — with rationale
 recorded inline above so they can be revisited deliberately, not
 rediscovered as an oversight.
+
+## Supersession note: account erasure (2026-11-02)
+
+The "no account erasure" and "no erasure flow" limitations in this SPEC are superseded. Account erasure is specified in
+`docs/features/account-erasure/SPEC.md`. Forum threads and replies by the erased person are removed; threads other people replied to become erased-thread placeholders (BR-7).
+Erasure does not claim deletion from provider logs or provider backups (account-erasure BR-19, E-1 to E-3).

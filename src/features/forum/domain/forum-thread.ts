@@ -55,6 +55,12 @@ export function isValidForumThread(data: unknown): data is ForumThreadRecord {
     return false;
   }
 
+  // An erased-thread placeholder (account-erasure TASK-014/015) carries `status`/`erasedAt`. No active write sets them, so
+  // a record that has them is never an active thread, even if the content fields are also present (fail closed).
+  if ("status" in record || "erasedAt" in record) {
+    return false;
+  }
+
   return (
     isNonEmptyString(record.teamId) &&
     isNonEmptyString(record.authorUid) &&

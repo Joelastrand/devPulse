@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { reportTeamSkillProgress } from "../../../../../../src/features/skill-trees/server/report-team-skill-progress";
-
+import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../../../src/features/auth/server/auth-refusal";
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
@@ -62,7 +62,7 @@ function extractBearerToken(header: string | null): string {
 
 function statusForReportError(
   error:
-    | "unauthenticated"
+    | AuthRefusal
     | "forbidden"
     | "team_disabled"
     | "not_tracked"
@@ -70,7 +70,7 @@ function statusForReportError(
     | "invalid_input"
     | "persistence_failed",
 ): number {
-  if (error === "unauthenticated") return 401;
+  if (isAuthRefusal(error)) return authRefusalStatus(error);
   if (error === "forbidden") return 403;
   if (error === "team_disabled") return 400;
   if (error === "not_tracked" || error === "tree_not_found") return 404;

@@ -1,15 +1,14 @@
 import "server-only";
+import { runFencedTransaction, writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import {
-  verifyIdToken,
-  type VerifyIdTokenDeps,
-} from "../../auth/server/verify-identity";
+import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import {
   authorizeTeamAccess,
   type AuthorizeTeamAccessDeps,
 } from "./authorize-team-access";
 import { accessRequestDocId, readAccessRequestStatusFor } from "../domain/team-access-request";
 import { membershipDocId } from "../domain/team-membership";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 
 const TEAMS_COLLECTION = "teams";
 const REQUESTS_COLLECTION = "teamAccessRequests";
@@ -62,7 +61,7 @@ function getDefaultCollection(): CreateAccessRequestCollection {
         .collection(MEMBERSHIPS_COLLECTION)
         .doc(membershipDocId(uid, teamId));
 
-      return db.runTransaction(async (tx): Promise<CreateOrResetOutcome> => {
+      return runFencedTransaction(db, uid, async (tx): Promise<CreateOrResetOutcome> => {
         const [snapshot, membershipSnap] = await Promise.all([
           tx.get(ref),
           tx.get(membershipRef),
@@ -89,7 +88,7 @@ export type CreateAccessRequestResult =
   | { ok: true; outcome: "created" | "already_pending" | "already_authorized" }
   | {
       ok: false;
-      error: "unauthenticated" | "unverified" | "team_disabled" | "read_failed" | "persistence_failed";
+      error: AuthRefusal | "unverified" | "team_disabled" | "read_failed" | "persistence_failed";
     };
 
 export interface CreateAccessRequestDeps {
@@ -127,7 +126,7 @@ export async function createAccessRequest(
 ): Promise<CreateAccessRequestResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
   if (!verified.ok) {
-    return { ok: false, error: "unauthenticated" };
+    return { ok: false, error: authRefusalFor(verified) };
   }
   if (!verified.identity.emailVerified) {
     return { ok: false, error: "unverified" };
@@ -161,7 +160,7 @@ export async function createAccessRequest(
   try {
     const outcome = await collection.createOrReset({ uid: verified.identity.uid, teamId, now });
     return { ok: true, outcome };
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 }

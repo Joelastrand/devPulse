@@ -647,3 +647,19 @@ Boundaries:
 - **Guards:** the C2 and D1 static guards admit only exact role-profiles files (PG-12), and the C1 guard admits only the
   comparison module by exact path. These guards are change detection, not authorization; authorization is pinned by the
   actor × operation matrix in `role-profiles-authz-matrix.test.ts`.
+
+## Account erasure (2026-11-02)
+
+- **Fence on every protected request.** `verifyIdToken` reads `accountErasures/{uid}` for each protected request. A record refuses
+  the request, except the erasure endpoint, which is the only caller that passes the in-progress check. This is an intentional
+  cost: one extra document read per protected request.
+- **Transactional fence on person-owned writes.** Every person-owned write reads the same record with `tx.get` in the same
+  transaction as the write (BR-4(b)). A helper that uses an ordinary read inside a transaction does not count. Ordinary admin removal
+  of a membership reads the removed member's record (the target person, not the admin) in the same transaction as the membership
+  delete and its roadmap and binding cleanup.
+- **Erasure contract.** `POST /api/me/erasure` is the only erasure route. The runner executes ordered steps, is resumable, and hands
+  off to Auth deletion as the last step. Verification advances only at zero residuals. Production enablement is set in code
+  (`PRODUCTION_HANDLERS_READY`) and still depends on the TASK-045 operator gate in `OPERATIONS.md`: the TTL policy, index deployment,
+  `APP_ADMIN_EMAILS`, and the platform-log and provider-backup limitations.
+- **Known limits, not claimed as erased.** Provider logs and provider backups (E-1, E-2). Client-side caches in the erased person's
+  browser (E-3). Historical invitations addressed to an e-mail that cannot be linked to the person (BR-13).

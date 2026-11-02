@@ -2,8 +2,10 @@ import "server-only";
 import { FieldValue } from "firebase-admin/firestore";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { runFencedTransaction, writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import { isAppAdmin, type IsAppAdminDeps } from "../../teams/domain/app-admin";
 import { isForumReplyDeleted, isValidForumReply, type ForumReplyRecord } from "../domain/forum-reply";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 
 const FORUM_REPLIES_COLLECTION = "forumReplies";
 
@@ -34,10 +36,19 @@ function getDefaultForumReplyDocStore(): ForumReplyDocStore {
       return { exists: snapshot.exists, data: () => snapshot.data() };
     },
     async tombstone(replyId, deletedAt, deletedBy) {
-      await getFirestoreDb()
-        .collection(FORUM_REPLIES_COLLECTION)
-        .doc(replyId)
-        .update({
+      const db = getFirestoreDb();
+      const ref = db.collection(FORUM_REPLIES_COLLECTION).doc(replyId);
+      // One transaction (TASK-029): the deleter's erasure fence is read first, and the reply is re-read before the write, so a
+      // concurrent tombstone is never overwritten with a different `deletedAt` or `deletedBy`.
+      await runFencedTransaction(db, deletedBy, async (tx) => {
+        const snapshot = await tx.get(ref);
+        if (!snapshot.exists) {
+          throw new Error("reply missing at tombstone");
+        }
+        if (snapshot.data()?.deletedAt !== undefined) {
+          return;
+        }
+        tx.update(ref, {
           deletedAt,
           deletedBy,
           ciphertext: FieldValue.delete(),
@@ -46,6 +57,7 @@ function getDefaultForumReplyDocStore(): ForumReplyDocStore {
           keyVersion: FieldValue.delete(),
           authorUid: FieldValue.delete(),
         });
+      });
     },
   };
 }
@@ -85,7 +97,10 @@ function toCandidateReply(data: unknown): unknown {
 
 export type DeleteReplyResult =
   | { ok: true }
-  | { ok: false; error: "sign_in_required" | "forbidden" | "not_found" | "persistence_failed" };
+  | {
+      ok: false;
+      error: "sign_in_required" | AuthRefusal | "forbidden" | "not_found" | "erasure_in_progress" | "persistence_failed";
+    };
 
 export interface DeleteReplyDeps {
   now?: Date;
@@ -148,7 +163,7 @@ export async function deleteReply(
 ): Promise<DeleteReplyResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
   if (!verified.ok) {
-    return { ok: false, error: "sign_in_required" };
+    return { ok: false, error: verified.error === "invalid_token" ? "sign_in_required" : authRefusalFor(verified) };
   }
 
   const docs = deps.docs ?? getDefaultForumReplyDocStore();
@@ -186,7 +201,7 @@ export async function deleteReply(
   try {
     await docs.tombstone(replyId, deps.now ?? new Date(), verified.identity.uid);
     return { ok: true };
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 }

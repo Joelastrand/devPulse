@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveChallenge } from "../../../../../../../../src/features/challenges/server/resolve-challenge";
-
+import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../../../../../src/features/auth/server/auth-refusal";
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
@@ -38,9 +38,9 @@ function extractBearerToken(header: string | null): string {
 }
 
 function statusForError(
-  error: "unauthenticated" | "forbidden" | "not_found" | "wrong_team" | "not_open" | "persistence_failed",
+  error: AuthRefusal | "forbidden" | "not_found" | "wrong_team" | "not_open" | "persistence_failed",
 ): number {
-  if (error === "unauthenticated") return 401;
+  if (isAuthRefusal(error)) return authRefusalStatus(error);
   if (error === "forbidden") return 403;
   if (error === "not_found" || error === "wrong_team") return 404;
   if (error === "not_open") return 409;

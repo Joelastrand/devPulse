@@ -1,4 +1,5 @@
 import "server-only";
+import { writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import { PARTICIPATION_LIMIT } from "../domain/conversation-constants";
 import { isConversationId } from "../domain/conversation-id";
 import { probeKey as probeKeyOnce, decryptForClassification as decryptForClassificationWithKey } from "./content-codec";
@@ -31,12 +32,16 @@ export interface InviteParticipantDeps {
 
 export type InviteParticipantResult =
   | { ok: true }
-  | { ok: false; error: "invalid_participant" | "conversation_completed" | "conversation_not_found" | "persistence_failed" };
+  | {
+      ok: false;
+      error: "invalid_participant" | "conversation_completed" | "conversation_not_found" | "erasure_in_progress" | "persistence_failed";
+    };
 
 const NOT_FOUND: InviteParticipantResult = { ok: false, error: "conversation_not_found" };
 const INVALID: InviteParticipantResult = { ok: false, error: "invalid_participant" };
 const COMPLETED: InviteParticipantResult = { ok: false, error: "conversation_completed" };
 const FAILED: InviteParticipantResult = { ok: false, error: "persistence_failed" };
+const REFUSED: InviteParticipantResult = { ok: false, error: "erasure_in_progress" };
 
 function defaultDeps(): InviteParticipantDeps {
   return {
@@ -76,7 +81,9 @@ export async function inviteParticipant(
     if (count >= PARTICIPATION_LIMIT) return INVALID;
 
     const now = deps.clock();
-    return await deps.store.runTransaction(async (tx): Promise<InviteParticipantResult> => {
+    return await deps.store.runOwnerTransaction(
+      ownerUid,
+      async (tx): Promise<InviteParticipantResult> => {
       const raw = await tx.getOwner(ownerUid, conversationId);
       if (raw === undefined) return NOT_FOUND;
       const classified = classifyOwnerDocument(raw, deps.codec);
@@ -97,11 +104,15 @@ export async function inviteParticipant(
         participantInvitedAt: new Date(now.getTime()),
         updatedAt: new Date(now.getTime()),
       });
+      // Coordination with membership destruction (TASK-038, I-7): the invitee's membership is touched in this transaction.
+      tx.touchMembership(resolved.candidateUid, teamId, resolved.memberRef);
       tx.setParticipation(resolved.candidateUid, conversationId, { ownerUid, invitedAt: new Date(now.getTime()) });
       return { ok: true };
-    });
-  } catch {
-    // Any read, key or write failure is operational. The raw error is never surfaced (BR-47).
-    return FAILED;
+    },
+      { secondFence: resolved.candidateUid },
+    );
+  } catch (error) {
+    // Any read, key or write failure is operational. The raw error is never surfaced (BR-47). A fence refusal is its own code.
+    return writeRefusalFor(error) === "erasure_in_progress" ? REFUSED : FAILED;
   }
 }

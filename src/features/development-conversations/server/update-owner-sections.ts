@@ -1,4 +1,5 @@
 import "server-only";
+import { writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import { isConversationId } from "../domain/conversation-id";
 import type { ConversationContent } from "../domain/content-payload";
 import { isPlainObject } from "../domain/stored-shape";
@@ -45,10 +46,14 @@ export type OwnerSectionRejectedField = "sharedGoalIds" | "participantMemberRef"
 export type UpdateOwnerSectionsResult =
   | { ok: true }
   | { ok: false; error: "invalid_input"; field: OwnerSectionField | OwnerSectionRejectedField | "unknown" | "patch" }
-  | { ok: false; error: "conversation_not_found" | "conversation_completed" | "persistence_failed" };
+  | {
+      ok: false;
+      error: "conversation_not_found" | "conversation_completed" | "erasure_in_progress" | "persistence_failed";
+    };
 
 const NOT_FOUND: UpdateOwnerSectionsResult = { ok: false, error: "conversation_not_found" };
 const FAILED: UpdateOwnerSectionsResult = { ok: false, error: "persistence_failed" };
+const REFUSED: UpdateOwnerSectionsResult = { ok: false, error: "erasure_in_progress" };
 
 const OWNER_SECTION_FIELDS: readonly OwnerSectionField[] = ["title", "plannedFor", "ownerNotes", "nextSteps"];
 const REJECTED_FIELDS: readonly OwnerSectionRejectedField[] = ["sharedGoalIds", "participantMemberRef", "status"];
@@ -132,7 +137,7 @@ export async function updateOwnerSections(
   const now = deps.clock();
   const { fields } = parsed;
   try {
-    return await deps.store.runTransaction(async (tx): Promise<UpdateOwnerSectionsResult> => {
+    return await deps.store.runOwnerTransaction(ownerUid, async (tx): Promise<UpdateOwnerSectionsResult> => {
       const raw = await tx.getOwner(ownerUid, conversationId);
       if (raw === undefined) return NOT_FOUND;
 
@@ -164,8 +169,8 @@ export async function updateOwnerSections(
       tx.updateOwner(ownerUid, conversationId, patch);
       return { ok: true };
     });
-  } catch {
-    // Any read, key or write failure is operational. The raw error is never surfaced (BR-47).
-    return FAILED;
+  } catch (error) {
+    // Any read, key or write failure is operational. The raw error is never surfaced (BR-47). A fence refusal is its own code.
+    return writeRefusalFor(error) === "erasure_in_progress" ? REFUSED : FAILED;
   }
 }

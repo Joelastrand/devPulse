@@ -2,11 +2,13 @@ import "server-only";
 import { encrypt } from "../../../lib/encryption/encryption";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { runFencedTransaction, writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import { isValidTeamStatus } from "../../teams/domain/team";
 import { isValidMembershipFor, membershipDocId } from "../../teams/domain/team-membership";
 import { isValidForumThread, type ForumThreadRecord } from "../domain/forum-thread";
 import type { ActiveForumReply } from "../domain/forum-reply";
 import { validateReplyBody } from "../domain/reply-content";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 
 const FORUM_THREADS_COLLECTION = "forumThreads";
 const FORUM_REPLIES_COLLECTION = "forumReplies";
@@ -17,22 +19,12 @@ const MEMBERSHIPS_COLLECTION = "teamMemberships";
 export const REPLY_CAPACITY_LIMIT = 500;
 
 /**
- * The write seam this operation depends on, satisfied in production by a
- * Firestore `CollectionReference` and by an in-memory fake in tests. No id
- * is returned — SPEC "Reply capacity" explains why `createReply` needs none
- * (the 500-reply cap already guarantees every reply stays addressable
- * through `getThreadWithReplies`'s always-complete result set).
+ * The write seam this operation depends on. Inside the transaction it is the transaction's own `create`, so the reply is
+ * written only if the transaction commits (TASK-029). No id is returned: SPEC "Reply capacity" explains why `createReply`
+ * needs none.
  */
 export interface ForumRepliesCollection {
   add(record: ActiveForumReply): Promise<void>;
-}
-
-function getDefaultForumRepliesCollection(): ForumRepliesCollection {
-  return {
-    async add(record) {
-      await getFirestoreDb().collection(FORUM_REPLIES_COLLECTION).add(record);
-    },
-  };
 }
 
 /** The read seam for a real `teamMemberships/{uid}__{teamId}` record — same shape as `createThread`'s (BR-1). */
@@ -40,73 +32,84 @@ export interface MembershipReader {
   getMembership(uid: string, teamId: string): Promise<unknown>;
 }
 
-function getDefaultMembershipReader(): MembershipReader {
-  return {
-    async getMembership(uid, teamId) {
-      const snapshot = await getFirestoreDb()
-        .collection(MEMBERSHIPS_COLLECTION)
-        .doc(membershipDocId(uid, teamId))
-        .get();
-      return snapshot.exists ? snapshot.data() : undefined;
-    },
-  };
-}
-
 /** The read seam for the owning team's fresh `status` — same shape as `createThread`'s (BR-7). */
 export interface TeamStatusReader {
   getTeamStatus(teamId: string): Promise<unknown>;
 }
 
-function getDefaultTeamStatusReader(): TeamStatusReader {
-  return {
-    async getTeamStatus(teamId) {
-      const snapshot = await getFirestoreDb().collection(TEAMS_COLLECTION).doc(teamId).get();
-      return snapshot.exists ? snapshot.data()?.status : undefined;
-    },
-  };
-}
-
 /**
- * The read seam for the target thread's own document, satisfied in
- * production by a Firestore document read and by an in-memory fake in
- * tests. Returns raw, unvalidated data (`undefined` if no such document
- * exists) — `createReply` is responsible for validating it before trusting
- * it.
+ * The read seam for the target thread's own document. Returns raw, unvalidated data (`undefined` if no such document
+ * exists) — `createReply` validates it before trusting it.
  */
 export interface ThreadReader {
   getThread(threadId: string): Promise<unknown>;
 }
 
-function getDefaultThreadReader(): ThreadReader {
-  return {
-    async getThread(threadId) {
-      const snapshot = await getFirestoreDb().collection(FORUM_THREADS_COLLECTION).doc(threadId).get();
-      return snapshot.exists ? snapshot.data() : undefined;
-    },
-  };
-}
-
 /**
- * The read seam for the target thread's current reply count, satisfied in
- * production by a Firestore `.count()` aggregation query (`where("threadId",
- * "==", threadId)` — no composite index needed, SPEC "Firestore/index
- * implications") and by an in-memory fake in tests.
+ * The read seam for the target thread's current reply count. Production reads it with a count aggregation inside the
+ * transaction (`where("threadId", "==", threadId)`, no composite index, SPEC "Firestore/index implications").
  */
 export interface ReplyCountReader {
   countRepliesForThread(threadId: string): Promise<number>;
 }
 
-function getDefaultReplyCountReader(): ReplyCountReader {
-  return {
-    async countRepliesForThread(threadId) {
-      const snapshot = await getFirestoreDb()
-        .collection(FORUM_REPLIES_COLLECTION)
-        .where("threadId", "==", threadId)
-        .count()
-        .get();
-      return snapshot.data().count;
-    },
-  };
+/**
+ * Everything one reply creation reads and writes, bound to one Firestore transaction (TASK-029). Every read happens through
+ * the same transaction as the write, so a membership, team, thread or count that changes before commit makes the commit
+ * retry or fail rather than be used stale.
+ */
+export interface ReplyTransactionScope {
+  membershipReader: MembershipReader;
+  teamStatusReader: TeamStatusReader;
+  threadReader: ThreadReader;
+  replyCountReader: ReplyCountReader;
+  collection: ForumRepliesCollection;
+}
+
+/**
+ * Runs `work` in one transaction whose first operation is the erasure fence read for `uid` (BR-4(b), TASK-004). An existing
+ * record refuses before `work` runs, so no read or write happens. Firestore may re-run `work`, so it must be retry-safe.
+ */
+export type ReplyTransactionRunner = <T>(uid: string, work: (scope: ReplyTransactionScope) => Promise<T>) => Promise<T>;
+
+/** Production runner: one Admin SDK transaction. Every read and the single create go through the transaction object. */
+function runReplyTransaction<T>(uid: string, work: (scope: ReplyTransactionScope) => Promise<T>): Promise<T> {
+  const db = getFirestoreDb();
+  return runFencedTransaction(db, uid, (tx) =>
+    work({
+      membershipReader: {
+        async getMembership(memberUid, teamId) {
+          const snapshot = await tx.get(db.collection(MEMBERSHIPS_COLLECTION).doc(membershipDocId(memberUid, teamId)));
+          return snapshot.exists ? snapshot.data() : undefined;
+        },
+      },
+      teamStatusReader: {
+        async getTeamStatus(teamId) {
+          const snapshot = await tx.get(db.collection(TEAMS_COLLECTION).doc(teamId));
+          return snapshot.exists ? snapshot.data()?.status : undefined;
+        },
+      },
+      threadReader: {
+        async getThread(threadId) {
+          const snapshot = await tx.get(db.collection(FORUM_THREADS_COLLECTION).doc(threadId));
+          return snapshot.exists ? snapshot.data() : undefined;
+        },
+      },
+      replyCountReader: {
+        async countRepliesForThread(threadId) {
+          const snapshot = await tx.get(
+            db.collection(FORUM_REPLIES_COLLECTION).where("threadId", "==", threadId).count(),
+          );
+          return snapshot.data().count;
+        },
+      },
+      collection: {
+        async add(record) {
+          tx.create(db.collection(FORUM_REPLIES_COLLECTION).doc(), record);
+        },
+      },
+    }),
+  );
 }
 
 /** Maps raw Firestore thread document data (a Timestamp `createdAt` included) into the candidate shape `isValidForumThread` expects. */
@@ -138,64 +141,44 @@ export type CreateReplyResult =
       ok: false;
       error:
         | "sign_in_required"
+        | AuthRefusal
         | "invalid_input"
         | "forbidden"
         | "team_disabled"
         | "not_found"
         | "thread_full"
         | "encryption_failed"
+        | "erasure_in_progress"
         | "persistence_failed";
     };
 
 export interface CreateReplyDeps {
   now?: Date;
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  membershipReader?: MembershipReader;
-  teamStatusReader?: TeamStatusReader;
-  threadReader?: ThreadReader;
-  replyCountReader?: ReplyCountReader;
-  collection?: ForumRepliesCollection;
+  /** Tests inject a transaction runner over fakes. Production uses the Admin SDK transaction. */
+  runReplyTransaction?: ReplyTransactionRunner;
 }
 
 /**
- * Creates one reply to `threadId` within `teamId` (docs/features/team-forum/
- * SPEC.md — "Server operations" → `createReply`; BR-1, BR-2, BR-4, BR-5,
- * BR-6, BR-7, BR-8, BR-9, BR-35, BR-47, BR-52, BR-53). `teamId`/`threadId`
- * are always the caller's trusted route scope; `authorUid` is always the
- * verified caller's own `uid` — never client-supplied.
+ * Creates one reply to `threadId` within `teamId` (docs/features/team-forum/SPEC.md — "Server operations" → `createReply`;
+ * BR-1, BR-2, BR-4, BR-5, BR-6, BR-7, BR-8, BR-9, BR-35, BR-47, BR-52, BR-53). `teamId`/`threadId` are the caller's trusted
+ * route scope; `authorUid` is always the verified caller's own `uid`.
  *
- * Order of checks, in this exact sequence (SPEC — "Server operations"):
- * verify the ID token (`sign_in_required`) → validate `rawBody` (TASK-001's
- * `validateReplyBody`, `invalid_input`, nothing read/written yet) → confirm a
- * real `teamMemberships/{uid}__{teamId}` record exists (BR-1, mirrors
- * `createThread`'s identical handling — app-admin status alone is never
- * sufficient) → re-read `teams/{teamId}.status` fresh (rejected
- * `team_disabled` for anything other than `active`, including a nonexistent
- * or status-malformed team — BR-7; the API/DTO contract table folds every
- * such case into the single `team_disabled` outcome for this operation,
- * unlike `createThread`'s separate `team_not_found`) → fetch
- * `forumThreads/{threadId}` and validate it (TASK-001's `isValidForumThread`);
- * missing, malformed, or a mismatched `teamId` all resolve to the identical
- * `not_found` (BR-8 — a thread has no separate "deleted" shape to check for
- * anymore; missing *is* deleted) → count the thread's current replies via a
- * Firestore count-aggregation query; `>= 500` → `thread_full` (BR-52),
- * nothing written → encrypt the body (fresh IV) → persist one
- * `forumReplies/{auto-id}` document, with `teamId` always read from the
- * already-validated thread record (BR-35), never from a client-supplied
- * value.
+ * Order: verify the ID token (`sign_in_required`) → validate `rawBody` (`invalid_input`, nothing read yet) → one transaction,
+ * whose first operation is the erasure fence read for the caller (TASK-029, BR-4(b)). Inside it, in this order: a real
+ * `teamMemberships/{uid}__{teamId}` record (`forbidden`, BR-1) → a fresh `teams/{teamId}.status` of `active`
+ * (`team_disabled`, BR-7) → `forumThreads/{threadId}` validated, with the same `teamId` (`not_found`, BR-8; a placeholder of an
+ * erased thread fails validation and so resolves to `not_found`, TASK-015) → the reply count, `>= 500` → `thread_full`
+ * (BR-52) → encrypt the body (fresh IV) → one `forumReplies` create with `teamId` taken from the validated thread (BR-35).
  *
- * No Firestore transaction is used — the reply cap is enforced on a
- * best-effort basis (BR-53), and no other cross-document invariant exists to
- * protect (SPEC "Server operations").
+ * Every read is in the same transaction as the create, so a membership, team, thread or count that changes before commit
+ * makes Firestore retry the transaction instead of using a stale value (no TOCTOU). The cap check remains best-effort
+ * (BR-53). A fence refusal returns `erasure_in_progress` through the shared mapping, with no read after it and no write.
+ * Callback work is pure apart from the transaction's own reads and the single create, so a retry repeats no external effect.
  *
- * Returns `{ok: true}` only — no `replyId`, since `getThreadWithReplies`
- * always returns the thread's complete reply set (SPEC "Reply capacity").
- *
- * Fails closed on every infrastructure failure: a Firestore read/write error
- * maps to `persistence_failed`; an `encrypt` failure (e.g. missing
- * `ENCRYPTION_KEY`) maps to `encryption_failed` — neither path ever falls
- * back to plaintext, and neither is ever logged with any detail from the
- * thrown error (BR-36).
+ * Returns `{ok: true}` only — no `replyId` (SPEC "Reply capacity"). Fails closed: a read, transaction or write error maps to
+ * `persistence_failed`; an `encrypt` failure to `encryption_failed`. Neither falls back to plaintext, and neither logs detail
+ * from the thrown error (BR-36).
  */
 export async function createReply(
   idToken: string,
@@ -206,7 +189,7 @@ export async function createReply(
 ): Promise<CreateReplyResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
   if (!verified.ok) {
-    return { ok: false, error: "sign_in_required" };
+    return { ok: false, error: verified.error === "invalid_token" ? "sign_in_required" : authRefusalFor(verified) };
   }
 
   const validatedBody = validateReplyBody(rawBody);
@@ -214,59 +197,50 @@ export async function createReply(
     return { ok: false, error: "invalid_input" };
   }
 
-  const membershipReader = deps.membershipReader ?? getDefaultMembershipReader();
-  let rawMembership: unknown;
+  const runTransaction = deps.runReplyTransaction ?? runReplyTransaction;
+  const now = deps.now ?? new Date();
   try {
-    rawMembership = await membershipReader.getMembership(verified.identity.uid, teamId);
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+    return await runTransaction(verified.identity.uid, (scope) =>
+      createReplyInTransaction(scope, verified.identity.uid, teamId, threadId, validatedBody.body, now),
+    );
+  } catch (error) {
+    // A fence refusal is `erasure_in_progress`; any other transaction or read failure is `persistence_failed`. The raw error
+    // is never returned.
+    return { ok: false, error: writeRefusalFor(error) };
   }
+}
 
-  const isMember = isValidMembershipFor(rawMembership, { uid: verified.identity.uid, teamId });
-  if (!isMember) {
+/** The reads, checks and the single create of one reply, run inside the transaction. Pure apart from its reads and create. */
+async function createReplyInTransaction(
+  scope: ReplyTransactionScope,
+  authorUid: string,
+  teamId: string,
+  threadId: string,
+  body: string,
+  now: Date,
+): Promise<CreateReplyResult> {
+  // Read errors are not caught here: a thrown error lets Firestore retry the transaction on contention, and the caller maps
+  // any non-refusal failure to persistence_failed (createReply).
+  const rawMembership = await scope.membershipReader.getMembership(authorUid, teamId);
+  if (!isValidMembershipFor(rawMembership, { uid: authorUid, teamId })) {
     return { ok: false, error: "forbidden" };
   }
 
-  const teamStatusReader = deps.teamStatusReader ?? getDefaultTeamStatusReader();
-  let rawTeamStatus: unknown;
-  try {
-    rawTeamStatus = await teamStatusReader.getTeamStatus(teamId);
-  } catch {
-    return { ok: false, error: "persistence_failed" };
-  }
-
+  const rawTeamStatus = await scope.teamStatusReader.getTeamStatus(teamId);
   if (!isValidTeamStatus(rawTeamStatus) || rawTeamStatus !== "active") {
-    // Covers "disabled", "nonexistent" (Firestore returns `undefined`), and
-    // any other malformed/unrecognized status uniformly (BR-7) — this
-    // operation's documented API/DTO contract has no distinct
-    // `team_not_found` outcome, unlike `createThread`'s.
+    // Covers "disabled", "nonexistent" (`undefined`), and any other malformed status uniformly (BR-7).
     return { ok: false, error: "team_disabled" };
   }
 
-  const threadReader = deps.threadReader ?? getDefaultThreadReader();
-  let rawThread: unknown;
-  try {
-    rawThread = await threadReader.getThread(threadId);
-  } catch {
-    return { ok: false, error: "persistence_failed" };
-  }
-
+  const rawThread = await scope.threadReader.getThread(threadId);
   const candidateThread = toCandidateThread(rawThread);
   if (!isValidForumThread(candidateThread) || candidateThread.teamId !== teamId) {
-    // Missing, malformed, and cross-team all resolve to the identical
-    // not_found (BR-8) — a thread has no separate "deleted" shape to
-    // distinguish from "never existed" or "corrupt".
+    // Missing, malformed, cross-team, and an erased-thread placeholder all resolve to the identical not_found (BR-8, TASK-015).
     return { ok: false, error: "not_found" };
   }
   const thread: ForumThreadRecord = candidateThread;
 
-  const replyCountReader = deps.replyCountReader ?? getDefaultReplyCountReader();
-  let currentReplyCount: number;
-  try {
-    currentReplyCount = await replyCountReader.countRepliesForThread(threadId);
-  } catch {
-    return { ok: false, error: "persistence_failed" };
-  }
+  const currentReplyCount = await scope.replyCountReader.countRepliesForThread(threadId);
 
   if (currentReplyCount >= REPLY_CAPACITY_LIMIT) {
     return { ok: false, error: "thread_full" };
@@ -274,7 +248,7 @@ export async function createReply(
 
   let encrypted;
   try {
-    encrypted = encrypt(validatedBody.body);
+    encrypted = encrypt(body);
   } catch {
     return { ok: false, error: "encryption_failed" };
   }
@@ -282,19 +256,14 @@ export async function createReply(
   const record: ActiveForumReply = {
     teamId: thread.teamId,
     threadId,
-    authorUid: verified.identity.uid,
+    authorUid,
     ciphertext: encrypted.ciphertext,
     iv: encrypted.iv,
     authTag: encrypted.authTag,
     keyVersion: encrypted.keyVersion,
-    createdAt: deps.now ?? new Date(),
+    createdAt: now,
   };
 
-  const collection = deps.collection ?? getDefaultForumRepliesCollection();
-  try {
-    await collection.add(record);
-    return { ok: true };
-  } catch {
-    return { ok: false, error: "persistence_failed" };
-  }
+  await scope.collection.add(record);
+  return { ok: true };
 }

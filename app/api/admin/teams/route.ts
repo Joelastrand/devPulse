@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createTeam } from "../../../../src/features/teams/server/create-team";
 import { listTeams } from "../../../../src/features/teams/server/list-teams";
-
+import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../src/features/auth/server/auth-refusal";
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
@@ -58,9 +58,9 @@ function extractBearerToken(header: string | null): string {
 }
 
 function statusForAdminError(
-  error: "unauthenticated" | "forbidden" | "persistence_failed" | "read_failed",
+  error: AuthRefusal | "forbidden" | "persistence_failed" | "read_failed",
 ): number {
-  if (error === "unauthenticated") return 401;
+  if (isAuthRefusal(error)) return authRefusalStatus(error);
   if (error === "forbidden") return 403;
   return 500;
 }

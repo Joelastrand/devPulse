@@ -753,3 +753,8 @@ At B implementation closeout reconcile:
 ## Open questions
 None. OQ-1 through OQ-5 are resolved (see "Decisions resolved from open
 questions").
+
+## Behaviour note: owner assignment and erasure (2026-11-02)
+
+Assigning a roadmap owner to a membership also writes that membership in the same transaction (a no-op field write), so it conflicts
+with the membership's deletion by erasure or removal. See `docs/features/account-erasure/SPEC.md`, "Membership/roadmap race repair".

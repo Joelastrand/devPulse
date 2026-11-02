@@ -9,6 +9,7 @@ import { isValidTeamStatus } from "../../teams/domain/team";
 import { isValidMembershipFor, membershipDocId } from "../../teams/domain/team-membership";
 import { isValidSkillTree, type SkillTreeRecord } from "../domain/skill-tree";
 import { isValidSkillProgress, type SkillProgressRecord } from "../domain/skill-progress";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 
 const SKILL_PROGRESS_COLLECTION = "skillProgress";
 const SKILL_TREES_COLLECTION = "skillTrees";
@@ -218,7 +219,7 @@ async function resolveCanReportProgress(
 
 export type GetTeamSkillProgressResult =
   | { ok: true; skills: TeamSkillProgressView[]; canReportProgress: boolean }
-  | { ok: false; error: "unauthenticated" | "forbidden" | "read_failed" };
+  | { ok: false; error: AuthRefusal | "forbidden" | "read_failed" };
 
 export interface GetTeamSkillProgressDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
@@ -289,7 +290,7 @@ export async function getTeamSkillProgress(
 ): Promise<GetTeamSkillProgressResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
   if (!verified.ok) {
-    return { ok: false, error: "unauthenticated" };
+    return { ok: false, error: authRefusalFor(verified) };
   }
 
   const authResult = await authorizeTeamAccess(verified.identity, teamId, {

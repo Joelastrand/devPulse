@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifyIdToken } from "../../../src/features/auth/server/verify-identity";
 import { listActiveRolesForPerson } from "../../../src/features/role-profiles/server/list-active-roles";
+import { authRefusalFor, authRefusalStatus } from "../../../src/features/auth/server/auth-refusal";
 
 const BEARER_PATTERN = /^Bearer (.+)$/;
 /** PG-8: the person-facing role DTO allow-list, applied again here independently of the operation. */
@@ -14,7 +15,8 @@ export async function GET(request: Request) {
   const match = BEARER_PATTERN.exec(request.headers.get("authorization") ?? "");
   const verified = await verifyIdToken(match ? match[1] : "");
   if (!verified.ok) {
-    return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+    const refusal = authRefusalFor(verified);
+    return NextResponse.json({ error: refusal }, { status: authRefusalStatus(refusal) });
   }
 
   const result = await listActiveRolesForPerson();

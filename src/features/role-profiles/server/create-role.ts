@@ -1,10 +1,12 @@
 import { ROLE_DEFINITION_LIMIT, validateRoleDraft, type RoleAdminDto, type StoredRoleDefinition } from "../domain/role-definition";
 import { requireAppAdmin, type RequireAppAdminDeps } from "../../teams/server/require-app-admin";
 import { toAdminRoleDto } from "./role-admin-mapping";
-import { getDefaultRoleStore } from "./role-store";
+import { getDefaultRoleWriteStore } from "./role-store";
+import { writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import type { RoleStore } from "./role-store-types";
 import { getDefaultSkillTreeReader } from "./skill-tree-seam";
 import { resolveSkillTreeReferences, type RawSkillTreeReader } from "./skill-tree-seam-types";
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
 
 export interface CreateRoleDeps extends RequireAppAdminDeps {
   store?: RoleStore;
@@ -16,7 +18,7 @@ export type CreateRoleResult =
   | { ok: true; role: RoleAdminDto }
   | {
       ok: false;
-      error: "unauthenticated" | "forbidden" | "invalid_input" | "skill_not_found" | "cap_reached" | "persistence_failed";
+      error: AuthRefusal | "forbidden" | "invalid_input" | "skill_not_found" | "cap_reached" | "persistence_failed";
     };
 
 /**
@@ -39,7 +41,7 @@ export async function createRole(idToken: string, input: unknown, deps: CreateRo
   const { draft } = validated;
 
   try {
-    const store = deps.store ?? getDefaultRoleStore();
+    const store = deps.store ?? getDefaultRoleWriteStore(admin.identity.uid);
     const references = await resolveSkillTreeReferences(
       draft.expectations.map((expectation) => expectation.treeId),
       deps.treeReader ?? getDefaultSkillTreeReader(),
@@ -61,7 +63,7 @@ export async function createRole(idToken: string, input: unknown, deps: CreateRo
     };
     const roleId = await store.create(stored);
     return { ok: true, role: toAdminRoleDto(roleId, stored, references) };
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 }

@@ -172,6 +172,11 @@ export function createFirebaseDemoAdapters(input: {
   };
 
   const presenter: DemoPresenterLookup = {
+    async hasErasureRecord(uid) {
+      // Existence only: the erasure record's content is never read by the demo tooling (TASK-036, BR-20).
+      const snapshot = await db.doc(`accountErasures/${uid}`).get();
+      return snapshot.exists;
+    },
     async userExists(uid) {
       try {
         await auth.getUser(uid); // record (incl. email) is discarded immediately

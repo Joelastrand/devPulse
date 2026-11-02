@@ -1,4 +1,5 @@
 import "server-only";
+import { writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import { isConversationId } from "../domain/conversation-id";
 import type { ConversationContent } from "../domain/content-payload";
 import { isPlainObject } from "../domain/stored-shape";
@@ -44,10 +45,13 @@ export interface RespondToParticipationDeps {
   clock: () => Date;
 }
 
-export type RespondToParticipationResult = { ok: true } | { ok: false; error: "conversation_not_found" | "persistence_failed" };
+export type RespondToParticipationResult =
+  | { ok: true }
+  | { ok: false; error: "conversation_not_found" | "erasure_in_progress" | "persistence_failed" };
 
 const NOT_FOUND: RespondToParticipationResult = { ok: false, error: "conversation_not_found" };
 const FAILED: RespondToParticipationResult = { ok: false, error: "persistence_failed" };
+const REFUSED: RespondToParticipationResult = { ok: false, error: "erasure_in_progress" };
 
 /** The participant fields that a leave clears. Written as `null`, never omitted (BR-16, BR-17). */
 const CLEARED_PARTICIPANT_FIELDS = {
@@ -89,7 +93,7 @@ export async function acceptInvitation(
   if (!isConversationId(conversationId)) return NOT_FOUND;
 
   try {
-    return await deps.store.runTransaction(async (tx): Promise<RespondToParticipationResult> => {
+    return await deps.store.runParticipantTransaction(callerUid, async (tx): Promise<RespondToParticipationResult> => {
       // BR-15: the caller's index entry must exist and name a valid owner.
       const rawIndex = await tx.getParticipation(callerUid, conversationId);
       if (rawIndex === undefined) return NOT_FOUND;
@@ -121,9 +125,9 @@ export async function acceptInvitation(
       });
       return { ok: true };
     });
-  } catch {
+  } catch (error) {
     // Any read or write failure is operational. The raw error is never surfaced (BR-47).
-    return FAILED;
+    return writeRefusalFor(error) === "erasure_in_progress" ? REFUSED : FAILED;
   }
 }
 
@@ -183,7 +187,7 @@ export async function leaveParticipation(
   if (!isConversationId(conversationId)) return NOT_FOUND;
 
   try {
-    return await deps.store.runTransaction(async (tx): Promise<RespondToParticipationResult> => {
+    return await deps.store.runParticipantTransaction(callerUid, async (tx): Promise<RespondToParticipationResult> => {
       // BR-17 step 1: the caller's index entry is required.
       const rawIndex = await tx.getParticipation(callerUid, conversationId);
       if (rawIndex === undefined) return NOT_FOUND;
@@ -213,8 +217,8 @@ export async function leaveParticipation(
       }
       return leaveAccepted(tx, ownerUid, callerUid, conversationId, raw, deps, now);
     });
-  } catch {
+  } catch (error) {
     // Any read, key or write failure is operational. The raw error is never surfaced (BR-47).
-    return FAILED;
+    return writeRefusalFor(error) === "erasure_in_progress" ? REFUSED : FAILED;
   }
 }

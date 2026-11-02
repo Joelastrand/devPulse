@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { approveAccessRequest } from "../../../../../../../src/features/teams/server/approve-access-request";
 import { rejectAccessRequest } from "../../../../../../../src/features/teams/server/reject-access-request";
+import { authRefusalStatus, isAuthRefusal } from "../../../../../../../src/features/auth/server/auth-refusal";
 
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
@@ -45,8 +46,8 @@ export async function PATCH(
 
   if (!result.ok) {
     const httpStatus =
-      result.error === "unauthenticated"
-        ? 401
+      isAuthRefusal(result.error)
+        ? authRefusalStatus(result.error)
         : result.error === "forbidden"
           ? 403
           : 500;

@@ -1,8 +1,11 @@
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { runFencedTransaction, writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import { isAppAdmin, type IsAppAdminDeps } from "../../teams/domain/app-admin";
 import { isValidForumThread, type ForumThreadRecord } from "../domain/forum-thread";
+import { isErasedForumThread } from "../domain/forum-erased-thread";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 
 const FORUM_THREADS_COLLECTION = "forumThreads";
 const FORUM_REPLIES_COLLECTION = "forumReplies";
@@ -29,7 +32,8 @@ export interface DeleteThreadDocSnapshot {
  */
 export interface ForumThreadDocStore {
   get(threadId: string): Promise<DeleteThreadDocSnapshot>;
-  delete(threadId: string): Promise<void>;
+  /** Deletes the thread. `actorUid` is the caller whose erasure fence is read in the same transaction (TASK-029). */
+  delete(threadId: string, actorUid: string): Promise<void>;
 }
 
 function getDefaultForumThreadDocStore(): ForumThreadDocStore {
@@ -38,8 +42,13 @@ function getDefaultForumThreadDocStore(): ForumThreadDocStore {
       const snapshot = await getFirestoreDb().collection(FORUM_THREADS_COLLECTION).doc(threadId).get();
       return { exists: snapshot.exists, data: () => snapshot.data() };
     },
-    async delete(threadId) {
-      await getFirestoreDb().collection(FORUM_THREADS_COLLECTION).doc(threadId).delete();
+    async delete(threadId, actorUid) {
+      const db = getFirestoreDb();
+      const ref = db.collection(FORUM_THREADS_COLLECTION).doc(threadId);
+      // The actor's erasure fence is read first, in the same transaction as the delete (TASK-029, BR-4(b)).
+      await runFencedTransaction(db, actorUid, async (tx) => {
+        tx.delete(ref);
+      });
     },
   };
 }
@@ -56,29 +65,31 @@ function getDefaultForumThreadDocStore(): ForumThreadDocStore {
  * reply count above its nominal 500 cap.
  */
 export interface RepliesCascadeStore {
-  deleteNextBatch(threadId: string): Promise<number>;
+  /** Deletes up to one batch of replies. `actorUid` is the caller whose erasure fence is read in that batch's transaction. */
+  deleteNextBatch(threadId: string, actorUid: string): Promise<number>;
 }
 
 function getDefaultRepliesCascadeStore(): RepliesCascadeStore {
   return {
-    async deleteNextBatch(threadId) {
+    async deleteNextBatch(threadId, actorUid) {
       const db = getFirestoreDb();
-      const snapshot = await db
+      const batchQuery = db
         .collection(FORUM_REPLIES_COLLECTION)
         .where("threadId", "==", threadId)
-        .limit(DELETE_THREAD_CASCADE_BATCH_SIZE)
-        .get();
+        .limit(DELETE_THREAD_CASCADE_BATCH_SIZE);
 
-      if (snapshot.empty) {
-        return 0;
-      }
-
-      const batch = db.batch();
-      for (const doc of snapshot.docs) {
-        batch.delete(doc.ref);
-      }
-      await batch.commit();
-      return snapshot.size;
+      // One transaction per batch (TASK-029): the actor's fence read, the batch read, and its deletes. A batch is at most the
+      // 500-write transaction limit, so no batch can exceed it.
+      return runFencedTransaction(db, actorUid, async (tx) => {
+        const snapshot = await tx.get(batchQuery);
+        if (snapshot.empty) {
+          return 0;
+        }
+        for (const doc of snapshot.docs) {
+          tx.delete(doc.ref);
+        }
+        return snapshot.size;
+      });
     },
   };
 }
@@ -91,6 +102,20 @@ function toCandidateThread(data: unknown): unknown {
 
   const record = data as Record<string, unknown>;
   return { ...record, createdAt: toDateOrUndefined(record.createdAt) };
+}
+
+/** Maps raw erased-placeholder data (Timestamp dates included) into the candidate shape `isErasedForumThread` expects. */
+function toCandidateErasedThread(data: unknown): unknown {
+  if (typeof data !== "object" || data === null) {
+    return undefined;
+  }
+
+  const record = data as Record<string, unknown>;
+  return {
+    ...record,
+    createdAt: toDateOrUndefined(record.createdAt),
+    erasedAt: toDateOrUndefined(record.erasedAt),
+  };
 }
 
 function toDateOrUndefined(value: unknown): unknown {
@@ -108,7 +133,10 @@ function toDateOrUndefined(value: unknown): unknown {
 
 export type DeleteThreadResult =
   | { ok: true }
-  | { ok: false; error: "sign_in_required" | "forbidden" | "not_found" | "persistence_failed" };
+  | {
+      ok: false;
+      error: "sign_in_required" | AuthRefusal | "forbidden" | "not_found" | "erasure_in_progress" | "persistence_failed";
+    };
 
 export interface DeleteThreadDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
@@ -146,14 +174,20 @@ export interface DeleteThreadDeps {
  * regardless of whether BR-53's rare over-cap race ever pushed the thread's
  * real reply count above its nominal 500 cap.
  *
- * Not a Firestore transaction (SPEC — "Not a Firestore transaction"): a
+ * Not one Firestore transaction (SPEC — "Not a Firestore transaction"): a
  * transaction spanning the thread delete plus up to 500+ reply deletes would
- * itself risk Firestore's per-transaction operation-count limits. Neither
- * step reads `teams/{teamId}.status` — deletion is never gated on the
- * owning team's `active`/`disabled` status (BR-31).
+ * itself risk Firestore's per-transaction operation-count limits. Each step
+ * is its own transaction, each with the caller's erasure fence read first
+ * (TASK-029, BR-4(b)): the thread delete, then each reply batch of at most
+ * `DELETE_THREAD_CASCADE_BATCH_SIZE` deletes. Neither step reads
+ * `teams/{teamId}.status` — deletion is never gated on the owning team's
+ * `active`/`disabled` status (BR-31).
  *
- * Fails closed on any Firestore error during either step →
- * `persistence_failed`.
+ * A fence refusal in either step → `erasure_in_progress`. If a refusal lands
+ * during the cascade, the thread document is already gone, so the remaining
+ * replies are orphaned and unreachable through the thread; this is the same
+ * partial-failure window that existed before the fence, not a new one.
+ * Any other Firestore error during either step → `persistence_failed`.
  */
 export async function deleteThread(
   idToken: string,
@@ -163,7 +197,7 @@ export async function deleteThread(
 ): Promise<DeleteThreadResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
   if (!verified.ok) {
-    return { ok: false, error: "sign_in_required" };
+    return { ok: false, error: verified.error === "invalid_token" ? "sign_in_required" : authRefusalFor(verified) };
   }
 
   const threadDocs = deps.threadDocs ?? getDefaultForumThreadDocStore();
@@ -175,34 +209,47 @@ export async function deleteThread(
     return { ok: false, error: "persistence_failed" };
   }
 
-  const candidate = toCandidateThread(snapshot.exists ? snapshot.data() : undefined);
-  if (!isValidForumThread(candidate) || candidate.teamId !== teamId) {
-    // Missing, malformed, and cross-team all resolve to the identical
-    // not_found (BR-32) — a hard-deleted thread's document is
-    // indistinguishable from one that never existed.
-    return { ok: false, error: "not_found" };
-  }
-  const thread: ForumThreadRecord = candidate;
-
+  const rawData = snapshot.exists ? snapshot.data() : undefined;
   const admin = isAppAdmin(verified.identity, { allowList: deps.allowList });
-  if (!admin && thread.authorUid !== verified.identity.uid) {
-    return { ok: false, error: "forbidden" };
+
+  const erasedCandidate = toCandidateErasedThread(rawData);
+  if (isErasedForumThread(erasedCandidate)) {
+    // An erased-thread placeholder has no author, so only an app admin may delete it (account-erasure SPEC, "Operations
+    // on a placeholder"). The reply cascade below then runs as for any thread.
+    if (erasedCandidate.teamId !== teamId) {
+      return { ok: false, error: "not_found" };
+    }
+    if (!admin) {
+      return { ok: false, error: "forbidden" };
+    }
+  } else {
+    const candidate = toCandidateThread(rawData);
+    if (!isValidForumThread(candidate) || candidate.teamId !== teamId) {
+      // Missing, malformed, and cross-team all resolve to the identical
+      // not_found (BR-32) — a hard-deleted thread's document is
+      // indistinguishable from one that never existed.
+      return { ok: false, error: "not_found" };
+    }
+    const thread: ForumThreadRecord = candidate;
+    if (!admin && thread.authorUid !== verified.identity.uid) {
+      return { ok: false, error: "forbidden" };
+    }
   }
 
   try {
-    await threadDocs.delete(threadId);
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+    await threadDocs.delete(threadId, verified.identity.uid);
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 
   const repliesCascade = deps.repliesCascade ?? getDefaultRepliesCascadeStore();
   try {
-    let deletedInBatch = await repliesCascade.deleteNextBatch(threadId);
+    let deletedInBatch = await repliesCascade.deleteNextBatch(threadId, verified.identity.uid);
     while (deletedInBatch > 0) {
-      deletedInBatch = await repliesCascade.deleteNextBatch(threadId);
+      deletedInBatch = await repliesCascade.deleteNextBatch(threadId, verified.identity.uid);
     }
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 
   return { ok: true };

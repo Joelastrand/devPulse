@@ -1,5 +1,6 @@
 import { Timestamp } from "firebase-admin/firestore";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ErasureWriteRefused } from "../../auth/server/erasure-write-fence";
 import { getDefaultRoleTargetStore } from "./role-target-store";
 
 const holder = vi.hoisted(() => ({ db: undefined as unknown }));
@@ -46,6 +47,9 @@ function createRecordingDb(docs: Record<string, Data> = {}) {
           log.push(`tx.get|${ref.path}`);
           return snapshotOf(ref.path);
         },
+        delete: (ref: { path: string }) => {
+          log.push(`tx.delete|${ref.path}`);
+        },
         set: (ref: { path: string }, data: Data) => {
           log.push(`tx.set|${ref.path}`);
           sets.push({ path: ref.path, data });
@@ -69,7 +73,13 @@ describe("Admin role target store", () => {
     await store.get("uid-owner");
     await store.delete("uid-owner");
 
-    expect(recorder.log).toEqual([`${TARGET_PATH}|get`, `${TARGET_PATH}|delete`]);
+    // The delete runs in a transaction that reads the erasure fence first (TASK-026, BR-4(b)).
+    expect(recorder.log).toEqual([
+      `${TARGET_PATH}|get`,
+      "runTransaction",
+      "tx.get|accountErasures/uid-owner",
+      `tx.delete|${TARGET_PATH}`,
+    ]);
   });
 
   it("returns undefined for an absent document", async () => {
@@ -105,6 +115,7 @@ describe("Admin role target store", () => {
 
     expect(recorder.log).toEqual([
       "runTransaction",
+      "tx.get|accountErasures/uid-owner",
       "tx.get|roleDefinitions/role-1",
       "tx.get|skillTrees/api",
       `tx.set|${TARGET_PATH}`,
@@ -124,6 +135,34 @@ describe("Admin role target store", () => {
         return scope.readRole("role-1");
       }),
     ).rejects.toThrow("role read after the selection write");
-    expect(recorder.log.filter((entry) => entry.startsWith("tx.get|"))).toEqual([]);
+    // Only the fence read may precede the rejected read; no role or SkillTree read happens after the write (PG-7).
+    expect(recorder.log.filter((entry) => entry.startsWith("tx.get|") && !entry.startsWith("tx.get|accountErasures/"))).toEqual([]);
+  });
+});
+
+describe("Admin role target store — erasure fence on every write (TASK-026, BR-4(b))", () => {
+  it.each([
+    ["a valid in-progress record", { status: "in_progress" }],
+    ["a malformed record", "not-a-record"],
+  ])("delete with %s refuses as ErasureWriteRefused and deletes nothing", async (_label, erasure) => {
+    const recorder = createRecordingDb({ "accountErasures/uid-owner": erasure as Data, [TARGET_PATH]: { roleId: "role-1" } });
+    holder.db = recorder.db;
+
+    await expect(getDefaultRoleTargetStore().delete("uid-owner")).rejects.toBeInstanceOf(ErasureWriteRefused);
+    expect(recorder.log).toEqual(["runTransaction", "tx.get|accountErasures/uid-owner"]);
+  });
+
+  it("selection with an erasure record refuses before the role is read or the target written", async () => {
+    const recorder = createRecordingDb({
+      "accountErasures/uid-owner": { status: "in_progress" },
+      "roleDefinitions/role-1": { name: "Backend", expectations: [], createdAt: NOW, createdBy: "admin-uid" },
+    });
+    holder.db = recorder.db;
+    const work = vi.fn(async () => undefined);
+
+    await expect(getDefaultRoleTargetStore().runSelection("uid-owner", work)).rejects.toBeInstanceOf(ErasureWriteRefused);
+    expect(work).not.toHaveBeenCalled();
+    expect(recorder.log).toEqual(["runTransaction", "tx.get|accountErasures/uid-owner"]);
+    expect(recorder.sets).toEqual([]);
   });
 });

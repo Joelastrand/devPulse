@@ -191,6 +191,55 @@ describe("deleteThread", () => {
     expect(result).toEqual({ ok: false, error: "not_found" });
   });
 
+  describe("an erased-thread placeholder (TASK-015)", () => {
+    const placeholderRecord = (overrides: Record<string, unknown> = {}) => ({
+      teamId: TEAM_ID,
+      createdAt: new Date("2026-08-01T00:00:00Z"),
+      erasedAt: new Date("2026-10-01T00:00:00Z"),
+      status: "erased",
+      ...overrides,
+    });
+
+    it("lets an app admin delete the placeholder thread", async () => {
+      const threadDocs = fakeThreadDocStore(placeholderRecord());
+      const result = await deleteThread(
+        "token",
+        TEAM_ID,
+        THREAD_ID,
+        baseDeps({ verifyToken: verifyTokenReturning(adminIdentity()), threadDocs }),
+      );
+
+      expect(result).toEqual({ ok: true });
+      expect(threadDocs.deletedIds).toEqual([THREAD_ID]);
+    });
+
+    it("refuses a plain member, since a placeholder has no author to match, and writes nothing", async () => {
+      const threadDocs = fakeThreadDocStore(placeholderRecord());
+      const result = await deleteThread(
+        "token",
+        TEAM_ID,
+        THREAD_ID,
+        baseDeps({ verifyToken: verifyTokenReturning(memberIdentity({ uid: OTHER_MEMBER_UID })), threadDocs }),
+      );
+
+      expect(result).toEqual({ ok: false, error: "forbidden" });
+      expect(threadDocs.deletedIds).toHaveLength(0);
+    });
+
+    it("returns not_found for a placeholder of another team, and writes nothing", async () => {
+      const threadDocs = fakeThreadDocStore(placeholderRecord({ teamId: OTHER_TEAM_ID }));
+      const result = await deleteThread(
+        "token",
+        TEAM_ID,
+        THREAD_ID,
+        baseDeps({ verifyToken: verifyTokenReturning(adminIdentity()), threadDocs }),
+      );
+
+      expect(result).toEqual({ ok: false, error: "not_found" });
+      expect(threadDocs.deletedIds).toHaveLength(0);
+    });
+  });
+
   it("rejects a malformed thread document with not_found, and writes nothing", async () => {
     const threadDocs = fakeThreadDocStore({ teamId: TEAM_ID }); // missing required fields
     const result = await deleteThread("token", TEAM_ID, THREAD_ID, baseDeps({ threadDocs }));
@@ -404,11 +453,14 @@ describe("deleteThread", () => {
 
       const created = await createThread("token", TEAM_ID, "A real thread title", "A real thread body", {
         verifyToken: verifyTokenReturning(memberIdentity()),
-        membershipReader: { async getMembership(uid, teamId) {
-          return uid === AUTHOR_UID && teamId === TEAM_ID ? { uid, teamId } : undefined;
-        } },
-        teamStatusReader: { async getTeamStatus() { return "active"; } },
-        collection: store,
+        runThreadTransaction: (_uid, work) =>
+          work({
+            membershipReader: { async getMembership(uid, teamId) {
+              return uid === AUTHOR_UID && teamId === TEAM_ID ? { uid, teamId } : undefined;
+            } },
+            teamStatusReader: { async getTeamStatus() { return "active"; } },
+            collection: store,
+          }),
       });
       expect(created.ok).toBe(true);
       if (!created.ok) throw new Error("expected creation to succeed");

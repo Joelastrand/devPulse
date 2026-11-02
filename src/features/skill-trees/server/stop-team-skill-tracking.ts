@@ -1,10 +1,11 @@
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { runFencedTransaction, writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import type { IsAppAdminDeps } from "../../teams/domain/app-admin";
 import { requireAppAdmin } from "../../teams/server/require-app-admin";
 import { skillProgressDocId } from "../domain/skill-progress";
-
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
 const SKILL_PROGRESS_COLLECTION = "skillProgress";
 
 /**
@@ -20,17 +21,21 @@ export interface SkillProgressDocStore {
   delete(docId: string): Promise<void>;
 }
 
-function getDefaultSkillProgressDocStore(): SkillProgressDocStore {
+/** The writer is fenced on `accountErasures/{actorUid}` in the same transaction as the delete (TASK-031, W-15). */
+function getDefaultSkillProgressDocStore(actorUid: string): SkillProgressDocStore {
   return {
     async delete(docId) {
-      await getFirestoreDb().collection(SKILL_PROGRESS_COLLECTION).doc(docId).delete();
+      const db = getFirestoreDb();
+      await runFencedTransaction(db, actorUid, async (tx) => {
+        tx.delete(db.collection(SKILL_PROGRESS_COLLECTION).doc(docId));
+      });
     },
   };
 }
 
 export type StopTeamSkillTrackingResult =
   | { ok: true }
-  | { ok: false; error: "unauthenticated" | "forbidden" | "persistence_failed" };
+  | { ok: false; error: AuthRefusal | "forbidden" | "persistence_failed" };
 
 export interface StopTeamSkillTrackingDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
@@ -82,12 +87,12 @@ export async function stopTeamSkillTracking(
   }
 
   const docId = skillProgressDocId(teamId, treeId);
-  const progress = deps.progress ?? getDefaultSkillProgressDocStore();
+  const progress = deps.progress ?? getDefaultSkillProgressDocStore(admin.identity.uid);
 
   try {
     await progress.delete(docId);
     return { ok: true };
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 }

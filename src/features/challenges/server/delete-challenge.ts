@@ -1,10 +1,10 @@
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../../teams/domain/app-admin";
 import { requireAppAdmin } from "../../teams/server/require-app-admin";
 import { isValidChallenge, type Challenge } from "../domain/challenge";
-
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
 const CHALLENGES_COLLECTION = "challenges";
 
 /** A raw Firestore document read, abstracted so a test double never needs a real `firebase-admin` snapshot. */
@@ -76,7 +76,7 @@ export type DeleteChallengeResult =
   | { ok: true }
   | {
       ok: false;
-      error: "unauthenticated" | "forbidden" | "not_found" | "wrong_team" | "persistence_failed";
+      error: AuthRefusal | "forbidden" | "not_found" | "wrong_team" | "persistence_failed";
     };
 
 export interface DeleteChallengeDeps {

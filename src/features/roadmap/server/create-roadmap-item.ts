@@ -34,6 +34,8 @@ import {
   type RoadmapItemView,
   type RoadmapOwner,
 } from "./list-roadmap-items";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
+import { runFencedTransaction, writeRefusalFor } from "../../auth/server/erasure-write-fence";
 
 const ROADMAP_COLLECTION = "roadmapItems";
 const SKILL_PROGRESS_COLLECTION = "skillProgress";
@@ -44,7 +46,7 @@ const TEAMS_COLLECTION = "teams";
 const ALLOWED_KEYS = ["treeId", "targetNodeId", "priority", "status", "startDate", "targetDate", "ownerRef"];
 
 export type CreateRoadmapItemError =
-  | "unauthenticated"
+  | AuthRefusal
   | "forbidden"
   | "team_disabled"
   | "invalid_request"
@@ -75,47 +77,66 @@ export interface CreateRoadmapTx {
   getRoadmapItem(docId: string): Promise<unknown>;
   listMemberships(teamId: string, limit: number): Promise<unknown[]>;
   create(docId: string, data: Record<string, unknown>): void;
+  /**
+   * Transactional coordination with membership erasure (TASK-038, A-5). Writes the TARGET membership document with its own
+   * unchanged `memberRef`, so a concurrent erasure transaction that read that membership conflicts with this one. Called only
+   * when this mutation introduces a new owner, and only after every validation and read.
+   */
+  touchMembership(uid: string, teamId: string, memberRef: string): void;
 }
 
 export interface CreateRoadmapStore {
   runTransaction<T>(fn: (tx: CreateRoadmapTx) => Promise<T>): Promise<T>;
+  /** Writer-only: reads `accountErasures/{actorUid}` first, in the same transaction (TASK-032, W-14). */
+  runWriteTransaction<T>(actorUid: string, fn: (tx: CreateRoadmapTx) => Promise<T>): Promise<T>;
 }
 
 function getDefaultStore(): CreateRoadmapStore {
   return {
     runTransaction(fn) {
-      const db = getFirestoreDb();
-      return db.runTransaction((tx: Transaction) => {
-        const data = async (ref: FirebaseFirestore.DocumentReference, dateFields: string[]) => {
-          const snapshot = await tx.get(ref);
-          return snapshot.exists ? mapDates(snapshot.data(), dateFields) : undefined;
-        };
-        return fn({
-          async getTeamStatus(teamId) {
-            const snapshot = await tx.get(db.collection(TEAMS_COLLECTION).doc(teamId));
-            return snapshot.exists ? snapshot.data()?.status : undefined;
-          },
-          async getMembership(uid, teamId) {
-            const snapshot = await tx.get(db.collection(MEMBERSHIPS_COLLECTION).doc(membershipDocId(uid, teamId)));
-            return snapshot.exists ? snapshot.data() : undefined;
-          },
-          getSkillProgress: (docId) => data(db.collection(SKILL_PROGRESS_COLLECTION).doc(docId), ["updatedAt"]),
-          getSkillTree: (treeId) => data(db.collection(SKILL_TREES_COLLECTION).doc(treeId), ["createdAt", "updatedAt"]),
-          getRoadmapItem: (docId) =>
-            data(db.collection(ROADMAP_COLLECTION).doc(docId), ["createdAt", "updatedAt", "completedAt", "archivedAt"]),
-          async listMemberships(teamId, limit) {
-            const snapshot = await tx.get(
-              db.collection(MEMBERSHIPS_COLLECTION).where("teamId", "==", teamId).limit(limit),
-            );
-            return snapshot.docs.map((doc) => doc.data());
-          },
-          create(docId, record) {
-            tx.create(db.collection(ROADMAP_COLLECTION).doc(docId), record);
-          },
-        });
-      });
+      return runCreateRoadmapTransaction(fn, (work) => getFirestoreDb().runTransaction(work));
+    },
+    runWriteTransaction(actorUid, fn) {
+      return runCreateRoadmapTransaction(fn, (work) => runFencedTransaction(getFirestoreDb(), actorUid, work));
     },
   };
+}
+
+function runCreateRoadmapTransaction<T>(
+  fn: (tx: CreateRoadmapTx) => Promise<T>,
+  runner: (work: (tx: Transaction) => Promise<T>) => Promise<T>,
+): Promise<T> {
+  const db = getFirestoreDb();
+  return runner((tx: Transaction) => {
+    const data = async (ref: FirebaseFirestore.DocumentReference, dateFields: string[]) => {
+      const snapshot = await tx.get(ref);
+      return snapshot.exists ? mapDates(snapshot.data(), dateFields) : undefined;
+    };
+    return fn({
+      async getTeamStatus(teamId) {
+        const snapshot = await tx.get(db.collection(TEAMS_COLLECTION).doc(teamId));
+        return snapshot.exists ? snapshot.data()?.status : undefined;
+      },
+      async getMembership(uid, teamId) {
+        const snapshot = await tx.get(db.collection(MEMBERSHIPS_COLLECTION).doc(membershipDocId(uid, teamId)));
+        return snapshot.exists ? snapshot.data() : undefined;
+      },
+      getSkillProgress: (docId) => data(db.collection(SKILL_PROGRESS_COLLECTION).doc(docId), ["updatedAt"]),
+      getSkillTree: (treeId) => data(db.collection(SKILL_TREES_COLLECTION).doc(treeId), ["createdAt", "updatedAt"]),
+      getRoadmapItem: (docId) =>
+        data(db.collection(ROADMAP_COLLECTION).doc(docId), ["createdAt", "updatedAt", "completedAt", "archivedAt"]),
+      async listMemberships(teamId, limit) {
+        const snapshot = await tx.get(db.collection(MEMBERSHIPS_COLLECTION).where("teamId", "==", teamId).limit(limit));
+        return snapshot.docs.map((doc) => doc.data());
+      },
+      create(docId, record) {
+        tx.create(db.collection(ROADMAP_COLLECTION).doc(docId), record);
+      },
+      touchMembership(uid, teamId, memberRef) {
+        tx.update(db.collection(MEMBERSHIPS_COLLECTION).doc(membershipDocId(uid, teamId)), { memberRef });
+      },
+    });
+  });
 }
 
 export interface CreateRoadmapItemDeps {
@@ -206,7 +227,7 @@ export async function createRoadmapItem(
 ): Promise<CreateRoadmapItemResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
   if (!verified.ok) {
-    return { ok: false, error: "unauthenticated" };
+    return { ok: false, error: authRefusalFor(verified) };
   }
   const uid = verified.identity.uid;
 
@@ -220,7 +241,7 @@ export async function createRoadmapItem(
 
   let outcome: TxOutcome;
   try {
-    outcome = await store.runTransaction(async (tx): Promise<TxOutcome> => {
+    outcome = await store.runWriteTransaction(uid, async (tx): Promise<TxOutcome> => {
       const fail = (error: CreateRoadmapItemError): TxOutcome => ({ ok: false, error });
 
       const membership = await tx.getMembership(uid, teamId);
@@ -250,11 +271,14 @@ export async function createRoadmapItem(
         return fail(target.error);
       }
 
+      let ownerTouch: { uid: string; memberRef: string } | undefined;
       if (parsed.ownerRef !== undefined) {
         const owner = resolveMemberRef(memberships.slice(0, ROADMAP_ITEMS_MAX), teamId, parsed.ownerRef);
-        if (owner === null || extractMemberUid(owner) === null) {
+        const ownerUid = owner === null ? null : extractMemberUid(owner);
+        if (owner === null || ownerUid === null || typeof parsed.ownerRef !== "string") {
           return fail("invalid_owner");
         }
+        ownerTouch = { uid: ownerUid, memberRef: parsed.ownerRef };
       }
 
       if (slot !== undefined) {
@@ -280,6 +304,7 @@ export async function createRoadmapItem(
       const { completedAt } = applyStatusTransition({ status: "planned" }, parsed.status, now);
       if (completedAt !== null) record.completedAt = completedAt;
 
+      if (ownerTouch !== undefined) tx.touchMembership(ownerTouch.uid, teamId, ownerTouch.memberRef);
       tx.create(roadmapItemDocId(teamId, parsed.treeId), { ...record });
       return {
         ok: true,
@@ -291,8 +316,8 @@ export async function createRoadmapItem(
         },
       };
     });
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 
   if (!outcome.ok) {

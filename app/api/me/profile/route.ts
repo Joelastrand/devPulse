@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { deleteOwnProfile } from "../../../../src/features/profiles/server/delete-own-profile";
 import { getOwnProfile } from "../../../../src/features/profiles/server/get-own-profile";
 import { setOwnProfile } from "../../../../src/features/profiles/server/set-own-profile";
-
+import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../src/features/auth/server/auth-refusal";
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
@@ -63,8 +63,8 @@ export async function DELETE(request: Request) {
   return NextResponse.json({ ok: true }, { status: 200 });
 }
 
-function statusFor(error: "unauthenticated" | "invalid_input" | "persistence_failed"): number {
-  if (error === "unauthenticated") return 401;
+function statusFor(error: AuthRefusal | "invalid_input" | "persistence_failed"): number {
+  if (isAuthRefusal(error)) return authRefusalStatus(error);
   if (error === "invalid_input") return 400;
   return 500;
 }

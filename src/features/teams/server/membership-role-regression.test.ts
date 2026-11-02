@@ -50,21 +50,27 @@ function applyUpdate(path: string, fields: Doc) {
   store.set(path, next);
 }
 
-function query(collection: string, filters: Array<[string, unknown]>, max = Infinity) {
+/** A query over one collection (`group` false) or every collection with that id (`group` true, a collection group). */
+function query(collection: string, filters: Array<[string, unknown]>, max = Infinity, group = false) {
+  const inScope = (path: string) =>
+    group ? path.split("/").at(-2) === collection : path.startsWith(`${collection}/`);
   return {
     where(field: string, _op: string, value: unknown) {
-      return query(collection, [...filters, [field, value]], max);
+      return query(collection, [...filters, [field, value]], max, group);
     },
     limit(count: number) {
-      return query(collection, filters, count);
+      return query(collection, filters, count, group);
+    },
+    select() {
+      return query(collection, filters, max, group);
     },
     async get() {
-      const docs = [...store.entries()]
-        .filter(([path]) => path.startsWith(`${collection}/`))
+      const found = [...store.entries()]
+        .filter(([path]) => inScope(path))
         .filter(([, data]) => filters.every(([field, value]) => data[field] === value))
         .slice(0, max)
-        .map(([, data]) => ({ data: () => ({ ...data }) }));
-      return { docs };
+        .map(([path, data]) => ({ id: path.split("/").at(-1), ref: { path }, data: () => ({ ...data }) }));
+      return { docs: found, size: found.length };
     },
   };
 }
@@ -76,15 +82,21 @@ const fakeDb = {
       where: (field: string, op: string, value: unknown) => query(name, []).where(field, op, value),
     };
   },
+  collectionGroup(name: string) {
+    return query(name, [], Infinity, true);
+  },
   async getAll(...refs: Array<{ path: string }>) {
     return refs.map((ref) => ({ id: ref.path.split("/")[1], ...snapshot(ref.path) }));
   },
   async runTransaction<T>(work: (tx: unknown) => Promise<T>): Promise<T> {
     const writes: Array<() => void> = [];
     const tx = {
-      get: async (ref: { path: string }) => snapshot(ref.path),
+      // A document reference reads its snapshot; a query reads its documents (transactional reads are recorded here).
+      get: async (ref: { path?: string; get?: () => Promise<unknown> }) =>
+        ref.path !== undefined ? snapshot(ref.path) : ref.get?.(),
       set: (ref: { path: string }, data: Doc) => void writes.push(() => void store.set(ref.path, { ...data })),
       update: (ref: { path: string }, data: Doc) => void writes.push(() => applyUpdate(ref.path, data)),
+      delete: (ref: { path: string }) => void writes.push(() => void store.delete(ref.path)),
     };
     const result = await work(tx);
     writes.forEach((write) => write());

@@ -65,6 +65,27 @@ interface SourceFile {
 const APPROVED_COLLECTION_REFERENCES: readonly string[] = [
   `${D2_SERVER_DIR}conversation-store-types.ts`,
   `${D2_SERVER_DIR}conversation-store.test.ts`,
+  // Account erasure (erasure-only persistence metadata, file-exact): the inventory registry names the `conversations`
+  // collection and its `participantUid` field (I-8 discovery, AE-IDX-1), and its test pins those rows. Not a D2 store.
+  "src/features/account-erasure/server/inventory.ts",
+  "src/features/account-erasure/server/inventory.test.ts",
+  // Account erasure AE-IDX-1: the deployment-config test pins the approved `conversations.participantUid` index.
+  "src/lib/firebase/firestore-deployment-config.test.ts",
+  // Account erasure AE-IDX-1: the roadmap guard's index pin names the same approved `conversations` override (exact
+  // entry, erasure-only index metadata). It grants no D2 access; the roadmap feature still has no index of its own.
+  "src/features/roadmap/roadmap-scope-guard.test.ts",
+  // Account erasure (TASK-038, dated 2026-11-02): erasure-only Admin adapters that read D2 collections for the approved
+  // erasure graph. The participant-binding discovery is the TASK-019 collection-group query, registered only in the
+  // account-erasure composition. The residual counter names the same D2 collections the inventory rows name. Read-only for
+  // these modules' D2 references, and no D2 store, route, or feature module imports them. Exact files, no directory.
+  "src/features/account-erasure/server/erasure-adapters-conversations.ts",
+  "src/features/account-erasure/server/erasure-adapters-conversations.test.ts",
+  // TASK-038 (2026-11-02): the ordinary-removal and erasure membership destruction adapter. It clears the memberRef-dependent
+  // references (roadmap ownerRef, participant bindings) that the destroyed membership instance leaves behind. Cleanup only.
+  "src/features/account-erasure/server/membership-destruction-adapter.ts",
+  "src/features/account-erasure/server/erasure-adapters-sweep.ts",
+  "src/features/account-erasure/server/erasure-adapters-sweep.test.ts",
+  "src/features/account-erasure/server/production-composition.test.ts",
 ];
 
 /**
@@ -625,6 +646,20 @@ describe("D2 scope guard — sanity", () => {
 describe("D2 scope guard — persistence identifiers (dimension 1)", () => {
   it("only the approved files reference a D2 storage identifier on the real tree", () => {
     expect(collectionReferenceViolations(realFiles)).toEqual([]);
+  });
+
+  it("the account-erasure exemption is file-exact: sibling erasure files naming the collection are still flagged", () => {
+    expect(
+      collectionReferenceViolations([
+        virtual("src/features/account-erasure/server/inventory-extra.ts", `const c = "conversations";`),
+        virtual("src/features/account-erasure/server/erasure-runner.ts", `const c = "conversations";`),
+        virtual("src/features/account-erasure/server/inventory.test-helper.ts", `const c = "conversations";`),
+      ]),
+    ).toEqual([
+      "src/features/account-erasure/server/inventory-extra.ts",
+      "src/features/account-erasure/server/erasure-runner.ts",
+      "src/features/account-erasure/server/inventory.test-helper.ts",
+    ]);
   });
 
   it("fails for an unapproved reference in any form, and passes an approved file", () => {
@@ -1239,7 +1274,8 @@ const REAL_PERSISTED_LISTS: Record<string, readonly string[]> = {
  */
 const PINNED_COLLECTION_ARGUMENTS: Record<string, readonly string[]> = {
   [`${D2_SERVER_DIR}area-names.ts`]: ["SKILL_TREES_COLLECTION"],
-  [`${D2_SERVER_DIR}conversation-store.ts`]: ["USER_DEVELOPMENT_COLLECTION", "parent", "subcollection"],
+  // TASK-038 (2026-11-02): the invitee/replacement membership touch (I-7 coordination) names the teams membership collection.
+  [`${D2_SERVER_DIR}conversation-store.ts`]: ["USER_DEVELOPMENT_COLLECTION", "OWNER_CONVERSATIONS_SUBCOLLECTION", "PARTICIPATION_INDEX_SUBCOLLECTION", "MEMBERSHIPS_COLLECTION"],
   [`${D2_SERVER_DIR}member-ref-binding.ts`]: ["MEMBERSHIPS_COLLECTION"],
   [`${D2_SERVER_DIR}read-pending-invitation.ts`]: ['"teams"'],
   [`${D2_SERVER_DIR}read-selectable-members.ts`]: ["MEMBERSHIPS_COLLECTION"],

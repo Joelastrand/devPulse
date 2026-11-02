@@ -6,13 +6,15 @@ import { isWellFormedTreeId, readSkillProfileRecord } from "../domain/skill-prof
 import { toCandidateSkillTree } from "./skill-catalog";
 import { getDefaultSkillProfileStore, type SkillProfileStore } from "./skill-profile-store";
 import { stampsForWrite } from "./write-stamps";
+import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
+import { writeRefusalFor } from "../../auth/server/erasure-write-fence";
 
 export type SetOwnSkillLevelResult =
   | { ok: true; level: SelfAssessedLevel }
   | {
       ok: false;
       error:
-        | "unauthenticated"
+        | AuthRefusal
         | "invalid_request"
         | "invalid_input"
         | "skill_unavailable"
@@ -39,7 +41,7 @@ export async function setOwnSkillLevel(
   deps: SetOwnSkillLevelDeps = {},
 ): Promise<SetOwnSkillLevelResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
-  if (!verified.ok) return { ok: false, error: "unauthenticated" };
+  if (!verified.ok) return { ok: false, error: authRefusalFor(verified) };
 
   if (!isWellFormedTreeId(treeId)) return { ok: false, error: "skill_unavailable" };
 
@@ -64,7 +66,7 @@ export async function setOwnSkillLevel(
       tx.setLevel(treeId, level, stampsForWrite(existing, now));
       return { ok: true, level };
     });
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 }

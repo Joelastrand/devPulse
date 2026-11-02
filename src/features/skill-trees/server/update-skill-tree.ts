@@ -1,11 +1,12 @@
 import "server-only";
+import { runFencedTransaction, writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifyIdTokenDeps } from "../../auth/server/verify-identity";
+import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../../teams/domain/app-admin";
 import { requireAppAdmin } from "../../teams/server/require-app-admin";
 import { isValidSkillTree, type SkillTreeRecord } from "../domain/skill-tree";
 import { validateSkillNodeLabels, validateSkillTreeName } from "../domain/skill-tree-input";
-
+import { type AuthRefusal } from "../../auth/server/auth-refusal";
 const SKILL_TREES_COLLECTION = "skillTrees";
 
 /** A raw Firestore document read, abstracted so a test double never needs a real `firebase-admin` snapshot. */
@@ -25,14 +26,18 @@ export interface SkillTreeDocStore {
   update(treeId: string, data: Record<string, unknown>): Promise<void>;
 }
 
-function getDefaultSkillTreeDocStore(): SkillTreeDocStore {
+/** Writer-only: the update (stamps `updatedBy`) is fenced on `accountErasures/{actorUid}` in the same transaction (TASK-035, W-17). */
+function getDefaultSkillTreeDocStore(actorUid: string): SkillTreeDocStore {
   return {
     async get(treeId) {
       const snapshot = await getFirestoreDb().collection(SKILL_TREES_COLLECTION).doc(treeId).get();
       return { exists: snapshot.exists, data: () => snapshot.data() };
     },
     async update(treeId, data) {
-      await getFirestoreDb().collection(SKILL_TREES_COLLECTION).doc(treeId).update(data);
+      const db = getFirestoreDb();
+      await runFencedTransaction(db, actorUid, async (tx) => {
+        tx.update(db.collection(SKILL_TREES_COLLECTION).doc(treeId), data);
+      });
     },
   };
 }
@@ -71,7 +76,7 @@ export type UpdateSkillTreeResult =
   | {
       ok: false;
       error:
-        | "unauthenticated"
+        | AuthRefusal
         | "forbidden"
         | "tree_not_found"
         | "invalid_input"
@@ -126,7 +131,7 @@ export async function updateSkillTree(
     return { ok: false, error: admin.error };
   }
 
-  const docs = deps.docs ?? getDefaultSkillTreeDocStore();
+  const docs = deps.docs ?? getDefaultSkillTreeDocStore(admin.identity.uid);
 
   let snapshot: UpdateSkillTreeDocSnapshot;
   try {
@@ -169,7 +174,7 @@ export async function updateSkillTree(
       updatedBy: admin.identity.uid,
     });
     return { ok: true };
-  } catch {
-    return { ok: false, error: "persistence_failed" };
+  } catch (error) {
+    return { ok: false, error: writeRefusalFor(error) };
   }
 }

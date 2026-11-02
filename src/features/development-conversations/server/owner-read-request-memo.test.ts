@@ -7,6 +7,8 @@ import { createProductionParticipantStateResolver } from "./owner-participant-st
 import { NOW, OWNER_UID, PARTICIPANT_UID, TEAM_ID, rosterTeam, seedOwnerConversation } from "./owner-read-test-support";
 import { readOwnerConversation } from "./read-owner-conversation";
 import { readOwnerConversations, type ReadOwnerConversationsDeps } from "./read-owner-conversations";
+import { issueErasureOwnerCleanupCapability } from "./erasure-owner-cleanup-capability";
+import type { FakeConversationStore } from "./fake-conversation-store";
 
 /**
  * TASK-023 I-2: the owner list and detail share one request memo of raw team and membership reads. These tests count the
@@ -70,7 +72,7 @@ async function setup(teams: FakeTeamEligibilityState) {
 
 /** Seeds one conversation for the owner. Each conversation has its own participant binding and its own stored memberRef. */
 async function seedBound(
-  base: ConversationStore,
+  base: FakeConversationStore,
   codec: FakeContentCodec,
   conversationId: string,
   options: { participantUid?: string; teamId?: string; participantNotes?: string } = {},
@@ -82,13 +84,13 @@ async function seedBound(
     participantNotes: options.participantNotes,
   });
   // The participant index is written separately, as TASK-014 does, so the BR-21 index check has a real entry to read.
-  await base.runTransaction(async (tx) => {
+  await base.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => {
     tx.setParticipation(options.participantUid ?? PARTICIPANT_UID, conversationId, { ownerUid: OWNER_UID, invitedAt: NOW });
   });
 }
 
 async function setStoredRef(base: ConversationStore, conversationId: string, ref: string) {
-  await base.runTransaction(async (tx) => tx.updateOwner(OWNER_UID, conversationId, { participantMemberRef: ref }));
+  await base.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.updateOwner(OWNER_UID, conversationId, { participantMemberRef: ref }));
 }
 
 const participantStates = (items: Array<{ conversationId: string; participant: { state: string } }>) =>

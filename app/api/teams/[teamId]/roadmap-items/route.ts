@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createRoadmapItem } from "../../../../../src/features/roadmap/server/create-roadmap-item";
 import { listRoadmapItems } from "../../../../../src/features/roadmap/server/list-roadmap-items";
+import { authRefusalStatus, isAuthRefusal } from "../../../../../src/features/auth/server/auth-refusal";
 
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
@@ -21,7 +22,7 @@ export async function GET(
 
   if (!result.ok) {
     const status =
-      result.error === "unauthenticated" ? 401 : result.error === "forbidden" ? 403 : 500;
+      isAuthRefusal(result.error) ? authRefusalStatus(result.error) : result.error === "forbidden" ? 403 : 500;
     return NextResponse.json({ error: result.error }, { status });
   }
 
@@ -33,6 +34,8 @@ export async function GET(
 
 const POST_STATUS: Record<string, number> = {
   unauthenticated: 401,
+  erasure_in_progress: 403,
+  auth_unavailable: 503,
   forbidden: 403,
   invalid_request: 400,
   invalid_input: 400,

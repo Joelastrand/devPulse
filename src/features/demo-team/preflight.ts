@@ -48,11 +48,12 @@ export interface DemoReader {
 }
 
 /**
- * Existence check for the presenter's Auth user. Returns a boolean only, so
- * the user record (and its email) can never reach this module.
+ * Existence checks for the presenter uid. Both return a boolean only, so the user record (and its email) and the erasure
+ * record's content can never reach this module. `hasErasureRecord` refuses a uid that is erasing or erased (TASK-036, BR-20).
  */
 export interface DemoPresenterLookup {
   userExists(uid: string): Promise<boolean>;
+  hasErasureRecord(uid: string): Promise<boolean>;
 }
 
 export interface DemoCrypto {
@@ -91,6 +92,7 @@ export type PreflightErrorCategory =
   | "crypto-failed"
   | "adapters-missing"
   | "presenter-not-found"
+  | "presenter-erasure-record"
   | "presenter-lookup-failed"
   | "read-failed"
   | "conflict";
@@ -351,6 +353,14 @@ export async function runDemoPreflight(input: DemoPreflightInput): Promise<DemoP
     return failure("presenter-lookup-failed");
   }
   if (!presenterExists) return failure("presenter-not-found");
+
+  let erasureRecordExists: boolean;
+  try {
+    erasureRecordExists = await online.presenter.hasErasureRecord(config.presenterUid);
+  } catch {
+    return failure("presenter-lookup-failed");
+  }
+  if (erasureRecordExists) return failure("presenter-erasure-record");
 
   const classifications: ClassifiedPath[] = [];
   for (const op of operations) {

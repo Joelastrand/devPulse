@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cancelInvitation } from "../../../../../../src/features/teams/server/cancel-invitation";
 import { createInvitation } from "../../../../../../src/features/teams/server/create-invitation";
 import { listTeamInvitations } from "../../../../../../src/features/teams/server/list-team-invitations";
-
+import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../../../src/features/auth/server/auth-refusal";
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
@@ -92,7 +92,7 @@ function extractBearerToken(header: string | null): string {
 
 function statusForError(
   error:
-    | "unauthenticated"
+    | AuthRefusal
     | "forbidden"
     | "invalid_email"
     | "team_not_found"
@@ -101,7 +101,7 @@ function statusForError(
     | "persistence_failed"
     | "read_failed",
 ): number {
-  if (error === "unauthenticated") return 401;
+  if (isAuthRefusal(error)) return authRefusalStatus(error);
   if (error === "forbidden") return 403;
   if (error === "invalid_email" || error === "team_disabled") return 400;
   if (error === "team_not_found") return 404;

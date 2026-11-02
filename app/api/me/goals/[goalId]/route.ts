@@ -5,6 +5,7 @@ import { deletePersonalGoal } from "../../../../../src/features/personal-goals/s
 import { readUpdateGoalRequest } from "../../../../../src/features/personal-goals/server/goal-request-body";
 import { updatePersonalGoal } from "../../../../../src/features/personal-goals/server/update-personal-goal";
 import type { UpdatePersonalGoalResult } from "../../../../../src/features/personal-goals/server/update-personal-goal";
+import { type AuthRefusal, authRefusalFor, authRefusalStatus } from "../../../../../src/features/auth/server/auth-refusal";
 
 const BEARER_PATTERN = /^Bearer (.+)$/;
 const NO_STORE = { "Cache-Control": "no-store" };
@@ -31,8 +32,9 @@ type RouteContext = { params: Promise<{ goalId: string }> };
  * `PATCH` hides a missing or malformed goal as `goal_not_found`, `DELETE` is idempotent. `PATCH` and `DELETE` only.
  */
 export async function PATCH(request: Request, { params }: RouteContext) {
-  const subject = await authenticate(request);
-  if (!subject) return fail("unauthenticated", 401);
+  const verified = await authenticate(request);
+  if (!verified.ok) return json({ error: verified.error }, authRefusalStatus(verified.error));
+  const subject = verified.uid;
 
   const body = await readUpdateGoalRequest(request);
   if (!body.ok) return fail(body.error, 400);
@@ -44,8 +46,9 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 }
 
 export async function DELETE(request: Request, { params }: RouteContext) {
-  const subject = await authenticate(request);
-  if (!subject) return fail("unauthenticated", 401);
+  const verified = await authenticate(request);
+  if (!verified.ok) return json({ error: verified.error }, authRefusalStatus(verified.error));
+  const subject = verified.uid;
 
   const { goalId } = await params;
   const result = await deletePersonalGoal(subject, goalId);
@@ -54,10 +57,12 @@ export async function DELETE(request: Request, { params }: RouteContext) {
 }
 
 /** The verified token's uid, or `null` for a missing, malformed or unverifiable token. */
-async function authenticate(request: Request): Promise<string | null> {
+async function authenticate(request: Request): Promise<{ ok: true; uid: string } | { ok: false; error: AuthRefusal }> {
   const match = BEARER_PATTERN.exec(request.headers.get("authorization") ?? "");
   const verified = await verifyIdToken(match ? match[1] : "");
-  return verified.ok ? verified.identity.uid : null;
+  return verified.ok
+    ? { ok: true, uid: verified.identity.uid }
+    : { ok: false, error: authRefusalFor(verified) };
 }
 
 /** Field-by-field allow-list of a goal DTO (SI-10), independent of what the operation returned. */
