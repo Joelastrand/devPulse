@@ -1,6 +1,6 @@
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
-import type { VerifiedIdentity } from "../../auth/server/verify-identity";
+import { type VerifiedIdentity } from "../../auth/server/verify-identity";
 import { isValidTeamStatus, type TeamStatus } from "../../teams/domain/team";
 import {
   isValidMembershipFor,

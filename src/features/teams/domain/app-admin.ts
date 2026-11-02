@@ -1,5 +1,5 @@
 import "server-only";
-import type { VerifiedIdentity } from "../../auth/server/verify-identity";
+import { type VerifiedIdentity } from "../../auth/server/verify-identity";
 import { normalizeEmail } from "./normalize-email";
 
 /**
