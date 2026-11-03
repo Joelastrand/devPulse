@@ -1,11 +1,14 @@
 import type { InputHTMLAttributes } from "react";
 import { Alert } from "./Alert";
-import { cx, describedByIds, FORM_CONTROL_CLASSNAME } from "./class-names";
+import { cx, describedByIds, FORM_CONTROL_CLASSNAME, FORM_CONTROL_HEIGHT_CLASSNAME } from "./class-names";
+import { FieldLabel } from "./FieldLabel";
 
 export interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
   id: string;
   /** Rendered as a real, associated `<label htmlFor={id}>` — never optional, unlike the native `aria-label` fallback other elements accept. */
   label: string;
+  /** Marks the field optional with visible text. */
+  optional?: boolean;
   /** Optional hint text, associated via `aria-describedby` (e.g. a boundary/format hint). */
   description?: string;
   /** A field-specific validation error. When present, sets `aria-invalid` and renders the message via the shared `Alert` (preserving its existing `role="alert"` semantics), associated via `aria-describedby`. */
@@ -33,6 +36,7 @@ export interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
 export function TextField({
   id,
   label,
+  optional,
   description,
   error,
   className,
@@ -43,18 +47,16 @@ export function TextField({
 
   return (
     <div className="flex flex-col gap-2">
-      <label htmlFor={id} className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
-        {label}
-      </label>
+      <FieldLabel htmlFor={id} label={label} optional={optional} />
       <input
         id={id}
         aria-invalid={error ? true : undefined}
         aria-describedby={describedByIds(descriptionId, errorId)}
-        className={cx(FORM_CONTROL_CLASSNAME, className)}
+        className={cx(FORM_CONTROL_CLASSNAME, FORM_CONTROL_HEIGHT_CLASSNAME, className)}
         {...props}
       />
       {description && (
-        <p id={descriptionId} className="text-sm text-zinc-600 dark:text-zinc-400">
+        <p id={descriptionId} className="text-help text-text-muted">
           {description}
         </p>
       )}

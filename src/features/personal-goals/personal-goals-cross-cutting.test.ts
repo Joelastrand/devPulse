@@ -187,7 +187,7 @@ const read = (path: string) => readFileSync(join(ROOT, path), "utf8");
 const stripComments = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
 const D1_ROUTES = walk("app/api/me/goals");
-const D1_PRODUCTION = [...walk("src/features/personal-goals"), ...D1_ROUTES, ...walk("app/me/goals")].filter(
+const D1_PRODUCTION = [...walk("src/features/personal-goals"), ...D1_ROUTES, ...walk("app/(app)/me/goals")].filter(
   (p) => !isTest(p) && /\.tsx?$/.test(p) && !p.endsWith("fake-goal-store.ts"),
 );
 

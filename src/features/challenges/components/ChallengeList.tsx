@@ -1,5 +1,5 @@
 import { Alert } from "../../../components/ui/Alert";
-import { Badge } from "../../../components/ui/Badge";
+import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { LoadingState } from "../../../components/ui/LoadingState";
@@ -49,10 +49,10 @@ export function ChallengeList({ state }: { state: ChallengeListState }) {
 
 function ChallengeCard({ challenge }: { challenge: MemberChallengeView }) {
   return (
-    <Card as="li" variant="bordered" padding="sm" className="flex flex-col gap-1">
+    <Card as="li" variant="nested" padding="sm" className="flex flex-col gap-1">
       <p className="whitespace-pre-wrap break-words text-zinc-900 dark:text-zinc-50">{challenge.text}</p>
       <p className="flex flex-wrap items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-        <Badge>{challengesCopy.list.statusLabels[challenge.status]}</Badge>
+        <StatusBadge>{challengesCopy.list.statusLabels[challenge.status]}</StatusBadge>
         <span>{formatSurveyDate(new Date(challenge.submittedAt))}</span>
       </p>
     </Card>

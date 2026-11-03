@@ -11,6 +11,7 @@ import {
   type SurveyParticipationFetchResult,
 } from "../client/survey-participation-gateway";
 import { surveysCopy } from "../copy";
+import { SurveyIntro } from "./SurveyIntro";
 import { SurveyResponseForm } from "./SurveyResponseForm";
 
 type ViewState =
@@ -35,6 +36,8 @@ type ViewState =
  */
 export function SurveyParticipationView({ surveyId }: { surveyId: string }) {
   const [state, setState] = useState<ViewState>({ phase: "loading" });
+  // The intro is shown first. This flag is in memory only; nothing is stored.
+  const [started, setStarted] = useState(false);
 
   useAuthGatedResource(
     (token, generation, isCurrentGeneration) => {
@@ -99,6 +102,10 @@ export function SurveyParticipationView({ surveyId }: { surveyId: string }) {
         <Alert variant="info">{surveysCopy.page.closed}</Alert>
       </div>
     );
+  }
+
+  if (!started) {
+    return <SurveyIntro title={title} teamName={survey.teamName} onStart={() => setStarted(true)} />;
   }
 
   return (

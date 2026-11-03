@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Badge } from "../../../components/ui/Badge";
+import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { Card } from "../../../components/ui/Card";
 import type { OwnerSummaryWire, ParticipationSummaryWire } from "../client/conversations-gateway";
 import { conversationsCopy } from "../copy";
@@ -23,7 +23,7 @@ export function OwnedConversationList({ items }: { items: readonly OwnerSummaryW
             >
               {conversation.title}
             </Link>
-            <Badge>{conversationsCopy.statusLabel[conversation.status]}</Badge>
+            <StatusBadge>{conversationsCopy.statusLabel[conversation.status]}</StatusBadge>
           </div>
           {conversation.plannedFor !== null && (
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
@@ -54,7 +54,7 @@ export function ParticipationList({ items }: { items: readonly ParticipationSumm
           {participation.state === "pending" ? (
             <>
               <div>
-                <Badge>{conversationsCopy.pendingBadge}</Badge>
+                <StatusBadge tone="info">{conversationsCopy.pendingBadge}</StatusBadge>
               </div>
               <p className="text-sm text-zinc-600 dark:text-zinc-400">
                 {conversationsCopy.teamLabel}: {participation.teamName}

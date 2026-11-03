@@ -122,14 +122,16 @@ describe("ConversationsPage states", () => {
         },
       }),
     );
-    const section = screen.getByRole("region", { name: conversationsCopy.ownedHeading });
-    const items = within(section).getAllByRole("listitem");
-    expect(items).toHaveLength(2);
-    expect(items[0]?.textContent).toContain("Første samtale");
-    expect(items[0]?.textContent).toContain(conversationsCopy.participantStateLabel.accepted);
-    expect(items[0]?.textContent).toContain("Kari");
-    expect(items[1]?.textContent).toContain("Andre samtale");
-    expect(items[1]?.textContent).toContain(conversationsCopy.statusLabel.completed);
+    // TASK-033: open and completed conversations are grouped separately.
+    const open = within(screen.getByRole("region", { name: conversationsCopy.ownedHeading })).getAllByRole("listitem");
+    expect(open).toHaveLength(1);
+    expect(open[0]?.textContent).toContain("Første samtale");
+    expect(open[0]?.textContent).toContain(conversationsCopy.participantStateLabel.accepted);
+    expect(open[0]?.textContent).toContain("Kari");
+    const done = within(screen.getByRole("region", { name: conversationsCopy.completedHeading })).getAllByRole("listitem");
+    expect(done).toHaveLength(1);
+    expect(done[0]?.textContent).toContain("Andre samtale");
+    expect(done[0]?.textContent).toContain(conversationsCopy.statusLabel.completed);
   });
 
   it("populated: a pending participation shows 'Venter på svar', no title and an open link", async () => {
@@ -142,7 +144,7 @@ describe("ConversationsPage states", () => {
         },
       }),
     );
-    const section = screen.getByRole("region", { name: conversationsCopy.participatingHeading });
+    const section = screen.getByRole("region", { name: conversationsCopy.invitationsHeading });
     expect(within(section).getByText(conversationsCopy.pendingBadge)).toBeTruthy();
     const link = within(section).getByRole("link", { name: conversationsCopy.openPendingName("Plattform") });
     expect(link.getAttribute("href")).toBe("/me/conversations/pend-1");

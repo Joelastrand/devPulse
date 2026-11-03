@@ -85,9 +85,9 @@ export function buildTrendSeries(
  * series remain distinguishable without relying on color alone.
  */
 const DIMENSION_LINES = [
-  { key: "flow" as const, color: "#2563eb", dash: undefined, label: resultsCopy.trendTable.columns.flow },
-  { key: "stress" as const, color: "#dc2626", dash: "6 3", label: resultsCopy.trendTable.columns.stress },
-  { key: "fun" as const, color: "#16a34a", dash: "2 2", label: resultsCopy.trendTable.columns.fun },
+  { key: "flow" as const, color: "var(--chart-1)", dash: undefined, label: resultsCopy.trendTable.columns.flow },
+  { key: "stress" as const, color: "var(--chart-2)", dash: "6 3", label: resultsCopy.trendTable.columns.stress },
+  { key: "fun" as const, color: "var(--chart-3)", dash: "2 2", label: resultsCopy.trendTable.columns.fun },
 ];
 
 function formatTooltipValue(value: unknown): string {

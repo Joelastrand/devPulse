@@ -1,11 +1,14 @@
 import type { SelectHTMLAttributes } from "react";
 import { Alert } from "./Alert";
-import { cx, describedByIds, FORM_CONTROL_CLASSNAME } from "./class-names";
+import { cx, describedByIds, FORM_CONTROL_CLASSNAME, FORM_CONTROL_HEIGHT_CLASSNAME } from "./class-names";
+import { FieldLabel } from "./FieldLabel";
 
 export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   id: string;
   /** Rendered as a real, associated `<label htmlFor={id}>`. */
   label: string;
+  /** Marks the field optional with visible text. */
+  optional?: boolean;
   /** Optional hint text, associated via `aria-describedby`. */
   description?: string;
   /** A field-specific validation error, rendered via the shared `Alert` (preserving `role="alert"`) and associated via `aria-describedby`; also sets `aria-invalid`. */
@@ -23,6 +26,7 @@ export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
 export function Select({
   id,
   label,
+  optional,
   description,
   error,
   className,
@@ -34,20 +38,18 @@ export function Select({
 
   return (
     <div className="flex flex-col gap-2">
-      <label htmlFor={id} className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
-        {label}
-      </label>
+      <FieldLabel htmlFor={id} label={label} optional={optional} />
       <select
         id={id}
         aria-invalid={error ? true : undefined}
         aria-describedby={describedByIds(descriptionId, errorId)}
-        className={cx(FORM_CONTROL_CLASSNAME, className)}
+        className={cx(FORM_CONTROL_CLASSNAME, FORM_CONTROL_HEIGHT_CLASSNAME, className)}
         {...props}
       >
         {children}
       </select>
       {description && (
-        <p id={descriptionId} className="text-sm text-zinc-600 dark:text-zinc-400">
+        <p id={descriptionId} className="text-help text-text-muted">
           {description}
         </p>
       )}

@@ -10,7 +10,10 @@ import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { LoadingState } from "../../../components/ui/LoadingState";
-import { PageHeader } from "../../../components/ui/PageHeader";
+import { useAnnounceTeamName } from "../../../components/nav/TeamContext";
+import { TeamSummaryStrip } from "./TeamSummaryStrip";
+import { TeamIdentity } from "./TeamIdentity";
+import { ResultsSummaryStrip } from "../../results/components/ResultsSummaryStrip";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import {
   fetchTeamChallenges,
@@ -517,13 +520,25 @@ export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnab
   if (result.status === "results_unavailable") {
     return (
       <div className="flex flex-col gap-4">
-        <TeamHeading name={result.name} />
+        <TeamHeading name={result.name} teamId={teamId} />
         <TeamRouteNav teamId={teamId} />
         <Alert variant="error">{teamsCopy.detail.resultsUnavailable}</Alert>
         <ResultaterZone>
           <CurrentSurveySection state={result.currentSurvey} />
         </ResultaterZone>
         <TeamaktivitetZone>
+          <RoadmapPlanningScope key={generation} token={token} teamId={teamId}>
+            {(planning) => (
+              <TeamSkillSection
+                idToken={token}
+                teamId={teamId}
+                state={toTeamSkillSectionState(result.skills)}
+                onReported={() => handleSkillReported(token, generation)}
+                planning={planning}
+              />
+            )}
+          </RoadmapPlanningScope>
+          <TeamSkillNeedsSection key={generation} teamId={teamId} token={token} teamName={result.name} />
           <ChallengesSection
             teamId={teamId}
             token={token}
@@ -538,18 +553,6 @@ export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnab
               onThreadCreated={(threadId) => handleThreadCreated(generation, threadId)}
             />
           )}
-          <RoadmapPlanningScope key={generation} token={token} teamId={teamId}>
-            {(planning) => (
-              <TeamSkillSection
-                idToken={token}
-                teamId={teamId}
-                state={toTeamSkillSectionState(result.skills)}
-                onReported={() => handleSkillReported(token, generation)}
-                planning={planning}
-              />
-            )}
-          </RoadmapPlanningScope>
-          <TeamSkillNeedsSection key={generation} teamId={teamId} token={token} teamName={result.name} />
           <TeamRosterSection key={generation} teamId={teamId} token={token} />
         </TeamaktivitetZone>
       </div>
@@ -565,9 +568,11 @@ export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnab
     const latest = result.results[result.results.length - 1] ?? null;
     return (
       <div className="flex flex-col gap-8">
-        <TeamHeading name={result.name} />
+        <TeamHeading name={result.name} teamId={teamId} />
         <TeamRouteNav teamId={teamId} />
+        <TeamSummaryStrip latest={latest} />
         <ResultaterZone>
+          <ResultsSummaryStrip results={result.results} />
           <CurrentSurveySection state={result.currentSurvey} />
           <PeriodSummary result={latest} />
           {result.results.length > 0 && (
@@ -578,6 +583,18 @@ export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnab
           <TrendTable results={result.results} />
         </ResultaterZone>
         <TeamaktivitetZone>
+          <RoadmapPlanningScope key={generation} token={token} teamId={teamId}>
+            {(planning) => (
+              <TeamSkillSection
+                idToken={token}
+                teamId={teamId}
+                state={toTeamSkillSectionState(result.skills)}
+                onReported={() => handleSkillReported(token, generation)}
+                planning={planning}
+              />
+            )}
+          </RoadmapPlanningScope>
+          <TeamSkillNeedsSection key={generation} teamId={teamId} token={token} teamName={result.name} />
           <ChallengesSection
             teamId={teamId}
             token={token}
@@ -592,18 +609,6 @@ export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnab
               onThreadCreated={(threadId) => handleThreadCreated(generation, threadId)}
             />
           )}
-          <RoadmapPlanningScope key={generation} token={token} teamId={teamId}>
-            {(planning) => (
-              <TeamSkillSection
-                idToken={token}
-                teamId={teamId}
-                state={toTeamSkillSectionState(result.skills)}
-                onReported={() => handleSkillReported(token, generation)}
-                planning={planning}
-              />
-            )}
-          </RoadmapPlanningScope>
-          <TeamSkillNeedsSection key={generation} teamId={teamId} token={token} teamName={result.name} />
           <TeamRosterSection key={generation} teamId={teamId} token={token} />
         </TeamaktivitetZone>
       </div>
@@ -614,7 +619,7 @@ export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnab
 
   return (
     <div className="flex flex-col gap-4">
-      <TeamHeading name={result.name} />
+      <TeamHeading name={result.name} teamId={teamId} />
       <Alert variant="info">{RELATIONSHIP_MESSAGES[result.relationship]}</Alert>
       {actionState.status === "error" && (
         <Alert variant="error">{actionState.message}</Alert>
@@ -634,8 +639,19 @@ export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnab
   );
 }
 
-function TeamHeading({ name }: { name?: string }) {
-  return <PageHeader title={name ?? teamsCopy.detail.fallbackName} />;
+function TeamHeading({ name, teamId }: { name?: string; teamId: string }) {
+  // The shell shows the team name as context; the name is the one already loaded here.
+  useAnnounceTeamName(name ?? null);
+  return (
+    <header className="flex items-center gap-5 rounded-surface border border-border-subtle bg-surface p-4 shadow-card">
+      <span className="hidden w-28 shrink-0 overflow-hidden rounded-control sm:block">
+        <TeamIdentity teamId={teamId} />
+      </span>
+      <h1 className="break-words text-page-title font-semibold text-text-primary">
+        {name ?? teamsCopy.detail.fallbackName}
+      </h1>
+    </header>
+  );
 }
 
 /**
@@ -652,7 +668,7 @@ function ResultaterZone({ children }: { children: ReactNode }) {
     <section aria-labelledby="team-detail-resultater-heading" className="flex flex-col gap-6">
       <h2
         id="team-detail-resultater-heading"
-        className="text-xl font-semibold text-zinc-900 dark:text-zinc-50"
+        className="text-section-title font-semibold text-text-primary"
       >
         {teamsCopy.detail.resultaterHeading}
       </h2>
@@ -667,7 +683,7 @@ function TeamaktivitetZone({ children }: { children: ReactNode }) {
     <section aria-labelledby="team-detail-teamaktivitet-heading" className="flex flex-col gap-6">
       <h2
         id="team-detail-teamaktivitet-heading"
-        className="text-xl font-semibold text-zinc-900 dark:text-zinc-50"
+        className="text-section-title font-semibold text-text-primary"
       >
         {teamsCopy.detail.teamaktivitetHeading}
       </h2>

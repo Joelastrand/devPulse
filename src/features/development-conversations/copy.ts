@@ -12,6 +12,9 @@ export const conversationsCopy = {
   empty: "Du har ingen samtaler ennå.",
   ownedHeading: "Dine samtaler",
   ownedEmpty: "Du har ingen samtaler du har startet.",
+  /** TASK-033: completed owned conversations get their own group (SPEC: Development conversation redesign). */
+  completedHeading: "Fullførte samtaler",
+  invitationsHeading: "Invitasjoner",
   participatingHeading: "Samtaler du er med i",
   participatingEmpty: "Du er ikke med i noen samtaler.",
   /** Shown once per list when either list is bounded. It states that not every item is shown, not how many exist. */

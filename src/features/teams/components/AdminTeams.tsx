@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { Alert } from "../../../components/ui/Alert";
-import { Badge } from "../../../components/ui/Badge";
+import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
@@ -288,9 +288,9 @@ export function AdminTeams() {
                     {team.name}
                   </Link>
                   <p className="mt-1 flex flex-wrap items-center gap-1 text-sm text-zinc-600 dark:text-zinc-400">
-                    <Badge>
+                    <StatusBadge tone={team.status === "active" ? "success" : "neutral"}>
                       {team.status === "active" ? adminCopy.teams.statusActive : adminCopy.teams.statusDisabled}
-                    </Badge>
+                    </StatusBadge>
                     <span>
                       · {adminCopy.teams.teamIdLabel} {team.teamId}
                     </span>

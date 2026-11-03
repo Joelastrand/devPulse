@@ -17,6 +17,9 @@ export const navCopy = {
   personalGoals: "Mål",
   personalConversations: "Samtaler",
   admin: "Admin",
+  administration: "Administrasjon",
+  deleteAccount: "Slett kontoen din",
   signOut: "Logg ut",
+  menu: "Meny",
   signingOut: "Logger ut…",
 } as const;

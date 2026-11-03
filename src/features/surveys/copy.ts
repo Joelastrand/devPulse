@@ -12,6 +12,27 @@
  * is retired wholesale by TASK-014, not imported from here in the meantime.
  */
 export const surveysCopy = {
+  /**
+   * Intro screen before the first question (docs/features/product-experience/
+   * SPEC.md — Locked privacy notice for the survey page, class A). The notice
+   * is mode-neutral and names no threshold. `notice` is the verbatim text, and
+   * its lead is shown in bold.
+   */
+  intro: {
+    start: "Start",
+    noticeLead: "Svaret ditt lagres uten navn eller e-postadresse.",
+    noticeRest:
+      "Teamet ser bare samlede resultater, og først når undersøkelsen er avsluttet og nok personer har svart.",
+    notice: "Svaret ditt lagres uten navn eller e-postadresse. Teamet ser bare samlede resultater, og først når undersøkelsen er avsluttet og nok personer har svart.",
+    disclosureTitle: "Mer om personvernet",
+    disclosurePoints: [
+      "DevPulse viser aldri enkeltsvar, og viser ikke hvem som har svart.",
+      "Undersøkelser for teamet krever innlogging og medlemskap. Da kan du bare svare én gang.",
+      "Undersøkelser som er åpne for alle med lenken, krever ikke innlogging. Da kan DevPulse ikke hindre at samme person svarer flere ganger, og svarene kan ikke knyttes til en person i DevPulse.",
+      "Resultatene vises først når undersøkelsen er avsluttet og minst det angitte antallet personer har svart. Før det vises ingen tall.",
+      "Svar som ikke er sendt inn, lagres ikke. Har du ikke sendt inn, må du åpne siden på nytt og svare igjen.",
+    ],
+  },
   page: {
     loading: "Laster undersøkelse…",
     notFound: "Denne undersøkelsen finnes ikke.",
@@ -29,6 +50,14 @@ export const surveysCopy = {
     fun: "Glede og motivasjon",
   },
   form: {
+    /** One question per screen (SPEC BR-S2, BR-S3, BR-S5). Answers are held in memory only. */
+    stepper: {
+      back: "Tilbake",
+      next: "Neste",
+      nextDisabled: "Velg et svar for å fortsette",
+      progress: (current: number, total: number) => `Spørsmål ${current} av ${total}`,
+      review: "Gjennomgå svarene",
+    },
     submit: "Send inn",
     submitting: "Sender inn…",
     success: "Takk — svaret ditt ble registrert.",

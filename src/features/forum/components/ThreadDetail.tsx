@@ -287,7 +287,7 @@ function ReplyRow({
     <Card as="li" variant="bordered" padding="sm" className="flex flex-col gap-2">
       <p className="whitespace-pre-wrap break-words text-zinc-900 dark:text-zinc-50">{reply.body}</p>
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
-        {forumCopy.authorTagLabel(reply.authorTag)} · {postedAt}
+        {forumCopy.authorTagLabel(reply.authorTag)} · <time dateTime={reply.createdAt}>{postedAt}</time>
       </p>
       {canDelete && (
         <DeleteConfirmation

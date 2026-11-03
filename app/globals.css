@@ -1,26 +1,218 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * Semantic token contract (docs/features/product-experience/SPEC.md — Token
+ * contract). Light is the default. Dark applies only when the root element
+ * carries data-theme="dark" (set by the inline script in app/layout.tsx).
+ * The OS preference is never read here, so an OS dark setting does not change
+ * the default light theme.
+ */
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+  --canvas: #faf9f6;
+  --surface: #ffffff;
+  --surface-subtle: #f1f3f0;
+  --surface-elevated: #ffffff;
+  --text-primary: #14242b;
+  --text-secondary: #50616b;
+  --text-muted: #5f6f76;
+  --border-subtle: #e5e9e6;
+  --border-strong: #7d8c89;
+  --primary: #087b5b;
+  --primary-text: #ffffff;
+  --primary-hover: #086a55;
+  --primary-subtle: #ddf3e7;
+  /* Sidebar and brand surfaces (DESIGN-SYSTEM.md §4.2, §4.4). */
+  --sidebar-background: #053f35;
+  --sidebar-foreground: #f2f8f4;
+  --sidebar-muted: #b8d2c8;
+  --sidebar-active: #176b58;
+  --success-text: #1e6b3e;
+  --success-subtle: #e3f2e8;
+  --warning-text: #7a4e00;
+  --warning-subtle: #fbf0d9;
+  --danger-text: #a4221b;
+  --danger-subtle: #fbe4e2;
+  --info-text: #2456a6;
+  --info-subtle: #e4ecf8;
+  --focus-ring: #087b5b;
+  /* Categorical chart palette, in SPEC order: teal, indigo, amber, rose, slate, green. */
+  --chart-1: #0b6b63;
+  --chart-2: #4f46b0;
+  --chart-3: #9a6400;
+  --chart-4: #b4345e;
+  --chart-5: #4b5870;
+  --chart-6: #2e7d3f;
 }
 
+[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #111a1b;
+  --surface: #1b2829;
+  --surface-subtle: #233234;
+  --surface-elevated: #213031;
+  --text-primary: #edf3f0;
+  --text-secondary: #b5c5c1;
+  --text-muted: #94a7a2;
+  --border-subtle: #344547;
+  --border-strong: #7a8f8b;
+  --primary: #5dc9a1;
+  --primary-text: #082e25;
+  --primary-hover: #7fdbb8;
+  --primary-subtle: #173b32;
+  --sidebar-background: #04332b;
+  --sidebar-foreground: #f2f8f4;
+  --sidebar-muted: #a9c7bc;
+  --sidebar-active: #1d6654;
+  --success-text: #6cc48f;
+  --success-subtle: #1b2e24;
+  --warning-text: #e0b354;
+  --warning-subtle: #33290f;
+  --danger-text: #f08a82;
+  --danger-subtle: #3a1d1b;
+  --info-text: #8db4f0;
+  --info-subtle: #18243a;
+  --focus-ring: #5dc9a1;
+  --chart-1: #5fc3b5;
+  --chart-2: #a5a6f5;
+  --chart-3: #e0b354;
+  --chart-4: #f08aa6;
+  --chart-5: #a3b1c6;
+  --chart-6: #6cc48f;
+}
+
+/* Dark variants follow the explicit theme, not the operating system. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-canvas: var(--canvas);
+  --color-sidebar: var(--sidebar-background);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-muted: var(--sidebar-muted);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-brand-950: #053f35;
+  --color-brand-900: #075446;
+  --color-brand-800: #086a55;
+  --color-brand-700: #087b5b;
+  --color-brand-600: #11916e;
+  --color-brand-200: #b8e4d0;
+  --color-brand-100: #ddf3e7;
+  --color-brand-50: #eff9f3;
+  --color-surface: var(--surface);
+  --color-surface-subtle: var(--surface-subtle);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-strong: var(--border-strong);
+  --color-primary: var(--primary);
+  --color-primary-text: var(--primary-text);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-subtle: var(--primary-subtle);
+  --color-success-text: var(--success-text);
+  --color-success-subtle: var(--success-subtle);
+  --color-warning-text: var(--warning-text);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-danger-text: var(--danger-text);
+  --color-danger-subtle: var(--danger-subtle);
+  --color-info-text: var(--info-text);
+  --color-info-subtle: var(--info-subtle);
+  --color-focus-ring: var(--focus-ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/*
+ * Non-colour tokens (SPEC: Typography, Spacing, radii, borders, elevation,
+ * Motion strategy). Spacing uses Tailwind's default 4 px scale, which already
+ * matches the SPEC steps (4, 8, 12, 16, 24, 32, 48, 64).
+ */
+@theme {
+  --text-eyebrow: 13px;
+  --text-eyebrow--line-height: 18px;
+  --text-page-title: 28px;
+  --text-page-title--line-height: 34px;
+  --text-page-description: 15px;
+  --text-page-description--line-height: 24px;
+  --text-section-title: 18px;
+  --text-section-title--line-height: 26px;
+  --text-panel-title: 15px;
+  --text-panel-title--line-height: 22px;
+  --text-metric: 32px;
+  --text-metric--line-height: 36px;
+  --text-body: 15px;
+  --text-body--line-height: 24px;
+  --text-body-secondary: 14px;
+  --text-body-secondary--line-height: 22px;
+  --text-label: 14px;
+  --text-label--line-height: 20px;
+  --text-help: 13px;
+  --text-help--line-height: 20px;
+  --text-survey-question: 20px;
+  --text-survey-question--line-height: 28px;
+  --text-survey-body: 17px;
+  --text-survey-body--line-height: 26px;
+
+  --radius-field: 6px;
+  --radius-control: 10px;
+  --radius-surface: 14px;
+
+  --shadow-card: 0 1px 2px rgb(20 36 43 / 0.04), 0 4px 16px rgb(20 36 43 / 0.06);
+  --shadow-elevated: 0 8px 24px rgb(0 0 0 / 0.12);
+
+  --duration-micro: 120ms;
+  --duration-panel: 200ms;
+  --duration-progress: 300ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Named content containers (SPEC: Breakpoints and containers). */
+  --container-main: 75rem;
+  --container-reading: 42.5rem;
+  --container-survey: 35rem;
+  --container-auth: 26.25rem;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--canvas);
+  color: var(--text-primary);
   font-family: var(--font-sans), ui-sans-serif, sans-serif;
+}
+
+/* Never removed by a component: every focusable element keeps this ring. */
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Mobile drawer slide-in (SPEC: Motion strategy, dialog and drawer 200 ms). Disabled by the reduced-motion rule below. */
+@keyframes drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@utility animate-drawer-in {
+  animation: drawer-in var(--duration-panel) var(--ease-standard);
+}
+
+/* Motion communicates state only. Users who ask for less get none of it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
 }

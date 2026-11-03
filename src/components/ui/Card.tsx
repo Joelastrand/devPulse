@@ -1,7 +1,7 @@
 import type { HTMLAttributes } from "react";
 import { cx } from "./class-names";
 
-export type CardVariant = "bordered" | "elevated";
+export type CardVariant = "bordered" | "elevated" | "nested";
 export type CardPadding = "sm" | "md" | "lg";
 export type CardElement = "div" | "li" | "section";
 
@@ -19,8 +19,10 @@ export interface CardProps extends HTMLAttributes<HTMLElement> {
 }
 
 const VARIANT_CLASSNAMES: Record<CardVariant, string> = {
-  bordered: "rounded-lg border border-zinc-200 dark:border-zinc-800",
-  elevated: "rounded-lg bg-white shadow-sm dark:bg-zinc-900",
+  bordered: "rounded-surface border border-border-subtle bg-surface shadow-card",
+  elevated: "rounded-surface bg-surface shadow-elevated",
+  // A surface inside a bordered surface uses a fill, not a second border (SPEC: Spacing, radii, borders, elevation).
+  nested: "rounded-control bg-surface-subtle",
 };
 
 const PADDING_CLASSNAMES: Record<CardPadding, string> = {

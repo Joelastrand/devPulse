@@ -25,3 +25,27 @@ describe("PageHeader", () => {
     expect(container.querySelector("p")).toBeNull();
   });
 });
+
+describe("PageHeader structure", () => {
+  afterEach(cleanup);
+
+  it("renders the eyebrow as visible text above the title", () => {
+    const { container } = render(<PageHeader title="Team" eyebrow="Administrasjon" />);
+
+    expect(screen.getByText("Administrasjon")).toBeTruthy();
+    expect(container.querySelector("h1")?.previousElementSibling?.textContent).toBe("Administrasjon");
+  });
+
+  it("renders its one primary action beside the title", () => {
+    render(<PageHeader title="Team" primaryAction={<button type="button">Ny samtale</button>} />);
+
+    expect(screen.getByRole("button", { name: "Ny samtale" })).toBeTruthy();
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+  });
+
+  it("keeps the action out of the heading", () => {
+    render(<PageHeader title="Team" primaryAction={<button type="button">Lagre</button>} />);
+
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Team");
+  });
+});

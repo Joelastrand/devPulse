@@ -31,3 +31,14 @@ describe("Badge", () => {
     expect(screen.getByText("Aktiv").id).toBe("team-status");
   });
 });
+
+describe("Badge radius", () => {
+  afterEach(cleanup);
+
+  it("uses the 6 px field radius rather than a pill shape", () => {
+    render(<Badge>Teamleder</Badge>);
+
+    expect(screen.getByText("Teamleder").className).toContain("rounded-field");
+    expect(screen.getByText("Teamleder").className).not.toContain("rounded-full");
+  });
+});

@@ -10,8 +10,11 @@ function submitButton() {
 
 async function fillAllFields(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByLabelText("1", { selector: "#flow-1" }));
+  await user.click(screen.getByRole("button", { name: "Neste" }));
   await user.click(screen.getByLabelText("2", { selector: "#stress-2" }));
+  await user.click(screen.getByRole("button", { name: "Neste" }));
   await user.click(screen.getByLabelText("3", { selector: "#fun-3" }));
+  await user.click(screen.getByRole("button", { name: "Neste" }));
 }
 
 describe("SurveyResponseForm", () => {
@@ -20,28 +23,20 @@ describe("SurveyResponseForm", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders exactly three questions and no team selector, in Norwegian", () => {
+  it("starts on the first of three questions and shows no team selector, in Norwegian", () => {
     render(<SurveyResponseForm surveyId="survey-1" idToken={null} />);
 
     expect(screen.getByRole("group", { name: "Arbeidsflyt og leveransetilfredshet" })).toBeTruthy();
-    expect(screen.getByRole("group", { name: "Bærekraftig arbeidsmengde og stress" })).toBeTruthy();
-    expect(screen.getByRole("group", { name: "Glede og motivasjon" })).toBeTruthy();
+    expect(screen.queryByRole("group", { name: "Bærekraftig arbeidsmengde og stress" })).toBeNull();
     expect(screen.queryByLabelText("Team")).toBeNull();
   });
 
-  it("disables submission until all three answers are selected", async () => {
+  it("offers submission only on the review step, after all three answers", async () => {
     const user = userEvent.setup();
     render(<SurveyResponseForm surveyId="survey-1" idToken={null} />);
 
-    expect(submitButton().hasAttribute("disabled")).toBe(true);
-
-    await user.click(screen.getByLabelText("1", { selector: "#flow-1" }));
-    expect(submitButton().hasAttribute("disabled")).toBe(true);
-
-    await user.click(screen.getByLabelText("2", { selector: "#stress-2" }));
-    expect(submitButton().hasAttribute("disabled")).toBe(true);
-
-    await user.click(screen.getByLabelText("3", { selector: "#fun-3" }));
+    expect(screen.queryByRole("button", { name: /send inn/i })).toBeNull();
+    await fillAllFields(user);
     expect(submitButton().hasAttribute("disabled")).toBe(false);
   });
 

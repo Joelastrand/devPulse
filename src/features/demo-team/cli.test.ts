@@ -55,7 +55,18 @@ describe("package script", () => {
 
   it("adds no dependency or compiler change (BR-32)", () => {
     const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as Record<string, Record<string, string>>;
-    expect(Object.keys(pkg.dependencies).sort()).toEqual(["firebase", "firebase-admin", "next", "react", "react-dom", "recharts", "server-only"]);
+    // lucide-react is the single icon dependency approved by the Product
+    // Experience SPEC (Iconography, TASK-004). The seed CLI itself adds none.
+    expect(Object.keys(pkg.dependencies).sort()).toEqual([
+      "firebase",
+      "firebase-admin",
+      "lucide-react",
+      "next",
+      "react",
+      "react-dom",
+      "recharts",
+      "server-only",
+    ]);
     expect(Object.keys(pkg.devDependencies)).not.toContain("tsx");
     const tsconfig = readFileSync(join(ROOT, "tsconfig.json"), "utf8");
     expect(tsconfig).not.toContain("allowImportingTsExtensions");

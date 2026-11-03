@@ -259,7 +259,9 @@ describe("timeline partition and order", () => {
     const section = screen.getByRole("heading", { level: 2, name: "Forfalt" }).closest("section") as HTMLElement;
     expect(section.querySelector("ol > li")).toBeTruthy();
     expect(screen.queryByText(/^Nå$/)).toBeNull();
-    expect(document.body.querySelector('[role="progressbar"], svg')).toBeNull();
+    // Decorative status icons are SVG too (StatusBadge), so the chart check
+    // targets the Recharts wrapper rather than any svg element.
+    expect(document.body.querySelector('[role="progressbar"], .recharts-wrapper')).toBeNull();
   });
 
   it("omits empty groups and keeps Fullførte items hidden until expanded", async () => {

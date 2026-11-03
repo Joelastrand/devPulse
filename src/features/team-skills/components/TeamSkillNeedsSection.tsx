@@ -525,7 +525,7 @@ function NeedCards({ needs, coverage, actions }: { needs: SkillNeedView[]; cover
   return (
     <ul aria-label={copy.tableCaption} className="flex flex-col gap-2 sm:hidden">
       {needs.map((need) => (
-        <Card as="li" key={need.treeId} padding="sm">
+        <Card as="li" key={need.treeId} variant="nested" padding="sm">
           <dl className="flex flex-col gap-1">
             <dt className="text-sm text-zinc-600 dark:text-zinc-400">{copy.columnArea}</dt>
             <dd className="break-words">{areaCell(need)}</dd>

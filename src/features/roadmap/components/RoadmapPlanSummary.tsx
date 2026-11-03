@@ -1,4 +1,4 @@
-import { Badge } from "../../../components/ui/Badge";
+import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { roadmapCopy } from "../copy";
 import type { RoadmapItemView, RoadmapOwner } from "../server/list-roadmap-items";
 
@@ -60,18 +60,18 @@ export function RoadmapPlanSummary({ plan }: { plan: RoadmapItemView }) {
         <ul className="flex flex-wrap items-center gap-2">
           {plan.archived && (
             <li>
-              <Badge>{indicators.archived}</Badge>
+              <StatusBadge>{indicators.archived}</StatusBadge>
             </li>
           )}
           {plan.targetReached === true && (
             <li>
-              <Badge>{indicators.targetReached}</Badge>
+              <StatusBadge tone="success">{indicators.targetReached}</StatusBadge>
               {plan.status !== "completed" && <span className="ml-2">{indicators.targetReachedHint}</span>}
             </li>
           )}
           {plan.overdue && (
             <li>
-              <Badge>{indicators.overdue}</Badge>
+              <StatusBadge tone="warning">{indicators.overdue}</StatusBadge>
             </li>
           )}
         </ul>

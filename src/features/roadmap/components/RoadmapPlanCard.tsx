@@ -1,4 +1,4 @@
-import { Badge } from "../../../components/ui/Badge";
+import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { roadmapCopy } from "../copy";
 import { isLegacyReadOnlyPlan, planEditingContext, type TrackedAreaFacts } from "../domain/roadmap-mutation";
 import type { RoadmapItemView } from "../server/list-roadmap-items";
@@ -61,22 +61,22 @@ export function RoadmapPlanCard({ plan, editing = null }: { plan: RoadmapItemVie
       <ul className="flex flex-wrap items-center gap-2">
         {plan.archived && (
           <li>
-            <Badge>{indicators.archived}</Badge>
+            <StatusBadge>{indicators.archived}</StatusBadge>
           </li>
         )}
         {plan.tracking.state === "not_tracked" && (
           <li>
-            <Badge>{indicators.untracked}</Badge>
+            <StatusBadge>{indicators.untracked}</StatusBadge>
           </li>
         )}
         {plan.targetReached === true && (
           <li>
-            <Badge>{indicators.targetReached}</Badge>
+            <StatusBadge tone="success">{indicators.targetReached}</StatusBadge>
           </li>
         )}
         {plan.overdue && (
           <li>
-            <Badge>{indicators.overdue}</Badge>
+            <StatusBadge tone="warning">{indicators.overdue}</StatusBadge>
           </li>
         )}
         {updated !== null && (
@@ -112,7 +112,7 @@ function CardField({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
       <dt className="inline font-medium text-zinc-900 dark:text-zinc-50">{label}: </dt>
-      <dd className="inline break-words">{value}</dd>
+      <dd className="ml-1 inline-flex max-w-full items-center break-words rounded-field border border-border-subtle bg-surface-subtle px-2 py-0.5 text-help font-medium text-text-secondary">{value}</dd>
     </div>
   );
 }

@@ -9,16 +9,39 @@
  * itself, mirroring `app/page.test.tsx`'s existing colocation; a page that
  * belongs to a feature (pulse survey, auth, teams, admin) places its copy
  * module under that feature instead (e.g. `src/features/teams/copy.ts`).
+ *
+ * Value and trust items describe existing features only (pulse, competency
+ * tree, goals, conversations, privacy rules). They make no performance claim.
  */
 export const homeCopy = {
   title: "DevPulse",
+  eyebrow: "Teamutvikling for moderne utviklingsteam",
+  headline: "Fra innsikt til utvikling – sammen",
   description:
     "En kort, tilbakevendende pulsmåling for utviklere — arbeidsflyt og leveransetilfredshet, bærekraftig arbeidsmengde og stress, og glede og motivasjon.",
   privacyNote:
-    "Individuelle svar er anonyme. Bare teamets samlede trender vises, aldri individuelle poeng.",
+    "Svarene lagres uten navn eller e-postadresse. Individuelle svar vises aldri. Teamet ser bare samlede resultater, og først når nok personer har svart.",
+  values: [
+    {
+      title: "Følg utvikling",
+      description: "Få innsikt i arbeidsflyt, trivsel og utviklingsbehov på teamnivå.",
+    },
+    {
+      title: "Utvikle kompetanse",
+      description: "Synliggjør kompetansebehov, dekk hull og planlegg utvikling sammen.",
+    },
+    {
+      title: "Skap fremdrift",
+      description: "Sett mål, ha utviklingssamtaler og følg felles planer i én arbeidsflate.",
+    },
+  ],
+  trust: [
+    { title: "Personvern først", description: "Svar uten navn eller e-postadresse" },
+    { title: "Bygget for team", description: "Samarbeid, læring og utvikling" },
+    { title: "Enkel å bruke", description: "Fokus på det som skaper verdi" },
+  ],
   actions: {
     signIn: { label: "Logg inn", href: "/sign-in" },
     createAccount: { label: "Opprett konto", href: "/sign-up" },
-    myTeams: { label: "Mine team", href: "/teams" },
   },
 } as const;

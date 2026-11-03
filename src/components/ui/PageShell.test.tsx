@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import { PageShell, WIDTH_CLASSNAMES, type PageShellWidth } from "./PageShell";
+import { CONTAINER_CLASSNAMES } from "./Container";
+import { CONTAINER_FOR_WIDTH, PageShell, type PageShellWidth } from "./PageShell";
+
+const WIDTHS = Object.keys(CONTAINER_FOR_WIDTH) as PageShellWidth[];
 
 describe("PageShell", () => {
   afterEach(cleanup);
@@ -13,48 +16,27 @@ describe("PageShell", () => {
       </PageShell>,
     );
 
-    const main = screen.getByRole("main");
-    expect(main).toBeTruthy();
+    expect(screen.getByRole("main")).toBeTruthy();
     expect(screen.getByText("Innhold")).toBeTruthy();
   });
 
-  it.each(Object.keys(WIDTH_CLASSNAMES) as PageShellWidth[])(
-    "renders the %s width token's own max-width class, and no other token's",
-    (width) => {
-      render(
-        <PageShell width={width}>
-          <p>Innhold</p>
-        </PageShell>,
-      );
-
-      const main = screen.getByRole("main");
-      expect(main.className).toContain(WIDTH_CLASSNAMES[width]);
-      for (const [otherWidth, otherClassName] of Object.entries(WIDTH_CLASSNAMES)) {
-        if (otherWidth !== width) {
-          expect(main.className).not.toContain(otherClassName);
-        }
-      }
-    },
-  );
-
-  it("defaults to the existing 3xl width when none is supplied", () => {
-    render(
-      <PageShell>
+  it.each(WIDTHS)("gives the %s width the container it maps to", (width) => {
+    const { container } = render(
+      <PageShell width={width}>
         <p>Innhold</p>
       </PageShell>,
     );
 
-    expect(screen.getByRole("main").className).toContain(WIDTH_CLASSNAMES["3xl"]);
+    const expected = CONTAINER_CLASSNAMES[CONTAINER_FOR_WIDTH[width]];
+    expect(container.querySelector(".max-w-main, .max-w-reading, .max-w-survey, .max-w-auth")?.className).toBe(expected);
   });
 
-  it("accepts the new wide token, materially wider than the existing 3xl default", () => {
-    render(
-      <PageShell width="wide">
-        <p>Innhold</p>
-      </PageShell>,
-    );
+  it("maps the default to the main container", () => {
+    expect(CONTAINER_FOR_WIDTH["3xl"]).toBe("main");
+  });
 
-    expect(screen.getByRole("main").className).toContain(WIDTH_CLASSNAMES.wide);
-    expect(WIDTH_CLASSNAMES.wide).not.toBe(WIDTH_CLASSNAMES["3xl"]);
+  it("maps the sign-in width to the auth container and the survey width to the survey container", () => {
+    expect(CONTAINER_FOR_WIDTH.sm).toBe("auth");
+    expect(CONTAINER_FOR_WIDTH.lg).toBe("survey");
   });
 });

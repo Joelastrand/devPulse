@@ -1,10 +1,16 @@
-import type { ButtonHTMLAttributes } from "react";
+import type { ButtonHTMLAttributes, Ref } from "react";
 import { cx } from "./class-names";
 
-export type ButtonVariant = "primary" | "secondary" | "destructive";
+/**
+ * Action hierarchy (docs/features/product-experience/SPEC.md — Action
+ * hierarchy). `destructive` is for dialogs and danger areas only.
+ */
+export type ButtonVariant = "primary" | "secondary" | "tertiary" | "destructive";
 export type ButtonSize = "md" | "sm";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  /** React 19 passes ref as a prop; the shell uses it to return focus to its trigger. */
+  ref?: Ref<HTMLButtonElement>;
   variant?: ButtonVariant;
   size?: ButtonSize;
   /**
@@ -17,15 +23,16 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   pending?: boolean;
 }
 
+// Focus is owned by the global :focus-visible rule in app/globals.css and is
+// not restated here, so no button can remove it.
 const BASE_CLASSNAME =
-  "rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
+  "rounded-control transition-colors duration-micro ease-standard disabled:cursor-not-allowed disabled:opacity-50";
 
 const VARIANT_CLASSNAMES: Record<ButtonVariant, string> = {
-  primary: "bg-foreground text-background hover:bg-[#383838] dark:hover:bg-[#ccc]",
-  secondary:
-    "border border-zinc-300 text-zinc-900 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-900",
-  destructive:
-    "border border-red-300 text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950",
+  primary: "bg-primary text-primary-text hover:bg-primary-hover",
+  secondary: "border border-border-strong text-text-primary hover:bg-surface-subtle",
+  tertiary: "text-primary hover:bg-primary-subtle",
+  destructive: "border border-danger-text text-danger-text hover:bg-danger-subtle",
 };
 
 const SIZE_CLASSNAMES: Record<ButtonSize, string> = {

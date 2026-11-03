@@ -42,29 +42,13 @@ export function OwnerConversationEditor({ conversation, token, onUnauthenticated
       <p className="text-sm text-zinc-700 dark:text-zinc-300">{conversationsCopy.detailPrivacy}</p>
       {completed && <Alert variant="info">{conversationsCopy.detailCompleted}</Alert>}
 
-      <ParticipantPanel
-        conversationId={conversation.conversationId}
-        token={token}
-        teamId={conversation.teamId}
-        completed={completed}
-        participant={conversation.participant}
-        onUnauthenticated={onUnauthenticated}
-        onChanged={onChanged}
-      />
-
+      <div className="flex flex-col gap-10 xl:grid xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start xl:gap-10">
+        <div className="flex min-w-0 flex-col gap-10">
       <TitleSection title={conversation.title} completed={completed} context={context} />
       <PlannedForSection plannedFor={conversation.plannedFor} completed={completed} context={context} />
       <NotesSection ownerNotes={conversation.ownerNotes} completed={completed} context={context} />
       <NextStepsSection nextSteps={conversation.nextSteps} completed={completed} context={context} />
       <ParticipantNotesSection participantNotes={conversation.participantNotes} />
-      <GoalSnapshotSelector
-        conversationId={conversation.conversationId}
-        token={token}
-        completed={completed}
-        sharedGoals={conversation.sharedGoals}
-        onUnauthenticated={onUnauthenticated}
-        onChanged={onChanged}
-      />
 
       <section aria-labelledby="lifecycle-heading" className="flex flex-col gap-4">
         <h2 id="lifecycle-heading" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
@@ -86,6 +70,28 @@ export function OwnerConversationEditor({ conversation, token, onUnauthenticated
           onChanged={onChanged}
         />
       </section>
+        </div>
+        <aside className="flex min-w-0 flex-col gap-10">
+        <ParticipantPanel
+          conversationId={conversation.conversationId}
+          token={token}
+          teamId={conversation.teamId}
+          completed={completed}
+          participant={conversation.participant}
+          onUnauthenticated={onUnauthenticated}
+          onChanged={onChanged}
+        />
+  
+          <GoalSnapshotSelector
+          conversationId={conversation.conversationId}
+          token={token}
+          completed={completed}
+          sharedGoals={conversation.sharedGoals}
+          onUnauthenticated={onUnauthenticated}
+          onChanged={onChanged}
+        />
+          </aside>
+      </div>
     </div>
   );
 }

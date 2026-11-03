@@ -161,5 +161,11 @@ export const roadmapCopy = {
     overdue: "Forfalt",
     startOnly: "Kun startdato",
     undated: "Uten dato",
+    ganttHeading: "Tidslinje",
+    ganttDescription: "Planer med både start- og måldato, plassert etter kvartal. Planer uten begge datoer vises i listen under.",
+    ganttArea: "Kompetanseområde",
+    ganttNoArea: "Uten område",
+    ganttEmpty: "Ingen planer har både startdato og måldato ennå.",
+    ganttLegend: { planned: "Planlagt", active: "Pågår", completed: "Fullført" },
   },
 } as const;

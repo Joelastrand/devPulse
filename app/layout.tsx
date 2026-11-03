@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { SiteHeader } from "../src/components/nav/SiteHeader";
+import { SkipLink } from "../src/components/ui/SkipLink";
+import { THEME_INIT_SCRIPT } from "../src/lib/theme/theme";
 import { homeCopy } from "./page.copy";
 import "./globals.css";
 
@@ -25,12 +26,20 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
+    // data-theme="light" is the server default. The inline script below may
+    // switch it before first paint, which is why hydration warnings are
+    // suppressed on <html> only.
     <html
       lang="no"
+      data-theme="light"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body className="min-h-full flex flex-col">
-        <SiteHeader />
+        <SkipLink />
         {children}
       </body>
     </html>

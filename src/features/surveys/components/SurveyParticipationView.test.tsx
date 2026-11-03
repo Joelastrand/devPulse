@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 const observeIdTokenMock = vi.fn();
 const fetchSurveyParticipationMock = vi.fn();
@@ -82,7 +83,7 @@ describe("SurveyParticipationView", () => {
 
     render(<SurveyParticipationView surveyId="survey-1" />);
 
-    await screen.findByRole("group", { name: /arbeidsflyt/i });
+    await screen.findByRole("button", { name: "Start" });
     expect(fetchSurveyParticipationMock).toHaveBeenCalledWith("survey-1", undefined);
   });
 
@@ -169,8 +170,12 @@ describe("SurveyParticipationView", () => {
 
     render(<SurveyParticipationView surveyId="survey-1" />);
 
+    // The intro comes first; the form appears only after Start.
+    expect(screen.queryByRole("group", { name: /arbeidsflyt/i })).toBeNull();
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Start" }));
+
     expect(await screen.findByRole("group", { name: /arbeidsflyt/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /send inn/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Neste" })).toBeTruthy();
   });
 
   it("shows a generic Norwegian read-failure notice on a server read failure", async () => {

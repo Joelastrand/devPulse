@@ -191,27 +191,9 @@ function TrackedSkillRow({
   }
 
   return (
-    <Card as="li" variant="bordered" padding="sm" className="flex flex-col gap-2">
+    <Card as="li" variant="nested" padding="sm" className="flex flex-col gap-2">
       <p className="break-words font-medium text-zinc-900 dark:text-zinc-50">{skill.name}</p>
       <SkillProgressPath name={skill.name} nodes={skill.nodes} currentNodeId={skill.currentNodeId} />
-      {planSlot}
-
-      {canReportProgress && phase === "validation_error" && (
-        <Alert variant="error" className="text-sm">
-          {teamSkillSectionCopy.report.validationError}
-        </Alert>
-      )}
-      {canReportProgress && phase === "authorization_error" && (
-        <Alert variant="error" className="text-sm">
-          {teamSkillSectionCopy.report.authorizationError}
-        </Alert>
-      )}
-      {canReportProgress && phase === "infrastructure_error" && (
-        <Alert variant="error" className="text-sm">
-          {teamSkillSectionCopy.report.genericError}
-        </Alert>
-      )}
-
       {canReportProgress && (
         <div className="flex flex-wrap items-center gap-2">
           <label
@@ -246,6 +228,24 @@ function TrackedSkillRow({
           </Button>
         </div>
       )}
+      {planSlot}
+
+      {canReportProgress && phase === "validation_error" && (
+        <Alert variant="error" className="text-sm">
+          {teamSkillSectionCopy.report.validationError}
+        </Alert>
+      )}
+      {canReportProgress && phase === "authorization_error" && (
+        <Alert variant="error" className="text-sm">
+          {teamSkillSectionCopy.report.authorizationError}
+        </Alert>
+      )}
+      {canReportProgress && phase === "infrastructure_error" && (
+        <Alert variant="error" className="text-sm">
+          {teamSkillSectionCopy.report.genericError}
+        </Alert>
+      )}
+
     </Card>
   );
 }

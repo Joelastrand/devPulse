@@ -1,0 +1,25 @@
+import Link from "next/link";
+import { PageHeader } from "../../../../src/components/ui/PageHeader";
+import { ADMIN_SCOPE_EYEBROW } from "../../../../src/components/ui/copy";
+import { PageShell } from "../../../../src/components/ui/PageShell";
+import { adminCopy } from "../../../../src/features/teams/copy";
+import { AdminTeams } from "../../../../src/features/teams/components/AdminTeams";
+
+export default function AdminTeamsPage() {
+  return (
+    <PageShell width="wide">
+      <PageHeader eyebrow={ADMIN_SCOPE_EYEBROW} title={adminCopy.teams.pageTitle} description={adminCopy.teams.pageDescription} />
+      <p className="mt-2">
+        <Link href="/admin/skills" className="font-medium text-zinc-900 underline dark:text-zinc-50">
+          Kompetanseområder
+        </Link>{" "}
+        <Link href="/admin/roles" className="font-medium text-zinc-900 underline dark:text-zinc-50">
+          Roller
+        </Link>
+      </p>
+      <div className="mt-6">
+        <AdminTeams />
+      </div>
+    </PageShell>
+  );
+}

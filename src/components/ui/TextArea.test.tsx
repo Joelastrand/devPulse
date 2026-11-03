@@ -56,3 +56,19 @@ describe("TextArea", () => {
     expect(textarea.getAttribute("aria-describedby")).toBeNull();
   });
 });
+
+describe("TextArea form hierarchy (Product Experience)", () => {
+  afterEach(cleanup);
+
+  it("marks an optional textarea with 'valgfritt'", () => {
+    render(<TextArea id="notat" label="Notat" optional />);
+
+    expect(screen.getByText("(valgfritt)")).toBeTruthy();
+  });
+
+  it("does not fix a height, so the field can grow with its text", () => {
+    render(<TextArea id="notat" label="Notat" />);
+
+    expect(screen.getByLabelText("Notat").className).not.toMatch(/(^|\s)h-\d/);
+  });
+});

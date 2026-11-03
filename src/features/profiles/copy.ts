@@ -7,6 +7,11 @@
 export const profileCopy = {
   pageTitle: "Min profil",
   pageDescription: "Velg hvordan du vises for andre i teamene dine.",
+  teamsTitle: "Team",
+  teamsDescription: "Teamene du er medlem av, med resultater og roadmap.",
+  teamsLink: "Se teamene dine",
+  accountTitle: "Konto",
+  accountDescription: "Handlinger som gjelder kontoen din.",
   loading: "Laster profilen din…",
   signInLink: "Logg inn",
   signInPrompt: "for å se og endre profilen din.",

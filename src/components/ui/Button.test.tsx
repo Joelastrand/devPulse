@@ -91,3 +91,38 @@ describe("buttonClassName", () => {
     expect(buttonClassName({ className: "w-full" })).toMatch(/(^|\s)w-full(\s|$)/);
   });
 });
+
+describe("Button action hierarchy", () => {
+  afterEach(cleanup);
+
+  it.each([
+    ["primary", "bg-primary"],
+    ["secondary", "border-border-strong"],
+    ["destructive", "border-danger-text"],
+  ] as const)("gives the %s variant its filled or outlined treatment", (variant, marker) => {
+    render(<Button variant={variant}>Klikk</Button>);
+
+    expect(screen.getByRole("button").className).toContain(marker);
+  });
+
+  it("gives tertiary a text treatment with no border", () => {
+    render(<Button variant="tertiary">Klikk</Button>);
+
+    const className = screen.getByRole("button").className;
+    expect(className).toContain("text-primary");
+    expect(className).not.toMatch(/(^|\s)border(\s|$)/);
+  });
+
+  it("uses the 10 px control radius", () => {
+    render(<Button>Klikk</Button>);
+
+    expect(screen.getByRole("button").className).toContain("rounded-control");
+    expect(screen.getByRole("button").className).not.toContain("rounded-full");
+  });
+
+  it("does not restate or remove focus styling (the global rule owns it)", () => {
+    render(<Button>Klikk</Button>);
+
+    expect(screen.getByRole("button").className).not.toMatch(/focus-visible|outline-none/);
+  });
+});

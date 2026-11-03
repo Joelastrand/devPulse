@@ -6,6 +6,8 @@ import { Alert } from "../../../components/ui/Alert";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
+import { Icon } from "../../../components/ui/Icon";
+import { ChevronRight } from "lucide-react";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { LoadingState } from "../../../components/ui/LoadingState";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
@@ -17,6 +19,7 @@ import {
   type TeamsOverviewFetchResult,
 } from "../client/teams-overview-gateway";
 import { requestAccessErrorMessage } from "./request-access-messages";
+import { TeamIdentity } from "./TeamIdentity";
 
 type ViewState =
   | { phase: "loading" }
@@ -137,7 +140,7 @@ export function TeamsOverview() {
   }
 
   return (
-    <ul className="flex flex-col gap-3">
+    <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
       {teams.map((team) => {
         const action = actionStates[team.teamId] ?? { status: "idle" as const };
         const canRequestAccess =
@@ -150,39 +153,46 @@ export function TeamsOverview() {
             key={team.teamId}
             variant="bordered"
             padding="sm"
-            className="flex items-center justify-between gap-4"
+            className="flex flex-col overflow-hidden"
           >
-            <div className="min-w-0">
-              {canOpen ? (
-                <Link
-                  href={`/teams/${encodeURIComponent(team.teamId)}`}
-                  className="break-words font-medium text-zinc-900 underline dark:text-zinc-50"
-                >
-                  {team.name}
-                </Link>
-              ) : (
-                <p className="break-words font-medium text-zinc-900 dark:text-zinc-50">{team.name}</p>
-              )}
-              <p className="mt-1">
-                <Badge>{RELATIONSHIP_LABELS[team.relationship]}</Badge>
-              </p>
+            <TeamIdentity teamId={team.teamId} />
+            <div className="flex flex-1 flex-col gap-4 p-4">
+              <div className="flex min-w-0 flex-col gap-2">
+                {canOpen ? (
+                  <Link
+                    href={`/teams/${encodeURIComponent(team.teamId)}`}
+                    className="break-words text-panel-title font-semibold text-text-primary underline-offset-4 hover:underline"
+                  >
+                    {team.name}
+                  </Link>
+                ) : (
+                  <p className="break-words text-panel-title font-semibold text-text-primary">{team.name}</p>
+                )}
+                <p>
+                  <Badge>{RELATIONSHIP_LABELS[team.relationship]}</Badge>
+                </p>
+              </div>
               {action.status === "error" && (
-                <Alert variant="error" className="mt-1 text-sm">
+                <Alert variant="error" className="text-sm">
                   {action.message}
                 </Alert>
               )}
+              <div className="mt-auto flex items-center justify-between gap-3">
+                {canRequestAccess ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    pending={action.status === "pending"}
+                    onClick={() => handleRequestAccess(token, team.teamId, generation)}
+                  >
+                    {action.status === "pending" ? teamsCopy.requestingAccess : teamsCopy.requestAccess}
+                  </Button>
+                ) : (
+                  <span />
+                )}
+                {canOpen && <Icon icon={ChevronRight} className="text-primary" />}
+              </div>
             </div>
-            {canRequestAccess && (
-              <Button
-                variant="secondary"
-                size="sm"
-                className="shrink-0"
-                pending={action.status === "pending"}
-                onClick={() => handleRequestAccess(token, team.teamId, generation)}
-              >
-                {action.status === "pending" ? teamsCopy.requestingAccess : teamsCopy.requestAccess}
-              </Button>
-            )}
           </Card>
         );
       })}

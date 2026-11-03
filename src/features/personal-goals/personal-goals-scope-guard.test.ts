@@ -110,7 +110,7 @@ const APPROVED_SERVER_IMPORTERS = [
   "app/api/me/goals/route.test.ts",
   "app/api/me/goals/[goalId]/route.ts",
   "app/api/me/goals/[goalId]/route.test.ts",
-  "app/me/goals/page.tsx",
+  "app/(app)/me/goals/page.tsx",
   // TASK-008 (D2 snapshot seam): the one D2 module that reads D1 goals, by the verified owner uid (SPEC CL-5, BR-24).
   "src/features/development-conversations/server/read-owned-goal-snapshots.ts",
 ];

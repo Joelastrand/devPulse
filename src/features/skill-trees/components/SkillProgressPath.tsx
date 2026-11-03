@@ -43,10 +43,10 @@ export function deriveSkillProgressPath(
 }
 
 const MARKER_CLASSES: Record<StageState, string> = {
-  earlier: "border-zinc-500 bg-zinc-500 text-white dark:border-zinc-400 dark:bg-zinc-400 dark:text-zinc-900",
+  earlier: "border-text-muted bg-text-muted text-surface",
   current:
-    "border-zinc-900 bg-zinc-900 text-white ring-2 ring-zinc-900/30 dark:border-zinc-50 dark:bg-zinc-50 dark:text-zinc-900 dark:ring-zinc-50/30",
-  upcoming: "border-zinc-300 bg-transparent text-zinc-600 dark:border-zinc-600 dark:text-zinc-400",
+    "border-primary bg-primary text-primary-text ring-2 ring-focus-ring/30",
+  upcoming: "border-border-strong bg-transparent text-text-muted",
 };
 
 /**
@@ -75,7 +75,7 @@ export function SkillProgressPath({
   return (
     <div className="flex min-w-0 flex-col gap-2">
       {summary !== null && (
-        <p className="break-words text-sm text-zinc-700 dark:text-zinc-300">
+        <p className="break-words text-sm text-text-secondary">
           {skillProgressPathCopy.summaryLabel}: <span className="font-medium">{summary}</span>
         </p>
       )}
@@ -94,14 +94,14 @@ export function SkillProgressPath({
                   aria-hidden="true"
                   className={`absolute bottom-0 left-3 top-7 w-0 -translate-x-1/2 border-l-2 ${
                     railSolid
-                      ? "border-solid border-zinc-500 dark:border-zinc-400"
-                      : "border-dashed border-zinc-300 dark:border-zinc-600"
+                      ? "border-solid border-text-muted"
+                      : "border-dashed border-border-strong"
                   }`}
                 />
               )}
               <span
                 aria-hidden="true"
-                className={`relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-xs font-medium ${MARKER_CLASSES[state]}`}
+                className={`relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-xs font-medium transition-colors duration-progress ease-standard ${MARKER_CLASSES[state]}`}
               >
                 {index + 1}
               </span>
@@ -109,13 +109,13 @@ export function SkillProgressPath({
                 <span
                   className={`break-words text-sm ${
                     state === "current"
-                      ? "font-semibold text-zinc-900 dark:text-zinc-50"
-                      : "text-zinc-700 dark:text-zinc-300"
+                      ? "font-semibold text-text-primary"
+                      : "text-text-secondary"
                   }`}
                 >
                   {node.label}
                 </span>
-                <span className="text-xs text-zinc-600 dark:text-zinc-400">{skillProgressPathCopy.state[state]}</span>
+                <span className="text-xs text-text-muted">{skillProgressPathCopy.state[state]}</span>
               </span>
             </li>
           );

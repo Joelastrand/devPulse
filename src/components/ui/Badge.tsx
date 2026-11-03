@@ -4,7 +4,7 @@ import { cx } from "./class-names";
 export type BadgeProps = HTMLAttributes<HTMLSpanElement>;
 
 const BASE_CLASSNAME =
-  "inline-flex items-center rounded-full border border-zinc-300 px-2 py-0.5 text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-300";
+  "inline-flex items-center rounded-field border border-border-subtle bg-surface px-2 py-0.5 text-help font-medium text-text-secondary";
 
 /**
  * Shared calm, operational status/relationship-text treatment

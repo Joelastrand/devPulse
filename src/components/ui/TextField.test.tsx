@@ -102,3 +102,38 @@ describe("TextField", () => {
     expect(screen.getByLabelText("E-post").className).toMatch(/extra-class/);
   });
 });
+
+describe("TextField form hierarchy (Product Experience)", () => {
+  afterEach(cleanup);
+
+  it("marks an optional field with the text 'valgfritt', not an asterisk", () => {
+    render(<TextField id="navn" label="Navn" optional />);
+
+    expect(screen.getByLabelText("Navn (valgfritt)")).toBeTruthy();
+    expect(screen.getByText("(valgfritt)")).toBeTruthy();
+  });
+
+  it("does not add optional text to a required field", () => {
+    render(<TextField id="navn" label="Navn" />);
+
+    expect(screen.queryByText("(valgfritt)")).toBeNull();
+  });
+
+  it("uses the 44 px mobile and 40 px desktop control height", () => {
+    render(<TextField id="navn" label="Navn" />);
+
+    const className = screen.getByLabelText("Navn").className;
+    expect(className).toContain("h-11");
+    expect(className).toContain("md:h-10");
+  });
+
+  it("keeps help text and error associated with the input", () => {
+    render(<TextField id="navn" label="Navn" description="Bruk fornavn" error="Feltet er påkrevd" />);
+
+    const input = screen.getByLabelText("Navn");
+    const described = input.getAttribute("aria-describedby")?.split(" ") ?? [];
+    expect(described).toHaveLength(2);
+    expect(screen.getByText("Bruk fornavn").id).toBe(described[0]);
+    expect(screen.getByRole("alert").id).toBe(described[1]);
+  });
+});

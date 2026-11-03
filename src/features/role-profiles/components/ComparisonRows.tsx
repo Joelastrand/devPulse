@@ -1,8 +1,16 @@
 import type { ComparisonRowView, ComparisonView } from "../client/role-target-gateway";
 import { CreateGoalAction } from "./CreateGoalAction";
 import { personRoleCopy } from "../copy";
+import { StatusBadge, type StatusTone } from "../../../components/ui/StatusBadge";
 
 const copy = personRoleCopy.comparison;
+
+const STATUS_TONES: Record<ComparisonRowView["status"], StatusTone> = {
+  meets: "success",
+  development_opportunity: "info",
+  not_assessed: "neutral",
+  area_unavailable: "neutral",
+};
 
 const STATUS_LABELS: Record<ComparisonRowView["status"], string> = {
   meets: copy.meets,
@@ -35,7 +43,9 @@ export function ComparisonRows({ comparison }: { comparison: ComparisonView }) {
         {comparison.rows.map((row) => (
           <li key={row.treeId} className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
             <p className="font-medium text-zinc-900 dark:text-zinc-50">{row.treeName ?? copy.areaUnavailable}</p>
-            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{STATUS_LABELS[row.status]}</p>
+            <div>
+              <StatusBadge tone={STATUS_TONES[row.status]}>{STATUS_LABELS[row.status]}</StatusBadge>
+            </div>
             {(row.status === "development_opportunity" || row.status === "not_assessed") && (
               <div className="mt-2">
                 <CreateGoalAction treeId={row.treeId} />

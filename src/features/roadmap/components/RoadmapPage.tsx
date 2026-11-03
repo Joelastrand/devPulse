@@ -25,6 +25,7 @@ import {
 import { RoadmapFilterBar } from "./RoadmapFilterBar";
 import type { RoadmapEditing } from "./RoadmapPlanCard";
 import { RoadmapListView } from "./RoadmapListView";
+import { RoadmapGantt } from "./RoadmapGantt";
 import { RoadmapTimelineView } from "./RoadmapTimelineView";
 import { RoadmapUnplannedAreas } from "./RoadmapUnplannedAreas";
 import { RoadmapViewSwitch } from "./RoadmapViewSwitch";
@@ -232,12 +233,21 @@ function RoadmapContent({ token, teamId }: { token: string; teamId: string }) {
               </div>
             )
           ) : view === "timeline" ? (
-            <RoadmapTimelineView
-              items={visible}
-              editing={editing}
-              completedExpanded={completedExpanded}
-              onToggleCompleted={() => setCompletedExpanded((expanded) => !expanded)}
-            />
+            <>
+              <section aria-labelledby="roadmap-gantt-heading" className="hidden flex-col gap-3 md:flex">
+                <p id="roadmap-gantt-heading" className="text-section-title font-semibold text-text-primary">
+                  {roadmapCopy.timeline.ganttHeading}
+                </p>
+                <p className="text-body-secondary text-text-secondary">{roadmapCopy.timeline.ganttDescription}</p>
+                <RoadmapGantt items={visible} />
+              </section>
+              <RoadmapTimelineView
+                items={visible}
+                editing={editing}
+                completedExpanded={completedExpanded}
+                onToggleCompleted={() => setCompletedExpanded((expanded) => !expanded)}
+              />
+            </>
           ) : (
             <RoadmapListView
               items={visible}

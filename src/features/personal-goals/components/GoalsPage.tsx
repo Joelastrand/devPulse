@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
-import { Badge } from "../../../components/ui/Badge";
+import { StatusBadge } from "../../../components/ui/StatusBadge";
+import { GoalCompletionNode } from "./GoalCompletionNode";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
+import { GoalsIllustration } from "../../../components/ui/illustrations/illustrations";
 import { LoadingState } from "../../../components/ui/LoadingState";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import { createGoal, deleteGoal, fetchGoals, updateGoal, type GoalMutationError } from "../client/goals-gateway";
@@ -227,7 +229,12 @@ function ReadyView({ data, token, initialTreeId, onUnauthenticated, onChanged }:
       {data.truncated && <Alert variant="info">{goalsCopy.truncatedNotice}</Alert>}
       {data.skillOptionsTruncated && <Alert variant="info">{goalsCopy.skillOptionsTruncatedNotice}</Alert>}
 
-      {empty && <EmptyState>{goalsCopy.empty}</EmptyState>}
+      {empty && (
+        <div className="flex flex-col items-start gap-3">
+          <GoalsIllustration />
+          <EmptyState>{goalsCopy.empty}</EmptyState>
+        </div>
+      )}
 
       <CreateGoalEntry
         open={openForm?.kind === "create"}
@@ -399,8 +406,11 @@ function GoalItem({
   return (
     <Card as="li" padding="sm" className="flex flex-col gap-1">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <span className="min-w-0 break-words font-medium text-zinc-900 dark:text-zinc-50">{goal.title}</span>
-        <Badge>{goal.status === "completed" ? goalsCopy.statusCompleted : goalsCopy.statusActive}</Badge>
+        <span className="flex min-w-0 items-center gap-2">
+          <GoalCompletionNode completed={goal.status === "completed"} />
+          <span className="min-w-0 break-words font-medium text-zinc-900 dark:text-zinc-50">{goal.title}</span>
+        </span>
+        <StatusBadge tone={goal.status === "completed" ? "success" : "neutral"}>{goal.status === "completed" ? goalsCopy.statusCompleted : goalsCopy.statusActive}</StatusBadge>
       </div>
       {goal.treeId !== null && (
         <p className="text-sm text-zinc-600 dark:text-zinc-400">

@@ -1,11 +1,34 @@
 import type { ReactNode } from "react";
 import { cx } from "./class-names";
+import { CONTAINER_CLASSNAMES, Container, type ContainerVariant } from "./Container";
 
 export type PageShellWidth = "sm" | "lg" | "2xl" | "3xl" | "wide";
 
+/**
+ * The existing width tokens map onto the Product Experience containers
+ * (docs/features/product-experience/SPEC.md — Breakpoints and containers).
+ * `wide` (admin) uses the main container: the SPEC defines no separate wide
+ * width, so the admin pages share main's 1200 px cap.
+ */
+export const CONTAINER_FOR_WIDTH: Record<PageShellWidth, ContainerVariant> = {
+  sm: "auth",
+  lg: "survey",
+  "2xl": "reading",
+  "3xl": "main",
+  wide: "main",
+};
+
+export const WIDTH_CLASSNAMES: Record<PageShellWidth, string> = {
+  sm: CONTAINER_CLASSNAMES[CONTAINER_FOR_WIDTH.sm],
+  lg: CONTAINER_CLASSNAMES[CONTAINER_FOR_WIDTH.lg],
+  "2xl": CONTAINER_CLASSNAMES[CONTAINER_FOR_WIDTH["2xl"]],
+  "3xl": CONTAINER_CLASSNAMES[CONTAINER_FOR_WIDTH["3xl"]],
+  wide: CONTAINER_CLASSNAMES[CONTAINER_FOR_WIDTH.wide],
+};
+
 export interface PageShellProps {
   children: ReactNode;
-  /** Matches Tailwind's `max-w-*` scale already used across existing pages. */
+  /** Mapped to a Product Experience container; see CONTAINER_FOR_WIDTH. */
   width?: PageShellWidth;
   /** Vertically centers content — the existing treatment for short auth/survey-form pages. */
   center?: boolean;
@@ -13,38 +36,16 @@ export interface PageShellProps {
 }
 
 /**
- * `"wide"` is a maximum, not a fixed width — like every other token here, it
- * simply shrinks on a narrower viewport (docs/features/ui-refresh/SPEC.md —
- * BR-3). Reserved for surfaces with genuinely list/section-dense content
- * (currently the three admin routes, applied by their own tasks); no public,
- * auth, or survey page uses it (BR-5). Exported so `SiteHeader` can share the
- * exact same width value as its own outer bound (BR-4) without duplicating
- * the literal Tailwind class string.
- */
-export const WIDTH_CLASSNAMES: Record<PageShellWidth, string> = {
-  sm: "max-w-sm",
-  lg: "max-w-lg",
-  "2xl": "max-w-2xl",
-  "3xl": "max-w-3xl",
-  wide: "max-w-6xl",
-};
-
-/**
- * Shared application page-shell primitive: the outer centered container +
- * `<main>` landmark every existing route currently hand-duplicates, per
- * docs/features/product-ux-shell/SPEC.md BR-8. `center` reproduces the
- * existing vertically-centered treatment used by the sign-in/sign-up/pulse-
- * survey pages; every other existing page top-aligns (`center` omitted).
+ * Shared application page shell: the outer region, the container and the
+ * `<main>` landmark every route renders. Route content, copy and guards are
+ * unchanged; only the surrounding width and surface use the new tokens.
  */
 export function PageShell({ children, width = "3xl", center = false, className }: PageShellProps) {
   return (
-    <div
-      className={cx(
-        "flex flex-1 justify-center bg-zinc-50 px-4 py-16 dark:bg-black",
-        center && "items-center",
-      )}
-    >
-      <main className={cx("w-full", WIDTH_CLASSNAMES[width], className)}>{children}</main>
+    <div className={cx("flex flex-1 justify-center bg-canvas py-16", center && "items-center")}>
+      <Container variant={CONTAINER_FOR_WIDTH[width]}>
+        <main className={cx("w-full", className)}>{children}</main>
+      </Container>
     </div>
   );
 }

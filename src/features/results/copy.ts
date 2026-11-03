@@ -17,6 +17,20 @@ const insufficientMessage = (minimumResponses: number) =>
   `Resultatet vises når minst ${minimumResponses} personer har svart.`;
 
 export const resultsCopy = {
+  /** Summary strip above the results (TASK-050). Dimension names repeat the survey questions as plain text. */
+  summaryStrip: {
+    latest: "Siste undersøkelse",
+    change: "Endring fra forrige",
+    up: "steg opp",
+    down: "steg ned",
+    flat: "uendret",
+    insufficient: "For få svar ennå",
+    dimensions: {
+      flow: "Arbeidsflyt og leveransetilfredshet",
+      stress: "Bærekraftig arbeidsmengde og stress",
+      fun: "Glede og motivasjon",
+    },
+  },
   latestSurvey: {
     heading: "Siste undersøkelse",
     dimensions: {

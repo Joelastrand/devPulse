@@ -29,7 +29,7 @@ export function TeamRouteNav({ teamId }: { teamId: string }) {
 
   return (
     <nav aria-label={teamsCopy.nav.label}>
-      <ul className="flex flex-wrap gap-x-4 gap-y-2">
+      <ul className="flex flex-wrap gap-1 border-b border-border-subtle">
         {links.map((link) => {
           const current = pathname === link.href;
           return (
@@ -39,8 +39,8 @@ export function TeamRouteNav({ teamId }: { teamId: string }) {
                 aria-current={current ? "page" : undefined}
                 className={
                   current
-                    ? "font-semibold text-zinc-900 underline underline-offset-4 dark:text-zinc-50"
-                    : "text-zinc-600 hover:underline dark:text-zinc-400"
+                    ? "-mb-px block border-b-2 border-primary px-4 py-3 text-label font-semibold text-text-primary"
+                    : "-mb-px block border-b-2 border-transparent px-4 py-3 text-label font-medium text-text-secondary hover:text-text-primary"
                 }
               >
                 {link.label}

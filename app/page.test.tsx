@@ -8,6 +8,16 @@ vi.mock("../src/features/auth/client/auth-client", () => ({
   observeIdToken: observeIdTokenMock,
 }));
 
+vi.mock("../src/components/nav/AppShell", () => ({
+  AppShell: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="app-shell">{children}</div>
+  ),
+}));
+
+vi.mock("../src/features/home/components/AuthenticatedHome", () => ({
+  AuthenticatedHome: () => <h1>Hjem</h1>,
+}));
+
 const { default: Home } = await import("./page");
 
 function subscribingWith(token: string | null) {
@@ -27,7 +37,7 @@ describe("Home", () => {
     observeIdTokenMock.mockImplementation(subscribingWith(null));
     render(<Home />);
 
-    expect(screen.getByRole("heading", { name: "DevPulse" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Fra innsikt til utvikling – sammen" })).toBeTruthy();
     expect(
       screen.getByText(/arbeidsflyt og leveransetilfredshet/i),
     ).toBeTruthy();
@@ -41,8 +51,13 @@ describe("Home", () => {
     observeIdTokenMock.mockImplementation(subscribingWith(null));
     render(<Home />);
 
-    expect(screen.getByText(/anonyme/i)).toBeTruthy();
-    expect(screen.getByText(/team.*samlede trender/i)).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Svarene lagres uten navn eller e-postadresse. Individuelle svar vises aldri. Teamet ser bare samlede resultater, og først når nok personer har svart.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/anonym/i)).toBeNull();
+    expect(screen.queryByText(/individuelle poeng/i)).toBeNull();
   });
 
   it("renders exactly one top-level heading", () => {
@@ -64,8 +79,8 @@ describe("Home", () => {
       observeIdTokenMock.mockImplementation(() => () => {});
       render(<Home />);
 
-      expect(screen.getByRole("link", { name: /logg inn/i })).toBeTruthy();
-      expect(screen.getByRole("link", { name: /opprett konto/i })).toBeTruthy();
+      expect(screen.getAllByRole("link", { name: /logg inn/i }).length).toBeGreaterThan(0);
+      expect(screen.getAllByRole("link", { name: /opprett konto/i }).length).toBeGreaterThan(0);
       expect(screen.queryByRole("link", { name: /mine team/i })).toBeNull();
     });
   });
@@ -75,13 +90,12 @@ describe("Home", () => {
       observeIdTokenMock.mockImplementation(subscribingWith(null));
       render(<Home />);
 
-      expect(screen.getByRole("link", { name: /logg inn/i })).toHaveProperty(
-        "href",
-        expect.stringContaining("/sign-in"),
-      );
-      expect(
-        screen.getByRole("link", { name: /opprett konto/i }),
-      ).toHaveProperty("href", expect.stringContaining("/sign-up"));
+      for (const link of screen.getAllByRole("link", { name: /logg inn/i })) {
+        expect(link).toHaveProperty("href", expect.stringContaining("/sign-in"));
+      }
+      for (const link of screen.getAllByRole("link", { name: /opprett konto/i })) {
+        expect(link).toHaveProperty("href", expect.stringContaining("/sign-up"));
+      }
       expect(screen.queryByRole("link", { name: /mine team/i })).toBeNull();
     });
 
@@ -103,14 +117,13 @@ describe("Home", () => {
       expect(screen.queryByRole("link", { name: /opprett konto/i })).toBeNull();
     });
 
-    it("shows a Mine team action linking to /teams", () => {
+    it("renders the authenticated home inside the app shell, not the public header", () => {
       observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
       render(<Home />);
 
-      expect(screen.getByRole("link", { name: /mine team/i })).toHaveProperty(
-        "href",
-        expect.stringContaining("/teams"),
-      );
+      expect(screen.getByTestId("app-shell")).toBeTruthy();
+      expect(screen.getByRole("heading", { name: "Hjem" })).toBeTruthy();
+      expect(screen.queryByRole("link", { name: /opprett konto/i })).toBeNull();
     });
   });
 
@@ -122,5 +135,16 @@ describe("Home", () => {
     expect(screen.queryByText(/view results/i)).toBeNull();
     expect(screen.queryByText(/sign in/i)).toBeNull();
     expect(screen.queryByText(/create account/i)).toBeNull();
+  });
+});
+
+describe("Home privacy line (class A, TASK-014)", () => {
+  it("contains the old wording neither in the copy nor the word anonym", async () => {
+    const { homeCopy } = await import("./page.copy");
+    expect(homeCopy.privacyNote).toBe(
+      "Svarene lagres uten navn eller e-postadresse. Individuelle svar vises aldri. Teamet ser bare samlede resultater, og først når nok personer har svart.",
+    );
+    expect(homeCopy.privacyNote).not.toMatch(/anonym/i);
+    expect(homeCopy.privacyNote).not.toContain("Individuelle svar er anonyme");
   });
 });

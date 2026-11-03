@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
 import { EmptyState } from "../../../components/ui/EmptyState";
+import { ConversationsIllustration } from "../../../components/ui/illustrations/illustrations";
 import { LoadingState } from "../../../components/ui/LoadingState";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import { fetchConversationList, type ConversationListResponse } from "../client/conversations-gateway";
@@ -104,6 +105,10 @@ function ReadyView({ data, token, onUnauthenticated, onChanged }: ReadyViewProps
   const summaries = data.owned.items.flatMap((item) => (item.kind === "summary" ? [item.conversation] : []));
   const recoveryItems = data.owned.items.flatMap((item) => (item.kind === "recovery" ? [item.item] : []));
   const participations = data.participating.items;
+  const openSummaries = summaries.filter((conversation) => conversation.status === "open");
+  const completedSummaries = summaries.filter((conversation) => conversation.status === "completed");
+  const invitations = participations.filter((participation) => participation.state === "pending");
+  const acceptedParticipations = participations.filter((participation) => participation.state === "accepted");
   const empty = data.owned.items.length === 0 && participations.length === 0;
   const truncated = data.owned.truncated || data.participating.truncated;
 
@@ -117,19 +122,22 @@ function ReadyView({ data, token, onUnauthenticated, onChanged }: ReadyViewProps
       {truncated && <Alert variant="info">{conversationsCopy.truncatedNotice}</Alert>}
 
       {empty ? (
-        <EmptyState>{conversationsCopy.empty}</EmptyState>
+        <div className="flex flex-col items-start gap-3">
+          <ConversationsIllustration />
+          <EmptyState>{conversationsCopy.empty}</EmptyState>
+        </div>
       ) : (
         <>
           {/* A recovery-only owner list has no "you have no conversations" line: the recovery region below shows those items. */}
-          {(summaries.length > 0 || recoveryItems.length === 0) && (
+          {(openSummaries.length > 0 || recoveryItems.length === 0) && (
             <section aria-labelledby="owned-heading" className="flex flex-col gap-3">
               <h2 id="owned-heading" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
                 {conversationsCopy.ownedHeading}
               </h2>
-              {summaries.length === 0 ? (
+              {openSummaries.length === 0 ? (
                 <p className="text-zinc-600 dark:text-zinc-400">{conversationsCopy.ownedEmpty}</p>
               ) : (
-                <OwnedConversationList items={summaries} />
+                <OwnedConversationList items={openSummaries} />
               )}
             </section>
           )}
@@ -143,14 +151,32 @@ function ReadyView({ data, token, onUnauthenticated, onChanged }: ReadyViewProps
             />
           )}
 
+          {completedSummaries.length > 0 && (
+            <section aria-labelledby="completed-heading" className="flex flex-col gap-3">
+              <h2 id="completed-heading" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                {conversationsCopy.completedHeading}
+              </h2>
+              <OwnedConversationList items={completedSummaries} />
+            </section>
+          )}
+
+          {invitations.length > 0 && (
+            <section aria-labelledby="invitations-heading" className="flex flex-col gap-3">
+              <h2 id="invitations-heading" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                {conversationsCopy.invitationsHeading}
+              </h2>
+              <ParticipationList items={invitations} />
+            </section>
+          )}
+
           <section aria-labelledby="participating-heading" className="flex flex-col gap-3">
             <h2 id="participating-heading" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
               {conversationsCopy.participatingHeading}
             </h2>
-            {participations.length === 0 ? (
+            {acceptedParticipations.length === 0 ? (
               <p className="text-zinc-600 dark:text-zinc-400">{conversationsCopy.participatingEmpty}</p>
             ) : (
-              <ParticipationList items={participations} />
+              <ParticipationList items={acceptedParticipations} />
             )}
           </section>
         </>

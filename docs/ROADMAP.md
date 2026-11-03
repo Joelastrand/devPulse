@@ -1,5 +1,23 @@
 # DevPulse — Roadmap
 
+## Current product priority
+
+- **Product Experience** *(in progress; 37 of 40 tasks Done as of 2026-11-03; manual browser evidence outstanding)*:
+  a substantial redesign of the whole product experience — information
+  architecture, navigation/application shell, design tokens, typography, icons,
+  page composition, mobile-first survey participation, team and personal
+  development surfaces, pulse analytics, administration and accessibility — with
+  no change to domain logic, authorization, anonymity or privacy rules. It comes
+  before any further isolated product feature.
+  See `docs/features/product-experience/SPEC.md` and `TASKS.md`. Remaining:
+  TASK-072 (responsive pass), TASK-073 (accessibility pass) and TASK-074
+  (documentation closeout), each needing browser evidence that is not yet recorded.
+  Manual evidence is listed in `docs/features/product-experience/VERIFICATION.md`.
+  `docs/UI-UX.md` and `docs/features/product-ux-shell/SPEC.md` describe the
+  Phase 3 contract that this initiative will supersede phase by phase.
+
+## Completed phases
+
 - **Phase 0 — Foundation** *(complete)*:
   repository structure, documentation, Claude Code workflow, skills and rules.
 
@@ -390,6 +408,36 @@
   *Dated pointer (2026-10-21):* the sentence above is the historical 2026-10-14 planning statement and is not
   rewritten. D2 has since been implemented in the repository (see the D2 entry above); deployment is separate and
   has not been performed.
+
+- **Account Erasure** *(implemented through TASK-044; production gate open)*:
+  self-service erasure of a person's own DevPulse data, with a transactional
+  fence that refuses concurrent writes for an erasing account and cleanup of
+  personal, membership and audit-attribution data.
+  - Implementation is complete through TASK-044 (operations runbook and
+    deployment checklist), per `docs/features/account-erasure/TASKS.md`.
+  - **TASK-045 (operational environment verification gate, operator) remains
+    Ready and is a separate production gate.** It is not satisfied by any other
+    work, including Product Experience.
+  - Account Erasure deployment is **HELD** (not performed).
+  - Nothing has been deployed. No production or cloud infrastructure was changed.
+  See `docs/features/account-erasure/SPEC.md`.
+
+## Later candidate work (not approved)
+
+These items are retained as future intentions. None is approved, scheduled or
+built unless a separate SPEC is approved. They are deferred until after Product
+Experience.
+
+- Owner-private D2 notes
+- Notifications and invitation expiry
+- Current role
+- Lead-initiated check-ins
+- Multiple conversation participants
+- Mentor / cross-team conversation sharing (CL-2)
+- Role-definition proposals
+- Multiple target roles, role families, role levels, role comparison summaries
+- Additional roadmap views (roadmap history, Gantt, Kanban, dependencies)
+- Cross-team or Section/department grouping
 
 Phases 0–9 are complete. See `docs/PRODUCT.md` for the product vision and
 non-goals.

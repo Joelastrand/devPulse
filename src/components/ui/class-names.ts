@@ -26,5 +26,9 @@ export function describedByIds(...ids: Array<string | undefined>): string | unde
  * hand-rolled inputs/textareas/selects (docs/features/ui-refresh/SPEC.md —
  * "Problem", BR-6).
  */
+// Focus comes from the global :focus-visible rule (app/globals.css).
 export const FORM_CONTROL_CLASSNAME =
-  "rounded border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50";
+  "rounded-field border border-border-strong bg-surface px-3 py-2 text-body-secondary text-text-primary";
+
+// Single-line controls: 44 px on mobile, 40 px from md (SPEC: Form hierarchy).
+export const FORM_CONTROL_HEIGHT_CLASSNAME = "h-11 md:h-10";

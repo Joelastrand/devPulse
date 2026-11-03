@@ -46,7 +46,7 @@ export function ThreadList({ teamId, state }: { teamId: string; state: ThreadLis
 
 function ThreadRow({ teamId, thread }: { teamId: string; thread: ThreadSummaryView }) {
   return (
-    <Card as="li" variant="bordered" padding="sm" className="flex flex-col gap-1">
+    <Card as="li" variant="nested" padding="sm" className="flex flex-col gap-1">
       <Link
         href={`/teams/${encodeURIComponent(teamId)}/forum/${encodeURIComponent(thread.threadId)}`}
         className="font-medium text-zinc-900 underline-offset-2 hover:underline dark:text-zinc-50"
@@ -54,7 +54,7 @@ function ThreadRow({ teamId, thread }: { teamId: string; thread: ThreadSummaryVi
         {thread.title}
       </Link>
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
-        {forumCopy.authorTagLabel(thread.authorTag)} · {formatSurveyDate(new Date(thread.createdAt))}
+        {forumCopy.authorTagLabel(thread.authorTag)} · <time dateTime={thread.createdAt}>{formatSurveyDate(new Date(thread.createdAt))}</time>
       </p>
     </Card>
   );

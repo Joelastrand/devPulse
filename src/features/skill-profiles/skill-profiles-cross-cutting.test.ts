@@ -24,7 +24,7 @@ function walk(dir: string): string[] {
 const C1_PRODUCTION = [
   ...walk("src/features/skill-profiles"),
   ...walk("app/api/me/skills"),
-  ...walk("app/me/skills"),
+  ...walk("app/(app)/me/skills"),
 ].filter((path) => !/\.test\.tsx?$/.test(path) && !path.endsWith("/fake-skill-profile-store.ts"));
 
 /** Built indirectly so this file is not itself a collection reference for the TASK-005 allow-list guard. */
@@ -145,7 +145,7 @@ describe("C1 scope on all C1 surfaces including the page route (BR-19, BR-29, BR
   ];
 
   it("includes the page route in the scanned surface", () => {
-    expect(C1_PRODUCTION).toContain("app/me/skills/page.tsx");
+    expect(C1_PRODUCTION).toContain("app/(app)/me/skills/page.tsx");
     expect(C1_PRODUCTION).toContain("src/features/skill-profiles/copy.ts");
   });
 
@@ -165,7 +165,7 @@ describe("C1 scope on all C1 surfaces including the page route (BR-19, BR-29, BR
 
   it("browser-reachable C1 code never imports a Firestore SDK or server modules", () => {
     const browser = C1_PRODUCTION.filter(
-      (p) => p.startsWith("app/me/") || /skill-profiles\/(client|components|domain)\//.test(p) || p.endsWith("/copy.ts"),
+      (p) => p.startsWith("app/(app)/me/") || /skill-profiles\/(client|components|domain)\//.test(p) || p.endsWith("/copy.ts"),
     );
     expect(browser.length).toBeGreaterThan(4);
     const hits = browser.filter((p) =>

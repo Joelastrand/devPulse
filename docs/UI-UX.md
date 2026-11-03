@@ -768,6 +768,15 @@ test suite (TASK-033).
   render time as secondary, non-load-bearing context, but is never persisted
   or treated as the primary label.
 
+## Theme (Product Experience, TASK-001)
+
+Lys is the default for every operating-system setting. Mørk and Følg enhet
+(which follows the OS preference only when explicitly chosen) are applied
+through `data-theme` on `<html>`, set before first paint from one local key.
+Semantic tokens are defined in `app/globals.css`; the storage and resolution
+logic is in `src/lib/theme/theme.ts`. Dark variants follow `data-theme`, not
+the OS query. Source of truth: `docs/features/product-experience/SPEC.md` (Theme strategy).
+
 ## Accessibility
 
 - Semantic headings (a single logical heading hierarchy per page, not
@@ -857,3 +866,94 @@ Directional inspiration only — never a pixel-copy requirement:
   their role, for screen readers.
 - The expectations editor offers skill areas from the catalog and levels 2–4. Errors are neutral and linked to their fields;
   server refusals are shown with `role="alert"`.
+
+## Type scale, spacing, radii, elevation and motion (Product Experience, TASK-003)
+
+Tokens live in `app/globals.css` and are used through Tailwind utilities.
+Typography roles are `text-eyebrow`, `text-page-title`, `text-page-description`,
+`text-section-title`, `text-panel-title`, `text-metric`, `text-body`,
+`text-body-secondary`, `text-label`, `text-help`, `text-survey-question` and
+`text-survey-body`, each paired with its SPEC line height. Radii are
+`rounded-field` (6 px), `rounded-control` (10 px) and `rounded-surface` (14 px).
+Elevation level 2 is `shadow-elevated`; level 0 and 1 use no shadow. Motion
+durations are `duration-micro` (120 ms), `duration-panel` (200 ms) and
+`duration-progress` (300 ms) with `ease-standard`. A global `:focus-visible`
+ring (2 px, 2 px offset) applies to every focusable element, and a
+`prefers-reduced-motion: reduce` rule disables transitions and animations.
+
+## Button hierarchy and status presentation (Product Experience, TASK-005)
+
+- `Button` variants: `primary` (filled, the single accent), `secondary` (outlined), `tertiary` (text), `destructive` (outlined danger; dialogs and danger areas only). Radius is `rounded-control` (10 px). `pending` and `disabled` semantics are unchanged.
+- `StatusBadge` (`src/components/ui/StatusBadge.tsx`) renders a status as a decorative icon, a text label and a tone (`success`, `warning`, `danger`, `info`, `neutral`). The caller chooses the tone from its existing state. Lead, self and relationship markers keep the plain `Badge`.
+
+## Page composition and containers (Product Experience, TASK-006)
+
+`PageHeader` renders an optional eyebrow, exactly one `h1`, an optional
+description and at most one primary action (`primaryAction`, right-aligned on
+desktop, below the title on mobile). `Section` renders an `h2` with an optional
+description and action, separated by space rather than borders. The named
+containers are `Container variant="main" | "reading" | "survey" | "auth"` at
+1200, 680, 560 and 420 px (tokens `max-w-main`, `max-w-reading`,
+`max-w-survey`, `max-w-auth`), with a 16 px gutter on mobile and 32 px from `md`.
+Existing pages still use `PageShell` until TASK-015.
+
+## Form hierarchy (Product Experience, TASK-007)
+
+`TextField`, `TextArea` and `Select` show the label above, help text below and
+error text below help (associated with `aria-describedby`, and `aria-invalid`
+when there is an error). An optional field carries the visible text
+"(valgfritt)" in its label, which is part of its accessible name. Single-line
+controls are 44 px high on mobile and 40 px from `md`. Radio scales stay native.
+
+## Route groups (Product Experience, TASK-010)
+
+Route groups are folders in parentheses, so no URL changes. `app/(public)` holds
+the home page and the sign-in and sign-up pages, with the signed-out top bar
+(`PublicHeader`: Hjem, Logg inn, Opprett konto). `app/(app)` holds the
+authenticated routes and keeps the existing header until the desktop shell
+(TASK-011). `app/(survey)` holds `/survey/[surveyId]` with no navigation. The
+survey layout imports no identity-bearing component (BR-S8). The root layout
+renders no header. The complete URL list is checked in `app/route-groups.test.ts`.
+
+## Home privacy line (class A, Product Experience TASK-014)
+
+The home page privacy line is class A (`docs/features/product-experience/SPEC.md`,
+"Locked home-page privacy line"). Its wording is owner-approved and is not to be
+changed further. It is tested verbatim in `app/(public)/page.test.tsx`.
+
+## Desktop navigation (Product Experience, TASK-011)
+
+From `md` up the authenticated routes show a 248 px sidebar (`AppShell`), in this
+order: Overview (Hjem), Team (Team), Min utvikling (Ferdigheter, Mål, Samtaler,
+the only personal entries), Administrasjon (admin only: Admin), and User (Min
+profil, Slett kontoen din, Logg ut). Active items carry `aria-current="page"` on
+the exact path. Signed-out and loading states show Hjem, Logg inn and Opprett
+konto only. Admin visibility comes from the existing own-admin-status read only.
+The in-page `PersonalNav` on personal pages is unchanged until a later task.
+
+## Team context, admin scope and skip link (Product Experience, TASK-013)
+
+- On team routes the team name shows as the heading of the Team group in the
+  shell. The team page already loads the name and announces it through
+  `TeamContext`; there is no new request. Pages without a team show no context.
+- Every admin page carries the eyebrow "Administrasjon" (`ADMIN_SCOPE_EYEBROW`).
+- A skip link ("Hopp til innhold") is the first focusable element in the root
+  layout. It targets the main content region (`id="main-content"`), which every
+  layout renders around its page content.
+
+## Containers on existing pages (Product Experience, TASK-015)
+
+`PageShell` keeps its `width` API and now renders the named containers. `sm`
+(sign-in, sign-up) maps to the auth container (420 px), `lg` (survey) to the
+survey container (560 px), `2xl` to the reading column (680 px), and `3xl` and
+`wide` to the main container (1200 px). The admin pages use `wide`, which is
+the main container: the SPEC defines no separate wide width.
+
+## Illustrations (Product Experience, TASK-070)
+
+Asset record. Three original DevPulse SVG illustrations, drawn for this product, with no
+third-party or competitor artwork and no external resource. They are React SVG components in
+`src/components/ui/illustrations/illustrations.tsx`, with a 160 x 120 frame, 1.5 px stroke and
+token colours only. Each is `aria-hidden`, and none contains text. Origin: DevPulse, licence:
+the repository's own licence. Used only in: goals with no goals yet (`GoalsPage`), conversations
+with none yet (`ConversationsPage`) and survey completion (`SurveyResponseForm`).

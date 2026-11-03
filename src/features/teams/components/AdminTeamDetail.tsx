@@ -8,6 +8,7 @@ import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { LoadingState } from "../../../components/ui/LoadingState";
 import { PageHeader } from "../../../components/ui/PageHeader";
+import { ADMIN_SCOPE_EYEBROW } from "../../../components/ui/copy";
 import { TextField } from "../../../components/ui/TextField";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import {
@@ -1010,11 +1011,37 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
   return (
     <div className="flex flex-col gap-10">
       <PageHeader
+        eyebrow={ADMIN_SCOPE_EYEBROW}
         title={team.name}
         description={`${team.status === "active" ? adminCopy.teams.statusActive : adminCopy.teams.statusDisabled} · ${adminCopy.teams.teamIdLabel} ${team.teamId}`}
       />
 
-      <section className="flex flex-col gap-4">
+      <nav aria-label={adminCopy.detail.sectionIndexLabel} className="lg:sticky lg:top-4">
+        <ul className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+          <li>
+            <a href="#admin-section-invite" className="font-medium text-text-primary underline">Gå til {adminCopy.detail.inviteSectionTitle}</a>
+          </li>
+          <li>
+            <a href="#admin-section-members" className="font-medium text-text-primary underline">Gå til {adminCopy.detail.membersSectionTitle}</a>
+          </li>
+          <li>
+            <a href="#admin-section-invitations" className="font-medium text-text-primary underline">Gå til {adminCopy.detail.invitationsSectionTitle}</a>
+          </li>
+          <li>
+            <a href="#admin-section-requests" className="font-medium text-text-primary underline">Gå til {adminCopy.detail.requestsSectionTitle}</a>
+          </li>
+          <li>
+            <a href="#admin-section-surveys" className="font-medium text-text-primary underline">Gå til {surveysCopy.admin.sectionTitle}</a>
+          </li>
+          <li>
+            <a href="#admin-section-challenges" className="font-medium text-text-primary underline">Gå til {challengesCopy.admin.sectionTitle}</a>
+          </li>
+          <li>
+            <a href="#admin-section-skills" className="font-medium text-text-primary underline">Gå til {teamSkillTrackingCopy.sectionTitle}</a>
+          </li>
+        </ul>
+      </nav>
+      <section id="admin-section-invite" className="flex flex-col gap-4">
         <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
           {adminCopy.detail.inviteSectionTitle}
         </h2>
@@ -1038,7 +1065,7 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
         </form>
       </section>
 
-      <section className="flex flex-col gap-3">
+      <section id="admin-section-members" className="flex flex-col gap-3">
         <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
           {adminCopy.detail.membersSectionTitle}
         </h2>
@@ -1138,7 +1165,7 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
         )}
       </section>
 
-      <section className="flex flex-col gap-3">
+      <section id="admin-section-invitations" className="flex flex-col gap-3">
         <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
           {adminCopy.detail.invitationsSectionTitle}
         </h2>
@@ -1182,7 +1209,7 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
         )}
       </section>
 
-      <section className="flex flex-col gap-3">
+      <section id="admin-section-requests" className="flex flex-col gap-3">
         <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
           {adminCopy.detail.requestsSectionTitle}
         </h2>
@@ -1243,7 +1270,7 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
         )}
       </section>
 
-      <section className="flex flex-col gap-4">
+      <section id="admin-section-surveys" className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
             {surveysCopy.admin.sectionTitle}
@@ -1441,7 +1468,7 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
         )}
       </section>
 
-      <section className="flex flex-col gap-4">
+      <section id="admin-section-challenges" className="flex flex-col gap-4">
         <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
           {challengesCopy.admin.sectionTitle}
         </h2>
@@ -1456,7 +1483,7 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
         />
       </section>
 
-      <section className="flex flex-col gap-4">
+      <section id="admin-section-skills" className="flex flex-col gap-4">
         <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
           {teamSkillTrackingCopy.sectionTitle}
         </h2>

@@ -5,6 +5,8 @@ Approved — implemented (TASK-001 through TASK-011 Done; see
 [TASKS.md](./TASKS.md)). Feature-level user review and a security/privacy
 regression review both completed; see TASKS.md's TASK-011 closeout note.
 
+**Supersession pointer (Product Experience, TASK-011).** The header described in this document is superseded by the desktop sidebar `AppShell` (`src/components/nav/AppShell.tsx`); the mobile drawer follows in TASK-012. Source of truth: `docs/features/product-experience/SPEC.md` (Application shell). This note is a pointer only; the requirements here are not rewritten.
+
 **Revision note (App-Wide UI/UX Refresh, `docs/features/ui-refresh/
 SPEC.md`).** The BR-8 through BR-12 primitive set this document originally
 recorded (`Button`, `Card`, `Alert`, `EmptyState`, `LoadingState`, page

@@ -1,5 +1,5 @@
 import { Alert } from "../../../components/ui/Alert";
-import { Badge } from "../../../components/ui/Badge";
+import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
@@ -187,7 +187,7 @@ function AdminChallengeRow({
     <Card as="li" variant="bordered" padding="sm" className="flex flex-col gap-2">
       <p className="whitespace-pre-wrap break-words text-zinc-900 dark:text-zinc-50">{challenge.text}</p>
       <p className="flex flex-wrap items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-        <Badge>{challengesCopy.admin.statusLabels[challenge.status]}</Badge>
+        <StatusBadge>{challengesCopy.admin.statusLabels[challenge.status]}</StatusBadge>
         <span>{formatSurveyDate(new Date(challenge.submittedAt))}</span>
       </p>
       {action.status === "error" && (

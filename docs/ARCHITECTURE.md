@@ -663,3 +663,8 @@ Boundaries:
   `APP_ADMIN_EMAILS`, and the platform-log and provider-backup limitations.
 - **Known limits, not claimed as erased.** Provider logs and provider backups (E-1, E-2). Client-side caches in the erased person's
   browser (E-3). Historical invitations addressed to an e-mail that cannot be linked to the person (BR-13).
+
+## Product Experience presentation foundation (TASK-001 to TASK-004, 2026-11-02)
+
+- Icons: `lucide-react` (exact pin 1.66.0, ISC) is the only icon family, used through `src/components/ui/Icon.tsx`. Client bundle record: `docs/features/product-experience/VERIFICATION.md`.
+- Theme: a viewer-only `data-theme` attribute on `<html>`, set before first paint from one local key (`src/lib/theme/theme.ts`). No server state, no network call and no telemetry.

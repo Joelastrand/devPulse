@@ -294,6 +294,8 @@ function ReadyView({
 
   return (
     <div className="flex flex-col gap-6">
+      {/* The private summary leads the page (Product Experience TASK-030); the notices follow it. */}
+      {readable && dto.skills.length > 0 ? <Overview dto={dto} /> : null}
       <p className="text-sm text-zinc-700 dark:text-zinc-300">{skillProfileCopy.privacyNotice}</p>
       <p className="text-sm text-zinc-700 dark:text-zinc-300">{skillProfileCopy.roleComparisonNotice}</p>
 
@@ -318,7 +320,6 @@ function ReadyView({
         <EmptyState>{skillProfileCopy.noSkillsDefined}</EmptyState>
       ) : (
         <>
-          {readable && <Overview dto={dto} />}
           <section aria-labelledby="skill-list-heading">
             <h2 id="skill-list-heading" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
               {skillProfileCopy.skillsHeading}

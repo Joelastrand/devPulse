@@ -129,6 +129,8 @@ export const adminCopy = {
     statusUpdateError: "Noe gikk galt under oppdatering av dette teamet. Prøv igjen.",
   },
   detail: {
+    /** Accessible name for the in-page section index (TASK-060). */
+    sectionIndexLabel: "Seksjoner på siden",
     loading: "Laster team…",
     signInPrompt: "for å administrere dette teamet.",
     signInLink: "Logg inn",

@@ -61,3 +61,29 @@ describe("Select", () => {
     expect(select.getAttribute("aria-describedby")).toBeNull();
   });
 });
+
+describe("Select form hierarchy (Product Experience)", () => {
+  afterEach(cleanup);
+
+  it("marks an optional select with 'valgfritt'", () => {
+    render(
+      <Select id="rolle" label="Rolle" optional>
+        <option value="a">A</option>
+      </Select>,
+    );
+
+    expect(screen.getByText("(valgfritt)")).toBeTruthy();
+  });
+
+  it("uses the 44 px mobile and 40 px desktop control height", () => {
+    render(
+      <Select id="rolle" label="Rolle">
+        <option value="a">A</option>
+      </Select>,
+    );
+
+    const className = screen.getByLabelText("Rolle").className;
+    expect(className).toContain("h-11");
+    expect(className).toContain("md:h-10");
+  });
+});
