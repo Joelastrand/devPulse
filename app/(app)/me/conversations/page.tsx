@@ -6,7 +6,7 @@ import { conversationsCopy } from "../../../../src/features/development-conversa
 
 export default function MyConversationsPage() {
   return (
-    <PageShell width="2xl">
+    <PageShell width="3xl">
       <PersonalNav />
       <PageHeader title={conversationsCopy.pageTitle} description={conversationsCopy.pageDescription} />
       <div className="mt-6">

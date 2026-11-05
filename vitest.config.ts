@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
@@ -10,6 +10,8 @@ export default defineConfig({
     // jsdom-heavy tests past the default 5s timeout intermittently. Capping at
     // half the cores trades some wall time for stable results.
     maxWorkers: "50%",
+    // Browser verification specs run only under Playwright (pnpm verify:browser).
+    exclude: [...configDefaults.exclude, "browser/**"],
     include: [
       "src/**/*.{test,spec}.{ts,tsx}",
       "app/**/*.{test,spec}.{ts,tsx}",

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
+import { InitialsAvatar } from "../../../components/ui/dashboard/DashboardPrimitives";
 import { Card } from "../../../components/ui/Card";
 import type { OwnerSummaryWire, ParticipationSummaryWire } from "../client/conversations-gateway";
 import { conversationsCopy } from "../copy";
@@ -10,7 +11,18 @@ function conversationHref(conversationId: string): string {
 }
 
 /** The owner's own summaries, in the server order. Recovery items are rendered by `RecoveryRegion`, not here. */
-export function OwnedConversationList({ items }: { items: readonly OwnerSummaryWire[] }) {
+export function OwnedConversationList({
+  items,
+  selectable = false,
+  selectedId = null,
+  onSelect,
+}: {
+  items: readonly OwnerSummaryWire[];
+  /** Wide layout: a click selects the conversation beside the list instead of navigating. */
+  selectable?: boolean;
+  selectedId?: string | null;
+  onSelect?: (conversationId: string) => void;
+}) {
   return (
     <ul className="flex flex-col gap-2">
       {items.map((conversation) => (
@@ -19,6 +31,13 @@ export function OwnedConversationList({ items }: { items: readonly OwnerSummaryW
             {/* The owner detail page exists from TASK-028. Accepted participant titles stay plain text until TASK-030. */}
             <Link
               href={conversationHref(conversation.conversationId)}
+              aria-current={selectable && selectedId === conversation.conversationId ? "true" : undefined}
+              onClick={(event) => {
+                // Modified or non-primary clicks keep the browser default (for example, open in a new tab).
+                if (!selectable || !onSelect || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+                event.preventDefault();
+                onSelect(conversation.conversationId);
+              }}
               className="min-w-0 break-words font-medium text-zinc-900 underline dark:text-zinc-50"
             >
               {conversation.title}
@@ -30,7 +49,10 @@ export function OwnedConversationList({ items }: { items: readonly OwnerSummaryW
               {conversationsCopy.plannedForLabel}: {conversation.plannedFor}
             </p>
           )}
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          <p className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+            {conversation.participant.displayName !== null && (
+              <InitialsAvatar name={conversation.participant.displayName} />
+            )}
             {conversationsCopy.participantStateLabel[conversation.participant.state]}
             {conversation.participant.state !== "none" && (
               <> · {conversation.participant.displayName ?? conversationsCopy.anonymousColleague}</>

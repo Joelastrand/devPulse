@@ -89,6 +89,13 @@ const CONTRAST_PAIRS: Pair[] = [
   { foreground: "chart-4", background: "surface", kind: "non-text" },
   { foreground: "chart-5", background: "surface", kind: "non-text" },
   { foreground: "chart-6", background: "surface", kind: "non-text" },
+  // Visual-redesign pairs (TASK-019): new dashboard compositions.
+  { foreground: "text-secondary", background: "surface-elevated", kind: "text" },
+  { foreground: "text-secondary", background: "primary-subtle", kind: "text" },
+  { foreground: "text-primary", background: "primary-subtle", kind: "text" },
+  { foreground: "primary", background: "surface-subtle", kind: "text" },
+  { foreground: "primary", background: "surface-subtle", kind: "non-text" },
+  { foreground: "primary", background: "surface", kind: "non-text" },
 ];
 
 const THEMES: ThemeName[] = ["light", "dark"];

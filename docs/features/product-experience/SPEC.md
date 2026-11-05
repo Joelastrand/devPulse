@@ -177,12 +177,18 @@ The admin create-form hint "Alle som har lenken kan svare anonymt uten å logge 
 
 ## Application shell
 
+> Visual redesign (`docs/features/visual-redesign/SPEC.md`, TASK-001): the desktop top bar carries an account menu (Min konto) in addition to the sidebar Account group. No navigation item was added or removed.
+
 ### Structure (conceptual; no route changes)
 - **Overview:** `Hjem` (`/`) and `Team` (`/teams`).
 - **Team** (contextual): the current team's `Oversikt` and `Roadmap` (`/teams/[teamId]`, `/teams/[teamId]/roadmap`), with the team name visible. Forum and challenges remain sections of Oversikt.
 - **Personal development** (group heading only, no new route): `Ferdigheter` (`/me/skills`, with the role section), `Mål` (`/me/goals`), `Samtaler` (`/me/conversations`). The heading is the visual name for the existing `Min utvikling` entry.
 - **Administration** (only for `isAdmin`, visibly labelled "Administrasjon"): `Team` (`/admin/teams`, page title "Admin: Team"), `Kompetanseområder` (`/admin/skills`), `Roller` (`/admin/roles`).
 - **User** (sidebar footer): `Min profil` (`/me/profile`), `Slett kontoen din` (`/me/erasure`, the existing label in `account-erasure/copy.ts`), `Logg ut`.
+
+> Dated note (2026-11-03, visual-redesign TASK-001; history above preserved). Presentation only: the shell now shows the group headings `Workspace` (Hjem, Team), `Min utvikling`, `Administrasjon` (Team → `/admin/teams`, Roller → `/admin/roles`, admin-only) and `Account` (Min profil, Slett kontoen din, Logg ut). Route access and the signed-out and loading sets are unchanged. Roller was already in this contract and is now rendered. Open item, not resolved here: line 186 also lists Kompetanseområder (`/admin/skills`), which the shell does not render and which `visual-redesign` BR-9 does not list. Authorization is unchanged; see `docs/features/visual-redesign/SPEC.md` "Approval decisions".
+
+> Dated note (2026-11-04, `visual-fidelity-and-ui-fixes` TASK-003, BR-17, D-4): `Logg ut` is removed from the sidebar Account group and from the mobile drawer. The top-bar account menu is the only sign-out control, on desktop and mobile. The `User` entry above is superseded for the sign-out item only.
 
 ### Geometry (contract)
 - Desktop (≥ 768 px, `md`): persistent sidebar 248 px wide, full height, on the light canvas with a quiet surface. Content to its right.

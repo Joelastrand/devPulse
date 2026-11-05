@@ -30,6 +30,14 @@ describe("ComparisonRows — available", () => {
     expect(within(rowFor("API design")).getByText(`${copy.expectedLevel(3)} · ${copy.ownLevel(4)}`)).toBeTruthy();
   });
 
+  it("shows the approved Norwegian labels: Dekket for a met expectation and Utviklingsmulighet for a development opportunity", () => {
+    render(<ComparisonRows comparison={{ state: "available", target: { roleId: "r", name: "Backend" }, rows: ROWS }} />);
+
+    expect(within(rowFor("API design")).getByText("Dekket")).toBeTruthy();
+    expect(within(rowFor("Testing")).getByText("Utviklingsmulighet")).toBeTruthy();
+    expect(screen.queryByText("Møter forventningen")).toBeNull();
+  });
+
   it("shows a missing own level as not assessed, never as zero, and an unavailable tree as unavailable", () => {
     render(<ComparisonRows comparison={{ state: "available", target: { roleId: "r", name: "Backend" }, rows: ROWS }} />);
 

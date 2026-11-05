@@ -18,6 +18,7 @@ import {
   type AdminTeamsFetchResult,
 } from "../client/admin-teams-gateway";
 import type { TeamStatus } from "../domain/team";
+import { TeamIdentity } from "./TeamIdentity";
 
 type ViewState =
   | { phase: "loading" }
@@ -217,7 +218,7 @@ export function AdminTeams() {
   const disabledCount = teams.length - activeCount;
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           {teams.length > 0 && (
@@ -266,7 +267,7 @@ export function AdminTeams() {
       {teams.length === 0 ? (
         <EmptyState>{adminCopy.teams.empty}</EmptyState>
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {teams.map((team) => {
             const action = statusActions[team.teamId] ?? { status: "idle" as const };
             const nextStatus: TeamStatus = team.status === "active" ? "disabled" : "active";
@@ -278,8 +279,9 @@ export function AdminTeams() {
                 key={team.teamId}
                 variant="bordered"
                 padding="sm"
-                className="flex items-center justify-between gap-4"
+                className="flex flex-col gap-4 overflow-hidden"
               >
+                <TeamIdentity teamId={team.teamId} />
                 <div className="min-w-0">
                   <Link
                     href={`/admin/teams/${encodeURIComponent(team.teamId)}`}

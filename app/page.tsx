@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Layers, Shield, ShieldCheck, Target, TrendingUp, Users, Zap } from "lucide-react";
+import { Layers, Shield, ShieldCheck, Target, TrendingUp, Users } from "lucide-react";
 import { useState } from "react";
 import { AppShell } from "../src/components/nav/AppShell";
 import { PublicHeader } from "../src/components/nav/PublicHeader";
@@ -17,7 +17,7 @@ import { homeCopy } from "./page.copy";
 type HomeAuthState = "unknown" | "signed_out" | "signed_in";
 
 const VALUE_ICONS = [TrendingUp, Layers, Target] as const;
-const TRUST_ICONS = [Shield, Users, Zap] as const;
+const TRUST_ICONS = [Shield, Users] as const;
 
 /**
  * Home (docs/features/managed-surveys/SPEC.md — BR-38, BR-39). The route is
@@ -36,7 +36,7 @@ const TRUST_ICONS = [Shield, Users, Zap] as const;
  * via a generated `/survey/{surveyId}` link, never a Home entry point.
  */
 export default function Home() {
-  const { eyebrow, headline, description, privacyNote, values, trust, actions } = homeCopy;
+  const { eyebrow, headline, description, values, trust, actions } = homeCopy;
   const [authState, setAuthState] = useState<HomeAuthState>("unknown");
 
   useAuthGatedResource((token) => {
@@ -58,7 +58,7 @@ export default function Home() {
       <PublicHeader />
       <div id={SKIP_LINK_TARGET_ID} tabIndex={-1} className="flex flex-1 flex-col">
         <main className="flex flex-1 flex-col">
-          <section className="mx-auto grid w-full max-w-main grid-cols-1 items-center gap-12 px-4 pb-16 pt-12 md:grid-cols-2 md:px-8 md:pb-24 md:pt-20">
+          <section className="mx-auto grid w-full max-w-main grid-cols-1 items-center gap-12 px-4 pb-16 pt-12 md:grid-cols-2 md:px-8 md:pb-6 md:pt-20">
             <div className="flex flex-col gap-6">
               <p className="w-fit rounded-full bg-surface-subtle px-4 py-1.5 text-label font-medium text-text-secondary">
                 {eyebrow}
@@ -75,15 +75,11 @@ export default function Home() {
                   {actions.createAccount.label}
                 </Link>
               </div>
-              <p className="flex items-start gap-2 text-help text-text-muted">
-                <Icon icon={ShieldCheck} size="inline" />
-                <span>{privacyNote}</span>
-              </p>
             </div>
             <HomePreview />
           </section>
 
-          <section className="mx-auto grid w-full max-w-main grid-cols-1 gap-8 px-4 pb-16 md:grid-cols-3 md:px-8">
+          <section className="mx-auto grid w-full max-w-main grid-cols-1 gap-6 px-4 pb-16 md:grid-cols-3 md:pb-6 md:px-8">
             {values.map((value, index) => {
               const ValueIcon = VALUE_ICONS[index] ?? TrendingUp;
               return (
@@ -101,7 +97,7 @@ export default function Home() {
           </section>
 
           <section className="bg-brand-900 text-sidebar-foreground">
-            <ul className="mx-auto grid w-full max-w-main grid-cols-1 gap-6 px-4 py-10 sm:grid-cols-3 md:px-8">
+            <ul className="mx-auto grid w-full max-w-main grid-cols-1 gap-6 px-4 py-10 md:py-6 sm:grid-cols-2 md:px-8">
               {trust.map((item, index) => {
                 const TrustIcon = TRUST_ICONS[index] ?? ShieldCheck;
                 return (

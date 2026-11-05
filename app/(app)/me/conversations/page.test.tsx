@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { expectHeadingStructure, expectMainLandmark, expectNamedControls } from "../../../../src/components/ui/heading-structure";
 import { cleanup, render, screen } from "@testing-library/react";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/me/conversations" }));
@@ -20,5 +21,19 @@ describe("/me/conversations page", () => {
     const current = nav.querySelectorAll('a[aria-current="page"]');
     expect(current).toHaveLength(1);
     expect(current[0]?.textContent).toBe("Samtaler");
+  });
+});
+
+describe("route structure (visual-redesign TASK-019)", () => {
+  beforeEach(() => {
+    // Earlier tests in this file leave their renders in the DOM; the structure check starts from a clean document.
+    cleanup();
+  });
+
+  it("renders one main landmark and a valid heading structure with one level-1 title", async () => {
+    render(<MyConversationsPage />);
+    expectMainLandmark(document.body);
+    expectNamedControls(document.body);
+    expectHeadingStructure(document.body, { ownsPageTitle: true });
   });
 });

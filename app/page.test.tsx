@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
+import { expectHeadingStructure } from "../src/components/ui/heading-structure";
 
 const observeIdTokenMock = vi.fn();
 
@@ -138,6 +139,82 @@ describe("Home", () => {
   });
 });
 
+describe("Home composition (visual-redesign TASK-003, BR-10)", () => {
+  const lockedLine =
+    "Svarene lagres uten navn eller e-postadresse. Individuelle svar vises aldri. Teamet ser bare samlede resultater, og først når nok personer har svart.";
+
+  afterEach(() => {
+    cleanup();
+    observeIdTokenMock.mockReset();
+  });
+
+  it("shows the locked class A line verbatim exactly once, in the trust band", () => {
+    observeIdTokenMock.mockImplementation(subscribingWith(null));
+    render(<Home />);
+
+    const matches = screen.getAllByText(lockedLine);
+    expect(matches).toHaveLength(1);
+    expect(matches[0].closest("ul")).not.toBeNull();
+  });
+
+  it("does not use the shortened privacy claim as a trust item", () => {
+    observeIdTokenMock.mockImplementation(subscribingWith(null));
+    render(<Home />);
+
+    expect(screen.queryByText("Svar uten navn eller e-postadresse")).toBeNull();
+  });
+
+  it("does not show the excluded trust item 'Enkel å bruke' (visual-redesign BR-10)", () => {
+    observeIdTokenMock.mockImplementation(subscribingWith(null));
+    render(<Home />);
+
+    expect(screen.queryByText("Enkel å bruke")).toBeNull();
+  });
+
+  it("renders no excluded reference copy", () => {
+    observeIdTokenMock.mockImplementation(subscribingWith(null));
+    render(<Home />);
+
+    for (const excluded of [
+      /gratis/i,
+      /priser/i,
+      /produkt/i,
+      /sikkerhet og personvern/i,
+      /se hvordan det fungerer/i,
+      /skaper engasjement/i,
+      /enkel å bruke/i,
+    ]) {
+      expect(screen.queryByText(excluded)).toBeNull();
+    }
+  });
+
+  it("renders hero, value strip and trust band in that order", () => {
+    observeIdTokenMock.mockImplementation(subscribingWith(null));
+    render(<Home />);
+
+    const h1 = screen.getByRole("heading", { level: 1 });
+    const valueHeading = screen.getByRole("heading", { name: "Følg utvikling" });
+    const trustLine = screen.getAllByText(lockedLine)[0];
+
+    expect(h1.compareDocumentPosition(valueHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(valueHeading.compareDocumentPosition(trustLine) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("keeps both primary actions as keyboard-reachable links", () => {
+    observeIdTokenMock.mockImplementation(subscribingWith(null));
+    render(<Home />);
+
+    const actions = [
+      ...screen.getAllByRole("link", { name: "Logg inn" }),
+      ...screen.getAllByRole("link", { name: "Opprett konto" }),
+    ];
+    expect(actions.length).toBeGreaterThan(0);
+    for (const action of actions) {
+      expect(action.tabIndex).not.toBe(-1);
+    }
+  });
+});
+
 describe("Home privacy line (class A, TASK-014)", () => {
   it("contains the old wording neither in the copy nor the word anonym", async () => {
     const { homeCopy } = await import("./page.copy");
@@ -146,5 +223,12 @@ describe("Home privacy line (class A, TASK-014)", () => {
     );
     expect(homeCopy.privacyNote).not.toMatch(/anonym/i);
     expect(homeCopy.privacyNote).not.toContain("Individuelle svar er anonyme");
+  });
+});
+
+describe("signed-out home heading structure (visual-redesign TASK-019)", () => {
+  it("keeps one level-1 headline and a valid hierarchy for the landing composition", () => {
+    render(<Home />);
+    expectHeadingStructure(document.body, { ownsPageTitle: true });
   });
 });

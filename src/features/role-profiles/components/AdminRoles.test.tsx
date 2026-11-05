@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { expectHeadingStructure } from "../../../components/ui/heading-structure";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { adminRolesCopy } from "../copy";
 import type { AdminRoleView, FetchAdminRolesResult } from "../client/roles-gateway";
 
@@ -111,5 +113,86 @@ describe("AdminRoles", () => {
 
     expect(await screen.findByRole("link", { name: adminRolesCopy.signInLink })).toBeTruthy();
     expect(fetchAdminRolesMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("AdminRoles split view (visual-redesign TASK-015)", () => {
+  it("renders the list and the selected role side by side from lg, with no permission toggle, Rettigheter tab or assignment control (visual-fidelity TASK-017)", async () => {
+    await renderWith({ status: "ok", truncated: false, roles: [role(), role({ roleId: "role-2", name: "Frontend" })] });
+
+    const summary = screen.getByRole("list", { name: adminRolesCopy.splitListLabel });
+    const grid = summary.parentElement;
+    expect(grid?.className).toContain("lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]");
+    expect(summary.className).toContain("hidden");
+    expect(summary.className).toContain("lg:flex");
+
+    expect(screen.queryByRole("tab", { name: /Rettigheter/ })).toBeNull();
+    expect(screen.queryByRole("switch")).toBeNull();
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    expect(screen.queryByRole("combobox", { name: /tildel|assign|rolle for/i })).toBeNull();
+    expect(screen.queryByText(/Rettigheter/)).toBeNull();
+  });
+
+  it("lists every role in the summary list with its expectation count and archived text", async () => {
+    await renderWith({
+      status: "ok",
+      truncated: false,
+      roles: [
+        role({ description: "Bygger API-et" }),
+        role({ roleId: "role-2", name: "Frontend", archived: true, expectations: [] }),
+      ],
+    });
+
+    const summary = screen.getByRole("list", { name: adminRolesCopy.splitListLabel });
+    expect(within(summary).getByText("Bygger API-et")).toBeTruthy();
+    expect(within(summary).getByRole("button", { name: /Backend/ }).textContent).toContain(
+      adminRolesCopy.expectationCount(1),
+    );
+    expect(within(summary).getByRole("button", { name: /Frontend/ }).textContent).toContain(adminRolesCopy.statusArchived);
+  });
+
+  it("selects a role from the list: the selection moves and only that role's row is marked for desktop display", async () => {
+    await renderWith({
+      status: "ok",
+      truncated: false,
+      roles: [role(), role({ roleId: "role-2", name: "Frontend" })],
+    });
+    const summary = screen.getByRole("list", { name: adminRolesCopy.splitListLabel });
+    const backendButton = within(summary).getByRole("button", { name: /Backend/ });
+    const frontendButton = within(summary).getByRole("button", { name: /Frontend/ });
+
+    expect(backendButton.getAttribute("aria-pressed")).toBe("true");
+    const frontendRow = screen.getByRole("heading", { name: "Frontend" }).closest("li") as HTMLElement;
+    expect(frontendRow.className).toContain("lg:hidden");
+
+    await userEvent.click(frontendButton);
+
+    expect(frontendButton.getAttribute("aria-pressed")).toBe("true");
+    expect(backendButton.getAttribute("aria-pressed")).toBe("false");
+    expect(frontendRow.className).not.toContain("lg:hidden");
+  });
+
+  it("closes an open editor when the selection moves to another role", async () => {
+    await renderWith({
+      status: "ok",
+      truncated: false,
+      roles: [role(), role({ roleId: "role-2", name: "Frontend" })],
+    });
+    const user = userEvent.setup();
+    const backendRow = screen.getByRole("heading", { name: "Backend" }).closest("li") as HTMLElement;
+    await user.click(within(backendRow).getByRole("button", { name: new RegExp(adminRolesCopy.editRole) }));
+    expect(within(backendRow).getAllByRole("textbox").length).toBeGreaterThan(0);
+
+    const summary = screen.getByRole("list", { name: adminRolesCopy.splitListLabel });
+    await user.click(within(summary).getByRole("button", { name: /Frontend/ }));
+
+    expect(within(backendRow).queryAllByRole("textbox")).toHaveLength(0);
+  });
+});
+
+describe("admin roles heading structure (visual-redesign TASK-019)", () => {
+  it("keeps a valid heading hierarchy for the split view", async () => {
+    await renderWith({ status: "ok", truncated: false, roles: [role(), role({ roleId: "role-2", name: "Frontend" })] });
+    expectHeadingStructure(document.body, { ownsPageTitle: false });
   });
 });

@@ -1,4 +1,5 @@
 "use client";
+import { StatTile } from "../../../components/ui/dashboard/DashboardPrimitives";
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -148,6 +149,9 @@ function ReadyView({ data, token, initialTreeId, onUnauthenticated, onChanged }:
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
   const active = data.goals.filter((goal) => goal.status === "active");
   const completed = data.goals.filter((goal) => goal.status === "completed");
+  const [tab, setTab] = useState<"active" | "completed" | "all">("all");
+  // Linked skill areas only (BR-19): distinct existing area names, never a computed goal progress.
+  const linkedAreas = [...new Set(data.goals.flatMap((goal) => (goal.areaName ? [goal.areaName] : [])))].sort();
   const empty = data.goals.length === 0 && data.recoveryItems.length === 0;
 
   /** Runs one mutation. Resolves to an error message, or `undefined` once the change succeeded and was refetched. */
@@ -245,25 +249,81 @@ function ReadyView({ data, token, initialTreeId, onUnauthenticated, onChanged }:
       />
 
       {data.goals.length > 0 && (
-        <section aria-labelledby="active-goals-heading" className="flex flex-col gap-3">
-          <h2 id="active-goals-heading" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-            {goalsCopy.activeHeading}
-          </h2>
-          {active.length === 0 ? (
-            <p className="text-zinc-600 dark:text-zinc-400">{goalsCopy.noActiveGoals}</p>
-          ) : (
-            <ul className="flex flex-col gap-2">{active.map(goalItem)}</ul>
-          )}
-        </section>
-      )}
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_16rem]">
+          <div className="flex min-w-0 flex-col gap-6">
+            {/* Summary strip (visual-redesign BR-19): existing counts only, no progress ring or percentage. */}
+            <div className="grid grid-cols-2 gap-3">
+              <StatTile label={goalsCopy.tabs.active} value={String(active.length)} />
+              <StatTile label={goalsCopy.tabs.completed} value={String(completed.length)} />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  ["active", goalsCopy.tabs.active, active.length],
+                  ["completed", goalsCopy.tabs.completed, completed.length],
+                  ["all", goalsCopy.tabs.all, data.goals.length],
+                ] as const
+              ).map(([value, label, count]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={tab === value}
+                  onClick={() => setTab(value)}
+                  className={`rounded-full border px-3 py-1 text-sm ${
+                    tab === value ? "border-primary bg-primary-subtle text-text-primary" : "border-border-subtle text-text-secondary"
+                  }`}
+                >
+                  {`${label} (${count})`}
+                </button>
+              ))}
+            </div>
 
-      {completed.length > 0 && (
-        <details>
-          <summary className="cursor-pointer text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-            {goalsCopy.completedSummary(completed.length)}
-          </summary>
-          <ul className="mt-3 flex flex-col gap-2">{completed.map(goalItem)}</ul>
-        </details>
+            {tab !== "completed" && (
+              <section aria-labelledby="active-goals-heading" className="flex flex-col gap-3">
+                <h2 id="active-goals-heading" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                  {goalsCopy.activeHeading}
+                </h2>
+                {active.length === 0 ? (
+                  <p className="text-zinc-600 dark:text-zinc-400">{goalsCopy.noActiveGoals}</p>
+                ) : (
+                  <ul className="flex flex-col gap-2">{active.map(goalItem)}</ul>
+                )}
+              </section>
+            )}
+
+            {completed.length > 0 && tab === "all" && (
+              <details>
+                <summary className="cursor-pointer text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                  {goalsCopy.completedSummary(completed.length)}
+                </summary>
+                <ul className="mt-3 flex flex-col gap-2">{completed.map(goalItem)}</ul>
+              </details>
+            )}
+            {tab === "completed" && completed.length === 0 && (
+              <p className="text-text-secondary">{goalsCopy.noCompletedGoals}</p>
+            )}
+            {completed.length > 0 && tab === "completed" && (
+              <section aria-label={goalsCopy.tabs.completed} className="flex flex-col gap-2">
+                <ul className="flex flex-col gap-2">{completed.map(goalItem)}</ul>
+              </section>
+            )}
+          </div>
+
+          <aside aria-labelledby="linked-areas-heading" className="flex min-w-0 flex-col gap-2 self-start">
+            <h2 id="linked-areas-heading" className="text-base font-semibold text-text-primary">
+              {goalsCopy.linkedAreasHeading}
+            </h2>
+            {linkedAreas.length === 0 ? (
+              <p className="text-sm text-text-secondary">{goalsCopy.linkedAreasEmpty}</p>
+            ) : (
+              <div className="flex flex-col gap-1 text-sm text-text-secondary">
+                {linkedAreas.map((area) => (
+                  <p key={area}>{area}</p>
+                ))}
+              </div>
+            )}
+          </aside>
+        </div>
       )}
 
       {data.recoveryItems.length > 0 && (

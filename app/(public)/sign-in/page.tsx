@@ -7,6 +7,7 @@ import { PageShell } from "../../../src/components/ui/PageShell";
 import { SignedInRedirect } from "../../../src/features/auth/components/SignedInRedirect";
 import { SignInForm } from "../../../src/features/auth/components/SignInForm";
 import { authCopy } from "../../../src/features/auth/copy";
+import { SidebarLandscape } from "../../../src/components/nav/SidebarLandscape";
 
 interface SignInPageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
@@ -48,9 +49,10 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
 
   return (
     <PageShell width="3xl">
-      <div className="grid grid-cols-1 items-center gap-10 py-6 md:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] md:gap-16 md:py-16">
-        <section aria-label={SIGN_IN_PANEL.headline} className="flex flex-col gap-8">
-          <p className="text-page-title font-semibold text-text-primary md:text-[2.5rem] md:leading-[3rem]">
+      <div className="relative grid grid-cols-1 items-center gap-6 py-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:gap-16 lg:py-16">
+        <SidebarLandscape className="lg:inset-x-auto lg:right-0 lg:h-full lg:w-1/2" />
+        <section aria-label={SIGN_IN_PANEL.headline} className="relative flex flex-col gap-6">
+          <p className="text-page-title font-semibold text-text-primary lg:text-[2.5rem] lg:leading-[3rem]">
             {SIGN_IN_PANEL.headline}
           </p>
           <ul className="flex flex-col gap-6">
@@ -68,7 +70,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
           </ul>
         </section>
 
-        <Card variant="elevated" padding="lg">
+        <Card variant="elevated" padding="lg" className="relative">
           <PageHeader title={authCopy.signIn.pageTitle} />
           <SignedInRedirect continuation={continuation} />
           <SignInForm continuation={continuation} />

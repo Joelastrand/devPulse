@@ -21,7 +21,7 @@ describe("role-profiles copy — approved terminology", () => {
   });
 
   it("pins the comparison status labels, level labels and the create-goal action", () => {
-    expect(personRoleCopy.comparison.meets).toBe("Møter forventningen");
+    expect(personRoleCopy.comparison.meets).toBe("Dekket");
     expect(personRoleCopy.comparison.developmentOpportunity).toBe("Utviklingsmulighet");
     expect(personRoleCopy.comparison.notAssessed).toBe("Ikke vurdert ennå");
     expect(personRoleCopy.comparison.unavailable).toBe("Ikke tilgjengelig");

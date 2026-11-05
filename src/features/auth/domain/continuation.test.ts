@@ -42,7 +42,7 @@ describe("isValidSurveyContinuationPath", () => {
 });
 
 describe("resolveSignInDestination", () => {
-  it("returns the default /teams destination when no continuation is supplied", () => {
+  it("returns the default / destination when no continuation is supplied", () => {
     expect(resolveSignInDestination(undefined)).toEqual(DEFAULT_SIGN_IN_DESTINATION);
     expect(resolveSignInDestination(null)).toEqual(DEFAULT_SIGN_IN_DESTINATION);
   });
@@ -54,13 +54,13 @@ describe("resolveSignInDestination", () => {
     });
   });
 
-  it("falls back to /teams for an external URL", () => {
+  it("falls back to / for an external URL", () => {
     expect(resolveSignInDestination("https://evil.example")).toEqual(
       DEFAULT_SIGN_IN_DESTINATION,
     );
   });
 
-  it("falls back to /teams for a malformed value", () => {
+  it("falls back to / for a malformed value", () => {
     expect(resolveSignInDestination("/survey/a/b")).toEqual(DEFAULT_SIGN_IN_DESTINATION);
   });
 
@@ -71,7 +71,7 @@ describe("resolveSignInDestination", () => {
     });
   });
 
-  it("falls back to /teams when the first repeated value is invalid", () => {
+  it("falls back to / when the first repeated value is invalid", () => {
     expect(resolveSignInDestination(["https://evil.example", "/survey/abc123"])).toEqual(
       DEFAULT_SIGN_IN_DESTINATION,
     );

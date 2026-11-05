@@ -64,6 +64,12 @@ function navLinkNames() {
   return Array.from(nav.querySelectorAll("a")).map((link) => link.textContent);
 }
 
+/** Group headings are the bold muted labels; the team-context line is not bold. */
+function navHeadingNames() {
+  const nav = screen.getByRole("navigation");
+  return Array.from(nav.querySelectorAll("p.font-medium")).map((heading) => heading.textContent);
+}
+
 describe("AppShell", () => {
   afterEach(() => {
     cleanup();
@@ -119,7 +125,7 @@ describe("AppShell", () => {
     ).toBe(false);
   });
 
-  it("shows exactly the signed-in, non-admin link set plus a Logg ut action for a non-admin caller", async () => {
+  it("shows exactly the signed-in, non-admin link set and no sign-out control in the sidebar (BR-17)", async () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchOwnAdminStatusMock.mockResolvedValue({ ok: true, isAdmin: false });
 
@@ -130,11 +136,24 @@ describe("AppShell", () => {
       expect(screen.getByRole("link", { name })).toBeTruthy();
     }
     expect(navLinkNames()).toHaveLength(SIGNED_IN_LINK_NAMES.length);
-    expect(screen.getByRole("button", { name: /logg ut/i })).toBeTruthy();
-    expect(screen.queryByRole("link", { name: /^admin$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /logg ut/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /min konto/i })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /^roller$/i })).toBeNull();
   });
 
-  it("orders the groups Overview, Team, personal, Administrasjon, User for an admin", async () => {
+  it("hides decorative sidebar icons and shows no notification bell, which has no backing feature (BR-11, BR-13)", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchOwnAdminStatusMock.mockResolvedValue({ ok: true, isAdmin: false });
+
+    render(<AppShell />);
+
+    await waitFor(() => expect(fetchOwnAdminStatusMock).toHaveBeenCalled());
+    const homeLink = screen.getByRole("link", { name: "Hjem" });
+    expect(homeLink.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+    expect(screen.queryByRole("button", { name: "Varsler" })).toBeNull();
+  });
+
+  it("orders the groups without a Workspace heading: Min utvikling, Administrasjon, Konto for an admin", async () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchOwnAdminStatusMock.mockResolvedValue({ ok: true, isAdmin: true });
 
@@ -142,17 +161,44 @@ describe("AppShell", () => {
 
     const profileLink = await screen.findByRole("link", { name: /^min profil$/i });
     expect(profileLink.getAttribute("href")).toBe("/me/profile");
-    await screen.findByRole("link", { name: /^admin$/i });
+    await screen.findByRole("link", { name: /^roller$/i });
     expect(navLinkNames()).toEqual([
       "Hjem",
       "Team",
       "Ferdigheter",
       "Mål",
       "Samtaler",
-      "Admin",
+      "Team",
+      "Roller",
       "Min profil",
       "Slett kontoen din",
     ]);
+    expect(navHeadingNames()).toEqual(["Min utvikling", "Administrasjon", "Konto"]);
+  });
+
+  it("lists the Team and Roller destinations under Administrasjon only for an admin", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchOwnAdminStatusMock.mockResolvedValue({ ok: true, isAdmin: true });
+
+    render(<AppShell />);
+
+    const roller = await screen.findByRole("link", { name: /^roller$/i });
+    expect(roller.getAttribute("href")).toBe("/admin/roles");
+    const administrasjon = screen.getByText("Administrasjon").closest("div");
+    const adminLinks = Array.from(administrasjon?.querySelectorAll("a") ?? []).map((a) => a.getAttribute("href"));
+    expect(adminLinks).toEqual(["/admin/teams", "/admin/roles"]);
+  });
+
+  it("never lists Roller or the Administrasjon heading for a non-admin, even with Team in the workspace", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchOwnAdminStatusMock.mockResolvedValue({ ok: true, isAdmin: false });
+
+    render(<AppShell />);
+
+    await screen.findByRole("link", { name: /^min profil$/i });
+    expect(screen.queryByRole("link", { name: /^roller$/i })).toBeNull();
+    expect(screen.queryByText("Administrasjon")).toBeNull();
+    expect(navHeadingNames()).toEqual(["Min utvikling", "Konto"]);
   });
 
   it("shows the Administrasjon heading only for an admin", async () => {
@@ -174,6 +220,25 @@ describe("AppShell", () => {
     observeIdTokenMock.mockImplementation(() => () => {});
     render(<AppShell />);
     expect(screen.queryByRole("link", { name: /min profil/i })).toBeNull();
+  });
+
+  it("never exposes the account menu or its /me/profile link before a signed-in auth event", async () => {
+    observeIdTokenMock.mockImplementation(() => () => {});
+    render(<AppShell />);
+    expect(screen.queryByRole("button", { name: /min konto/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /min profil/i })).toBeNull();
+    cleanup();
+
+    observeIdTokenMock.mockImplementation(subscribingWith(null));
+    render(<AppShell />);
+    expect(screen.queryByRole("button", { name: /min konto/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /min profil/i })).toBeNull();
+    cleanup();
+
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchOwnAdminStatusMock.mockResolvedValue({ ok: false });
+    render(<AppShell />);
+    expect(await screen.findByRole("button", { name: /min konto/i })).toBeTruthy();
   });
 
   it("marks 'Min profil' as the current page on /me/profile without touching other links", async () => {
@@ -242,9 +307,9 @@ describe("AppShell", () => {
 
     render(<AppShell />);
 
-    const adminLink = await screen.findByRole("link", { name: /^admin$/i });
-    expect(adminLink.getAttribute("href")).toBe("/admin/teams");
-    expect(navLinkNames()).toHaveLength(SIGNED_IN_LINK_NAMES.length + 1);
+    const adminLink = await screen.findByRole("link", { name: /^roller$/i });
+    expect(adminLink.getAttribute("href")).toBe("/admin/roles");
+    expect(navLinkNames()).toHaveLength(SIGNED_IN_LINK_NAMES.length + 2);
   });
 
   it("never shows Admin when the own-admin-status read fails (fails closed, not open)", async () => {
@@ -254,7 +319,7 @@ describe("AppShell", () => {
     render(<AppShell />);
 
     await waitFor(() => expect(fetchOwnAdminStatusMock).toHaveBeenCalled());
-    expect(screen.queryByRole("link", { name: /^admin$/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /^roller$/i })).toBeNull();
   });
 
   it("never shows Admin while the own-admin-status read is still in flight", async () => {
@@ -263,8 +328,8 @@ describe("AppShell", () => {
 
     render(<AppShell />);
 
-    await screen.findByRole("button", { name: /logg ut/i });
-    expect(screen.queryByRole("link", { name: /^admin$/i })).toBeNull();
+    await screen.findByRole("button", { name: /min konto/i });
+    expect(screen.queryByRole("link", { name: /^roller$/i })).toBeNull();
   });
 
   it("has no client-side admin allow-list check — Admin visibility comes solely from the /api/me gateway result", async () => {
@@ -273,7 +338,7 @@ describe("AppShell", () => {
 
     render(<AppShell />);
 
-    await screen.findByRole("link", { name: /^admin$/i });
+    await screen.findByRole("link", { name: /^roller$/i });
     // The only way this component can ever know admin status is through
     // the mocked gateway call below — there is no other admin/allow-list
     // source it could have consulted.
@@ -294,7 +359,9 @@ describe("AppShell", () => {
     observer.emit("a-token");
     await waitFor(() => expect(fetchOwnAdminStatusMock).toHaveBeenCalled());
 
-    const signOutButton = await screen.findByRole("button", { name: /logg ut/i });
+    await user.click(await screen.findByRole("button", { name: /min konto/i }));
+    expect(await screen.findAllByRole("button", { name: /logg ut/i })).toHaveLength(1);
+    const signOutButton = screen.getByRole("button", { name: /logg ut/i });
     await user.click(signOutButton);
 
     expect(signOutMock).toHaveBeenCalled();
@@ -379,7 +446,7 @@ describe("AppShell auth-state races", () => {
     resolveStatus?.({ ok: true, isAdmin: true });
     await flushMicrotasks();
 
-    expect(screen.queryByRole("link", { name: /^admin$/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /^roller$/i })).toBeNull();
     expect(screen.getByRole("link", { name: /logg inn/i })).toBeTruthy();
   });
 
@@ -404,12 +471,12 @@ describe("AppShell auth-state races", () => {
     // "isAdmin: true" arrives late — it must never retroactively grant
     // Admin to the now-current, non-admin account B.
     resolvers[1]({ ok: true, isAdmin: false });
-    await waitFor(() => expect(screen.queryByRole("link", { name: /^admin$/i })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("link", { name: /^roller$/i })).toBeNull());
 
     resolvers[0]({ ok: true, isAdmin: true });
     await flushMicrotasks();
 
-    expect(screen.queryByRole("link", { name: /^admin$/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /^roller$/i })).toBeNull();
   });
 
   it("does not update state after unmount even if a pending admin-status fetch resolves later", async () => {

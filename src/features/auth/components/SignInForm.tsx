@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
@@ -18,7 +19,7 @@ interface SignInFormProps {
    * The raw `continue` query value from `/sign-in`'s URL, exactly as
    * Next.js's `searchParams` hands it over — untrusted until validated by
    * `resolveSignInDestination` below. Absent for the existing default
-   * `/teams` post-login behavior.
+   * `/` post-login behavior.
    */
   continuation?: string | string[] | null;
 }
@@ -28,13 +29,21 @@ export function SignInForm({ continuation }: SignInFormProps) {
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const hasError = status === "error";
+  const router = useRouter();
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus("submitting");
 
     const result = await signIn(email, password);
-    setStatus(result.ok ? "success" : "error");
+    if (!result.ok) {
+      setStatus("error");
+      return;
+    }
+    // D-1: navigate automatically. The success alert below is only a fallback
+    // while navigation is in progress; its link targets the same destination.
+    setStatus("success");
+    router.replace(resolveSignInDestination(continuation).path);
   }
 
   if (status === "success") {

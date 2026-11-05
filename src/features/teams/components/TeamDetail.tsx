@@ -57,6 +57,7 @@ import { requestAccessErrorMessage } from "./request-access-messages";
 import { TeamSkillNeedsSection } from "../../team-skills/components/TeamSkillNeedsSection";
 import { TeamRosterSection } from "./TeamRosterSection";
 import { TeamRouteNav } from "./TeamRouteNav";
+import { TeamOverviewSummary } from "./TeamOverviewSummary";
 
 /**
  * `TrendChart` code-split out of this page's eager client bundle
@@ -527,33 +528,49 @@ export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnab
           <CurrentSurveySection state={result.currentSurvey} />
         </ResultaterZone>
         <TeamaktivitetZone>
-          <RoadmapPlanningScope key={generation} token={token} teamId={teamId}>
-            {(planning) => (
-              <TeamSkillSection
-                idToken={token}
+          {/*
+            Reading order (DOM order, BR-14 section order): planning, needs, challenges, forum, members. On lg the needs
+            and challenges cards sit side by side; the others span the full width.
+          */}
+          <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+            <div className="min-w-0 lg:col-span-2">
+              <RoadmapPlanningScope key={`planning:${generation}`} token={token} teamId={teamId}>
+                {(planning) => (
+                  <TeamSkillSection
+                    idToken={token}
+                    teamId={teamId}
+                    state={toTeamSkillSectionState(result.skills)}
+                    onReported={() => handleSkillReported(token, generation)}
+                    planning={planning}
+                  />
+                )}
+              </RoadmapPlanningScope>
+            </div>
+            <div className="min-w-0">
+              <TeamSkillNeedsSection key={`needs:${generation}`} teamId={teamId} token={token} teamName={result.name} />
+            </div>
+            <div className="min-w-0">
+              <ChallengesSection
                 teamId={teamId}
-                state={toTeamSkillSectionState(result.skills)}
-                onReported={() => handleSkillReported(token, generation)}
-                planning={planning}
+                token={token}
+                state={result.challenges}
+                onSubmitted={() => handleChallengeSubmitted(token, generation)}
               />
+            </div>
+            {forumEnabled && (
+              <div className="min-w-0 lg:col-span-2">
+                <ForumSection
+                  teamId={teamId}
+                  token={token}
+                  state={result.forum}
+                  onThreadCreated={(threadId) => handleThreadCreated(generation, threadId)}
+                />
+              </div>
             )}
-          </RoadmapPlanningScope>
-          <TeamSkillNeedsSection key={generation} teamId={teamId} token={token} teamName={result.name} />
-          <ChallengesSection
-            teamId={teamId}
-            token={token}
-            state={result.challenges}
-            onSubmitted={() => handleChallengeSubmitted(token, generation)}
-          />
-          {forumEnabled && (
-            <ForumSection
-              teamId={teamId}
-              token={token}
-              state={result.forum}
-              onThreadCreated={(threadId) => handleThreadCreated(generation, threadId)}
-            />
-          )}
-          <TeamRosterSection key={generation} teamId={teamId} token={token} />
+            <div className="min-w-0 lg:col-span-2">
+              <TeamRosterSection key={`roster:${generation}`} teamId={teamId} token={token} />
+            </div>
+          </div>
         </TeamaktivitetZone>
       </div>
     );
@@ -566,55 +583,86 @@ export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnab
     // discovery (docs/features/managed-surveys/SPEC.md — "Current/latest
     // result" and "current-survey discovery ... remain separate contracts").
     const latest = result.results[result.results.length - 1] ?? null;
+    const openChallenges =
+      result.challenges.status === "loaded"
+        ? result.challenges.challenges.filter((challenge) => challenge.status === "open").length
+        : null;
+    // One roadmap read (`RoadmapPlanningScope`) serves both the summary row's next-steps panel and the planning
+    // section below (TASK-028, BR-32). It is scoped to the whole authorized view so the summary can read its plans.
     return (
-      <div className="flex flex-col gap-8">
-        <TeamHeading name={result.name} teamId={teamId} />
-        <TeamRouteNav teamId={teamId} />
-        <TeamSummaryStrip latest={latest} />
-        <ResultaterZone>
-          <ResultsSummaryStrip results={result.results} />
-          <CurrentSurveySection state={result.currentSurvey} />
-          <PeriodSummary result={latest} />
-          {result.results.length > 0 && (
-            <TrendChartBoundary>
-              <LazyTrendChart results={result.results} />
-            </TrendChartBoundary>
-          )}
-          <TrendTable results={result.results} />
-        </ResultaterZone>
-        <TeamaktivitetZone>
-          <RoadmapPlanningScope key={generation} token={token} teamId={teamId}>
-            {(planning) => (
-              <TeamSkillSection
-                idToken={token}
-                teamId={teamId}
-                state={toTeamSkillSectionState(result.skills)}
-                onReported={() => handleSkillReported(token, generation)}
-                planning={planning}
-              />
-            )}
-          </RoadmapPlanningScope>
-          <TeamSkillNeedsSection key={generation} teamId={teamId} token={token} teamName={result.name} />
-          <ChallengesSection
-            teamId={teamId}
-            token={token}
-            state={result.challenges}
-            onSubmitted={() => handleChallengeSubmitted(token, generation)}
-          />
-          {forumEnabled && (
-            <ForumSection
+      <RoadmapPlanningScope key={`planning:${generation}`} token={token} teamId={teamId}>
+        {(planning) => (
+          <div className="flex flex-col gap-6">
+            <TeamHeading name={result.name} teamId={teamId} summary={latest ? <TeamSummaryStrip latest={latest} /> : null} />
+            <TeamRouteNav teamId={teamId} />
+            <TeamOverviewSummary
               teamId={teamId}
-              token={token}
-              state={result.forum}
-              onThreadCreated={(threadId) => handleThreadCreated(generation, threadId)}
+              openChallenges={openChallenges}
+              plans={planning.plans}
             />
-          )}
-          <TeamRosterSection key={generation} teamId={teamId} token={token} />
-        </TeamaktivitetZone>
-      </div>
+            {/*
+              Results zone (visual-redesign BR-14). The summary, current survey and period stack, followed by the trend table.
+              The team development chart is placed beside the competency needs panel in the activity zone (TASK-029).
+            */}
+            <ResultaterZone>
+              <ResultsSummaryStrip results={result.results} />
+              <CurrentSurveySection state={result.currentSurvey} />
+              <PeriodSummary result={latest} />
+              <TrendTable results={result.results} />
+            </ResultaterZone>
+            <TeamaktivitetZone>
+              {/*
+                Reading order: planning, needs, trend chart, challenges, members, forum. At lg the needs and chart pair
+                and the challenges and members pair sit side by side (TASK-029, reference 05); planning and forum span the width.
+              */}
+              <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+                <div className="min-w-0 lg:col-span-2">
+                  <TeamSkillSection
+                    idToken={token}
+                    teamId={teamId}
+                    state={toTeamSkillSectionState(result.skills)}
+                    onReported={() => handleSkillReported(token, generation)}
+                    planning={planning}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <TeamSkillNeedsSection key={`needs:${generation}`} teamId={teamId} token={token} teamName={result.name} />
+                </div>
+                <div className="min-w-0">
+                  {result.results.length > 0 && (
+                    <TrendChartBoundary>
+                      <LazyTrendChart results={result.results} />
+                    </TrendChartBoundary>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <ChallengesSection
+                    teamId={teamId}
+                    token={token}
+                    state={result.challenges}
+                    onSubmitted={() => handleChallengeSubmitted(token, generation)}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <TeamRosterSection key={`roster:${generation}`} teamId={teamId} token={token} />
+                </div>
+                {forumEnabled && (
+                  <div className="min-w-0 lg:col-span-2">
+                    <ForumSection
+                      teamId={teamId}
+                      token={token}
+                      state={result.forum}
+                      onThreadCreated={(threadId) => handleThreadCreated(generation, threadId)}
+                    />
+                  </div>
+                )}
+              </div>
+            </TeamaktivitetZone>
+          </div>
+        )}
+      </RoadmapPlanningScope>
     );
   }
-
   const canRequestAccess = result.relationship === "none" || result.relationship === "request_rejected";
 
   return (
@@ -639,7 +687,7 @@ export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnab
   );
 }
 
-function TeamHeading({ name, teamId }: { name?: string; teamId: string }) {
+function TeamHeading({ name, teamId, summary }: { name?: string; teamId: string; summary?: ReactNode }) {
   // The shell shows the team name as context; the name is the one already loaded here.
   useAnnounceTeamName(name ?? null);
   return (
@@ -647,9 +695,12 @@ function TeamHeading({ name, teamId }: { name?: string; teamId: string }) {
       <span className="hidden w-28 shrink-0 overflow-hidden rounded-control sm:block">
         <TeamIdentity teamId={teamId} />
       </span>
-      <h1 className="break-words text-page-title font-semibold text-text-primary">
-        {name ?? teamsCopy.detail.fallbackName}
-      </h1>
+      <div className="flex min-w-0 flex-col gap-2">
+        <h1 className="break-words text-page-title font-semibold text-text-primary">
+          {name ?? teamsCopy.detail.fallbackName}
+        </h1>
+        {summary}
+      </div>
     </header>
   );
 }

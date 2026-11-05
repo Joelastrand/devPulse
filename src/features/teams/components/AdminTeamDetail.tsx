@@ -1009,7 +1009,7 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
     skillCatalog.status === "loaded" ? { status: "loaded", trees: skillCatalog.trees } : { status: "error" };
 
   return (
-    <div className="flex flex-col gap-10">
+    <div className="flex flex-col gap-6">
       <PageHeader
         eyebrow={ADMIN_SCOPE_EYEBROW}
         title={team.name}

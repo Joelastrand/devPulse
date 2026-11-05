@@ -161,7 +161,7 @@ Personal target role (owner-only)
 Comparison (derived, owner-only, live)
 
 - **BR-11**: For each expectation of the owner's target role, the comparison yields exactly one status:
-  - `meets` *(Møter forventningen)*: the owner has a valid C1 level for that `treeId` and it is `>=` the
+  - `meets` *(Dekket)*: the owner has a valid C1 level for that `treeId` and it is `>=` the
     expected level;
   - `development_opportunity` *(Utviklingsmulighet)*: the owner has a valid C1 level and it is `<` the
     expected level;
@@ -452,7 +452,7 @@ Proposed Norwegian terminology (consistent with existing *Ferdigheter*, *Mål*, 
 | Change / clear target | *Endre rolle* / *Fjern valgt rolle* |
 | Expectation level | *Forventet nivå* |
 | Own level | *Ditt nivå* |
-| Status: meets | *Møter forventningen* |
+| Status: meets | *Dekket* |
 | Status: development opportunity | *Utviklingsmulighet* |
 | Status: not assessed | *Ikke vurdert ennå* |
 | Status: unavailable | *Ikke tilgjengelig* |

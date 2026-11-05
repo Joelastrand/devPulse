@@ -208,7 +208,7 @@ function TrackedSkillRow({
             value={selectedNodeId}
             disabled={isPending}
             onChange={(event) => setSelectedNodeId(event.target.value)}
-            className="rounded border border-zinc-300 px-2 py-1 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:bg-zinc-900"
+            className="min-w-0 max-w-full rounded border border-zinc-300 px-2 py-1 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-zinc-700 dark:bg-zinc-900"
           >
             {nodes.map((node) => (
               <option key={node.nodeId} value={node.nodeId}>

@@ -10,7 +10,7 @@
  * different internal route (`/admin/...`, `/teams/...`, `/sign-in/...`),
  * path traversal, an extra path segment, an empty survey id, or any
  * embedded `?`/`#`/`/` character inside the id itself — falls back to the
- * existing default (`/teams`) rather than being followed.
+ * existing default (`/`) rather than being followed.
  *
  * The input is treated as the single, already-decoded value of one query
  * parameter and is never decoded again here, so a double-encoded value
@@ -21,7 +21,7 @@
 
 const SURVEY_CONTINUATION_PATTERN = /^\/survey\/[A-Za-z0-9_-]+$/;
 
-export const DEFAULT_SIGN_IN_PATH = "/teams";
+export const DEFAULT_SIGN_IN_PATH = "/";
 
 export interface SignInDestination {
   /** The path to send the user to after a successful sign-in. */
@@ -44,7 +44,7 @@ export function isValidSurveyContinuationPath(path: string): boolean {
  * Resolves the raw `continue` query value (as Next.js's `searchParams`
  * hands it over — a string, repeated-key array, or absent) to a safe
  * post-sign-in destination. Never throws; any unrecognized shape falls
- * back to the `/teams` default.
+ * back to the `/` default.
  */
 export function resolveSignInDestination(
   continuation: string | string[] | null | undefined,

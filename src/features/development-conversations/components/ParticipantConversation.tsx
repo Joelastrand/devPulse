@@ -1,5 +1,6 @@
 "use client";
 
+import { ConversationSectionTabs } from "./ConversationSectionTabs";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
@@ -51,7 +52,7 @@ export function ParticipantConversation({
   }, [notice]);
 
   return (
-    <section aria-label={conversationsCopy.participantHeading} className="flex flex-col gap-10">
+    <section aria-label={conversationsCopy.participantHeading} className="flex flex-col gap-6">
       <div ref={noticeRef} tabIndex={-1} className="outline-none">
         {notice && <Alert variant="info">{notice}</Alert>}
       </div>
@@ -70,68 +71,90 @@ export function ParticipantConversation({
         <p>{conversationsCopy.statusLabel[conversation.status]}</p>
       </div>
 
-      <Section id="participant-title-heading" heading={conversationsCopy.titleSection}>
-        <p className="break-words text-zinc-900 dark:text-zinc-50">{conversation.title}</p>
-      </Section>
+      <ConversationSectionTabs label={conversationsCopy.sectionTabs.label}
+        tabs={[
+          {
+            id: "overview",
+            label: conversationsCopy.sectionTabs.overview,
+            children: (
+              <>
+        <Section id="participant-title-heading" heading={conversationsCopy.titleSection}>
+          <p className="break-words text-zinc-900 dark:text-zinc-50">{conversation.title}</p>
+        </Section>
 
-      <Section id="participant-planned-for-heading" heading={conversationsCopy.plannedForSection}>
-        <p className="text-zinc-900 dark:text-zinc-50">{conversation.plannedFor ?? conversationsCopy.noPlannedFor}</p>
-      </Section>
+        <Section id="participant-planned-for-heading" heading={conversationsCopy.plannedForSection}>
+          <p className="text-zinc-900 dark:text-zinc-50">{conversation.plannedFor ?? conversationsCopy.noPlannedFor}</p>
+        </Section>
+                <LeaveSection flight={flight} onLeave={onLeave} />
+              </>
+            ),
+          },
+          {
+            id: "notes",
+            label: conversationsCopy.sectionTabs.notes,
+            children: (
+              <>
+        <Section id="participant-owner-notes-heading" heading={conversationsCopy.ownerNotesSection}>
+          <p className="text-sm text-zinc-700 dark:text-zinc-300">{conversationsCopy.ownerContentNote}</p>
+          <p className="whitespace-pre-line break-words text-zinc-900 dark:text-zinc-50">{conversation.ownerNotes || conversationsCopy.noOwnerNotes}</p>
+        </Section>
+        <Section id="participant-own-notes-heading" heading={conversationsCopy.participantOwnNotesSection}>
+          <ParticipantNotesEditor
+            conversationId={conversation.conversationId}
+            token={token}
+            notes={conversation.participantNotes}
+            completed={completed}
+            flight={flight}
+            onChanged={onChanged}
+            onUnauthenticated={onUnauthenticated}
+          />
+        </Section>
+              </>
+            ),
+          },
+          {
+            id: "follow-up",
+            label: conversationsCopy.sectionTabs.followUp,
+            children: <>
+        <Section id="participant-next-steps-heading" heading={conversationsCopy.nextStepsSection}>
+          {conversation.nextSteps.length === 0 ? (
+            <p className="text-zinc-600 dark:text-zinc-400">{conversationsCopy.noNextSteps}</p>
+          ) : (
+            <ul className="flex list-disc flex-col gap-1 pl-5 text-zinc-900 dark:text-zinc-50">
+              {conversation.nextSteps.map((step, index) => (
+                <li key={index} className="break-words">
+                  {step}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
 
-      <Section id="participant-owner-notes-heading" heading={conversationsCopy.ownerNotesSection}>
-        <p className="text-sm text-zinc-700 dark:text-zinc-300">{conversationsCopy.ownerContentNote}</p>
-        <p className="whitespace-pre-line break-words text-zinc-900 dark:text-zinc-50">{conversation.ownerNotes || conversationsCopy.noOwnerNotes}</p>
-      </Section>
-
-      <Section id="participant-next-steps-heading" heading={conversationsCopy.nextStepsSection}>
-        {conversation.nextSteps.length === 0 ? (
-          <p className="text-zinc-600 dark:text-zinc-400">{conversationsCopy.noNextSteps}</p>
-        ) : (
-          <ul className="flex list-disc flex-col gap-1 pl-5 text-zinc-900 dark:text-zinc-50">
-            {conversation.nextSteps.map((step, index) => (
-              <li key={index} className="break-words">
-                {step}
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
-
-      <Section id="participant-goals-heading" heading={conversationsCopy.sharedGoalsSection}>
-        <p className="text-sm text-zinc-700 dark:text-zinc-300">{conversationsCopy.participantSharedGoalsNote}</p>
-        {conversation.sharedGoals.length === 0 ? (
-          <p className="text-zinc-600 dark:text-zinc-400">{conversationsCopy.noSharedGoals}</p>
-        ) : (
-          <ul className="flex flex-col gap-3">
-            {conversation.sharedGoals.map((goal, index) => (
-              <li key={index} className="flex flex-col gap-1 text-zinc-900 dark:text-zinc-50">
-                <p className="break-words font-medium">{goal.goalTitle}</p>
-                <p className="text-sm text-zinc-700 dark:text-zinc-300">{goal.areaName ?? conversationsCopy.areaUnavailable}</p>
-                {goal.targetDate && (
-                  <p className="text-sm text-zinc-700 dark:text-zinc-300">
-                    {conversationsCopy.goalDateLabel}: {goal.targetDate}
-                  </p>
-                )}
-                <p className="text-sm text-zinc-700 dark:text-zinc-300">{conversationsCopy.goalStatusLabel[goal.status]}</p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
-
-      <Section id="participant-own-notes-heading" heading={conversationsCopy.participantOwnNotesSection}>
-        <ParticipantNotesEditor
-          conversationId={conversation.conversationId}
-          token={token}
-          notes={conversation.participantNotes}
-          completed={completed}
-          flight={flight}
-          onChanged={onChanged}
-          onUnauthenticated={onUnauthenticated}
-        />
-      </Section>
-
-      <LeaveSection flight={flight} onLeave={onLeave} />
+        <Section id="participant-goals-heading" heading={conversationsCopy.sharedGoalsSection}>
+          <p className="text-sm text-zinc-700 dark:text-zinc-300">{conversationsCopy.participantSharedGoalsNote}</p>
+          {conversation.sharedGoals.length === 0 ? (
+            <p className="text-zinc-600 dark:text-zinc-400">{conversationsCopy.noSharedGoals}</p>
+          ) : (
+            <ul className="flex flex-col gap-3">
+              {conversation.sharedGoals.map((goal, index) => (
+                <li key={index} className="flex flex-col gap-1 text-zinc-900 dark:text-zinc-50">
+                  <p className="break-words font-medium">{goal.goalTitle}</p>
+                  <p className="text-sm text-zinc-700 dark:text-zinc-300">{goal.areaName ?? conversationsCopy.areaUnavailable}</p>
+                  {goal.targetDate && (
+                    <p className="text-sm text-zinc-700 dark:text-zinc-300">
+                      {conversationsCopy.goalDateLabel}: {goal.targetDate}
+                    </p>
+                  )}
+                  <p className="text-sm text-zinc-700 dark:text-zinc-300">{conversationsCopy.goalStatusLabel[goal.status]}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+            </>,
+          },
+        ]}
+      />
     </section>
   );
 }

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { expectHeadingStructure, expectNamedControls } from "../../../components/ui/heading-structure";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { lazy, Suspense, type ComponentType, type ReactNode } from "react";
@@ -651,8 +652,9 @@ describe("TeamDetail", () => {
       render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
       const heading = await screen.findByRole("heading", HEADING);
-      expect(fetchSkillNeedsMock).toHaveBeenCalledWith("a-token", "team-1");
-      expect(fetchSkillContributionMock).toHaveBeenCalledWith("a-token", "team-1");
+      // The needs and contribution reads start after the token subscription resolves, which can be after the heading renders.
+      await waitFor(() => expect(fetchSkillNeedsMock).toHaveBeenCalledWith("a-token", "team-1"));
+      await waitFor(() => expect(fetchSkillContributionMock).toHaveBeenCalledWith("a-token", "team-1"));
       const order = Array.from(document.querySelectorAll("h3")).map((h) => h.textContent);
       expect(order.indexOf(heading.textContent ?? "")).toBeGreaterThan(order.indexOf("Kompetanseområder"));
       expect(order.indexOf(heading.textContent ?? "")).toBeLessThan(order.indexOf("Medlemmer"));
@@ -2422,5 +2424,231 @@ describe("TeamDetail lazy TrendChart (TASK-003)", () => {
     expect(fetchTeamResultsMock).toHaveBeenCalledTimes(1);
 
     errorSpy.mockRestore();
+  });
+});
+
+
+// Regression for BR-15: the zone children RoadmapPlanningScope, TeamSkillNeedsSection and TeamRosterSection
+// previously shared `key={generation}` inside TeamaktivitetZone's children array. The duplicate-prone survey
+// data is kept so the boundary also covers the TrendTable row keys.
+describe("TeamDetail duplicate-key boundary (visual-redesign TASK-007)", () => {
+  beforeEach(() => {
+    fetchCurrentTeamSurveyMock.mockResolvedValue(NO_CURRENT_SURVEY);
+    fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
+    fetchTeamThreadsMock.mockResolvedValue(NO_THREADS);
+    fetchTeamSkillsMock.mockResolvedValue(NO_SKILLS);
+    fetchSkillNeedsMock.mockReturnValue(new Promise(() => {}));
+    fetchSkillContributionMock.mockReturnValue(new Promise(() => {}));
+  });
+
+  afterEach(() => {
+    cleanup();
+    observeIdTokenMock.mockReset();
+    fetchTeamsOverviewMock.mockReset();
+    fetchTeamResultsMock.mockReset();
+  });
+
+  it("renders the team overview with two results that share a survey id, and logs no same-key error", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Demo Team", relationship: "member" }],
+    });
+    const duplicateProne = {
+      status: "ok",
+      teamId: "team-1",
+      results: [...PUBLISHED_RESULTS.results, PUBLISHED_RESULTS.results[0]],
+    };
+    fetchTeamResultsMock.mockResolvedValue(duplicateProne);
+
+    const errors: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      errors.push(args.map(String).join(" "));
+    });
+    try {
+      render(<TeamDetail teamId="team-1" forumEnabled={true} />);
+      await waitFor(() => expect(document.querySelectorAll("tbody tr").length).toBeGreaterThan(0));
+    } finally {
+      spy.mockRestore();
+    }
+
+    expect(errors.filter((message) => /same key/i.test(message))).toEqual([]);
+  });
+});
+
+describe("TeamDetail header (visual-redesign TASK-008)", () => {
+  beforeEach(() => {
+    fetchCurrentTeamSurveyMock.mockResolvedValue(NO_CURRENT_SURVEY);
+    fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
+    fetchTeamThreadsMock.mockResolvedValue(NO_THREADS);
+    fetchTeamSkillsMock.mockResolvedValue(NO_SKILLS);
+    fetchSkillNeedsMock.mockReturnValue(new Promise(() => {}));
+    fetchSkillContributionMock.mockReturnValue(new Promise(() => {}));
+  });
+
+  afterEach(() => {
+    cleanup();
+    observeIdTokenMock.mockReset();
+    fetchTeamsOverviewMock.mockReset();
+    fetchTeamResultsMock.mockReset();
+  });
+
+  it("shows the team name once, as the only level-1 heading of the authorized overview", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Demo Team", relationship: "member" }],
+    });
+    fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
+
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
+    await waitFor(() => expect(document.querySelectorAll("tbody tr").length).toBeGreaterThan(0));
+
+    const headings = screen.getAllByRole("heading", { level: 1 });
+    expect(headings).toHaveLength(1);
+    expect(headings[0]?.textContent).toBe("Demo Team");
+    expect(screen.getAllByText("Demo Team")).toHaveLength(1);
+  });
+});
+
+describe("TeamDetail tabs and insufficient data (visual-redesign TASK-008)", () => {
+  beforeEach(() => {
+    fetchCurrentTeamSurveyMock.mockResolvedValue(NO_CURRENT_SURVEY);
+    fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
+    fetchTeamThreadsMock.mockResolvedValue(NO_THREADS);
+    fetchTeamSkillsMock.mockResolvedValue(NO_SKILLS);
+    fetchSkillNeedsMock.mockReturnValue(new Promise(() => {}));
+    fetchSkillContributionMock.mockReturnValue(new Promise(() => {}));
+  });
+
+  afterEach(() => {
+    cleanup();
+    observeIdTokenMock.mockReset();
+    fetchTeamsOverviewMock.mockReset();
+    fetchTeamResultsMock.mockReset();
+  });
+
+  it("offers only the existing team routes as tabs", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Demo Team", relationship: "member" }],
+    });
+    fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
+
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
+    await waitFor(() => expect(document.querySelectorAll("tbody tr").length).toBeGreaterThan(0));
+
+    const nav = screen.getByRole("navigation", { name: teamsCopy.nav.label });
+    const hrefs = within(nav)
+      .getAllByRole("link")
+      .map((link) => link.getAttribute("href"));
+    expect(hrefs).toEqual(["/teams/team-1", "/teams/team-1/roadmap"]);
+  });
+
+  it("shows insufficient-data text for a suppressed survey and never a standalone zero", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Demo Team", relationship: "member" }],
+    });
+    fetchTeamResultsMock.mockResolvedValue({
+      status: "ok",
+      teamId: "team-1",
+      results: [
+        { surveyId: "survey-1", date: "2026-08-17T00:00:00.000Z", minimumResponses: 5, status: "insufficient" },
+      ],
+    });
+
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
+    await waitFor(() => expect(screen.getAllByText("For få svar ennå").length).toBeGreaterThan(0));
+
+    // Scoped to the results section: the open-challenge count in the team summary row is a real count, not a survey value.
+    expect(within(screen.getByRole("region", { name: teamsCopy.detail.resultaterHeading })).queryByText("0")).toBeNull();
+  });
+});
+
+describe("TeamDetail side-by-side composition (visual-redesign TASK-008, decision B)", () => {
+  beforeEach(() => {
+    fetchCurrentTeamSurveyMock.mockResolvedValue(NO_CURRENT_SURVEY);
+    fetchTeamThreadsMock.mockResolvedValue(NO_THREADS);
+    fetchTeamSkillsMock.mockResolvedValue(NO_SKILLS);
+    fetchSkillNeedsMock.mockReturnValue(new Promise(() => {}));
+    fetchSkillContributionMock.mockReturnValue(new Promise(() => {}));
+  });
+
+  afterEach(() => {
+    cleanup();
+    observeIdTokenMock.mockReset();
+    fetchTeamsOverviewMock.mockReset();
+    fetchTeamResultsMock.mockReset();
+    fetchTeamChallengesMock.mockReset();
+  });
+
+  it("puts competency needs and challenges in one two-column row, needs first, in reading order", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Demo Team", relationship: "member" }],
+    });
+    fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
+    fetchTeamChallengesMock.mockResolvedValue({
+      status: "ok",
+      challenges: [{ challengeId: "c1", text: "Deploy owner unclear", status: "open", submittedAt: "2026-01-10" }],
+      canSubmit: true,
+    });
+
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
+
+    const needsHeading = await screen.findByRole("heading", { name: "Kompetansebehov og dekning" });
+    const challengeText = await screen.findByText("Deploy owner unclear");
+    const needsColumn = needsHeading.closest("div.min-w-0") as HTMLElement;
+    const challengeColumn = challengeText.closest("div.min-w-0") as HTMLElement;
+
+    expect(needsColumn.parentElement).toBe(challengeColumn.parentElement);
+    expect(needsColumn.parentElement?.className).toContain("lg:grid-cols-2");
+    expect(needsColumn.compareDocumentPosition(challengeColumn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("places the team development chart beside the competency needs panel at lg, not beside the summary (TASK-029)", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Demo Team", relationship: "member" }],
+    });
+    fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
+    fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
+
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
+
+    const chartHeading = await screen.findByRole("heading", { name: "Trendvisualisering" });
+    const chartColumn = chartHeading.closest("div.min-w-0") as HTMLElement;
+    const needsColumn = chartColumn.previousElementSibling as HTMLElement;
+    expect(chartColumn.parentElement?.className).toContain("lg:grid-cols-2");
+    expect(needsColumn.parentElement).toBe(chartColumn.parentElement);
+    expect(needsColumn.textContent).toMatch(/Kompetansebehov/i);
+    expect(chartColumn.textContent).not.toMatch(/7 svar/);
+  });
+});
+
+describe("team overview heading structure (visual-redesign TASK-019)", () => {
+  it("has one level-1 team heading and a valid hierarchy for the authorized overview", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Demo Team", relationship: "member" }],
+    });
+    fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
+    fetchCurrentTeamSurveyMock.mockResolvedValue(NO_CURRENT_SURVEY);
+    fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
+    fetchTeamThreadsMock.mockResolvedValue(NO_THREADS);
+    fetchTeamSkillsMock.mockResolvedValue(NO_SKILLS);
+    fetchSkillNeedsMock.mockReturnValue(new Promise(() => {}));
+    fetchSkillContributionMock.mockReturnValue(new Promise(() => {}));
+
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
+    await screen.findByRole("heading", { level: 1, name: "Demo Team" });
+    expectHeadingStructure(document.body, { ownsPageTitle: true });
+    expectNamedControls(document.body);
   });
 });

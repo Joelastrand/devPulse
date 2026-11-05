@@ -373,6 +373,26 @@ exception text. Removing demo data is a manual act outside this tool.
   fakes, the real `cert()` and `Timestamp`). The first real dry-run is the
   first contact with the live SDK path.
 
+## Browser verification harness
+
+Browser verification of signed-in and signed-out pages uses Playwright, a
+development dependency (`@playwright/test`, with its local Chromium). It lives
+in `browser/` and is **not** part of `pnpm test`; Vitest excludes it.
+
+- Run with the dev server on port 3000: `pnpm dev`, then `pnpm verify:browser`.
+- Runtime environment variables (values are never written to a file, log, report
+  or screenshot): `DEVPULSE_VERIFY_EMAIL` and `DEVPULSE_VERIFY_PASSWORD`, for the
+  owner's test account only. Missing variables stop the run with a *not verified*
+  message before any browser starts.
+- The run refuses to start if the Firebase project identifier in `.env.local`
+  contains "prod" (BR-37). The identifier is read but not printed.
+- Sign-in happens once per run through the real sign-in form. No cookies,
+  tokens or storage state are written to disk; the browser context lives in
+  memory and is discarded at the end of the run.
+- Screenshots and Playwright output go to `.verify-output/`, which is git-ignored.
+- Record results in the feature's `VERIFICATION.md`. Do not record a pass
+  without evidence from a run.
+
 ## Skills
 
 The workflow above is driven by six Claude Code skills under

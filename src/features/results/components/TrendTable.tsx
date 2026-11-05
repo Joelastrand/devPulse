@@ -66,9 +66,9 @@ export function TrendTable({
               </tr>
             </thead>
             <tbody>
-              {results.map((result) => (
+              {results.map((result, index) => (
                 <tr
-                  key={result.surveyId}
+                  key={`${result.surveyId}:${index}`}
                   className="border-b border-zinc-100 last:border-0 dark:border-zinc-900"
                 >
                   <th

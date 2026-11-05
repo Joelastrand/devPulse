@@ -5,12 +5,11 @@ import { useEffect, useRef, type KeyboardEvent } from "react";
 import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
 import { navCopy } from "./copy";
-import { NavGroupList, type NavGroup, type NavSignOut } from "./NavGroupList";
+import { NavGroupList, type NavGroup } from "./NavGroupList";
 
 export interface MobileDrawerProps {
   groups: NavGroup[];
   pathname: string;
-  signOut?: NavSignOut;
   onNavigate: () => void;
   onClose: (options: { restoreFocus: boolean }) => void;
 }
@@ -26,7 +25,7 @@ const TABBABLE = "a[href], button:not([disabled])";
  * drawer is mounted. The slide-in is a state animation, disabled under reduced
  * motion by the global rule in app/globals.css.
  */
-export function MobileDrawer({ groups, pathname, signOut, onNavigate, onClose }: MobileDrawerProps) {
+export function MobileDrawer({ groups, pathname, onNavigate, onClose }: MobileDrawerProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -85,7 +84,7 @@ export function MobileDrawer({ groups, pathname, signOut, onNavigate, onClose }:
           </Button>
         </div>
         <nav aria-label={navCopy.mainNavLabel} className="flex flex-col gap-6">
-          <NavGroupList groups={groups} pathname={pathname} onNavigate={onNavigate} signOut={signOut} />
+          <NavGroupList groups={groups} pathname={pathname} onNavigate={onNavigate} />
         </nav>
       </div>
     </>

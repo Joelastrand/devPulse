@@ -8,27 +8,13 @@
 export const authenticatedHomeCopy = {
   title: "Hjem",
   description: "Gå rett til teamene, målene og samtalene dine.",
+  greeting: {
+    context: "Her er en oversikt over din utvikling og teamet ditt.",
+    withName: (name: string) => `Hei, ${name}`,
+  },
   quickLinksLabel: "Snarveier",
   teamsSectionTitle: "Dine team",
   teamsSectionDescription: "Teamene du er medlem av, med pulsmåling og utvikling.",
-  nextStepsTitle: "Neste steg",
-  nextSteps: {
-    teamNeeds: {
-      label: "Se teamets kompetansebehov",
-      description: "Vurder hvilke områder teamet bør styrke.",
-      href: "/teams",
-    },
-    conversation: {
-      label: "Planlegg neste utviklingssamtale",
-      description: "Sett agenda og felles fokus i samtalene dine.",
-      href: "/me/conversations",
-    },
-    roles: {
-      label: "Vurder rolleforventninger",
-      description: "Se hvordan ferdighetene dine passer til rollen din.",
-      href: "/me/skills",
-    },
-  },
   links: {
     teams: {
       label: "Team",
@@ -50,10 +36,60 @@ export const authenticatedHomeCopy = {
       description: "Utviklingssamtalene du deltar i.",
       href: "/me/conversations",
     },
-    profile: {
-      label: "Profil",
-      description: "Profilen din og kontoinnstillinger.",
-      href: "/me/profile",
+  },
+  readError: "Kunne ikke laste dette nå. Prøv igjen senere.",
+  tiles: {
+    team: { label: "Teamoversikt", emptyText: "Du er ikke medlem av et team ennå.", emptyAction: "Se teamene" },
+  },
+  goals: {
+    title: "Mine mål",
+    all: "Alle mål",
+    empty: "Du har ingen aktive mål ennå.",
+    statusActive: "Aktivt",
+    statusCompleted: "Fullført",
+  },
+  conversation: {
+    title: "Neste samtale",
+    empty: "Ingen planlagte samtaler.",
+    open: "Gå til samtale",
+    noDate: "Ingen dato satt",
+    withPrefix: "Med",
+  },
+  role: {
+    title: "Rolle og utvikling",
+    none: "Ingen rolle valgt",
+    noneDescription: "Velg en rolle for å se forventninger og utviklingsområder.",
+    action: "Velg rolle",
+    selectedLabel: "Din rolle",
+    archived: "Rollen er arkivert.",
+    unavailable: "Rolleinformasjonen er ikke tilgjengelig nå.",
+  },
+  development: {
+    title: "Teamets utvikling",
+    empty: "Det finnes ingen resultater for teamet ennå.",
+  },
+  pulse: {
+    label: "Teamets puls",
+    latest: "Siste undersøkelse",
+  },
+  teamPanelTitle: "Teamet ditt",
+  teamPanelAction: "Teamoversikt",
+  nextStepsTitle: "Neste steg",
+  nextSteps: {
+    teamNeeds: {
+      label: "Se teamets kompetansebehov",
+      description: "Vurder hvilke områder teamet bør styrke.",
+      href: "/teams",
+    },
+    conversation: {
+      label: "Planlegg neste utviklingssamtale",
+      description: "Sett agenda og felles fokus i samtalene dine.",
+      href: "/me/conversations",
+    },
+    roles: {
+      label: "Vurder rolleforventninger",
+      description: "Se hvordan ferdighetene dine passer til rollen din.",
+      href: "/me/skills",
     },
   },
 } as const;

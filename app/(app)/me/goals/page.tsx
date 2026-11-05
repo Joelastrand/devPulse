@@ -12,7 +12,7 @@ interface MyGoalsPageProps {
 export default async function MyGoalsPage({ searchParams }: MyGoalsPageProps) {
   const { treeId } = await searchParams;
   return (
-    <PageShell width="2xl">
+    <PageShell width="3xl">
       <PersonalNav />
       <PageHeader title={goalsCopy.pageTitle} description={goalsCopy.pageDescription} />
       <div className="mt-6">

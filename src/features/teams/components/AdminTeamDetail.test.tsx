@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { expectHeadingStructure, expectNamedControls } from "../../../components/ui/heading-structure";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -171,7 +172,7 @@ describe("AdminTeamDetail", () => {
     render(<AdminTeamDetail teamId="team-1" />);
 
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toMatch(/ikke tilgang/i);
+    expect(alert.textContent).toMatch(/Kunne ikke vise siden/);
     expect(alert.textContent).not.toMatch(/admin_emails|allow-?list|@/i);
   });
 
@@ -2037,10 +2038,10 @@ describe("AdminTeamDetail — member display names and team lead role", () => {
     expect(within(rowOf("plain@example.com")).queryByText("Teamlead")).toBeNull();
   });
 
-  it("states neutrally that the lead role grants no extra access yet, promising no capability", async () => {
+  it("describes the lead role as a per-member role, promising no capability", async () => {
     await renderWith([{ uid: "uid-1", email: "a@example.com", displayName: null, role: "member" }]);
 
-    expect(screen.getByText(/gir foreløpig ingen ekstra tilganger/i)).toBeTruthy();
+    expect(screen.getByText(/rolle som settes for hvert medlem/i)).toBeTruthy();
   });
 
   it("promotes a member with exactly role 'lead' and re-reads the authoritative list, which then shows the lead", async () => {
@@ -2327,5 +2328,41 @@ describe("AdminTeamDetail — Klargjør medlemsvelger (member-ref preparation)",
     const ref = "0123456789abcdefghjkmnpqrs";
     await renderWith([{ ...prepared, memberRef: ref }]);
     expect(document.body.innerHTML).not.toContain(ref);
+  });
+});
+
+describe("AdminTeamDetail scope marker and tabs (visual-redesign TASK-014)", () => {
+  it("shows the admin scope marker and no invented tab or link (BR-23)", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk();
+
+    render(<AdminTeamDetail teamId="team-1" />);
+    await screen.findByRole("heading", { name: "Platform" });
+
+    expect(screen.getAllByText("Administrasjon").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("tab", { name: /Medlemmer|Tilganger|Innstillinger/ })).toBeNull();
+    // The "Gå til Medlemmer" jump link is an existing in-page anchor to the members section, not a route or tab.
+    const jumpLinks = screen.queryAllByRole("link", { name: /Medlemmer|Tilganger|Innstillinger/ });
+    expect(jumpLinks.length).toBeGreaterThan(0);
+    for (const link of jumpLinks) {
+      expect(link.getAttribute("href")?.startsWith("#")).toBe(true);
+    }
+  });
+});
+
+describe("admin team detail heading structure (visual-redesign TASK-019)", () => {
+  beforeEach(() => {
+    // Earlier tests in this file leave their renders in the DOM; start this structure check from a clean document.
+    cleanup();
+  });
+
+  it("has one level-1 team heading and a valid hierarchy for the admin detail", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    mockOk();
+
+    render(<AdminTeamDetail teamId="team-1" />);
+    await screen.findByRole("heading", { level: 1, name: "Platform" });
+    expectHeadingStructure(document.body, { ownsPageTitle: true });
+    expectNamedControls(document.body);
   });
 });

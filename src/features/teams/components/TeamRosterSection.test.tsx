@@ -5,6 +5,14 @@ import userEvent from "@testing-library/user-event";
 
 const fetchTeamRosterMock = vi.fn();
 
+/** Visible text of a roster row: the decorative aria-hidden initials are excluded. */
+function visibleText(item: Element): string {
+  return Array.from(item.children)
+    .filter((child) => child.getAttribute("aria-hidden") !== "true")
+    .map((child) => child.textContent)
+    .join("");
+}
+
 vi.mock("../client/team-roster-gateway", () => ({
   fetchTeamRoster: fetchTeamRosterMock,
 }));
@@ -97,7 +105,7 @@ describe("TeamRosterSection — content", () => {
     await openRoster();
 
     const list = await screen.findByRole("list", { name: "Medlemmer i teamet" });
-    expect(within(list).getAllByRole("listitem").map((item) => item.textContent)).toEqual(["Anna Berg", "Medlem uten navn"]);
+    expect(within(list).getAllByRole("listitem").map((item) => visibleText(item))).toEqual(["Anna Berg", "Medlem uten navn"]);
   });
 
   it("marks a lead and the caller themselves with visible text — and only those", async () => {
@@ -110,9 +118,9 @@ describe("TeamRosterSection — content", () => {
     await openRoster();
 
     const items = within(await screen.findByRole("list")).getAllByRole("listitem");
-    expect(items[0].textContent).toBe("LeaTeamlead");
-    expect(items[1].textContent).toBe("PerDeg");
-    expect(items[2].textContent).toBe("Ola");
+    expect(visibleText(items[0])).toBe("LeaTeamlead");
+    expect(visibleText(items[1])).toBe("PerDeg");
+    expect(visibleText(items[2])).toBe("Ola");
   });
 
   it("lets one member be both lead and self", async () => {
@@ -257,5 +265,19 @@ describe("TeamRosterSection — safety", () => {
     expect(document.body.textContent).not.toMatch(/@|uid|__/i);
     expect(fetchTeamRosterMock).toHaveBeenCalledTimes(1);
     expect(fetchTeamRosterMock.mock.calls[0]).toEqual(["a-token", "team-1"]);
+  });
+});
+
+describe("TeamRosterSection initials (visual-redesign TASK-008)", () => {
+  it("shows an aria-hidden initials avatar beside each name, with no image element", async () => {
+    ok([{ displayName: "Anna Berg", isLead: false, isSelf: false }]);
+    const { container } = render(<TeamRosterSection teamId="team-1" token="a-token" />);
+    await userEvent.setup().click(toggle());
+
+    const list = await screen.findByRole("list", { name: /medlemmer i teamet/i });
+    expect(within(list).getByText("Anna Berg")).toBeTruthy();
+    const initials = within(list).getByText("AB");
+    expect(initials.getAttribute("aria-hidden")).toBe("true");
+    expect(container.querySelector("img")).toBeNull();
   });
 });

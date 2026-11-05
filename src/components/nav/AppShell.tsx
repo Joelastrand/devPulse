@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Menu } from "lucide-react";
+import { Building2,GraduationCap, House, Menu, MessagesSquare, Target, UserCog, Users } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { signOut } from "../../features/auth/client/auth-client";
@@ -13,6 +13,7 @@ import { Icon } from "../ui/Icon";
 import { BrandMark } from "../ui/BrandMark";
 import { SidebarLandscape } from "./SidebarLandscape";
 import { MobileDrawer } from "./MobileDrawer";
+import { AccountMenu } from "./AccountMenu";
 import { useTeamName } from "./TeamContext";
 import { navCopy } from "./copy";
 import { NavGroupList, type NavGroup } from "./NavGroupList";
@@ -157,12 +158,19 @@ export function AppShell({ children }: AppShellProps) {
                 {navCopy.brand}
               </Link>
               <nav aria-label={navCopy.mainNavLabel} className="flex flex-col gap-6">
-                <NavGroupList groups={groups} pathname={pathname} signOut={signOutAction} />
+                <NavGroupList groups={groups} pathname={pathname} />
               </nav>
             </div>
           </aside>
-          <div id={SKIP_LINK_TARGET_ID} tabIndex={-1} className="min-w-0 flex-1">
-            {children}
+          <div className="flex min-w-0 flex-1 flex-col">
+            {state.phase === "signed_in" ? (
+              <div className="flex items-center justify-end border-b border-border-subtle bg-surface px-4 py-3 md:px-6">
+                <AccountMenu pathname={pathname} signOut={signOutAction} />
+              </div>
+            ) : null}
+            <div id={SKIP_LINK_TARGET_ID} tabIndex={-1} className="min-w-0 flex-1">
+              {children}
+            </div>
           </div>
         </div>
       </div>
@@ -170,7 +178,6 @@ export function AppShell({ children }: AppShellProps) {
         <MobileDrawer
           groups={groups}
           pathname={pathname}
-          signOut={signOutAction}
           onNavigate={() => {
             headingAfterNavigationRef.current = true;
             setMenuOpen(false);
@@ -188,15 +195,21 @@ export function AppShell({ children }: AppShellProps) {
 function navGroupsFor(state: HeaderState, teamName: string | null): NavGroup[] {
   if (state.phase === "signed_in") {
     const groups: NavGroup[] = [
-      { key: "overview", items: [{ href: "/", label: navCopy.home }] },
-      { key: "team", heading: teamName ?? undefined, items: [{ href: "/teams", label: navCopy.teams }] },
+      {
+        key: "workspace",
+        context: teamName ?? undefined,
+        items: [
+          { href: "/", label: navCopy.home, icon: House },
+          { href: "/teams", label: navCopy.teams, icon: Users },
+        ],
+      },
       {
         key: "personal",
         heading: navCopy.personalDevelopment,
         items: [
-          { href: "/me/skills", label: navCopy.personalSkills },
-          { href: "/me/goals", label: navCopy.personalGoals },
-          { href: "/me/conversations", label: navCopy.personalConversations },
+          { href: "/me/skills", label: navCopy.personalSkills, icon: GraduationCap },
+          { href: "/me/goals", label: navCopy.personalGoals, icon: Target },
+          { href: "/me/conversations", label: navCopy.personalConversations, icon: MessagesSquare },
         ],
       },
     ];
@@ -204,11 +217,15 @@ function navGroupsFor(state: HeaderState, teamName: string | null): NavGroup[] {
       groups.push({
         key: "admin",
         heading: navCopy.administration,
-        items: [{ href: "/admin/teams", label: navCopy.admin }],
+        items: [
+          { href: "/admin/teams", label: navCopy.adminTeams, icon: Building2 },
+          { href: "/admin/roles", label: navCopy.roles, icon: UserCog },
+        ],
       });
     }
     groups.push({
-      key: "user",
+      key: "account",
+      heading: navCopy.account,
       items: [
         { href: "/me/profile", label: navCopy.profile },
         { href: "/me/erasure", label: navCopy.deleteAccount },

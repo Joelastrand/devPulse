@@ -25,7 +25,7 @@ import {
 import { RoadmapFilterBar } from "./RoadmapFilterBar";
 import type { RoadmapEditing } from "./RoadmapPlanCard";
 import { RoadmapListView } from "./RoadmapListView";
-import { RoadmapGantt } from "./RoadmapGantt";
+import { RoadmapBoard, useWideRoadmapBoard } from "./RoadmapBoard";
 import { RoadmapTimelineView } from "./RoadmapTimelineView";
 import { RoadmapUnplannedAreas } from "./RoadmapUnplannedAreas";
 import { RoadmapViewSwitch } from "./RoadmapViewSwitch";
@@ -115,6 +115,7 @@ function RoadmapContent({ token, teamId }: { token: string; teamId: string }) {
   // Transient page-level presentation state (SPEC BR-14, BR-16): never persisted, never in the URL.
   const [filter, setFilter] = useState<RoadmapFilter>(DEFAULT_ROADMAP_FILTER);
   const [completedExpanded, setCompletedExpanded] = useState(false);
+  const wideBoard = useWideRoadmapBoard();
   // The only URL state: `?view=timeline` (SPEC BR-13).
   const { view, setView } = useRoadmapView();
   const { page } = roadmapCopy;
@@ -234,19 +235,22 @@ function RoadmapContent({ token, teamId }: { token: string; teamId: string }) {
             )
           ) : view === "timeline" ? (
             <>
-              <section aria-labelledby="roadmap-gantt-heading" className="hidden flex-col gap-3 md:flex">
-                <p id="roadmap-gantt-heading" className="text-section-title font-semibold text-text-primary">
-                  {roadmapCopy.timeline.ganttHeading}
-                </p>
-                <p className="text-body-secondary text-text-secondary">{roadmapCopy.timeline.ganttDescription}</p>
-                <RoadmapGantt items={visible} />
-              </section>
-              <RoadmapTimelineView
-                items={visible}
-                editing={editing}
-                completedExpanded={completedExpanded}
-                onToggleCompleted={() => setCompletedExpanded((expanded) => !expanded)}
-              />
+              {wideBoard ? (
+                <section aria-labelledby="roadmap-board-section-heading" className="flex flex-col gap-3">
+                  <p id="roadmap-board-section-heading" className="text-section-title font-semibold text-text-primary">
+                    {roadmapCopy.timeline.ganttHeading}
+                  </p>
+                  <p className="text-body-secondary text-text-secondary">{roadmapCopy.board.description}</p>
+                  <RoadmapBoard items={visible} editing={editing} />
+                </section>
+              ) : (
+                <RoadmapTimelineView
+                  items={visible}
+                  editing={editing}
+                  completedExpanded={completedExpanded}
+                  onToggleCompleted={() => setCompletedExpanded((expanded) => !expanded)}
+                />
+              )}
             </>
           ) : (
             <RoadmapListView

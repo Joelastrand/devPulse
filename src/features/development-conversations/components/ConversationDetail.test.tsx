@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { expectHeadingStructure } from "../../../components/ui/heading-structure";
 import { conversationsCopy } from "../copy";
 import type {
   FetchConversationResult,
@@ -760,5 +761,40 @@ describe("ConversationDetail: owner lifecycle controls (SPEC BR-5, BR-28, BR-29,
     await waitFor(() => expect(routerReplaceMock).toHaveBeenCalledWith("/me/conversations"));
     expect(deleteConversationMock).toHaveBeenCalledTimes(1);
     expect(deleteConversationMock).toHaveBeenCalledWith("a-token", CONVERSATION_ID);
+  });
+});
+
+describe("ConversationDetail: no chat-like controls (visual-redesign TASK-013)", () => {
+  it("the owner view has no composer, attachment, emoji, message bubble or read receipt, and keeps its save actions", async () => {
+    await renderOwner();
+
+    expect(document.querySelector('input[type="file"]')).toBeNull();
+    expect(screen.queryByRole("button", { name: /vedlegg|attach|emoji|send melding|send/i })).toBeNull();
+    expect(screen.queryByRole("log")).toBeNull();
+    expect(document.querySelector('[class*="bubble"], [role="message"]')).toBeNull();
+    expect(document.body.textContent ?? "").not.toMatch(/emoji|vedlegg|lest av|leste|read receipt/i);
+    expect(screen.getByRole("button", { name: conversationsCopy.saveTitle })).toBeTruthy();
+    expect(screen.getByRole("tablist", { name: conversationsCopy.sectionTabs.label })).toBeTruthy();
+  });
+});
+
+describe("ConversationDetail participant view: no chat-like controls (visual-redesign TASK-013)", () => {
+  it("has no composer, attachment, emoji, message bubble or read receipt, and keeps its own notes save action", async () => {
+    signedInWith(participantView(participant()));
+    render(<ConversationDetail conversationId={CONVERSATION_ID} />);
+    await screen.findByRole("heading", { level: 2, name: conversationsCopy.ownerNotesSection });
+
+    expect(document.querySelector('input[type="file"]')).toBeNull();
+    expect(screen.queryByRole("button", { name: /vedlegg|attach|emoji|send melding|send/i })).toBeNull();
+    expect(screen.queryByRole("log")).toBeNull();
+    expect(document.querySelector('[class*="bubble"], [role="message"]')).toBeNull();
+    expect(document.body.textContent ?? "").not.toMatch(/emoji|vedlegg|lest av|leste|read receipt/i);
+  });
+});
+
+describe("conversation detail heading structure (visual-redesign TASK-019)", () => {
+  it("keeps a valid heading hierarchy for the owner detail with its section tabs", async () => {
+    await renderOwner();
+    expectHeadingStructure(document.body, { ownsPageTitle: false });
   });
 });

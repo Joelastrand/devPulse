@@ -13,6 +13,11 @@ export const goalsCopy = {
   createButton: "Opprett mål",
   createHeading: "Nytt mål",
   activeHeading: "Aktive mål",
+  /** Visual-redesign TASK-011: summary tiles, status tabs and the linked-area panel. */
+  tabs: { label: "Filtrer mål", active: "Aktive", completed: "Fullførte", all: "Alle" },
+  noCompletedGoals: "Du har ingen fullførte mål ennå.",
+  linkedAreasHeading: "Knyttet til kompetanseområder",
+  linkedAreasEmpty: "Ingen mål er knyttet til et kompetanseområde ennå.",
   noActiveGoals: "Du har ingen aktive mål.",
   completedSummary: (count: number) => `Fullførte mål (${count})`,
   statusActive: "Aktivt",

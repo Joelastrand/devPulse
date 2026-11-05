@@ -1,128 +1,164 @@
-import Link from "next/link";
-import { ArrowRight, ChevronRight, Layers, MessageSquare, Target, UserRound, Users, Zap } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { Card } from "../../../components/ui/Card";
-import { Icon } from "../../../components/ui/Icon";
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
 import { PageShell } from "../../../components/ui/PageShell";
-import { Section } from "../../../components/ui/Section";
-import { TeamsOverview } from "../../teams/components/TeamsOverview";
+import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
+import { fetchGoals } from "../../personal-goals/client/goals-gateway";
+import type { GoalDto } from "../../personal-goals/domain/goal";
+import { fetchConversationList, type OwnerSummaryWire } from "../../development-conversations/client/conversations-gateway";
+import { fetchOwnRoleTarget, type RoleTargetView } from "../../role-profiles/client/role-target-gateway";
+import { fetchOwnProfile } from "../../profiles/client/profile-gateway";
+import { fetchTeamResults, type SurveyResultSummary } from "../../results/client/team-results-gateway";
+import { fetchTeamsOverview } from "../../teams/client/teams-overview-gateway";
+import type { TeamOverviewEntry } from "../../teams/client/teams-overview-gateway";
 import { authenticatedHomeCopy } from "../copy";
+import {
+  firstMemberTeamId,
+  GoalsPanel,
+  NextConversationPanel,
+  NextStepsPanel,
+  QuickLinks,
+  Read,
+  RolePanel,
+  TeamDevelopmentPanel,
+  TeamEntryTile,
+  TeamPulseTile,
+  TeamsSection,
+} from "./HomePanels";
 
-interface ShortcutLink {
-  label: string;
-  description: string;
-  href: string;
-  icon: LucideIcon;
-}
+const copy = authenticatedHomeCopy;
 
-const SHORTCUTS: readonly ShortcutLink[] = [
-  { ...authenticatedHomeCopy.links.teams, icon: Users },
-  { ...authenticatedHomeCopy.links.skills, icon: Layers },
-  { ...authenticatedHomeCopy.links.goals, icon: Target },
-  { ...authenticatedHomeCopy.links.conversations, icon: MessageSquare },
-];
-
-const NEXT_STEPS: readonly ShortcutLink[] = [
-  { ...authenticatedHomeCopy.nextSteps.teamNeeds, icon: Layers },
-  { ...authenticatedHomeCopy.nextSteps.conversation, icon: MessageSquare },
-  { ...authenticatedHomeCopy.nextSteps.roles, icon: UserRound },
-];
+const LOADING: { phase: "loading" } = { phase: "loading" };
 
 /**
- * Landscape band for the greeting. Original shapes in the brand greens,
- * decorative only.
- */
-function GreetingLandscape() {
-  return (
-    <svg
-      viewBox="0 0 640 200"
-      preserveAspectRatio="xMaxYMax slice"
-      aria-hidden="true"
-      focusable="false"
-      className="pointer-events-none absolute inset-y-0 right-0 h-full w-full md:w-3/5"
-    >
-      <path d="M0 120 C 120 70, 220 130, 330 96 S 520 60, 640 88 V200 H0 Z" className="fill-brand-100" />
-      <path d="M0 150 C 140 118, 260 166, 380 140 S 560 118, 640 132 V200 H0 Z" className="fill-brand-200" />
-      <g className="fill-brand-700">
-        <path d="M520 200 L548 124 L576 200 Z" />
-        <path d="M556 200 L584 110 L612 200 Z" />
-        <path d="M596 200 L620 142 L640 200 Z" />
-      </g>
-    </svg>
-  );
-}
-
-/**
- * Authenticated home (docs/design/references/03-app-home.png). Rendered only
- * inside `AppShell` after the client has a signed-in token. Every link goes to
- * an existing route. The team list comes from the existing `TeamsOverview`,
- * which keeps its own auth and privacy handling. No metric or personal data is
- * computed here.
+ * Authenticated home (docs/design/references/03-app-home.png, visual-redesign
+ * SPEC BR-12). Rendered only inside `AppShell` after the client has a signed-in
+ * token. Every value comes from an existing read the viewer may already make.
+ * Each section loads and fails on its own, so one failed read never hides
+ * another panel. No new endpoint or field is added.
  */
 export function AuthenticatedHome() {
+  const [displayName, setDisplayName] = useState<Read<string | null>>(LOADING);
+  const [goals, setGoals] = useState<Read<GoalDto[]>>(LOADING);
+  const [conversations, setConversations] = useState<Read<OwnerSummaryWire[]>>(LOADING);
+  const [role, setRole] = useState<Read<RoleTargetView>>(LOADING);
+  const [teams, setTeams] = useState<Read<TeamOverviewEntry[]>>(LOADING);
+  const [teamResults, setTeamResults] = useState<Read<SurveyResultSummary[]>>(LOADING);
+  // Re-runs the teams read for the current auth generation; set by the auth callback below.
+  const refreshTeamsRef = useRef<(() => void) | null>(null);
+  const handleTeamsChanged = useCallback(() => refreshTeamsRef.current?.(), []);
+  const teamId = teams.phase === "ok" ? firstMemberTeamId(teams.value) : null;
+  // The team id the panel should show now. A response for any other team is dropped (see below).
+  const currentTeamIdRef = useRef<string | null>(teamId);
+  useEffect(() => {
+    currentTeamIdRef.current = teamId;
+  }, [teamId]);
+
+  useAuthGatedResource((token, generation, isCurrentGeneration) => {
+    if (token === null) {
+      refreshTeamsRef.current = null;
+      return;
+    }
+    setDisplayName(LOADING);
+    setGoals(LOADING);
+    setConversations(LOADING);
+    setRole(LOADING);
+    setTeams(LOADING);
+
+    void fetchOwnProfile(token).then((result) => {
+      if (!isCurrentGeneration(generation)) return;
+      setDisplayName(result.status === "ok" ? { phase: "ok", value: result.displayName } : { phase: "error" });
+    }, () => {
+      if (isCurrentGeneration(generation)) setDisplayName({ phase: "error" });
+    });
+    void fetchGoals(token).then((result) => {
+      if (!isCurrentGeneration(generation)) return;
+      setGoals(result.status === "ok" ? { phase: "ok", value: result.response.goals } : { phase: "error" });
+    }, () => {
+      if (isCurrentGeneration(generation)) setGoals({ phase: "error" });
+    });
+    void fetchConversationList(token).then((result) => {
+      if (!isCurrentGeneration(generation)) return;
+      if (result.status !== "ok") {
+        setConversations({ phase: "error" });
+        return;
+      }
+      const owned = result.response.owned.items.flatMap((item) => (item.kind === "summary" ? [item.conversation] : []));
+      setConversations({ phase: "ok", value: owned });
+    }, () => {
+      if (isCurrentGeneration(generation)) setConversations({ phase: "error" });
+    });
+    void fetchOwnRoleTarget(token).then((result) => {
+      if (!isCurrentGeneration(generation)) return;
+      setRole(result.status === "ok" ? { phase: "ok", value: result.view } : { phase: "error" });
+    }, () => {
+      if (isCurrentGeneration(generation)) setRole({ phase: "error" });
+    });
+    // Shared by the initial load and the post-request-access refresh; neither adds a read beyond this one.
+    const loadTeams = () => {
+      void fetchTeamsOverview(token).then((result) => {
+        if (!isCurrentGeneration(generation)) return;
+        setTeams(result.status === "ok" ? { phase: "ok", value: result.teams } : { phase: "error" });
+      }, () => {
+        if (isCurrentGeneration(generation)) setTeams({ phase: "error" });
+      });
+    };
+    refreshTeamsRef.current = loadTeams;
+    loadTeams();
+  });
+
+  // The team results read is the one the team development chart and the pulse card share.
+  // It runs once per team id; it is not a new read.
+  useAuthGatedResource(
+    (token, generation, isCurrentGeneration) => {
+      if (token === null || teamId === null) {
+        setTeamResults({ phase: "ok", value: [] });
+        return;
+      }
+      setTeamResults(LOADING);
+      void fetchTeamResults(token, teamId).then((result) => {
+        // Apply only if this auth generation is still current and the viewer's team is still the one requested.
+        if (!isCurrentGeneration(generation) || currentTeamIdRef.current !== teamId) return;
+        setTeamResults(result.status === "ok" ? { phase: "ok", value: result.results } : { phase: "error" });
+      }, () => {
+        if (isCurrentGeneration(generation) && currentTeamIdRef.current === teamId) setTeamResults({ phase: "error" });
+      });
+    },
+    [teamId],
+  );
+
+  const greetingName = displayName.phase === "ok" && displayName.value ? displayName.value : null;
+
   return (
     <PageShell width="wide">
-      <section className="relative overflow-hidden rounded-surface border border-border-subtle bg-surface px-6 py-8 shadow-card md:px-8 md:py-10">
-        <GreetingLandscape />
-        <div className="relative flex max-w-xl flex-col gap-2">
-          <h1 className="text-metric font-semibold text-text-primary">{authenticatedHomeCopy.title}</h1>
-          <p className="text-body text-text-secondary">{authenticatedHomeCopy.description}</p>
+      <section className="rounded-surface border border-border-subtle bg-surface px-6 py-8 shadow-card md:px-8 md:py-10">
+        <div className="flex max-w-xl flex-col gap-2">
+          <h1 className="text-metric font-semibold text-text-primary">
+            {greetingName ? copy.greeting.withName(greetingName) : copy.title}
+          </h1>
+          <p className="text-body text-text-secondary">{copy.greeting.context}</p>
         </div>
       </section>
 
-      <nav aria-label={authenticatedHomeCopy.quickLinksLabel} className="mt-6">
-        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {SHORTCUTS.map((link) => (
-            <Card key={link.href} as="li" variant="bordered" padding="md" className="transition-shadow hover:shadow-elevated">
-              <Link href={link.href} className="flex h-full flex-col gap-4 rounded-control">
-                <div className="flex items-center justify-between">
-                  <span className="flex size-11 items-center justify-center rounded-control bg-primary-subtle text-primary">
-                    <Icon icon={link.icon} size="feature" />
-                  </span>
-                  <Icon icon={ArrowRight} size="inline" className="text-text-muted" />
-                </div>
-                <span className="flex flex-col gap-1">
-                  <span className="font-semibold text-text-primary">{link.label}</span>
-                  <span className="text-sm text-text-secondary">{link.description}</span>
-                </span>
-              </Link>
-            </Card>
-          ))}
-        </ul>
-      </nav>
+      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+        <TeamEntryTile read={teams} />
+        <TeamPulseTile teams={teams} teamId={teamId} results={teamResults} />
+      </div>
 
-      <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <Section title={authenticatedHomeCopy.teamsSectionTitle} description={authenticatedHomeCopy.teamsSectionDescription}>
-          <TeamsOverview />
-        </Section>
+      <div className="mt-6 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <GoalsPanel goals={goals} />
+        <NextConversationPanel conversations={conversations} />
+        <RolePanel role={role} />
+      </div>
 
-        <Card as="section" variant="bordered" padding="md" aria-labelledby="home-next-steps" className="flex flex-col gap-4 self-start">
-          <div className="flex items-center gap-3">
-            <span className="flex size-10 items-center justify-center rounded-control bg-primary-subtle text-primary">
-              <Icon icon={Zap} />
-            </span>
-            <h2 id="home-next-steps" className="text-section-title font-semibold text-text-primary">
-              {authenticatedHomeCopy.nextStepsTitle}
-            </h2>
-          </div>
-          <ul className="flex flex-col gap-2">
-            {NEXT_STEPS.map((step) => (
-              <li key={step.href}>
-                <Link
-                  href={step.href}
-                  className="flex items-center gap-3 rounded-control border border-border-subtle bg-surface-subtle px-3 py-3 hover:bg-surface"
-                >
-                  <Icon icon={step.icon} className="shrink-0 text-primary" />
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="text-sm font-medium text-text-primary">{step.label}</span>
-                    <span className="text-help text-text-muted">{step.description}</span>
-                  </span>
-                  <Icon icon={ChevronRight} size="inline" className="shrink-0 text-text-muted" />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </Card>
+      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <TeamDevelopmentPanel teams={teams} teamId={teamId} results={teamResults} />
+        <NextStepsPanel />
+      </div>
+
+      <div className="mt-8 flex flex-col gap-8">
+        <QuickLinks />
+        <TeamsSection teams={teams} onTeamsChanged={handleTeamsChanged} />
       </div>
     </PageShell>
   );

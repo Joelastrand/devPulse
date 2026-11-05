@@ -9,6 +9,15 @@ import type { SelfAssessedLevel } from "./domain/self-assessed-level";
  * elsewhere (BR-5). The privacy notice was amended by team-skill-needs-and-matrix BR-29 (TASK-011).
  */
 export const skillProfileCopy = {
+  /** Up to three links to existing pages (visual-redesign BR-18). */
+  nextSteps: {
+    heading: "Neste steg",
+    items: [
+      { title: "Se kompetansebehovet i teamet", description: "Vurder hvilke områder teamet bør styrke.", href: "/teams" },
+      { title: "Planlegg neste utviklingssamtale", description: "Sett agenda og felles fokus i samtalene dine.", href: "/me/conversations" },
+      { title: "Gå til profilen din", description: "Profilen din og kontoinnstillinger.", href: "/me/profile" },
+    ],
+  },
   pageTitle: "Mine ferdigheter",
   pageDescription: "Din egen vurdering av hva du kan, som støtte for din egen utvikling.",
   privacyNotice:

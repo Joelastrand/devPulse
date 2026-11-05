@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { expectMainLandmark, expectNamedControls } from "../../../../src/components/ui/heading-structure";
+import { cleanup } from "@testing-library/react";
 import { render } from "@testing-library/react";
 import type { ReactElement } from "react";
 
@@ -54,5 +56,19 @@ describe("TeamDetailPage — Forum feature flag (FEATURE_FORUM_ENABLED)", () => 
       teamId: "team-1",
       forumEnabled: true,
     });
+  });
+});
+
+describe("route structure (visual-redesign TASK-019)", () => {
+  beforeEach(() => {
+    // Earlier tests in this file leave their renders in the DOM; the structure check starts from a clean document.
+    cleanup();
+  });
+
+  it("renders one main landmark; the page title is checked in the composed view's suite", async () => {
+    render(await TeamDetailPage({ params: paramsOf("team-1") }));
+    expectMainLandmark(document.body);
+    expectNamedControls(document.body);
+    // The page title is owned by the composed client view; its heading structure is checked in that view's suite.
   });
 });

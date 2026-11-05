@@ -57,21 +57,20 @@ export function ResultsSummaryStrip({ results }: { results: readonly SurveyResul
   const comparable = previous?.status === "published" ? previous : undefined;
 
   return (
-    <dl className="flex flex-col gap-3 rounded-control border border-border-subtle bg-surface px-4 py-3">
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
+    // The dl's direct children are the term groups (div > dt + dd): the grid is on the dl itself, not on a wrapper div.
+    <dl className="grid gap-3 rounded-control border border-border-subtle bg-surface px-4 py-3 sm:grid-cols-3">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-1 sm:col-span-3">
         <dt className="text-text-muted">{copy.latest}</dt>
         <dd className="text-text-primary">{formatSurveyDate(new Date(latest.date))}</dd>
       </div>
-      <div className="grid gap-3 sm:grid-cols-3">
-        {DIMENSIONS.map((dimension) => (
-          <DimensionMetric
-            key={dimension}
-            dimension={dimension}
-            latest={latest.mean}
-            previous={comparable?.mean}
-          />
-        ))}
-      </div>
+      {DIMENSIONS.map((dimension) => (
+        <DimensionMetric
+          key={dimension}
+          dimension={dimension}
+          latest={latest.mean}
+          previous={comparable?.mean}
+        />
+      ))}
     </dl>
   );
 }

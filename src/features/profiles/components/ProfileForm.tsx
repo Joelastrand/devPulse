@@ -180,7 +180,7 @@ export function ProfileForm() {
         )}
       </p>
 
-      <form className="flex flex-col gap-4" onSubmit={(event) => handleSave(event, token, generation)} noValidate>
+      <form id="profile-form" className="flex flex-col gap-4" onSubmit={(event) => handleSave(event, token, generation)} noValidate>
         <TextField
           id="display-name"
           label={profileCopy.fieldLabel}

@@ -1,335 +1,285 @@
 ---
-description: |
-  Autonomously implement an already planned and task-split DevPulse
-  feature from SPEC.md and TASKS.md with minimal user interaction.
-  Orchestrates one task at a time using implement-task-for-feature
-  semantics, independently reviews each task using
-  review-task-for-feature semantics, remediates review findings,
-  checkpoints durable repository state, and finishes with feature-level
-  verification and security review when relevant. Use only after
-  plan-feature and split-tasks have produced an approved,
-  implementation-ready feature. Stop for material human decisions;
-  otherwise continue autonomously until complete or safely blocked.
 name: implement-feature
+description: >
+  Autonomously implement one approved, task-split DevPulse feature from
+  docs/features/<feature-id>/SPEC.md and TASKS.md. Orchestrate one task at a
+  time through implementation, independent review, automatic remediation,
+  durable checkpoints, feature-level verification, and security review where
+  applicable. Continue after passing subordinate skills; stop only for a
+  genuine blocker, an exhausted bounded retry, or an execution limit.
 ---
 
 # implement-feature
 
-Implement one approved, task-split feature end-to-end with minimal user
-interaction.
+Implement **one approved, task-split feature** end-to-end with minimal user interaction. This is the **parent orchestration workflow**. The repository, not the conversation, is the durable source of truth.
 
-This is an orchestration workflow. It does not weaken the boundaries of
-`implement-task-for-feature` or `review-task-for-feature`: exactly one
-task is implemented and reviewed at a time, and repository files remain
-the durable source of truth.
+## 1. Non-negotiable orchestration contract
 
-## Goal
+**A subordinate skill returning is not the end of this feature run.** `implement-task-for-feature`, `review-task-for-feature`, and `security-review` produce intermediate results for this parent workflow. After each subordinate result, **resume this orchestration loop in the same turn whenever execution remains available**.
 
-After the user has completed planning and task splitting, continue
-independently through ordinary implementation decisions until:
+Do not issue a terminal feature-level report while an eligible task remains, unless an explicit stop condition applies. Do not ask the user whether to continue after an ordinary implementation, a passing review, or a remediable defect. Do not invoke another feature.
 
--   all feature tasks are implemented and independently reviewed;
--   feature-level verification passes;
--   required durable documentation is synchronized;
--   a focused feature-level security/privacy review has passed when the
-    feature warrants one;
+The parent must interpret results as follows:
 
-or until a material decision/blocker genuinely requires the user.
+| Result | Parent action |
+|---|---|
+| `IMPLEMENTED` | Independently review the same task. |
+| `PASS` | Finalize task checkpoint; select the next eligible task. |
+| `PASS_WITH_SUGGESTIONS` | Record material nonblocking suggestions if useful; finalize task checkpoint; select the next eligible task. |
+| `CHANGES_REQUIRED` | Remediate Blocking/Important findings in the same task; rerun affected checks and independent review, within retry limits. |
+| `REVIEW_BLOCKED` | Attempt once to recover missing review evidence; if unresolved, stop with a precise blocker. |
+| `BLOCKED` | Stop only when the stated blocker meets the human-decision or safety rules below; otherwise resolve it within the approved contract and continue. |
+| `FAILED` | Make at most one focused technical retry if the cause is clear and within scope; otherwise stop. |
 
-## Preconditions
+A reviewer's `NEXT: continue` means **the parent continues**, not that the assistant should stop and ask the user to run the next command. The review skill may be prohibited from editing code; **the parent is still responsible for invoking implementation/remediation after that review**.
 
-Identify `<feature-id>` and read:
+A task is **not accepted** until its independent review returns `PASS` or `PASS_WITH_SUGGESTIONS`. An implementation skill marking a task `Done` early is provisional and must be corrected if review fails. Do not select the next task while the current task has unresolved Blocking/Important findings.
 
--   `docs/features/<feature-id>/SPEC.md`
--   `docs/features/<feature-id>/TASKS.md`
--   repository instructions and the documentation map if one exists
+If the tool or skill runner genuinely ends control after a subordinate invocation, do not pretend the loop continued. Persist an accurate checkpoint and provide the smallest possible resume instruction. This skill cannot override platform execution limits.
 
-Before coding, require:
+## 2. Scope, prerequisites, and sources of truth
 
--   the spec is approved/implementation-ready;
--   behavioral requirements have stable `BR-*` IDs;
--   no material open question blocks implementation;
--   TASKS.md exists and maps the in-scope requirements;
--   zero or one task is `In Progress`;
--   task dependencies are coherent.
+Identify exactly one `<feature-id>`. Read:
 
-If these conditions are not met, stop. Do not silently plan, rescope, or
-regenerate tasks.
+- `docs/features/<feature-id>/SPEC.md` (approved feature contract)
+- `docs/features/<feature-id>/TASKS.md` (task dependencies and progress)
+- Repository instructions (`CLAUDE.md` and any relevant local instructions)
+- Relevant sections of `docs/PRODUCT.md`, `docs/ARCHITECTURE.md`, `docs/SECURITY.md`, and `docs/DATA-MODEL.md`
+- Relevant implementation/review skill instructions when invoking them
 
-## Autonomy policy
+Before modifying product code, verify:
 
-Proceed without asking the user about:
+1. The spec is approved and implementation-ready.
+2. In-scope behavioral requirements have stable `BR-*` identifiers.
+3. No material open decision blocks the work.
+4. `TASKS.md` exists and maps the requirements to implementable tasks.
+5. At most one task is `In Progress`.
+6. Task dependencies are coherent; completed tasks have review evidence or can be safely reconciled from repository evidence.
+7. The working-tree baseline is attributable enough to review the feature safely.
 
--   local implementation details;
--   naming/internal structure consistent with existing patterns;
--   which existing pattern to extend when one is clearly established;
--   test organization;
--   small refactors inside the current task;
--   ordinary error handling already implied by the spec/project rules.
+Do not silently regenerate the spec or task list, change approved scope, or rewrite historical decisions. If an already-approved feature is being resumed, **resume it**; do not restart planning.
 
-Stop and ask for a decision only when continuing would require one of:
+### Existing working-tree changes
 
--   changing approved user-visible behavior or scope;
--   choosing between materially different product behaviors;
--   introducing/changing an architecture contract not already implied by
-    project rules;
--   changing authorization, privacy, anonymity, retention, encryption,
-    or other security policy;
--   accepting a known material security/privacy risk;
--   destructive handling of ambiguous pre-existing user changes;
--   substantial unplanned work that means TASKS.md is no longer a
-    reliable plan;
--   an unresolved blocker that cannot be fixed within the current
-    approved contract.
+Inspect `git status` and relevant diffs. Preserve pre-existing user changes. Do not reset, stash, clean, overwrite, commit, push, or deploy without explicit authorization. A dirty working tree is **not automatically a blocker**: proceed if task changes can be safely attributed through a recorded baseline, file-level diffs, or other reliable evidence. Stop if attribution is genuinely ambiguous and destructive handling would be required.
 
-When stopping, state the smallest exact decision needed and where it
-should be recorded.
+## 3. Autonomy and decision boundaries
 
-## State and context discipline
+Proceed autonomously on ordinary implementation decisions: component structure, naming, layout within the approved visual specification, existing patterns, local refactors, tests, accessibility implementation, and error handling already implied by project rules.
 
-Treat repository state as external memory.
+**Stop for a human decision only when necessary to:**
 
-At the start of every task cycle, reload the relevant task state from
-SPEC.md and TASKS.md. Do not rely on remembered status from earlier
-conversation turns.
+- Change approved product behavior or material scope.
+- Choose between materially different user-visible behaviors not resolved by the spec.
+- Change an architecture contract or security/privacy policy.
+- Change authentication, authorization, anonymity, encryption, retention, or a trust boundary.
+- Accept a known material security/privacy risk.
+- Resolve a genuine conflict between approved authoritative requirements that cannot be satisfied together.
+- Handle ambiguous pre-existing changes destructively.
+- Expand work so substantially that `TASKS.md` is no longer a reliable plan.
+- Resolve a blocker that cannot be fixed inside the approved contract.
 
-Keep active context narrow:
+Do **not** stop merely because a task is difficult, a presentation test asserts an obsolete layout, a reviewer proposes a nonblocking improvement, or authenticated browser automation is unavailable when safe implementation can proceed.
 
--   current task and covered requirements;
--   directly relevant code/tests;
--   relevant architecture/security/data-model sections;
--   unresolved findings from the current task review.
+For an actual blocker, ask for the **smallest exact decision**, explain the conflicting requirements, recommend a safe option if appropriate, and identify where the decision should be recorded. Do not assume the user approved a policy change by requesting autonomous work.
 
-Do not carry old test output, old diffs, completed-task implementation
-details, or resolved review discussion forward unless they affect the
-next task.
+## 4. State model and checkpoint discipline
 
-After each completed task, TASKS.md and authoritative docs must contain
-everything a fresh session would need to continue.
+Use `SPEC.md` and `TASKS.md` as the authoritative durable state. At the beginning of each task cycle, reload the current task, dependencies, and relevant requirements. Do not rely solely on conversation memory.
 
-## Main loop
+Use the existing task status schema; do not invent conflicting statuses. If the task system marks `Done` immediately after implementation, treat it as **provisional until independent review passes**. On `CHANGES_REQUIRED`, reopen the same task or explicitly record `review pending/changes required` according to the task file's established conventions. Never report a failed review as accepted completion.
 
-Repeat until no unfinished task remains.
+After each passing review:
 
-### 1. Select exactly one task
+1. Verify the task is `Done` and the status counts are correct.
+2. Record review result and any material outstanding nonblocking suggestion.
+3. Record relevant files, tests, and decisions in the task's existing durable fields.
+4. Keep only notes needed by a fresh session; avoid verbose transcripts.
+5. Reload `TASKS.md` and immediately select the next eligible task.
 
-Selection order:
+For an interrupted run, leave a compact durable checkpoint (in `TASKS.md` or an existing feature checkpoint file) containing:
 
-1.  resume the single `In Progress` task;
-2.  otherwise choose the first unblocked `Ready` task whose dependencies
-    are `Done`.
+- Feature and task ID; current status.
+- Last passing review and remediation attempt count.
+- Exact next action.
+- Relevant changed files and verification results.
+- Any real blocker and its decision owner.
 
-Never have more than one task `In Progress`.
+Do not mark work verified when it was not verified. Do not create a second competing progress system unless the approved feature already requires one.
 
-### 2. Implement the task
+## 5. Main autonomous loop
 
-Execute the full `implement-task-for-feature` workflow for that task.
+**Repeat while execution is available and eligible work remains.**
 
-Expected result:
+### Step A — Select one task
 
--   `IMPLEMENTED` → continue to independent review;
--   `BLOCKED` → stop the feature run and report the required
-    decision/action;
--   `FAILED` → make at most one additional focused implementation
-    attempt when the failure has a clear technical cause inside the
-    approved task; otherwise stop.
+1. Resume the single `In Progress` task, including an unfinished review/remediation.
+2. Otherwise choose the first unblocked `Ready` task whose dependencies are `Done` and accepted.
+3. Never have more than one task `In Progress`.
+4. If no eligible task exists, determine whether all tasks are accepted or a genuine dependency/blocker remains. Do not claim success merely because no task is currently selectable.
 
-Do not start another task before the current task passes review.
+### Step B — Implement
 
-### 3. Independently review the task
+Invoke the complete `implement-task-for-feature` workflow for the selected task. The child implements **one task only**. Inspect its result and repository evidence.
 
-Execute the full `review-task-for-feature` workflow against the actual
-repository evidence.
+- `IMPLEMENTED`: go directly to Step C.
+- `FAILED`: retry once only if a focused, safe fix is clear; otherwise stop.
+- `BLOCKED`: evaluate against Section 3; resolve ordinary technical issues without a user decision where possible.
 
-Handle the gate:
+Use the reference images and visual acceptance criteria when the approved task concerns UI redesign. Passing tests alone never establishes visual fidelity. Implement real responsive components, not screenshot replicas or superficial token changes.
 
--   `PASS` → proceed;
--   `PASS_WITH_SUGGESTIONS` → record only suggestions that materially
-    help later feature work; otherwise proceed;
--   `REVIEW_BLOCKED` → try once to establish the missing diff/evidence
-    boundary; if still ambiguous, stop;
--   `CHANGES_REQUIRED` → remediate the same task.
+### Step C — Independently review
 
-### 4. Remediate review findings
+Invoke `review-task-for-feature` against the **actual task diff, relevant tests, and acceptance criteria**. Keep implementation and review logically independent; the review skill reports findings and does not silently fix them.
+
+- `PASS`: go to Step E.
+- `PASS_WITH_SUGGESTIONS`: record only material suggestions, then Step E. Suggestions are **not blockers**.
+- `CHANGES_REQUIRED`: go to Step D.
+- `REVIEW_BLOCKED`: attempt once to recover missing evidence; stop if unresolved.
+
+The parent **must not terminate** simply because the review skill has finished or printed its own final report.
+
+### Step D — Remediate the same task
 
 For `CHANGES_REQUIRED`:
 
-1.  reopen the same task logically; do not select another task;
-2.  fix only Blocking/Important findings within the approved task/spec;
-3.  rerun affected verification;
-4.  inspect the remediation diff;
-5.  rerun `review-task-for-feature`.
+1. Keep or reopen the **same** task; do not start another.
+2. Extract the review's Blocking and Important findings.
+3. If a finding needs a genuine product/security/architecture decision, stop and ask precisely for it.
+4. Otherwise invoke implementation/remediation to fix those findings within the approved contract.
+5. Add or update regression tests where appropriate.
+6. Run affected checks, inspect the remediation diff, and independently review again.
 
-Allow at most **two review-remediation cycles per task**. If
-Blocking/Important findings remain after that, stop and report them
-rather than entering an unbounded loop.
+Allow at most **two review-remediation cycles per task**. After the second unsuccessful cycle, stop with the unresolved findings; do not enter an unbounded loop. A new, user-resolved specification decision may authorize a fresh attempt, but do not silently reset the counter.
 
-If remediation requires a product/architecture/security-policy decision,
-stop immediately for that decision.
+A `PASS_WITH_SUGGESTIONS` result after remediation is accepted and proceeds to Step E. Do not spend another cycle fixing suggestions unless they expose an actual requirement violation.
 
-### 5. Checkpoint and continue
+### Step E — Checkpoint and immediately continue
 
-Once the task review passes:
+Finalize the passing task as described in Section 4. Then **return to Step A without asking for user approval or writing a terminal report**.
 
--   ensure TASKS.md accurately records the completed task and summary
-    counts;
--   preserve useful durable notes only when future tasks genuinely need
-    them;
--   discard conversational detail that is already represented by
-    repository state;
--   select the next task.
+After every three accepted tasks, or after a task with broad architectural/security impact, run a lightweight milestone gate:
 
-Every three completed tasks, or after a task with broad
-architectural/security impact, run a lightweight milestone gate:
+- Check task counts, dependencies, and BR coverage.
+- Run broader checks only where accumulated changes justify them.
+- Confirm no unresolved Blocking/Important task-review finding.
+- Continue immediately; this is a checkpoint, not a new approval ceremony.
 
--   inspect TASKS.md consistency and requirement coverage;
--   run broader repository checks if accumulated changes make them
-    useful;
--   confirm no known task-level Blocking/Important finding remains.
+## 6. UI redesign and visual verification rules
 
-This is a checkpoint, not a new planning/review ceremony.
+When a feature has approved visual references:
 
-## Feature completion gate
+- Inspect the actual references where image inspection is available; do not infer fidelity from filenames.
+- Treat layout, hierarchy, spacing, typography, card composition, and responsive behavior as implementation requirements.
+- Preserve actual data, authorization, privacy thresholds, and domain behavior; replace unsupported reference elements with truthful, polished alternatives.
+- Update presentation-only tests when an approved design intentionally changes presentation, while retaining behavioral, privacy, and accessibility assertions.
+- Do not let old DOM snapshots prevent legitimate redesign; preserve meaningful reading order and keyboard behavior.
+- Distinguish `implemented in code`, `tested`, and `visually verified`.
+- If authenticated browser access is unavailable, continue safe frontend implementation and record manual browser verification as pending. Never claim rendered visual fidelity without evidence.
+- Do not create authentication bypasses, weaken Firebase security, or seed an unverified project just to obtain screenshots.
 
-When all tasks are `Done`, do not immediately declare success.
+If the approved feature requires a separate visual-verification document, maintain it accurately. Missing browser evidence must not be silently converted into a pass; if a specific task explicitly requires that evidence as a hard acceptance gate, record a genuine verification blocker instead of fabricating evidence.
 
-### 1. Requirement coverage
+## 7. Feature completion gate
 
-Verify every in-scope `BR-*` in SPEC.md is covered by completed tasks
-and exists in the implemented behavior. Check the feature-level
-acceptance criteria against the actual repository state.
+Only after **every in-scope task has an accepted independent review**:
 
-### 2. Full repository verification
+### 7.1 Requirement and acceptance coverage
 
-Run the repository's actual relevant commands that exist, such as:
+Verify each in-scope `BR-*` is covered by accepted tasks and implemented behavior. Check feature-level acceptance criteria against actual repository evidence. Identify any acceptance criterion that still needs manual browser evidence.
 
--   tests
--   lint
--   typecheck
--   build
+### 7.2 Full repository verification
 
-Resolve feature-caused failures. Report unrelated pre-existing failures
-explicitly and determine whether they prevent reliable feature
-completion.
+Run the actual relevant commands available in the repository, typically:
 
-### 3. Feature-level diff review
+```bash
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm build
+```
 
-Inspect the aggregate feature change as far as the repository/git
-history permits. Check for:
+Resolve feature-caused failures. Distinguish unrelated pre-existing failures and skipped checks. Never report an unrun check as passing.
 
--   accidental/unrelated files;
--   requirement drift;
--   inconsistent behavior across tasks;
--   duplicated domain logic introduced by separate tasks;
--   stale debug code;
--   secrets/sensitive fixtures;
--   cross-feature coupling;
--   incomplete documentation;
--   task interactions that individual task reviews could not see.
+### 7.3 Aggregate diff review
 
-Fix unambiguous implementation defects inside the approved feature
-contract and rerun affected verification. Stop for material decisions.
+Inspect the feature-wide change set for accidental files, requirement drift, duplicated logic, stale debug code, secrets, inconsistent interactions, cross-feature coupling, accessibility regressions, and documentation gaps. Fix unambiguous defects inside scope and rerun affected checks. Do not overwrite unrelated user changes.
 
-### 4. Documentation synchronization
+### 7.4 Documentation synchronization
 
-Compare the implemented feature and its SPEC/TASKS state with
-authoritative durable project documentation.
+Update current-state docs affected by implementation. Preserve historical decisions as history. Do not introduce new product/security/data-model decisions during closeout. Ensure `SPEC.md`, `TASKS.md`, and any required verification file agree.
 
-Update stale current-state documentation caused by this feature.
-Preserve historical descriptions as historical. Do not invent new
-product, architecture, security, or data-model decisions during
-closeout.
+### 7.5 Security/privacy gate
 
-### 5. Security/privacy gate
+Invoke focused `security-review` when the feature affects authentication, authorization, team isolation, anonymous identity/correlation, sensitive surveys/free text, encryption, persistence, privacy thresholds, personal-data retention, sensitive logging, or abuse controls. Otherwise record why a dedicated security review is unnecessary.
 
-Run a focused feature-level `security-review` when any task or the
-resulting feature touches a meaningful security/privacy boundary,
-including:
+Remediate unambiguous in-scope findings. Stop for policy/design or accepted-risk decisions. Do not weaken the project's security rules to satisfy a visual reference.
 
--   authentication or authorization;
--   team/tenant isolation;
--   anonymous identity or correlation;
--   sensitive survey/wellbeing/free-text data;
--   encryption/key handling;
--   Firestore or other persistence access;
--   aggregation/privacy thresholds;
--   personal-data retention;
--   logging/error reporting of sensitive data;
--   abuse/rate limiting at a trust boundary.
+### 7.6 Honest completion classification
 
-For a feature with no meaningful security/privacy boundary, explicitly
-record that the dedicated security review was skipped and why.
+Report `COMPLETE` only when all implementation/review gates and required verification gates have passed. If all code tasks are accepted but manual visual checks remain, report **implementation complete; visual verification pending** rather than claiming the visual design is verified. If the approved spec makes manual visual verification a hard completion condition, do not label the feature fully complete until it occurs.
 
-If security review returns material unresolved findings, remediate only
-defects that fit the approved contract. Stop for policy/design decisions
-or accepted-risk decisions.
+## 8. Safety valves and execution limits
 
-## Safety valves
+Stop safely for:
 
-Stop the autonomous run rather than guessing when:
+- Multiple simultaneous `In Progress` tasks or inconsistent dependencies that cannot be reconciled from evidence.
+- An approved-spec conflict with authoritative security rules.
+- A required material product/architecture/security decision.
+- Unsafe or unattributable destructive handling of user changes.
+- A task plan that no longer covers the required work.
+- Missing evidence that prevents a required review after one recovery attempt.
+- Two unsuccessful remediation cycles for the same task.
+- A material unresolved security finding.
+- An actual tool, context, or execution limit.
 
--   multiple tasks are unexpectedly `In Progress`;
--   task dependencies or requirement references are inconsistent;
--   the approved spec conflicts with authoritative project security
-    rules;
--   a required behavior cannot be implemented without changing the spec;
--   task scope expands substantially beyond the task plan;
--   pre-existing working-tree changes make safe attribution impossible;
--   verification cannot establish confidence in feature correctness;
--   review remains `CHANGES_REQUIRED` after two remediation cycles;
--   a security review finds a material issue whose fix requires a
-    policy/design decision.
+For an execution limit, save the best possible checkpoint and give a precise resume command. Do not imply that the assistant will continue working in the background after the turn ends. Do not convert an ordinary passing review or suggestion into a blocker.
 
-Do not stop merely because an implementation choice is nontrivial. If it
-is an internal engineering choice with a clearly best fit under existing
-constraints, make it and continue.
+## 9. Efficiency
 
-## Efficiency rules
+- Use targeted tests during tasks; broader tests at milestones; full checks at completion.
+- Read relevant sections rather than repeatedly loading whole documents.
+- Keep intermediate commentary minimal and do not generate a final user-facing report after each child skill.
+- Prefer durable task updates to lengthy handoffs.
+- Maintain independent review; do not substitute self-asserted success for the reviewer gate.
+- Do not trade security, correctness, or visual acceptance for speed.
+- Do not commit, push, deploy, run migrations, or touch production data without authorization.
 
--   Do not rerun the full repository suite after every small task.
--   Use targeted tests during tasks, broader checks at meaningful
-    checkpoints, and a full relevant gate at feature completion.
--   Do not repeatedly reread whole documentation files when only a known
-    relevant section is needed.
--   Do not duplicate task-level review with a full security review.
--   Do not produce long narrative reports between tasks.
--   Prefer repository updates and compact handoffs over conversational
-    summaries.
--   Never trade correctness/security for token savings.
+## 10. Final report
 
-## Final report
+Report **once**, when complete or genuinely stopped. Do not use this template after an ordinary passing subordinate review.
 
-On success, report once:
+### On complete implementation
 
-``` text
+```text
 FEATURE: <feature-id>
-RESULT: COMPLETE
-
-TASKS: <n>/<n> Done
+RESULT: COMPLETE | IMPLEMENTATION_COMPLETE_VISUAL_VERIFICATION_PENDING
+TASKS: <accepted>/<total> accepted
 REQUIREMENTS: <coverage summary>
-REVIEWS: <task review summary>
-SECURITY: <PASS / PASS WITH RISKS / skipped with reason>
+REVIEWS: <PASS / PASS_WITH_SUGGESTIONS summary>
+SECURITY: <PASS / PASS_WITH_RISKS / skipped with reason>
 VERIFICATION:
-- <command>: <result>
-- ...
-
-DOCS: <updated paths or none>
+- <command>: <actual result>
+DOCS: <updated paths>
 FILES: <high-level changed areas>
-PREEXISTING/UNRELATED_FAILURES: <none or concise>
-REMAINING_RISKS/SUGGESTIONS: <none or concise>
+VISUAL_VERIFICATION: <evidence or precise pending routes>
+PREEXISTING_FAILURES: <none or concise>
+REMAINING_RISKS: <none or concise>
 ```
 
-On stop/blocker, report:
+### On genuine blocker or execution limit
 
-``` text
+```text
 FEATURE: <feature-id>
-RESULT: BLOCKED | FAILED
-PROGRESS: <done>/<total>; current <task-id>
-BLOCKER: <specific issue>
-DECISION/ACTION NEEDED: <smallest exact user decision/action>
-RECORD IN: <SPEC.md / TASKS.md / architecture/security doc / repository state>
-VERIFICATION SO FAR: <concise>
-SAFE RESUME: rerun implement-feature after the blocker is resolved
+RESULT: BLOCKED | FAILED | INTERRUPTED
+PROGRESS: <accepted>/<total>; current <task-id>
+LAST_REVIEW: <result and remediation count>
+BLOCKER: <specific factual issue or execution limit>
+DECISION/ACTION_NEEDED: <smallest exact action, if any>
+RECORD_IN: <durable file>
+VERIFICATION_SO_FAR: <concise>
+NEXT_ACTION: <exact next task/step>
+SAFE_RESUME: /implement-feature <feature-id>
 ```
 
-Do not begin another feature.
+**Never stop merely because `review-task-for-feature` returned `PASS`, `PASS_WITH_SUGGESTIONS`, or a remediable `CHANGES_REQUIRED`. Return control to this parent workflow and continue.**

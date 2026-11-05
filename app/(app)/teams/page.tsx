@@ -5,7 +5,7 @@ import { teamsCopy } from "../../../src/features/teams/copy";
 
 export default function TeamsPage() {
   return (
-    <PageShell width="3xl">
+    <PageShell width="wide">
       <PageHeader
         title={teamsCopy.overview.pageTitle}
         description={teamsCopy.overview.pageDescription}

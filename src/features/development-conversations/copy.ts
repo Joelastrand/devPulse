@@ -1,5 +1,18 @@
 /** Norwegian UI copy for the `/me/conversations` list (SPEC BR-33, BR-34, BR-38, BR-44, D2-SI-13). Labels are the SPEC's. */
 export const conversationsCopy = {
+  /** Visual-redesign TASK-013 (decision A): section tabs over the existing detail sections. */
+  sectionTabs: { label: "Seksjoner", overview: "Oversikt", notes: "Notater", followUp: "Oppfølging" },
+  /** Visual-redesign TASK-012: filter chips over the existing sections (domain statuses and the created/participating split). */
+  filters: {
+    label: "Filtrer samtaler",
+    all: "Alle",
+    open: "Åpne",
+    completed: "Fullførte",
+    mine: "Opprettet av meg",
+    participating: "Deltar i",
+  },
+  selectedPaneLabel: "Valgt samtale",
+  selectPrompt: "Velg en samtale i listen for å se den her.",
   pageTitle: "Samtaler",
   pageDescription: "Personlige utviklingssamtaler du har startet, eller som du er invitert til.",
   privacyNotice:

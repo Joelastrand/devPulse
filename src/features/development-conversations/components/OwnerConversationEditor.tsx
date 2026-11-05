@@ -1,8 +1,10 @@
 "use client";
 
+import { ConversationSectionTabs } from "./ConversationSectionTabs";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
+import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { TextArea } from "../../../components/ui/TextArea";
 import { TextField } from "../../../components/ui/TextField";
 import type { OwnerConversationWire } from "../client/conversations-gateway";
@@ -38,40 +40,83 @@ export function OwnerConversationEditor({ conversation, token, onUnauthenticated
   const context: OwnerWriteContext = { token, conversationId: conversation.conversationId, onUnauthenticated, onChanged };
 
   return (
-    <div className="flex flex-col gap-10">
+    <div className="flex flex-col gap-6">
       <p className="text-sm text-zinc-700 dark:text-zinc-300">{conversationsCopy.detailPrivacy}</p>
+      {/* Header facts from the owner read already in hand (SPEC 10 criterion; BR-23): status, start date and participant. */}
+      <div className="flex min-w-0 flex-col gap-2 text-sm text-text-muted">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <StatusBadge>{conversationsCopy.statusLabel[conversation.status]}</StatusBadge>
+          {conversation.plannedFor !== null && (
+            <span className="min-w-0 break-words">
+              {conversationsCopy.plannedForLabel}: {conversation.plannedFor}
+            </span>
+          )}
+        </div>
+        <p className="min-w-0 break-words">
+          {conversationsCopy.participantStateLabel[conversation.participant.state]}
+          {conversation.participant.state !== "none" && (
+            <> · {conversation.participant.displayName ?? conversationsCopy.anonymousColleague}</>
+          )}
+        </p>
+      </div>
       {completed && <Alert variant="info">{conversationsCopy.detailCompleted}</Alert>}
 
-      <div className="flex flex-col gap-10 xl:grid xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start xl:gap-10">
-        <div className="flex min-w-0 flex-col gap-10">
-      <TitleSection title={conversation.title} completed={completed} context={context} />
-      <PlannedForSection plannedFor={conversation.plannedFor} completed={completed} context={context} />
-      <NotesSection ownerNotes={conversation.ownerNotes} completed={completed} context={context} />
-      <NextStepsSection nextSteps={conversation.nextSteps} completed={completed} context={context} />
-      <ParticipantNotesSection participantNotes={conversation.participantNotes} />
-
-      <section aria-labelledby="lifecycle-heading" className="flex flex-col gap-4">
-        <h2 id="lifecycle-heading" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-          {conversationsCopy.lifecycleSection}
-        </h2>
-        {!completed && (
-          <CompleteConversationDialog
-            conversationId={conversation.conversationId}
-            token={token}
-            participantState={conversation.participant.state}
-            onUnauthenticated={onUnauthenticated}
-            onChanged={onChanged}
+      {/* The aside sits beside the content only at 2xl (1536 px): inside the 1280 px split pane it would leave the tabs ~184 px wide. */}
+      <div className="flex flex-col gap-6 2xl:grid 2xl:grid-cols-[minmax(0,1fr)_20rem] 2xl:items-start 2xl:gap-6">
+        <div className="flex min-w-0 flex-col gap-6">
+          <ConversationSectionTabs label={conversationsCopy.sectionTabs.label}
+            tabs={[
+              {
+                id: "overview",
+                label: conversationsCopy.sectionTabs.overview,
+                children: (
+                  <>
+                    <TitleSection title={conversation.title} completed={completed} context={context} />
+                    <PlannedForSection plannedFor={conversation.plannedFor} completed={completed} context={context} />
+                    <section aria-labelledby="lifecycle-heading" className="flex flex-col gap-4">
+                            <h2 id="lifecycle-heading" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                              {conversationsCopy.lifecycleSection}
+                            </h2>
+                            {!completed && (
+                              <CompleteConversationDialog
+                                conversationId={conversation.conversationId}
+                                token={token}
+                                participantState={conversation.participant.state}
+                                onUnauthenticated={onUnauthenticated}
+                                onChanged={onChanged}
+                              />
+                            )}
+                            <DeleteConversationDialog
+                              conversationId={conversation.conversationId}
+                              token={token}
+                              onUnauthenticated={onUnauthenticated}
+                              onChanged={onChanged}
+                            />
+                          </section>
+                  </>
+                ),
+              },
+              {
+                id: "notes",
+                label: conversationsCopy.sectionTabs.notes,
+                children: (
+                  <>
+                    <NotesSection ownerNotes={conversation.ownerNotes} completed={completed} context={context} />
+                    <ParticipantNotesSection participantNotes={conversation.participantNotes} />
+                  </>
+                ),
+              },
+              {
+                id: "follow-up",
+                label: conversationsCopy.sectionTabs.followUp,
+                children: (
+                  <NextStepsSection nextSteps={conversation.nextSteps} completed={completed} context={context} />
+                ),
+              },
+            ]}
           />
-        )}
-        <DeleteConversationDialog
-          conversationId={conversation.conversationId}
-          token={token}
-          onUnauthenticated={onUnauthenticated}
-          onChanged={onChanged}
-        />
-      </section>
         </div>
-        <aside className="flex min-w-0 flex-col gap-10">
+        <aside className="flex min-w-0 flex-col gap-6">
         <ParticipantPanel
           conversationId={conversation.conversationId}
           token={token}

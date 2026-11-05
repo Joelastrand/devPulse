@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { conversationsCopy } from "../copy";
 import type { ConversationListResponse, OwnedListItem, OwnerSummaryWire, ParticipationSummaryWire } from "../client/conversations-gateway";
+import { expectHeadingStructure } from "../../../components/ui/heading-structure";
 
 const observeIdTokenMock = vi.fn();
+const fetchConversationMock = vi.fn(() => new Promise(() => {}));
 const fetchConversationListMock = vi.fn();
 const deleteConversationMock = vi.fn();
 
@@ -13,6 +15,8 @@ vi.mock("../../auth/client/auth-client", () => ({ observeIdToken: observeIdToken
 vi.mock("../client/conversations-gateway", () => ({
   fetchConversationList: fetchConversationListMock,
   deleteConversation: deleteConversationMock,
+  // The selected conversation is rendered by ConversationDetail on wide screens; it is not under test here.
+  fetchConversation: fetchConversationMock,
 }));
 
 const { ConversationsPage } = await import("./ConversationsPage");
@@ -333,5 +337,132 @@ describe("ConversationsPage copy", () => {
     for (const term of ["score", "rating", "vurdering", "rangering", "prestasjon", "ytelse", "på sporet"]) {
       expect(text).not.toContain(term);
     }
+  });
+});
+
+describe("ConversationsPage composition (visual-redesign TASK-012)", () => {
+  beforeEach(() => {
+    // Earlier tests may leave unconsumed one-shot responses; each composition test starts from a clean queue.
+    fetchConversationListMock.mockReset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("filters the sections with the chips: 'Åpne' hides completed, 'Fullførte' hides open", async () => {
+    await renderReady(
+      list({
+        owned: {
+          items: [
+            summary({ conversationId: "conv-1", title: "Åpen samtale" }),
+            summary({ conversationId: "conv-2", title: "Ferdig samtale", status: "completed", plannedFor: null }),
+          ],
+          truncated: false,
+        },
+      }),
+    );
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: conversationsCopy.filters.completed }));
+    expect(screen.getByText("Ferdig samtale")).toBeTruthy();
+    expect(screen.queryByText("Åpen samtale")).toBeNull();
+    expect(screen.getByRole("button", { name: conversationsCopy.filters.completed }).getAttribute("aria-pressed")).toBe("true");
+
+    await user.click(screen.getByRole("button", { name: conversationsCopy.filters.open }));
+    expect(screen.getByText("Åpen samtale")).toBeTruthy();
+    expect(screen.queryByText("Ferdig samtale")).toBeNull();
+  });
+
+  it("shows counterpart initials beside the name, without image elements", async () => {
+    const { container } = await renderReady(
+      list({
+        owned: {
+          items: [summary({ conversationId: "conv-1", title: "Med Kari", participant: { state: "accepted", displayName: "Kari Nordmann" } })],
+          truncated: false,
+        },
+      }),
+    ).then(() => ({ container: document.body }));
+    await screen.findByText("Med Kari");
+
+    expect(screen.getByText("KN").getAttribute("aria-hidden")).toBe("true");
+    expect(container.querySelector("img")).toBeNull();
+  });
+
+  it("on wide screens selects a conversation into the side pane instead of navigating", async () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query === "(min-width: 1280px)",
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+    await renderReady(
+      list({
+        owned: { items: [summary({ conversationId: "conv-1", title: "Valgt samtale" })], truncated: false },
+      }),
+    );
+    const user = userEvent.setup();
+
+    await waitFor(() => expect(document.querySelector("aside")?.textContent).toContain(conversationsCopy.selectPrompt));
+    const link = screen.getByRole("link", { name: "Valgt samtale" });
+    await user.click(link);
+    expect(link.getAttribute("aria-current")).toBe("true");
+    await waitFor(() => expect(document.querySelector("aside")?.textContent).not.toContain(conversationsCopy.selectPrompt));
+  });
+it("switching the selection loads the newly selected conversation and moves the selected marker", async () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query === "(min-width: 1280px)",
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+    fetchConversationMock.mockClear();
+    await renderReady(
+      list({
+        owned: {
+          items: [
+            summary({ conversationId: "conv-a", title: "Samtale A" }),
+            summary({ conversationId: "conv-b", title: "Samtale B" }),
+          ],
+          truncated: false,
+        },
+      }),
+    );
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("link", { name: "Samtale A" }));
+    await waitFor(() => expect(fetchConversationMock).toHaveBeenLastCalledWith(expect.any(String), "conv-a"));
+    await user.click(screen.getByRole("link", { name: "Samtale B" }));
+    await waitFor(() => expect(fetchConversationMock).toHaveBeenLastCalledWith(expect.any(String), "conv-b"));
+
+    expect(screen.getByRole("link", { name: "Samtale B" }).getAttribute("aria-current")).toBe("true");
+    expect(screen.getByRole("link", { name: "Samtale A" }).getAttribute("aria-current")).toBeNull();
+  });
+
+  it("below xl the title link keeps its default navigation (the click is not default-prevented)", async () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+    await renderReady(
+      list({
+        owned: { items: [summary({ conversationId: "conv-1", title: "Smal skjerm" })], truncated: false },
+      }),
+    );
+
+    const notPrevented = fireEvent.click(screen.getByRole("link", { name: "Smal skjerm" }));
+    expect(notPrevented).toBe(true);
+    expect(document.querySelector("aside")).toBeNull();
+  });
+});
+
+describe("conversations heading structure (visual-redesign TASK-019)", () => {
+  it("keeps a valid heading hierarchy for the loaded list view", async () => {
+    await renderReady(
+      list({ owned: { items: [summary({ conversationId: "conv-1", title: "Samtale" })], truncated: false } }),
+    );
+    expectHeadingStructure(document.body, { ownsPageTitle: false });
   });
 });

@@ -7,6 +7,7 @@ import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { LoadingState } from "../../../components/ui/LoadingState";
+import { InitialsAvatar } from "../../../components/ui/dashboard/DashboardPrimitives";
 import { fetchTeamRoster, type FetchTeamRosterResult } from "../client/team-roster-gateway";
 import { teamsCopy } from "../copy";
 
@@ -125,6 +126,7 @@ function RosterBody({ state, onRetry }: { state: RosterState; onRetry: () => voi
             key={`${index}-${member.displayName ?? ""}`}
             className="flex flex-wrap items-center gap-2 text-zinc-900 dark:text-zinc-50"
           >
+            {member.displayName ? <InitialsAvatar name={member.displayName} /> : null}
             <span className="break-words">{member.displayName ?? teamsCopy.roster.unnamedMember}</span>
             {member.isLead && <Badge>{teamsCopy.roster.leadLabel}</Badge>}
             {member.isSelf && <Badge>{teamsCopy.roster.selfLabel}</Badge>}

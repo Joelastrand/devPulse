@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { ArrowRight } from "lucide-react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
-import { CompletionIllustration } from "../../../components/ui/illustrations/illustrations";
+import { Card } from "../../../components/ui/Card";
 import { cx } from "../../../components/ui/class-names";
+import { Icon } from "../../../components/ui/Icon";
 import { submitSurveyResponse } from "../client/submit-survey-response-gateway";
 import { surveysCopy } from "../copy";
+import { CompletionIllustration } from "../../../components/ui/illustrations/illustrations";
 
 export interface SurveyResponseFormProps {
   surveyId: string;
@@ -44,7 +47,10 @@ type Status = "idle" | "submitting" | "success" | "already_submitted" | "error";
  * BR-S2, BR-S3, BR-S5). Answers live in memory for the page session only, so
  * Back and Next keep them and nothing is stored.
  */
-export function SurveyResponseForm({ surveyId, idToken }: SurveyResponseFormProps) {
+export function SurveyResponseForm({
+  surveyId,
+  idToken,
+}: SurveyResponseFormProps) {
   const [answers, setAnswers] = useState<Record<QuestionId, number | null>>({
     flow: null,
     stress: null,
@@ -53,9 +59,13 @@ export function SurveyResponseForm({ surveyId, idToken }: SurveyResponseFormProp
   const [step, setStep] = useState(0);
   const [status, setStatus] = useState<Status>("idle");
 
-  const isComplete = QUESTIONS.every((question) => answers[question.id] !== null);
+  const isComplete = QUESTIONS.every(
+    (question) => answers[question.id] !== null,
+  );
   const currentQuestion = step < REVIEW_STEP ? QUESTIONS[step] : null;
-  const currentAnswered = currentQuestion ? answers[currentQuestion.id] !== null : true;
+  const currentAnswered = currentQuestion
+    ? answers[currentQuestion.id] !== null
+    : true;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -76,7 +86,9 @@ export function SurveyResponseForm({ surveyId, idToken }: SurveyResponseFormProp
       return;
     }
 
-    setStatus(result.status === "already_submitted" ? "already_submitted" : "error");
+    setStatus(
+      result.status === "already_submitted" ? "already_submitted" : "error",
+    );
   }
 
   function goNext() {
@@ -107,7 +119,9 @@ export function SurveyResponseForm({ surveyId, idToken }: SurveyResponseFormProp
     );
   }
 
-  const progressPercent = Math.round((Math.min(step, QUESTIONS.length) / QUESTIONS.length) * 100);
+  const progressPercent = Math.round(
+    (Math.min(step, QUESTIONS.length) / QUESTIONS.length) * 100,
+  );
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-6" noValidate>
@@ -117,7 +131,10 @@ export function SurveyResponseForm({ surveyId, idToken }: SurveyResponseFormProp
             ? surveysCopy.form.stepper.progress(step + 1, QUESTIONS.length)
             : surveysCopy.form.stepper.review}
         </p>
-        <div aria-hidden="true" className="h-2 w-full overflow-hidden rounded-field bg-surface-subtle">
+        <div
+          aria-hidden="true"
+          className="h-2 w-full overflow-hidden rounded-field bg-surface-subtle"
+        >
           <div
             className="h-2 bg-primary transition-[width] duration-progress ease-standard"
             style={{ width: `${progressPercent}%` }}
@@ -126,44 +143,59 @@ export function SurveyResponseForm({ surveyId, idToken }: SurveyResponseFormProp
       </div>
 
       {currentQuestion ? (
-        <fieldset key={currentQuestion.id} className="flex flex-col gap-2">
-          <legend className="text-survey-question font-semibold text-text-primary">
-            {currentQuestion.label}
-          </legend>
-          <div className="flex gap-4">
-            {SCALE.map((value) => {
-              const inputId = `${currentQuestion.id}-${value}`;
-              return (
-                <label
-                  key={value}
-                  htmlFor={inputId}
-                  className={cx(
-                    "flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-control border text-label font-medium transition-colors duration-micro ease-standard has-focus-visible:outline has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus-ring",
-                    answers[currentQuestion.id] === value
-                      ? "border-primary text-primary bg-primary-subtle"
-                      : "border-border-strong text-text-secondary hover:bg-surface-subtle",
-                  )}
-                >
-                  <input
-                    id={inputId}
-                    type="radio"
-                    name={currentQuestion.id}
-                    value={value}
-                    checked={answers[currentQuestion.id] === value}
-                    onChange={() =>
-                      setAnswers((previous) => ({
-                        ...previous,
-                        [currentQuestion.id]: value,
-                      }))
-                    }
-                    className="sr-only"
-                  />
-                  {value}
-                </label>
-              );
-            })}
-          </div>
-        </fieldset>
+        <Card as="div" variant="bordered" padding="md">
+          <fieldset key={currentQuestion.id} className="flex flex-col gap-4">
+            <legend className="text-survey-question font-semibold text-text-primary">
+              {currentQuestion.label}
+            </legend>
+            <div className="flex flex-col gap-3">
+              {SCALE.map((value) => {
+                const inputId = `${currentQuestion.id}-${value}`;
+                return (
+                  <label
+                    key={value}
+                    htmlFor={inputId}
+                    className={cx(
+                      "flex min-h-11 min-w-11 w-full cursor-pointer items-center gap-3 rounded-control border px-4 py-3 text-label font-medium transition-colors duration-micro ease-standard has-focus-visible:outline has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus-ring",
+                      answers[currentQuestion.id] === value
+                        ? "border-primary text-primary bg-primary-subtle"
+                        : "border-border-strong text-text-secondary hover:bg-surface-subtle",
+                    )}
+                  >
+                    <input
+                      id={inputId}
+                      type="radio"
+                      name={currentQuestion.id}
+                      value={value}
+                      checked={answers[currentQuestion.id] === value}
+                      onChange={() =>
+                        setAnswers((previous) => ({
+                          ...previous,
+                          [currentQuestion.id]: value,
+                        }))
+                      }
+                      className="sr-only"
+                    />
+                    <span
+                      aria-hidden="true"
+                      className={cx(
+                        "flex size-5 shrink-0 items-center justify-center rounded-full border-2",
+                        answers[currentQuestion.id] === value
+                          ? "border-primary"
+                          : "border-border-strong",
+                      )}
+                    >
+                      {answers[currentQuestion.id] === value ? (
+                        <span className="size-2.5 rounded-full bg-primary" />
+                      ) : null}
+                    </span>
+                    {value}
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
+        </Card>
       ) : null}
 
       {currentQuestion ? (
@@ -173,27 +205,48 @@ export function SurveyResponseForm({ surveyId, idToken }: SurveyResponseFormProp
               {surveysCopy.form.stepper.nextDisabled}
             </p>
           ) : null}
-          <div className="flex items-center justify-between gap-3">
-            <Button type="button" variant="secondary" onClick={goBack} disabled={step === 0}>
+          {/* Phones: a bottom action bar that stays in view. From md up it sits under the card, inline. */}
+          <div className="sticky bottom-0 -mx-4 flex items-center justify-between gap-3 border-t border-border-subtle bg-surface px-4 py-3 md:static md:mx-0 md:border-0 md:bg-transparent md:px-0 md:py-0">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={goBack}
+              disabled={step === 0}
+            >
               {surveysCopy.form.stepper.back}
             </Button>
             <Button
               type="button"
               onClick={goNext}
               disabled={!currentAnswered}
-              aria-describedby={!currentAnswered ? "survey-next-hint" : undefined}
+              aria-describedby={
+                !currentAnswered ? "survey-next-hint" : undefined
+              }
             >
-              {surveysCopy.form.stepper.next}
+              <span className="inline-flex items-center gap-2">
+                {surveysCopy.form.stepper.next}
+                <Icon icon={ArrowRight} size="inline" />
+              </span>
             </Button>
           </div>
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          <ul aria-label={surveysCopy.form.stepper.review} className="flex flex-col gap-3">
+          <ul
+            aria-label={surveysCopy.form.stepper.review}
+            className="flex flex-col gap-3"
+          >
             {QUESTIONS.map((question) => (
-              <li key={question.id} className="flex items-center justify-between gap-3 rounded-control border border-border-subtle px-4 py-3">
-                <span className="text-label text-text-secondary">{question.label}</span>
-                <span className="text-label font-semibold text-text-primary">{answers[question.id]}</span>
+              <li
+                key={question.id}
+                className="flex items-center justify-between gap-3 rounded-control border border-border-subtle px-4 py-3"
+              >
+                <span className="text-label text-text-secondary">
+                  {question.label}
+                </span>
+                <span className="text-label font-semibold text-text-primary">
+                  {answers[question.id]}
+                </span>
               </li>
             ))}
           </ul>
@@ -201,8 +254,14 @@ export function SurveyResponseForm({ surveyId, idToken }: SurveyResponseFormProp
             <Button type="button" variant="secondary" onClick={goBack}>
               {surveysCopy.form.stepper.back}
             </Button>
-            <Button type="submit" disabled={!isComplete} pending={status === "submitting"}>
-              {status === "submitting" ? surveysCopy.form.submitting : surveysCopy.form.submit}
+            <Button
+              type="submit"
+              disabled={!isComplete}
+              pending={status === "submitting"}
+            >
+              {status === "submitting"
+                ? surveysCopy.form.submitting
+                : surveysCopy.form.submit}
             </Button>
           </div>
         </div>

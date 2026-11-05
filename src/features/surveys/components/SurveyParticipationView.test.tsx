@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { expectHeadingStructure, expectNamedControls } from "../../../components/ui/heading-structure";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -276,5 +277,22 @@ describe("SurveyParticipationView auth/route races", () => {
 
     expect(screen.queryByText("Survey A")).toBeNull();
     expect(screen.getByRole("heading", { name: "Survey B" })).toBeTruthy();
+  });
+});
+
+describe("survey heading structure (visual-redesign TASK-019)", () => {
+  it("shows the survey title as the one level-1 heading with a valid hierarchy on the intro", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith(null));
+    fetchSurveyParticipationMock.mockResolvedValue({
+      status: "answerable",
+      survey: { surveyId: "survey-1", title: "Pulsmåling", teamName: "Demo Team" },
+    });
+
+    render(<SurveyParticipationView surveyId="survey-1" />);
+
+    await screen.findByRole("button", { name: "Start" });
+    expectHeadingStructure(document.body, { ownsPageTitle: true });
+    expectNamedControls(document.body);
+    expect(screen.getByRole("heading", { level: 1, name: "Pulsmåling" })).toBeTruthy();
   });
 });

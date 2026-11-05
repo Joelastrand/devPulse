@@ -91,8 +91,10 @@ until attrition, burnout, or delivery failure makes them obvious.
   shares one application shell and a small set of reusable UI primitives
   (`src/components/ui/`), with consistent loading/empty/success/
   validation-error/authorization-failure/infrastructure-failure states.
-- After a successful sign-in, the confirmation state continues to `/teams`
-  (previously `/results`).
+- After a successful sign-in, the app navigates automatically to `/` (home).
+  A valid `/survey/{surveyId}` continuation still takes precedence
+  (`visual-fidelity-and-ui-fixes` BR-14, BR-15). Earlier versions continued to
+  `/teams`, and before that to `/results`.
 - A team's results view gained a Recharts-based 12-period trend chart,
   additive to the existing accessible `TrendTable` (unchanged). A
   suppressed (`insufficient`/`not_available`) period is never rendered as

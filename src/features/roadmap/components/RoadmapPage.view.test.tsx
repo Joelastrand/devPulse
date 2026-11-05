@@ -4,6 +4,8 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { RoadmapItemView } from "../server/list-roadmap-items";
 import { queryMutationControls } from "./roadmap-test-helpers";
+import { roadmapCopy } from "../copy";
+import { expectHeadingStructure, expectNamedControls } from "../../../components/ui/heading-structure";
 
 const observeIdTokenMock = vi.fn();
 const fetchTeamsOverviewMock = vi.fn();
@@ -502,5 +504,45 @@ describe("empty and error states", () => {
     await screen.findByText("Roadmapen kunne ikke lastes.");
     expect(screen.queryByRole("button", { name: "Tidslinje" })).toBeNull();
     expect(screen.queryByRole("group", { name: "Visning" })).toBeNull();
+  });
+});
+
+describe("board and list at the md breakpoint (visual-redesign TASK-009)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function stubViewport(wide: boolean) {
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: wide && query === "(min-width: 768px)",
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+  }
+
+  it("renders the quarter-column board region at md and up, and not the grouped list", async () => {
+    stubViewport(true);
+    await renderLoaded({ search: "view=timeline" });
+
+    expect(await screen.findByRole("region", { name: roadmapCopy.board.description })).toBeTruthy();
+    expect(groupHeadings()).toEqual([]);
+  });
+
+  it("renders the grouped list below md, with the same plan text as the board", async () => {
+    stubViewport(false);
+    await renderLoaded({ search: "view=timeline" });
+
+    expect(screen.queryByRole("region", { name: roadmapCopy.board.description })).toBeNull();
+    expect(groupHeadings().length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Q4 plan").length).toBeGreaterThan(0);
+  });
+});
+
+describe("roadmap heading structure (visual-redesign TASK-019)", () => {
+  it("keeps a valid heading hierarchy for the loaded timeline and list views", async () => {
+    await renderLoaded({ search: "view=timeline" });
+    expectHeadingStructure(document.body, { ownsPageTitle: true });
+    expectNamedControls(document.body);
   });
 });

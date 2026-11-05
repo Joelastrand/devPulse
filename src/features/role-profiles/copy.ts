@@ -1,5 +1,8 @@
 /** Norwegian UI copy for role profiles. Draft wording marked in SPEC "Navigation and UX" needs copy review before release. */
 export const adminRolesCopy = {
+  /** Visual-redesign TASK-015: split view on large screens (role list left, selected role right). */
+  splitListLabel: "Roller",
+  expectationCount: (count: number) => (count === 1 ? "1 forventning" : `${count} forventninger`),
   pageTitle: "Roller",
   pageDescription: "Roller beskriver forventninger til kompetanseområder. De brukes til sammenligning for den enkelte.",
   notice: "Ikke registrer personnavn eller personlige opplysninger i rollebeskrivelser.",
@@ -83,7 +86,7 @@ export const personRoleCopy = {
   comparison: {
     privacyNotice:
       "Valgt rolle og sammenligningen er bare synlige for deg. Rollen sier noe om forventninger til en rolle, ikke om deg som person, og brukes ikke i vurdering, lønn eller tildeling av oppgaver.",
-    meets: "Møter forventningen",
+    meets: "Dekket",
     developmentOpportunity: "Utviklingsmulighet",
     notAssessed: "Ikke vurdert ennå",
     unavailable: "Ikke tilgjengelig",

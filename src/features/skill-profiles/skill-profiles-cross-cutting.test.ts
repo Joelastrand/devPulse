@@ -33,12 +33,16 @@ const PERSONAL_COLLECTION = new RegExp(["skill", "Profiles"].join(""));
 const stripComments = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 
 /** Every user-visible string in copy.ts, with sample arguments for the parameterised ones. */
+function collectCopyStrings(value: unknown, out: string[]): void {
+  if (typeof value === "string") out.push(value);
+  else if (typeof value === "function") out.push((value as (...args: never[]) => string)(...([2, 5] as never[])));
+  else if (Array.isArray(value)) value.forEach((item) => collectCopyStrings(item, out));
+  else if (value !== null && typeof value === "object") Object.values(value).forEach((item) => collectCopyStrings(item, out));
+}
+
 function allCopyStrings(): string[] {
   const strings: string[] = [];
-  for (const value of Object.values(skillProfileCopy)) {
-    if (typeof value === "string") strings.push(value);
-    else strings.push((value as (...args: never[]) => string)(...([2, 5] as never[])));
-  }
+  collectCopyStrings(skillProfileCopy, strings);
   for (const level of SELF_ASSESSED_LEVELS) {
     strings.push(SELF_ASSESSED_LEVEL_COPY[level].name, SELF_ASSESSED_LEVEL_COPY[level].description);
   }

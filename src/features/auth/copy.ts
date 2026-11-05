@@ -7,7 +7,7 @@
 export const authCopy = {
   signIn: {
     pageTitle: "Logg inn",
-    emailLabel: "E-post",
+    emailLabel: "E-postadresse",
     passwordLabel: "Passord",
     submit: "Logg inn",
     submitting: "Logger inn…",

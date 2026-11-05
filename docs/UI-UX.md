@@ -851,7 +851,7 @@ Directional inspiration only — never a pixel-copy requirement:
 - Selected: the role name, *Endre rolle* and *Fjern valgt rolle*. An archived target shows *Rollen er arkivert*; a role with
   no expectations shows *Rollen har ingen forventninger ennå.*; an unusable target shows *Valgt rolle kan ikke brukes til
   sammenligning nå.* (copy approved by the product owner, 2026-10-28).
-- Comparison rows, in the role's order, with one text label each: *Møter forventningen*, *Utviklingsmulighet*, *Ikke vurdert
+- Comparison rows, in the role's order, with one text label each: *Dekket*, *Utviklingsmulighet*, *Ikke vurdert
   ennå*, *Ikke tilgjengelig*. Own level as *Ditt nivå N*; expected level as *Forventet nivå N*. No totals, counts or sorting.
   The approved privacy notice is shown with the rows.
 - *Opprett mål* appears on development-opportunity and not-assessed rows only. It opens the D1 goals form with the tree

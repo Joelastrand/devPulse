@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const observeIdTokenMock = vi.fn();
@@ -91,7 +91,7 @@ describe("AdminTeams", () => {
     render(<AdminTeams />);
 
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toMatch(/ikke tilgang/i);
+    expect(alert.textContent).toMatch(/Kunne ikke vise siden/);
     expect(alert.textContent).not.toMatch(/admin_emails|allow-?list|@/i);
   });
 
@@ -639,5 +639,32 @@ describe("AdminTeams auth races", () => {
 
     expect(errorSpy).not.toHaveBeenCalled();
     errorSpy.mockRestore();
+  });
+});
+
+describe("AdminTeams card grid (visual-redesign TASK-014)", () => {
+  it("lays team cards in one column on phones, two at tablet and three at desktop, each with identity art", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchAdminTeamsMock.mockResolvedValue({
+      status: "ok",
+      teams: [
+        { teamId: "t-1", name: "Plattform", status: "active" },
+        { teamId: "t-2", name: "Design", status: "disabled" },
+      ],
+    });
+
+    const { container } = render(<AdminTeams />);
+    await screen.findByText("Plattform");
+
+    const list = container.querySelector("ul");
+    expect(list?.className).toContain("grid-cols-1");
+    expect(list?.className).toContain("md:grid-cols-2");
+    expect(list?.className).toContain("xl:grid-cols-3");
+    const cards = within(list as HTMLElement).getAllByRole("listitem");
+    expect(cards).toHaveLength(2);
+    for (const card of cards) {
+      expect(card.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+    }
+    expect(container.querySelector("img")).toBeNull();
   });
 });

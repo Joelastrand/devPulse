@@ -162,10 +162,21 @@ export const roadmapCopy = {
     startOnly: "Kun startdato",
     undated: "Uten dato",
     ganttHeading: "Tidslinje",
-    ganttDescription: "Planer med både start- og måldato, plassert etter kvartal. Planer uten begge datoer vises i listen under.",
-    ganttArea: "Kompetanseområde",
-    ganttNoArea: "Uten område",
-    ganttEmpty: "Ingen planer har både startdato og måldato ennå.",
-    ganttLegend: { planned: "Planlagt", active: "Pågår", completed: "Fullført" },
+  },
+  /** Quarter-column board (visual-redesign TASK-009). Plans sit in their target-quarter column. */
+  board: {
+    description: "Planer plassert i kvartalet for måldatoen. Planer uten måldato vises i egen kolonne.",
+    undatedColumn: "Uten måldato",
+    currentQuarter: "I dag",
+    monthNames: ["jan", "feb", "mar", "apr", "mai", "jun", "jul", "aug", "sep", "okt", "nov", "des"],
+    detailHeading: "Valgt plan",
+    detailEmpty: "Velg en plan for å se detaljene.",
+    selectPlan: "Vis detaljer",
+    statusTiles: {
+      planned: "Planlagt",
+      active: "Pågår",
+      completed: "Fullført",
+      overdue: "Forfalt",
+    },
   },
 } as const;

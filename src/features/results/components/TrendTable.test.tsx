@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { TrendTable } from "./TrendTable";
 import type { SurveyResultSummary } from "../client/team-results-gateway";
@@ -97,5 +97,32 @@ describe("TrendTable", () => {
 
     expect(screen.queryByText(/period/i)).toBeNull();
     expect(screen.queryByText(/uke\s*\d/i)).toBeNull();
+  });
+});
+
+describe("TrendTable row identity (visual-redesign TASK-007)", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("does not raise a duplicate-key error when two rows share a survey id", () => {
+    const errors: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      errors.push(args.map(String).join(" "));
+    });
+    const row: SurveyResultSummary = {
+      surveyId: "2",
+      date: "2026-10-01T00:00:00.000Z",
+      minimumResponses: 3,
+      status: "insufficient",
+    };
+
+    try {
+      render(<TrendTable results={[row, { ...row, date: "2026-09-01T00:00:00.000Z" }]} />);
+    } finally {
+      spy.mockRestore();
+    }
+
+    expect(errors.filter((message) => /same key/i.test(message))).toEqual([]);
   });
 });

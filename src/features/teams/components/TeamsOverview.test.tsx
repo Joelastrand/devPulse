@@ -534,3 +534,142 @@ describe("TeamsOverview auth-state races", () => {
     errorSpy.mockRestore();
   });
 });
+
+describe("TeamsOverview directory composition (visual-redesign TASK-006)", () => {
+  afterEach(() => {
+    cleanup();
+    observeIdTokenMock.mockReset();
+    fetchTeamsOverviewMock.mockReset();
+  });
+
+  it("lays team cards in one column on phones, two at tablet and three at desktop", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [
+        { teamId: "t-1", name: "Demo Team", relationship: "member" },
+        { teamId: "t-2", name: "Plattform", relationship: "none" },
+      ],
+    });
+
+    const { container } = render(<TeamsOverview />);
+
+    await screen.findByText("Demo Team");
+    const list = container.querySelector("ul");
+    expect(list?.className).toContain("grid-cols-1");
+    expect(list?.className).toContain("md:grid-cols-2");
+    expect(list?.className).toContain("lg:grid-cols-3");
+    expect(list?.className).not.toContain("xl:grid-cols-3");
+  });
+
+  it("shows no search field, filter, tab or new-team control, and no metric text", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "t-1", name: "Demo Team", relationship: "member" }],
+    });
+
+    render(<TeamsOverview />);
+
+    await screen.findByText("Demo Team");
+    expect(screen.queryByRole("searchbox")).toBeNull();
+    expect(screen.queryByRole("tablist")).toBeNull();
+    expect(screen.queryByRole("button", { name: /nytt team/i })).toBeNull();
+    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(document.body.textContent ?? "").not.toMatch(/\d+\s?%|medlemmer:|\d+ medlemmer/i);
+  });
+
+  it("renders the teams the parent supplies and makes no fetch", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+
+    render(<TeamsOverview initialTeams={[{ teamId: "t-1", name: "Supplied Team", relationship: "member" }]} />);
+
+    await screen.findByText("Supplied Team");
+    expect(fetchTeamsOverviewMock).not.toHaveBeenCalled();
+  });
+
+  it("renders a supplied empty list as the empty state without fetching", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+
+    render(<TeamsOverview initialTeams={[]} />);
+
+    await screen.findByText(/ingen team/i);
+    expect(fetchTeamsOverviewMock).not.toHaveBeenCalled();
+  });
+
+  it("fetches the overview itself exactly once when no teams are supplied", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "t-1", name: "Fetched Team", relationship: "member" }],
+    });
+
+    render(<TeamsOverview />);
+
+    await screen.findByText("Fetched Team");
+    expect(fetchTeamsOverviewMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls onTeamsChanged once after a successful request-access when teams are supplied, and makes no fetch of its own", async () => {
+    const user = userEvent.setup();
+    const onTeamsChanged = vi.fn();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    requestTeamAccessMock.mockResolvedValue({ ok: true, outcome: "created" });
+
+    render(
+      <TeamsOverview
+        initialTeams={[{ teamId: "team-1", name: "Platform", relationship: "none" }]}
+        onTeamsChanged={onTeamsChanged}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /be om tilgang/i }));
+
+    await waitFor(() => expect(onTeamsChanged).toHaveBeenCalledTimes(1));
+    expect(requestTeamAccessMock).toHaveBeenCalledWith("a-token", "team-1");
+    expect(fetchTeamsOverviewMock).not.toHaveBeenCalled();
+  });
+
+  it("does not call onTeamsChanged when the request-access action fails", async () => {
+    const user = userEvent.setup();
+    const onTeamsChanged = vi.fn();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    requestTeamAccessMock.mockResolvedValue({ ok: false, error: "unknown" });
+
+    render(
+      <TeamsOverview
+        initialTeams={[{ teamId: "team-1", name: "Platform", relationship: "none" }]}
+        onTeamsChanged={onTeamsChanged}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /be om tilgang/i }));
+
+    await screen.findByRole("alert");
+    expect(onTeamsChanged).not.toHaveBeenCalled();
+  });
+
+  it("without initialTeams, re-fetches its own overview after request-access and never calls onTeamsChanged", async () => {
+    const user = userEvent.setup();
+    const onTeamsChanged = vi.fn();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchTeamsOverviewMock
+      .mockResolvedValueOnce({
+        status: "ok",
+        teams: [{ teamId: "team-1", name: "Platform", relationship: "none" }],
+      })
+      .mockResolvedValueOnce({
+        status: "ok",
+        teams: [{ teamId: "team-1", name: "Platform", relationship: "request_pending" }],
+      });
+    requestTeamAccessMock.mockResolvedValue({ ok: true, outcome: "created" });
+
+    render(<TeamsOverview onTeamsChanged={onTeamsChanged} />);
+
+    await user.click(await screen.findByRole("button", { name: /be om tilgang/i }));
+
+    await screen.findByText(/forespørsel venter/i);
+    expect(fetchTeamsOverviewMock).toHaveBeenCalledTimes(2);
+    expect(onTeamsChanged).not.toHaveBeenCalled();
+  });
+});

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { skillProfileCopy } from "../copy";
+import { expectHeadingStructure } from "../../../components/ui/heading-structure";
 
 const observeIdTokenMock = vi.fn();
 const fetchOwnSkillsMock = vi.fn();
@@ -124,8 +125,9 @@ describe("SkillProfilePage", () => {
     );
 
     expect(screen.getByText("Du har vurdert 3 av 4 ferdigheter.")).toBeTruthy();
-    expect(screen.getByText("Grunnleggende kjennskap: 2")).toBeTruthy();
-    expect(screen.getByText("Avansert: 1")).toBeTruthy();
+    // Per-level counts are stat tiles labelled by the level name (visual-redesign BR-18).
+    expect(within(screen.getByRole("region", { name: "Grunnleggende kjennskap" })).getByText("2")).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "Avansert" })).getByText("1")).toBeTruthy();
     expect(screen.queryByText(/Kan med støtte: /)).toBeNull();
     expect(screen.queryByText(/Kan selvstendig: /)).toBeNull();
   });
@@ -260,5 +262,12 @@ describe("SkillProfilePage", () => {
 
     const levels = screen.getAllByRole("heading").map((heading) => heading.tagName);
     expect(levels.every((tag) => tag === "H2")).toBe(true);
+  });
+});
+
+describe("skill profile heading structure (visual-redesign TASK-019)", () => {
+  it("keeps a valid heading hierarchy for the loaded skills view", async () => {
+    await renderWith(ok([{ treeId: "1", name: "A", level: 2 }]));
+    expectHeadingStructure(document.body, { ownsPageTitle: false });
   });
 });

@@ -49,7 +49,7 @@
   "src/features/role-profiles/components/ExpectationsEditor.tsx": 4,
   "src/features/role-profiles/components/RoleForm.tsx": 6,
   "src/features/role-profiles/components/RoleTargetSection.tsx": 16,
-  "src/features/skill-profiles/components/SkillProfilePage.tsx": 38,
+  "src/features/skill-profiles/components/SkillProfilePage.tsx": 30,
   "src/features/skill-trees/components/AdminSkills.tsx": 6,
   "src/features/skill-trees/components/OrgSkillProgressOverview.tsx": 8,
   "src/features/skill-trees/components/SkillTreeCatalogList.tsx": 8,

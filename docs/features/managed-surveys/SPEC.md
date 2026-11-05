@@ -1001,8 +1001,9 @@ hardcoded value. Every survey instead persists its own `minimumResponses`.
   `/survey/{surveyId}` URL. The continuation parameter is validated
   against a narrow `/survey/{surveyId}`-shaped allow-list (not merely
   "same-origin") — any other value, including an external URL or an
-  unrelated internal route, is rejected in favor of the existing `/teams`
-  default rather than followed.
+  unrelated internal route, is rejected in favor of the default
+  destination rather than followed. The default destination is `/` as of
+  `visual-fidelity-and-ui-fixes` (BR-14, BR-15); it was `/teams` before.
 
 **Team disable interaction** (see "Team disable semantics")
 - **BR-41**: A survey's answerability requires *both* its own derived
@@ -1336,8 +1337,8 @@ relative path (a broader mechanism than this feature actually needs, and
 one more thing a future bug could widen into an open redirect), the
 continuation parameter is validated against a narrow allow-list shape —
 it must match `^/survey/[^/]+$` (this feature's one actual destination) or
-be absent (defaulting to `/teams`, the existing behavior); any other value
-is rejected/ignored in favor of the `/teams` default rather than followed.
+be absent (defaulting to `/`, amended from `/teams` by `visual-fidelity-and-ui-fixes` D-2 / TASK-002); any other value
+is rejected/ignored in favor of the `/` default rather than followed.
 This is strictly narrower than "same-origin," closing not just external
 open-redirect targets but also any accidental reachability of another
 internal route this feature never intended the sign-in continuation

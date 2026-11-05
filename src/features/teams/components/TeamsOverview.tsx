@@ -34,6 +34,8 @@ type RequestActionState =
 const RELATIONSHIP_LABELS: Record<TeamOverviewEntry["relationship"], string> =
   teamsCopy.relationshipLabels;
 
+const PARENT_SUPPLIED_RESULT: TeamsOverviewFetchResult = { status: "ok", teams: [] };
+
 /**
  * Authenticated `/teams` overview (docs/features/team-management/SPEC.md —
  * BR-11 through BR-13, BR-23). Uses this feature's established client-side
@@ -50,8 +52,22 @@ const RELATIONSHIP_LABELS: Record<TeamOverviewEntry["relationship"], string> =
  * what's currently shown. No authorization decision is made client-side;
  * the server remains the sole source of truth for every value actually
  * rendered.
+ *
+ * When `initialTeams` is supplied (the signed-in home already holds the teams
+ * list), the list is rendered as given and this component makes no read.
+ * Without it, the component fetches the overview itself, as above.
+ *
+ * When `initialTeams` is supplied, `onTeamsChanged` (optional) is called once
+ * after a successful request-access so the parent can re-run its own teams
+ * read and pass a fresh `initialTeams`. Without `initialTeams` it has no effect.
  */
-export function TeamsOverview() {
+export function TeamsOverview({
+  initialTeams,
+  onTeamsChanged,
+}: {
+  initialTeams?: TeamOverviewEntry[];
+  onTeamsChanged?: () => void;
+} = {}) {
   const [state, setState] = useState<ViewState>({ phase: "loading" });
   const [actionStates, setActionStates] = useState<Record<string, RequestActionState>>({});
 
@@ -62,6 +78,13 @@ export function TeamsOverview() {
 
     if (!token) {
       setState({ phase: "signed_out" });
+      return;
+    }
+
+    if (initialTeams !== undefined) {
+      // The parent already holds the teams list, so this component makes no
+      // read. The placeholder result is never rendered: `initialTeams` is.
+      setState({ phase: "loaded", token, generation, result: PARENT_SUPPLIED_RESULT });
       return;
     }
 
@@ -112,8 +135,14 @@ export function TeamsOverview() {
     setActionStates((prev) => ({ ...prev, [teamId]: { status: "idle" } }));
     // Re-fetch the authoritative overview rather than guessing the new
     // relationship client-side — `already_authorized` in particular could
-    // mean either `member` or `admin`, which only the server knows.
-    await loadOverviewForGeneration(token, generation);
+    // mean either `member` or `admin`, which only the server knows. When the
+    // parent supplied the list, this component makes no read and instead
+    // asks the parent to refresh its own list.
+    if (initialTeams === undefined) {
+      await loadOverviewForGeneration(token, generation);
+    } else {
+      onTeamsChanged?.();
+    }
   }
 
   if (state.phase === "loading") {
@@ -133,14 +162,14 @@ export function TeamsOverview() {
     return <Alert variant="error">{teamsCopy.overview.error}</Alert>;
   }
 
-  const { teams } = result;
+  const teams = initialTeams ?? result.teams;
 
   if (teams.length === 0) {
     return <EmptyState>{teamsCopy.overview.empty}</EmptyState>;
   }
 
   return (
-    <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
       {teams.map((team) => {
         const action = actionStates[team.teamId] ?? { status: "idle" as const };
         const canRequestAccess =

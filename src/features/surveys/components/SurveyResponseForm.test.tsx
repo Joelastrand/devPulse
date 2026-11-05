@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SurveyResponseForm } from "./SurveyResponseForm";
+import { surveysCopy } from "../copy";
 
 function submitButton() {
   return screen.getByRole("button", { name: /send inn/i });
@@ -154,5 +155,29 @@ describe("SurveyResponseForm", () => {
     expect(screen.queryByText(/sustainable workload/i)).toBeNull();
     expect(screen.queryByText(/motivation/i)).toBeNull();
     expect(screen.queryByText(/^submit$/i)).toBeNull();
+  });
+});
+
+describe("SurveyResponseForm composition (visual-redesign TASK-017)", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("keeps Forrige and Neste in a bottom action bar on phones, inline from md up", () => {
+    render(<SurveyResponseForm surveyId="survey-1" idToken={null} />);
+
+    const next = screen.getByRole("button", { name: surveysCopy.form.stepper.next });
+    const bar = next.parentElement as HTMLElement;
+    expect(bar.className).toContain("sticky");
+    expect(bar.className).toContain("bottom-0");
+    expect(bar.className).toContain("md:static");
+  });
+
+  it("shows the real question count, the disabled-Neste text, and no time estimate or percentage text", () => {
+    render(<SurveyResponseForm surveyId="survey-1" idToken={null} />);
+
+    expect(screen.getByText(surveysCopy.form.stepper.progress(1, 3))).toBeTruthy();
+    expect(screen.getByText(surveysCopy.form.stepper.nextDisabled)).toBeTruthy();
+    expect(document.body.textContent ?? "").not.toMatch(/minutt|ca\. \d|\d+\s?%/i);
   });
 });

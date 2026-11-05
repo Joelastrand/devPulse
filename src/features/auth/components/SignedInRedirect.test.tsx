@@ -29,11 +29,11 @@ describe("SignedInRedirect", () => {
     replaceMock.mockReset();
   });
 
-  it("redirects a signed-in visitor to /teams by default", () => {
+  it("redirects a signed-in visitor to / by default", () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     render(<SignedInRedirect />);
 
-    expect(replaceMock).toHaveBeenCalledWith("/teams");
+    expect(replaceMock).toHaveBeenCalledWith("/");
   });
 
   it("redirects to a validated survey continuation", () => {
@@ -47,7 +47,7 @@ describe("SignedInRedirect", () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     render(<SignedInRedirect continuation="https://evil.example/" />);
 
-    expect(replaceMock).toHaveBeenCalledWith("/teams");
+    expect(replaceMock).toHaveBeenCalledWith("/");
   });
 
   it("does not redirect a visitor who is signed out", () => {

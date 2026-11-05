@@ -1,3 +1,6 @@
+const privacyNote =
+  "Svarene lagres uten navn eller e-postadresse. Individuelle svar vises aldri. Teamet ser bare samlede resultater, og først når nok personer har svart.";
+
 /**
  * Norwegian user-facing copy for the Home page (`app/page.tsx`).
  *
@@ -19,8 +22,7 @@ export const homeCopy = {
   headline: "Fra innsikt til utvikling – sammen",
   description:
     "En kort, tilbakevendende pulsmåling for utviklere — arbeidsflyt og leveransetilfredshet, bærekraftig arbeidsmengde og stress, og glede og motivasjon.",
-  privacyNote:
-    "Svarene lagres uten navn eller e-postadresse. Individuelle svar vises aldri. Teamet ser bare samlede resultater, og først når nok personer har svart.",
+  privacyNote,
   values: [
     {
       title: "Følg utvikling",
@@ -36,9 +38,11 @@ export const homeCopy = {
     },
   ],
   trust: [
-    { title: "Personvern først", description: "Svar uten navn eller e-postadresse" },
+    {
+      title: "Personvern først",
+      description: privacyNote,
+    },
     { title: "Bygget for team", description: "Samarbeid, læring og utvikling" },
-    { title: "Enkel å bruke", description: "Fokus på det som skaper verdi" },
   ],
   actions: {
     signIn: { label: "Logg inn", href: "/sign-in" },

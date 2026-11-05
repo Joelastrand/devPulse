@@ -7,6 +7,8 @@
 export const profileCopy = {
   pageTitle: "Min profil",
   pageDescription: "Velg hvordan du vises for andre i teamene dine.",
+  /** Visual-redesign TASK-016: the primary header action moves to the display-name form (no hidden state). */
+  editAction: "Rediger profil",
   teamsTitle: "Team",
   teamsDescription: "Teamene du er medlem av, med resultater og roadmap.",
   teamsLink: "Se teamene dine",

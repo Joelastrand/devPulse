@@ -32,6 +32,15 @@ export interface PlanningActions {
   loadOwners(force?: boolean): void;
 }
 
+/**
+ * The team's non-archived plans from the scope's single roadmap read, for the team overview summary
+ * (docs/features/visual-fidelity-and-ui-fixes TASK-028). No second fetch; a failure is reported as `error`.
+ */
+export type PlanSummaryState =
+  | { phase: "loading" }
+  | { phase: "error" }
+  | { phase: "loaded"; items: RoadmapItemView[] };
+
 /** What `TeamSkillSection` needs to place plans inside its area rows. */
 export interface AreaPlanning {
   orderAreas<A extends { treeId: string; name: string }>(areas: A[]): A[];
@@ -39,6 +48,8 @@ export interface AreaPlanning {
   controls: ReactNode;
   /** Plans whose area the team no longer tracks (`tracking.state === "not_tracked"`); `null` when none. */
   untracked: ReactNode;
+  /** Non-archived plans from the same roadmap read (TASK-028). */
+  plans: PlanSummaryState;
 }
 
 /**
@@ -88,8 +99,15 @@ export function RoadmapPlanningScope({
     if (!planByTree.has(item.treeId)) planByTree.set(item.treeId, item);
   }
   const actions: PlanningActions = { token, teamId, refresh, owners, loadOwners };
+  const plans: PlanSummaryState =
+    base.phase === "loaded"
+      ? { phase: "loaded", items: baseItems.filter((item) => !item.archived) }
+      : base.phase === "loading"
+        ? { phase: "loading" }
+        : { phase: "error" };
 
   const planning: AreaPlanning = {
+    plans,
     orderAreas: (areas) =>
       base.phase === "loaded"
         ? orderAreasForPlanning(

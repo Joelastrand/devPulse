@@ -406,3 +406,13 @@ describe("ProfileForm — safety", () => {
     expect(screen.queryByLabelText("Visningsnavn")).toBeNull();
   });
 });
+
+describe("ProfileForm anchor (visual-redesign TASK-016)", () => {
+  it("renders the display-name form with the id the profile page's 'Rediger profil' link targets", async () => {
+    await renderLoaded("Kari");
+
+    const form = document.getElementById("profile-form");
+    expect(form?.tagName).toBe("FORM");
+    expect(form?.querySelector("input")).not.toBeNull();
+  });
+});

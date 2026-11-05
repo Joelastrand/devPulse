@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useRef, useState } from "react";
+import { UserCog } from "lucide-react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
+import { Icon } from "../../../components/ui/Icon";
 import { LoadingState } from "../../../components/ui/LoadingState";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import { fetchAdminSkillTrees, type AdminSkillTreeEntry } from "../../skill-trees/client/skill-trees-gateway";
@@ -35,6 +37,7 @@ export function AdminRoles() {
   const [panel, setPanel] = useState<Panel>(null);
   const [busyRoleId, setBusyRoleId] = useState<string>();
   const [actionError, setActionError] = useState<{ roleId: string; message: string }>();
+  const [selectedRoleId, setSelectedRoleId] = useState<string>();
   const isCurrentRef = useRef<((generation: number) => boolean) | null>(null);
 
   useAuthGatedResource((token, generation, isCurrentGeneration) => {
@@ -93,6 +96,8 @@ export function AdminRoles() {
   const catalogAvailable = catalog.status === "ok";
   const catalogTrees = catalog.status === "ok" ? catalog.trees : [];
 
+  const loadedRoles = state.phase === "loaded" && state.result.status === "ok" ? state.result.roles : [];
+  const selectedRole = loadedRoles.find((role) => role.roleId === selectedRoleId) ?? loadedRoles[0];
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -127,11 +132,42 @@ export function AdminRoles() {
       {result.roles.length === 0 ? (
         <p className="text-zinc-600 dark:text-zinc-400">{adminRolesCopy.empty}</p>
       ) : (
-        <ul className="flex flex-col gap-4">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] lg:items-start">
+          {/* Split view (visual-redesign TASK-015): on lg the list is the left column and only the selected role is shown on the right. */}
+          <ul aria-label={adminRolesCopy.splitListLabel} className="hidden flex-col gap-2 lg:flex">
+            {result.roles.map((role) => (
+              <li key={role.roleId}>
+                <button
+                  type="button"
+                  aria-pressed={role.roleId === selectedRole?.roleId}
+                  onClick={() => {
+                    setSelectedRoleId(role.roleId);
+                    // An open editor belongs to the role it was opened for; it must not stay open on a hidden row.
+                    if (panel?.kind === "edit" && panel.roleId !== role.roleId) setPanel(null);
+                  }}
+                  className={`flex w-full flex-col gap-1 rounded-md border px-3 py-2 text-left text-sm ${
+                    role.roleId === selectedRole?.roleId ? "border-primary bg-primary-subtle" : "border-border-subtle"
+                  }`}
+                >
+                  <span className="flex items-center gap-2 font-medium text-text-primary">
+                    <Icon icon={UserCog} size="inline" />
+                    {role.name}
+                  </span>
+                  {role.description !== undefined && <span className="line-clamp-2 text-xs text-text-secondary">{role.description}</span>}
+                  <span className="text-xs text-text-secondary">
+                    {adminRolesCopy.expectationCount(role.expectations.length)}
+                    {role.archived ? ` · ${adminRolesCopy.statusArchived}` : ""}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        <ul className="flex min-w-0 flex-col gap-4">
           {result.roles.map((role) => (
             <RoleRow
               key={role.roleId}
               role={role}
+              selected={role.roleId === selectedRole?.roleId}
               token={state.token}
               catalog={catalogTrees}
               catalogAvailable={catalogAvailable}
@@ -149,6 +185,7 @@ export function AdminRoles() {
             />
           ))}
         </ul>
+        </div>
       )}
     </div>
   );
@@ -156,6 +193,8 @@ export function AdminRoles() {
 
 interface RoleRowProps {
   role: AdminRoleView;
+  /** On lg the split view shows only the selected role; below lg every role stays visible. */
+  selected: boolean;
   token: string;
   catalog: AdminSkillTreeEntry[];
   catalogAvailable: boolean;
@@ -169,6 +208,7 @@ interface RoleRowProps {
 
 function RoleRow({
   role,
+  selected,
   token,
   catalog,
   catalogAvailable,
@@ -180,7 +220,7 @@ function RoleRow({
   onArchiveChange,
 }: RoleRowProps) {
   return (
-    <li className="rounded-md border border-zinc-200 p-4 dark:border-zinc-800">
+    <li className={`rounded-md border border-zinc-200 p-4 dark:border-zinc-800 ${selected ? "" : "lg:hidden"}`}>
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">{role.name}</h2>
         <span className="rounded bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">

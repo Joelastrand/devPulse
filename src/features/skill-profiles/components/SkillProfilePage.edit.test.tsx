@@ -92,7 +92,7 @@ describe("SkillProfilePage — level select (TASK-008)", () => {
     expect(within(row).getByRole("status").textContent).toBe("");
     expect(row.textContent).toContain("Avansert");
     expect(screen.getByText("Du har vurdert 2 av 2 ferdigheter.")).toBeTruthy();
-    expect(screen.getByText("Avansert: 1")).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "Avansert" })).getByText("1")).toBeTruthy();
   });
 
   it("applies the server's canonical level, not the chosen one", async () => {

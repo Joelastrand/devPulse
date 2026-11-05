@@ -65,7 +65,7 @@ describe("AppShell mobile drawer", () => {
 
     const dialog = screen.getByRole("dialog", { name: "Hovednavigasjon" });
     expect(within(dialog).getByRole("link", { name: "Ferdigheter" })).toBeTruthy();
-    expect(within(dialog).getByRole("button", { name: /logg ut/i })).toBeTruthy();
+    expect(within(dialog).queryByRole("button", { name: /logg ut/i })).toBeNull();
   });
 
   it("moves focus to the current link when it opens", async () => {

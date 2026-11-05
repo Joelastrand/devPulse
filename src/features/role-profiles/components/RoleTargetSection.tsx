@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
+import { Card } from "../../../components/ui/Card";
 import { LoadingState } from "../../../components/ui/LoadingState";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import {
@@ -100,7 +101,7 @@ export function RoleTargetSection() {
   }
 
   return (
-    <section aria-labelledby="role-target-heading" className="mt-10 flex flex-col gap-4">
+    <Card as="section" padding="sm" aria-labelledby="role-target-heading" className="flex flex-col gap-4">
       <h2 id="role-target-heading" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
         {personRoleCopy.sectionHeading}
       </h2>
@@ -120,7 +121,7 @@ export function RoleTargetSection() {
           onClear={() => void clearRole(state)}
         />
       )}
-    </section>
+    </Card>
   );
 }
 

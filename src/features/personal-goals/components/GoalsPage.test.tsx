@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { goalsCopy } from "../copy";
+import { expectHeadingStructure } from "../../../components/ui/heading-structure";
 import type { GoalDto, GoalListResponse } from "../domain/goal";
 
 const observeIdTokenMock = vi.fn();
@@ -262,5 +263,65 @@ describe("GoalsPage", () => {
       recoveryItems: [{ goalId: "r" }],
     });
     expect(screen.queryByRole("button", { name: /reparer|gjenopprett|arkiv/i })).toBeNull();
+  });
+});
+
+describe("GoalsPage composition (visual-redesign TASK-011)", () => {
+  it("filters the list with the status tabs, which show counts", async () => {
+    await renderReady({
+      goals: [
+        goal({ id: "a", title: "Aktivt mål", status: "active" }),
+        goal({ id: "b", title: "Ferdig mål", status: "completed", completedAt: "2026-02-01T00:00:00.000Z" }),
+      ],
+    });
+    const user = userEvent.setup();
+
+    expect(screen.getByRole("button", { name: `${goalsCopy.tabs.active} (1)` }).getAttribute("aria-pressed")).toBe("false");
+    await user.click(screen.getByRole("button", { name: `${goalsCopy.tabs.completed} (1)` }));
+    expect(screen.getByText("Ferdig mål")).toBeTruthy();
+    expect(screen.queryByText("Aktivt mål")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: `${goalsCopy.tabs.active} (1)` }));
+    expect(screen.getByText("Aktivt mål")).toBeTruthy();
+    expect(screen.queryByText("Ferdig mål")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: `${goalsCopy.tabs.all} (2)` }));
+    expect(screen.getByText("Aktivt mål")).toBeTruthy();
+    expect(screen.getByText(goalsCopy.completedSummary(1))).toBeTruthy();
+  });
+
+  it("shows the summary counts as stat tiles, with no progress indicator or percentage", async () => {
+    await renderReady({
+      goals: [
+        goal({ id: "a", title: "Aktivt mål", status: "active" }),
+        goal({ id: "b", title: "Ferdig mål", status: "completed", completedAt: "2026-02-01T00:00:00.000Z" }),
+      ],
+    });
+
+    expect(within(screen.getByRole("region", { name: goalsCopy.tabs.active })).getByText("1")).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: goalsCopy.tabs.completed })).getByText("1")).toBeTruthy();
+    expect(screen.queryByRole("progressbar")).toBeNull();
+    expect(document.body.textContent ?? "").not.toMatch(/\d+\s?%/);
+  });
+
+  it("lists only the linked skill areas in the side panel", async () => {
+    await renderReady({
+      goals: [
+        goal({ id: "a", title: "Første", areaName: "Arkitektur" }),
+        goal({ id: "b", title: "Andre", areaName: "Arkitektur" }),
+        goal({ id: "c", title: "Tredje", areaName: null }),
+      ],
+    });
+
+    const panel = screen.getByRole("heading", { name: goalsCopy.linkedAreasHeading }).closest("aside") as HTMLElement;
+    expect(within(panel).getAllByText("Arkitektur")).toHaveLength(1);
+    expect(within(panel).queryByText("Tredje")).toBeNull();
+  });
+});
+
+describe("goals heading structure (visual-redesign TASK-019)", () => {
+  it("keeps a valid heading hierarchy for the loaded goals view", async () => {
+    await renderReady({ goals: [goal({ id: "a", title: "Mål" })] });
+    expectHeadingStructure(document.body, { ownsPageTitle: false });
   });
 });

@@ -79,6 +79,12 @@ export function buildTrendSeries(
 }
 
 /**
+ * Axis tick text takes the theme's muted text colour. Recharts' default tick fill is a grey that measures 2.65:1 on
+ * the dark surface (below AA 4.5:1); a presentation attribute cannot read a CSS variable, so the colour is set in style.
+ */
+const AXIS_TICK = { fontSize: 12, style: { fill: "var(--color-text-muted)" } } as const;
+
+/**
  * One line per dimension, reusing `TrendTable`'s own column labels
  * (BR-2: no duplicate copy source). Each line also carries a distinct dash
  * pattern (solid/dashed/dotted), not just a distinct color, so the three
@@ -137,10 +143,11 @@ export function TrendChart({ results }: { results: readonly SurveyResultSummary[
       </p>
       <div aria-hidden="true" className="mt-4 h-64 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
+          {/* The chart is aria-hidden (the table below carries the values); recharts' keyboard layer would make it focusable. */}
+          <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 8 }} accessibilityLayer={false}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-zinc-200 dark:stroke-zinc-800" />
-            <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-            <YAxis domain={VALUE_DOMAIN} allowDecimals={false} tick={{ fontSize: 12 }} />
+            <XAxis dataKey="date" tick={AXIS_TICK} />
+            <YAxis domain={VALUE_DOMAIN} allowDecimals={false} tick={AXIS_TICK} />
             <Tooltip formatter={formatTooltipValue} labelFormatter={formatTooltipLabel} />
             <Legend />
             {DIMENSION_LINES.map(({ key, color, dash, label }) => (
