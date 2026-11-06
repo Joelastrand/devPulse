@@ -68,6 +68,11 @@ person's own current self-report.
 - A strict owner-only privacy contract plus a static scope guard that keeps it
   honest (truthfully bounded, BR-18).
 
+## C2 participation control composition exception (team-experience-redesign TASK-009, 2026-11-06)
+- Owner decision (Option A, narrow): `/me/skills` may mount **one** C2 control, "Del kompetanse med teamet", implemented as `OwnCompetenceSharing` from `src/features/team-skills/components/`. It is the existing C2 participation panel per team the caller is a member of, OFF by default, reversible, notice-version-bound and enforced server-side through the existing owner-only C2 participation endpoint.
+- This is a UI placement exception only. It does **not** authorize sharing private C1 assessments: `skillProfiles` content still reaches no other person, lead or admin, and the C2 control reads and writes only `teamMemberships.skillContribution`. Team-facing output stays categorical with k = 5 (SECURITY invariants 32–35).
+- The exception is enforced by an exact-match guard in `src/features/skill-profiles/skill-profiles-cross-cutting.test.ts` (`APPROVED_C2_COMPOSITION`). That guard is change-detection, not a security boundary. Any other C1 → C2 import, or a second use of the control, fails it.
+
 ## Out of scope
 - C2: `teamSkillNeeds`, Team Skill Matrix, team gap/coverage analysis, any
   aggregate or aggregate endpoint, any minimum-cohort calculation or

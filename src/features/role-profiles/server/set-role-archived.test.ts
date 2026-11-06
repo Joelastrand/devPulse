@@ -5,6 +5,7 @@ import type { RawSkillTreeRead, RawSkillTreeReader } from "./skill-tree-seam-typ
 
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const CREATED_AT = new Date("2026-10-01T10:00:00Z");
 const ARCHIVED_AT = new Date("2026-10-04T10:00:00Z");
 
@@ -39,7 +40,7 @@ function seededStore(extra: Record<string, unknown> = {}) {
 function deps(overrides: Partial<SetRoleArchivedDeps> = {}): SetRoleArchivedDeps {
   return {
     verifyToken: vi.fn().mockResolvedValue({ uid: ADMIN_UID, email: ADMIN_EMAIL, email_verified: true }),
-    allowList: [ADMIN_EMAIL],
+    isSuperadmin: isAdminUid,
     store: seededStore(),
     treeReader,
     now: () => ARCHIVED_AT,
@@ -51,7 +52,7 @@ describe("setRoleArchived", () => {
   it("refuses a non-admin caller with zero writes", async () => {
     const store = seededStore();
     const spy = vi.spyOn(store, "update");
-    expect(await setRoleArchived("token", "role-1", true, deps({ store, allowList: [] }))).toEqual({
+    expect(await setRoleArchived("token", "role-1", true, deps({ store, isSuperadmin: async () => false }))).toEqual({
       ok: false,
       error: "forbidden",
     });

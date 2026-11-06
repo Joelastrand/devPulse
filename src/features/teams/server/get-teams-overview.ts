@@ -83,7 +83,7 @@ export type GetTeamsOverviewResult =
 export interface GetTeamsOverviewDeps {
   now?: Date;
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: IsAppAdminDeps["allowList"];
+  isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   activeTeamsCollection?: ActiveTeamsCollection;
   resolveInvitationsCollection?: ResolveInvitationsCollection;
   collection?: TeamsOverviewCollection;
@@ -149,7 +149,7 @@ export async function getTeamsOverview(
   }
 
   const collection = deps.collection ?? getDefaultCollection();
-  const admin = isAppAdmin(identity, { allowList: deps.allowList });
+  const admin = await isAppAdmin(identity, { isSuperadmin: deps.isSuperadmin });
 
   let rawMemberships: unknown[];
   let rawAccessRequests: unknown[];

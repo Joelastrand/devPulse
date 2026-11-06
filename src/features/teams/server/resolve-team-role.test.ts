@@ -13,7 +13,9 @@ function identity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
 const adminIdentity = () => identity({ uid: "admin-1", email: ADMIN_EMAIL });
 
 const plainMembership = { uid: "user-1", teamId: "team-1", createdAt: new Date(), createdVia: "invitation", grantedBy: "a" };
-const leadMembership = { ...plainMembership, role: "lead" };
+const leadMembership = { ...plainMembership, role: "teamadmin" };
+// A pre-existing document written when `lead` was the editing role: must grant nothing.
+const legacyLeadMembership = { ...plainMembership, role: "lead" };
 
 interface FakeState {
   teams?: Record<string, unknown>;
@@ -39,7 +41,7 @@ function fakeCollection(state: FakeState) {
   return { collection, calls };
 }
 
-const deps = (collection: AuthorizeTeamAccessCollection) => ({ allowList: [ADMIN_EMAIL], collection });
+const deps = (collection: AuthorizeTeamAccessCollection) => ({ isSuperadmin: async (uid: string) => uid === "admin-1", collection });
 
 async function roleOf(id: VerifiedIdentity, state: FakeState) {
   return resolveTeamRole(id, "team-1", deps(fakeCollection(state).collection));
@@ -48,11 +50,11 @@ async function roleOf(id: VerifiedIdentity, state: FakeState) {
 describe("resolveTeamRole", () => {
   describe("admin", () => {
     it("resolves an app admin on an active team to admin", async () => {
-      expect(await roleOf(adminIdentity(), { teams: { "team-1": "active" } })).toEqual({ ok: true, role: "admin" });
+      expect(await roleOf(adminIdentity(), { teams: { "team-1": "active" } })).toMatchObject({ ok: true, role: "admin" });
     });
 
     it("resolves an app admin on a disabled team to admin (existing admin semantics)", async () => {
-      expect(await roleOf(adminIdentity(), { teams: { "team-1": "disabled" } })).toEqual({ ok: true, role: "admin" });
+      expect(await roleOf(adminIdentity(), { teams: { "team-1": "disabled" } })).toMatchObject({ ok: true, role: "admin" });
     });
 
     it("resolves an app admin who also holds a lead membership to admin, never lead", async () => {
@@ -61,7 +63,7 @@ describe("resolveTeamRole", () => {
         memberships: { "admin-1__team-1": { ...leadMembership, uid: "admin-1" } },
       });
 
-      expect(result).toEqual({ ok: true, role: "admin" });
+      expect(result).toMatchObject({ ok: true, role: "admin" });
     });
 
     it("resolves an app admin who is an ordinary member to admin", async () => {
@@ -70,7 +72,7 @@ describe("resolveTeamRole", () => {
         memberships: { "admin-1__team-1": { ...plainMembership, uid: "admin-1" } },
       });
 
-      expect(result).toEqual({ ok: true, role: "admin" });
+      expect(result).toMatchObject({ ok: true, role: "admin" });
     });
 
     it("does not treat an allow-listed but unverified e-mail as admin", async () => {
@@ -78,7 +80,7 @@ describe("resolveTeamRole", () => {
         teams: { "team-1": "active" },
       });
 
-      expect(result).toEqual({ ok: true, role: "denied" });
+      expect(result).toMatchObject({ ok: true, role: "denied" });
     });
   });
 
@@ -88,13 +90,13 @@ describe("resolveTeamRole", () => {
     it("resolves a member with role: lead to lead", async () => {
       const result = await roleOf(identity(), { teams: active, memberships: { "user-1__team-1": leadMembership } });
 
-      expect(result).toEqual({ ok: true, role: "lead" });
+      expect(result).toMatchObject({ ok: true, role: "teamadmin" });
     });
 
     it("resolves a membership without a role field (every pre-existing document) to member", async () => {
       const result = await roleOf(identity(), { teams: active, memberships: { "user-1__team-1": plainMembership } });
 
-      expect(result).toEqual({ ok: true, role: "member" });
+      expect(result).toMatchObject({ ok: true, role: "member" });
     });
 
     it.each([
@@ -110,7 +112,7 @@ describe("resolveTeamRole", () => {
         memberships: { "user-1__team-1": { ...plainMembership, role } },
       });
 
-      expect(result).toEqual({ ok: true, role: "member" });
+      expect(result).toMatchObject({ ok: true, role: "member" });
     });
 
     it("ignores roleUpdated* fields when classifying", async () => {
@@ -119,7 +121,7 @@ describe("resolveTeamRole", () => {
         memberships: { "user-1__team-1": { ...plainMembership, roleUpdatedAt: new Date(), roleUpdatedBy: "admin-1" } },
       });
 
-      expect(result).toEqual({ ok: true, role: "member" });
+      expect(result).toMatchObject({ ok: true, role: "member" });
     });
 
     it("supports several leads in one team independently", async () => {
@@ -129,9 +131,9 @@ describe("resolveTeamRole", () => {
         "user-3__team-1": { ...plainMembership, uid: "user-3" },
       };
 
-      expect(await roleOf(identity({ uid: "user-1" }), { teams: active, memberships })).toEqual({ ok: true, role: "lead" });
-      expect(await roleOf(identity({ uid: "user-2" }), { teams: active, memberships })).toEqual({ ok: true, role: "lead" });
-      expect(await roleOf(identity({ uid: "user-3" }), { teams: active, memberships })).toEqual({ ok: true, role: "member" });
+      expect(await roleOf(identity({ uid: "user-1" }), { teams: active, memberships })).toMatchObject({ ok: true, role: "teamadmin" });
+      expect(await roleOf(identity({ uid: "user-2" }), { teams: active, memberships })).toMatchObject({ ok: true, role: "teamadmin" });
+      expect(await roleOf(identity({ uid: "user-3" }), { teams: active, memberships })).toMatchObject({ ok: true, role: "member" });
     });
   });
 
@@ -139,7 +141,7 @@ describe("resolveTeamRole", () => {
     const active = { "team-1": "active" };
 
     it("resolves a non-member to denied", async () => {
-      expect(await roleOf(identity(), { teams: active })).toEqual({ ok: true, role: "denied" });
+      expect(await roleOf(identity(), { teams: active })).toMatchObject({ ok: true, role: "denied" });
     });
 
     it("resolves a membership document belonging to a different uid to denied, even if it claims lead", async () => {
@@ -148,7 +150,7 @@ describe("resolveTeamRole", () => {
         memberships: { "user-1__team-1": { ...leadMembership, uid: "someone-else" } },
       });
 
-      expect(result).toEqual({ ok: true, role: "denied" });
+      expect(result).toMatchObject({ ok: true, role: "denied" });
     });
 
     it("resolves a membership document belonging to a different team to denied, even if it claims lead", async () => {
@@ -157,7 +159,7 @@ describe("resolveTeamRole", () => {
         memberships: { "user-1__team-1": { ...leadMembership, teamId: "team-2" } },
       });
 
-      expect(result).toEqual({ ok: true, role: "denied" });
+      expect(result).toMatchObject({ ok: true, role: "denied" });
     });
 
     it("resolves a lead of another team to denied for this team", async () => {
@@ -166,16 +168,16 @@ describe("resolveTeamRole", () => {
         memberships: { "user-1__team-2": { ...leadMembership, teamId: "team-2" } },
       });
 
-      expect(result).toEqual({ ok: true, role: "denied" });
+      expect(result).toMatchObject({ ok: true, role: "denied" });
     });
 
     it("resolves a removed lead (membership deleted) to denied", async () => {
       const state: FakeState = { teams: active, memberships: { "user-1__team-1": leadMembership } };
-      expect(await roleOf(identity(), state)).toEqual({ ok: true, role: "lead" });
+      expect(await roleOf(identity(), state)).toMatchObject({ ok: true, role: "teamadmin" });
 
       delete state.memberships?.["user-1__team-1"];
 
-      expect(await roleOf(identity(), state)).toEqual({ ok: true, role: "denied" });
+      expect(await roleOf(identity(), state)).toMatchObject({ ok: true, role: "denied" });
     });
 
     it.each([
@@ -187,8 +189,8 @@ describe("resolveTeamRole", () => {
       const teams = { "team-1": status };
       const memberships = { "user-1__team-1": leadMembership };
 
-      expect(await roleOf(identity(), { teams, memberships })).toEqual({ ok: true, role: "denied" });
-      expect(await roleOf(adminIdentity(), { teams, memberships })).toEqual({ ok: true, role: "denied" });
+      expect(await roleOf(identity(), { teams, memberships })).toMatchObject({ ok: true, role: "denied" });
+      expect(await roleOf(adminIdentity(), { teams, memberships })).toMatchObject({ ok: true, role: "denied" });
     });
   });
 
@@ -198,27 +200,27 @@ describe("resolveTeamRole", () => {
     it("keeps an ordinary member a member (existing access semantics)", async () => {
       const result = await roleOf(identity(), { teams: disabled, memberships: { "user-1__team-1": plainMembership } });
 
-      expect(result).toEqual({ ok: true, role: "member" });
+      expect(result).toMatchObject({ ok: true, role: "member" });
     });
 
-    it("resolves a stored lead to member, not lead — the role is dormant, not removed", async () => {
-      const state: FakeState = { teams: disabled, memberships: { "user-1__team-1": leadMembership } };
+    it("resolves a stored legacy lead to member — the role is dormant, not removed", async () => {
+      const state: FakeState = { teams: disabled, memberships: { "user-1__team-1": legacyLeadMembership } };
 
-      expect(await roleOf(identity(), state)).toEqual({ ok: true, role: "member" });
-      expect(state.memberships?.["user-1__team-1"]).toEqual(leadMembership);
+      expect(await roleOf(identity(), state)).toMatchObject({ ok: true, role: "member" });
+      expect(state.memberships?.["user-1__team-1"]).toEqual(legacyLeadMembership);
     });
 
-    it("makes the stored lead effective again once the team is re-activated", async () => {
+    it("makes a stored teamadmin effective again once the team is re-activated", async () => {
       const state: FakeState = { teams: { ...disabled }, memberships: { "user-1__team-1": leadMembership } };
-      expect(await roleOf(identity(), state)).toEqual({ ok: true, role: "member" });
+      expect(await roleOf(identity(), state)).toMatchObject({ ok: true, role: "teamadmin", canAdminister: false });
 
       state.teams = { "team-1": "active" };
 
-      expect(await roleOf(identity(), state)).toEqual({ ok: true, role: "lead" });
+      expect(await roleOf(identity(), state)).toMatchObject({ ok: true, role: "teamadmin" });
     });
 
     it("still denies a non-member", async () => {
-      expect(await roleOf(identity(), { teams: disabled })).toEqual({ ok: true, role: "denied" });
+      expect(await roleOf(identity(), { teams: disabled })).toMatchObject({ ok: true, role: "denied" });
     });
   });
 
@@ -284,7 +286,7 @@ describe("resolveTeamRole", () => {
         const authorized = await authorizeTeamAccess(id, "team-1", deps(fakeCollection(state).collection));
         const resolved = await roleOf(id, state);
 
-        expect(resolved).toEqual(
+        expect(resolved).toMatchObject(
           authorized.ok ? { ok: true, role: authorized.access } : { ok: false, error: authorized.error },
         );
       }
@@ -297,17 +299,17 @@ describe("resolveTeamRole", () => {
       const resolved = await roleOf(identity(), state);
 
       expect(authorized).toEqual({ ok: true, access: "member" });
-      expect(resolved).toEqual({ ok: true, role: "lead" });
+      expect(resolved).toMatchObject({ ok: true, role: "teamadmin" });
     });
 
-    it("never reads more than authorizeTeamAccess does for an admin or a non-member (no extra reads on those paths)", async () => {
+    it("reads membership no more than authorizeTeamAccess, plus one team-status read for canAdminister", async () => {
       const { collection, calls } = fakeCollection({ teams: { "team-1": "active" } });
       await resolveTeamRole(identity(), "team-1", deps(collection));
-      const baseline = { ...calls };
       const again = fakeCollection({ teams: { "team-1": "active" } });
       await authorizeTeamAccess(identity(), "team-1", deps(again.collection));
 
-      expect(baseline).toEqual(again.calls);
+      expect(calls.membership).toBe(again.calls.membership);
+      expect(calls.status).toBe(again.calls.status + 1);
     });
 
     it("returns only the role — no uid, e-mail, membership document or audit fields", async () => {
@@ -316,8 +318,8 @@ describe("resolveTeamRole", () => {
         memberships: { "user-1__team-1": { ...leadMembership, roleUpdatedBy: "admin-1", roleUpdatedAt: new Date() } },
       });
 
-      expect(result).toEqual({ ok: true, role: "lead" });
-      expect(Object.keys(result).sort()).toEqual(["ok", "role"]);
+      expect(result).toMatchObject({ ok: true, role: "teamadmin" });
+      expect(Object.keys(result).sort()).toEqual(["canAdminister", "ok", "role"]);
     });
   });
 });

@@ -35,7 +35,7 @@ export type RemoveTeamMemberResult =
 
 export interface RemoveTeamMemberDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: IsAppAdminDeps["allowList"];
+  isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   collection?: RemoveMemberCollection;
 }
 
@@ -56,7 +56,7 @@ export async function removeTeamMember(
 ): Promise<RemoveTeamMemberResult> {
   const admin = await requireAppAdmin(idToken, {
     verifyToken: deps.verifyToken,
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
   });
   if (!admin.ok) {
     return { ok: false, error: admin.error };

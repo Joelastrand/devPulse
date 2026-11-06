@@ -60,7 +60,7 @@ function getDefaultStore(): AssignableMembersStore {
 
 export interface ListAssignableMembersDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: AuthorizeTeamAccessDeps["allowList"];
+  isSuperadmin?: AuthorizeTeamAccessDeps["isSuperadmin"];
   /** Seam for `authorizeTeamAccess`'s own reads. */
   collection?: AuthorizeTeamAccessDeps["collection"];
   store?: AssignableMembersStore;
@@ -103,7 +103,7 @@ export async function listAssignableMembers(
   const callerUid = verified.identity.uid;
 
   const authorized = await authorizeTeamAccess(verified.identity, teamId, {
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
     collection: deps.collection,
   });
   if (!authorized.ok) {

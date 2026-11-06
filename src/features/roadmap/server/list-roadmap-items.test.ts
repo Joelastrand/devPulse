@@ -18,6 +18,7 @@ vi.mock("../../../lib/firebase/admin", () => ({
 }));
 
 const ADMIN_EMAIL = "admin@example.com";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === "admin-1";
 const NOW = new Date("2026-06-15T10:00:00Z"); // 2026-06-15 in Oslo
 const T0 = new Date("2026-01-01T00:00:00Z");
 const day = (n: number) => new Date(T0.getTime() + n * 86_400_000);
@@ -119,7 +120,7 @@ function build(world: World, callerUid = "user-1") {
     verifyToken: vi
       .fn()
       .mockResolvedValue({ uid: callerUid, email: callerUid === "admin-1" ? ADMIN_EMAIL : `${callerUid}@example.com`, email_verified: true }),
-    allowList: [ADMIN_EMAIL],
+    isSuperadmin: isAdminUid,
     collection,
     store,
     now: () => NOW,
@@ -162,7 +163,7 @@ describe("listRoadmapItems — authorization", () => {
   it("gives a lead no extra capability (same result as a member)", async () => {
     const r = await items(
       memberWorld({
-        memberships: { "user-1__team-1": member("user-1", 1, { role: "lead" }) },
+        memberships: { "user-1__team-1": member("user-1", 1, { role: "teamadmin" }) },
         plans: [doc("tree-a")],
       }),
     );

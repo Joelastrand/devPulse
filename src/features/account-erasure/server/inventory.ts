@@ -134,6 +134,11 @@ const PERSON_OWNED: readonly InventoryRow[] = [
   { id: "I-13", collection: "forumThreads", locator: "uidField", class: "DELETE", fields: [uid("authorUid")] },
   { id: "I-14", collection: "forumReplies", locator: "uidField", class: "ANONYMIZE", fields: [uid("authorUid")] },
   { id: "I-15", collection: "accountErasures", locator: "docIdIsUid", class: "TRANSIENT", fields: [] },
+  // I-16 (superadmin registry, docs/SECURITY.md superadmin section). The record is keyed by the Firebase Auth UID and stores the
+  // grant state of that person. Erasure must revoke it through the registry rules (last-superadmin protection and the
+  // control count), never by a bare delete. The erasure adapter for this row is required before cutover (see the
+  // superadmin cutover document).
+  { id: "I-16", collection: "superadmins", locator: "docIdIsUid", class: "DELETE", fields: [] },
 ];
 
 /** A-rows: actor and audit identities on preserved records (D5). Each field is set to null or to the erased marker. */
@@ -180,6 +185,36 @@ const ACTOR_AUDIT: readonly InventoryRow[] = [
     fields: [uid("grantedBy"), uid("roleUpdatedBy")],
   },
   { id: "A-12", collection: "teams", locator: "fieldsOnly", class: "ANONYMIZE", fields: [uid("createdBy")] },
+  {
+    id: "A-13",
+    collection: "teamSystems",
+    locator: "fieldsOnly",
+    class: "ANONYMIZE",
+    fields: [uid("createdBy"), uid("updatedBy"), uid("assessedBy")],
+  },
+  {
+    id: "A-14",
+    collection: "teamSystems",
+    locator: "fieldsOnly",
+    class: "DETACH",
+    fields: [memberRef("knowledgeMemberRefs")],
+  },
+  {
+    id: "A-15",
+    collection: "teamProjectParticipations",
+    locator: "fieldsOnly",
+    class: "DELETE",
+    fields: [memberRef("memberRef")],
+  },
+  // A-16: the superadmin registry records the granting and revoking administrator on each record. Erasing a person clears
+  // those references on other people's records and keeps the record state (the registry count is never changed by this row).
+  {
+    id: "A-16",
+    collection: "superadmins",
+    locator: "fieldsOnly",
+    class: "ANONYMIZE",
+    fields: [uid("grantedByUid"), uid("revokedByUid")],
+  },
 ];
 
 /** P-rows: preserved records with no person linkage, or anonymous. Listed so the sweep knows they are intentional. */
@@ -290,4 +325,17 @@ export const ACTOR_AUDIT_TARGETS = [
   { collection: "teamMemberships", field: "grantedBy" },
   { collection: "teamMemberships", field: "roleUpdatedBy" },
   { collection: "teams", field: "createdBy" },
+  // A-13 (team-system-overview, owner decision OQ-1, 2026-11-05). `assessedBy` is stored inside each assessment map, so its
+  // target is the dotted field path. Each target is one closed entry, like the others.
+  { collection: "teamSystems", field: "createdBy" },
+  { collection: "teamSystems", field: "updatedBy" },
+  { collection: "teamSystems", field: "availability.assessedBy" },
+  { collection: "teamSystems", field: "maintainability.assessedBy" },
+  { collection: "teamSystems", field: "security.assessedBy" },
+  { collection: "teamSystems", field: "reliability.assessedBy" },
+  { collection: "teamSystems", field: "testability.assessedBy" },
+  { collection: "teamSystems", field: "deployability.assessedBy" },
+  { collection: "teamSystems", field: "observability.assessedBy" },
+  { collection: "superadmins", field: "grantedByUid" },
+  { collection: "superadmins", field: "revokedByUid" },
 ] as const;

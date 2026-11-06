@@ -1,4 +1,5 @@
 import "server-only";
+import type { IsAppAdminDeps } from "../../teams/domain/app-admin";
 import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import { isWellFormedTreeId } from "../../skill-profiles/domain/skill-profile";
 import { isValidSkillTree } from "../../skill-trees/domain/skill-tree";
@@ -8,7 +9,7 @@ import {
   skillNeedDocId,
   type SkillNeedRecord,
 } from "../domain/skill-need";
-import { requireGenuineLead } from "./genuine-team-membership";
+import { requireTeamAdministrator } from "./genuine-team-membership";
 import type { SkillNeedView } from "./list-skill-needs";
 import { toCandidateSkillTree } from "./skill-need-catalog";
 import { getDefaultSkillNeedWriteStore, type SkillNeedWriteStore } from "./skill-needs-store";
@@ -28,6 +29,7 @@ export type UpsertSkillNeedResult =
   | { ok: false; error: UpsertSkillNeedError };
 
 export interface UpsertSkillNeedDeps {
+  isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
   store?: SkillNeedWriteStore;
   now?: () => Date;
@@ -61,8 +63,8 @@ export async function upsertSkillNeed(
 
   try {
     return await store.runTransaction(async (tx): Promise<TxOutcome> => {
-      const lead = await requireGenuineLead(identity, teamId, { reads: tx.reads });
-      if (!lead.ok) return { ok: false, error: lead.error === "read_failed" ? "persistence_failed" : lead.error };
+      const admin = await requireTeamAdministrator(identity, teamId, { reads: tx.reads, isSuperadmin: deps.isSuperadmin });
+      if (!admin.ok) return { ok: false, error: admin.error === "read_failed" ? "persistence_failed" : admin.error };
 
       const input = parseSkillNeedInput(body);
       if (!input.ok) return input;

@@ -17,6 +17,7 @@ vi.mock("../../../lib/firebase/admin", () => ({
 }));
 
 const ADMIN_EMAIL = "admin@example.com";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === "admin-uid";
 const T0 = new Date("2026-01-01T00:00:00Z");
 const day = (n: number) => new Date(T0.getTime() + n * 86_400_000);
 const REF = (n: number) => `${String(n).padStart(2, "0")}bbbbbbbbbbbbbbbbbbbbbbbb`;
@@ -75,7 +76,7 @@ function build(world: World, callerUid = "user-1") {
   // seams expose reads only, so a Proxy-free structural check is enough.
   const deps: ListAssignableMembersDeps = {
     verifyToken: tokenFor(callerUid),
-    allowList: [ADMIN_EMAIL],
+    isSuperadmin: isAdminUid,
     collection,
     store,
     profileReader: {
@@ -96,7 +97,7 @@ function teamWorld(): World {
     teams: { "team-1": "active", "team-2": "active" },
     memberships: {
       "user-1__team-1": member("user-1", 1),
-      "user-2__team-1": member("user-2", 2, { role: "lead", roleUpdatedAt: day(9), roleUpdatedBy: "admin-secret" }),
+      "user-2__team-1": member("user-2", 2, { role: "teamadmin", roleUpdatedAt: day(9), roleUpdatedBy: "admin-secret" }),
       "user-3__team-1": member("user-3", 3),
       "user-9__team-2": { ...member("user-9", 1), teamId: "team-2", memberRef: REF(90) },
     },

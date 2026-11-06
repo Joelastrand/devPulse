@@ -31,6 +31,7 @@ function deps(overrides: Partial<StartErasureDeps> & Pick<StartErasureDeps, "por
       auth_time: NOW_SECONDS - 10,
     }),
     readFence: async () => ({ kind: "none" as const }),
+    revokeSuperadminForErasure: async () => ({ ok: true as const }),
     ...overrides,
   };
 }

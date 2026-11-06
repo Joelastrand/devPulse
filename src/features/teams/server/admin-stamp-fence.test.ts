@@ -13,6 +13,7 @@ vi.mock("../../../lib/firebase/admin", () => ({
 vi.mock("server-only", () => ({}));
 
 const ADMIN_UID = "admin-35";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const ADMIN_EMAIL = "admin35@example.com";
 const FENCE = `accountErasures/${ADMIN_UID}`;
 
@@ -37,7 +38,6 @@ holder.db = {
 };
 
 const verifyToken = vi.fn().mockResolvedValue({ uid: ADMIN_UID, email: ADMIN_EMAIL, email_verified: true });
-const allowList = [ADMIN_EMAIL];
 
 beforeEach(() => {
   docs.clear();
@@ -48,7 +48,7 @@ describe("admin creates are refused while the admin's erasure record exists", ()
   it("creating a skill tree refuses with erasure_in_progress and writes nothing", async () => {
     docs.set(FENCE, { status: "in_progress", step: "forum" });
 
-    const result = await createSkillTree("t", "Container adoption", ["Start", "Next"], { verifyToken, allowList });
+    const result = await createSkillTree("t", "Container adoption", ["Start", "Next"], { verifyToken, isSuperadmin: isAdminUid });
 
     expect(result).toEqual({ ok: false, error: "erasure_in_progress" });
     expect(writes).toEqual([]);
@@ -57,14 +57,14 @@ describe("admin creates are refused while the admin's erasure record exists", ()
   it("creating a team refuses with erasure_in_progress and writes nothing", async () => {
     docs.set(FENCE, { status: "in_progress", step: "forum" });
 
-    const result = await createTeam("t", "Platform", { verifyToken, allowList });
+    const result = await createTeam("t", "Platform", { verifyToken, isSuperadmin: isAdminUid });
 
     expect(result).toEqual({ ok: false, error: "erasure_in_progress" });
     expect(writes).toEqual([]);
   });
 
   it("creating a team without an erasure record writes once (unchanged behaviour)", async () => {
-    const result = await createTeam("t", "Platform", { verifyToken, allowList });
+    const result = await createTeam("t", "Platform", { verifyToken, isSuperadmin: isAdminUid });
 
     expect(result.ok).toBe(true);
     expect(writes).toEqual(["create|teams/generated-teams"]);

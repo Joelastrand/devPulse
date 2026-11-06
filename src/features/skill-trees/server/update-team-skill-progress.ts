@@ -116,7 +116,7 @@ export type UpdateTeamSkillProgressResult =
 export interface UpdateTeamSkillProgressDeps {
   now?: Date;
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: IsAppAdminDeps["allowList"];
+  isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   progress?: SkillProgressDocStore;
   treeReader?: SkillTreeReader;
 }
@@ -160,7 +160,7 @@ export async function updateTeamSkillProgress(
 ): Promise<UpdateTeamSkillProgressResult> {
   const admin = await requireAppAdmin(idToken, {
     verifyToken: deps.verifyToken,
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
   });
   if (!admin.ok) {
     return { ok: false, error: admin.error };

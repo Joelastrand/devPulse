@@ -21,6 +21,8 @@ const THREAD_ID = "thread-1";
 const MEMBER_UID = "member-1";
 const OTHER_AUTHOR_UID = "member-2";
 const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const DELETER_UID = "admin-uid";
 
 function memberIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
@@ -28,7 +30,7 @@ function memberIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIden
 }
 
 function adminIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
-  return memberIdentity({ email: ADMIN_EMAIL, ...overrides });
+  return memberIdentity({ uid: ADMIN_UID, email: ADMIN_EMAIL, ...overrides });
 }
 
 function verifyTokenReturning(identity: VerifiedIdentity) {
@@ -162,7 +164,7 @@ function spyDecrypt(): ((payload: EncryptedPayload) => string) & { calls: Encryp
 function baseDeps(overrides: Partial<GetThreadWithRepliesDeps> = {}): GetThreadWithRepliesDeps {
   return {
     verifyToken: verifyTokenReturning(memberIdentity()),
-    allowList: [ADMIN_EMAIL],
+    isSuperadmin: isAdminUid,
     authCollection: fakeAuthCollection({
       teamStatus: { [TEAM_ID]: "active" },
       memberships: { [`${MEMBER_UID}__${TEAM_ID}`]: { uid: MEMBER_UID, teamId: TEAM_ID } },

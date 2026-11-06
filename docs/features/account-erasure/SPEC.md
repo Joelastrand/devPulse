@@ -233,6 +233,9 @@ marker for the forum tombstone) is the only change to the record.
 | A-10 | `teamInvitations` (others) | `invitedBy` | ANONYMIZE | Invitation preserved for other emails. |
 | A-11 | `teamMemberships` (others) | `grantedBy`, `roleUpdatedBy` | ANONYMIZE | Other members' memberships preserved. |
 | A-12 | `teams` | `createdBy` | ANONYMIZE | Team preserved. |
+| A-13 | `teamSystems` | `createdBy`, `updatedBy`, `assessedBy` (`assessedBy` inside each of `availability`, `maintainability`, `security`) | ANONYMIZE | System preserved; the assessment value, note and `assessedAt` are kept; only the actor is nulled (OQ-1 approved 2026-11-05). |
+| A-14 | `teamSystems` | `knowledgeMemberRefs` (membership `memberRef` values) | DETACH | The erased membership's ref is removed from the array; other members and the system record are kept (OQ-1 approved 2026-11-05). Membership-instance row; see the decision log below. |
+| A-15 | `teamProjectParticipations` | `memberRef` (membership `memberRef` value) | DELETE | The participation record is deleted, because a planning interval has no meaning once its member ref is destroyed. Membership-instance row, processed in the `memberships` step before the membership delete, scoped to the membership's team. Owner decision 2026-11-06 (TASK-004); see the decision log below. |
 
 Identifier kinds (reconciled 2026-10-28). Each row is one of two kinds:
 
@@ -241,8 +244,9 @@ Identifier kinds (reconciled 2026-10-28). Each row is one of two kinds:
   expected (verify in task; see AE-IDX-2).
 - **memberRef-kind**: holds the opaque, team-scoped `memberRef` generated for a
   membership (`generateMemberRef`). It is never derived from a uid and is never
-  queried by uid. This applies to A-5 `roadmapItems.ownerRef`, I-7
-  `participantMemberRef`, and I-9 `memberRef`.
+  queried by uid. This applies to A-5 `roadmapItems.ownerRef`, A-14
+  `teamSystems.knowledgeMemberRefs` (array elements), I-7 `participantMemberRef`, and I-9
+  `memberRef`.
 
 A-5 is handled in the `memberships` step, per membership, while that membership's
 `memberRef` still exists (BR-10). Preserved roadmap behaviour applies: an `ownerRef`
@@ -358,13 +362,13 @@ No email, team identifier, membership identifier, content, count, or free text i
 | Step id | Work (bounded, idempotent) | Consistency rule |
 |---|---|---|
 | `forum` | I-13 then I-14 (see BR-7). | Each reply is handled in one transaction. A thread is processed in bounded transactional chunks (see the decision log under "Forum tombstone semantics"). |
-| `memberships` | For each I-9 membership (page by document-id prefix and by `uid` field): null A-5 `ownerRef` values that match its `memberRef` in that team, then delete the membership. Then I-10 and I-11 (invitations by email and by `resolvedUid`). | `ownerRef` nulling precedes deletion, so the `memberRef` is still available. |
+| `memberships` | For each I-9 membership (page by document-id prefix and by `uid` field): null A-5 `ownerRef` values that match its `memberRef` in that team; remove that `memberRef` from A-14 `knowledgeMemberRefs` arrays in that team (system kept); then delete the membership. Then I-10 and I-11 (invitations by email and by `resolvedUid`). | `ownerRef` nulling precedes deletion, so the `memberRef` is still available. |
 | `conversations_owned` | I-5 owned conversations, including their participant index at `participantUid` (existing BR-29 semantics). | One transaction per conversation. |
 | `participant_bindings` | I-8 discovery, then I-7 (BR-9): clear participant fields, re-encrypt the payload without `participantNotes`, and delete the matching I-6 index. | One transaction per owner document. |
 | `locators` | I-6 (own subtree). | |
 | `personal_data` | I-1, I-2, I-3, I-4. | |
 | `survey_participations` | I-12. | |
-| `actor_audit` | A-1 to A-12 (single-field equality queries). | Null only the actor field, never the record. |
+| `actor_audit` | A-1 to A-13 (single-field equality queries; A-13 `assessedBy` is three nested paths). | Null only the actor field, never the record. |
 | `verify_data` | Re-run every inventory query (BR-5). Any remaining match causes the appropriate idempotent cleanup for that row to be re-run while the persisted step stays `verify_data` (D-VERIFY-BACK, approved option a). The sweep is bounded per run and resumes on later runner iterations or requests. | Must observe zero matches for the uid before the step advances. |
 | `auth_delete` | Delete the Firebase Auth user. `user-not-found` counts as success (retry-safe). | BR-6. |
 | `final_sweep` | Re-run the inventory queries once more after Auth deletion. Any match is an operator-visible failure (see Partial failure). | Set record `status: "completed"` with `expireAt`. |
@@ -717,7 +721,7 @@ missing or malformed index does not hide a binding.
 
 ## Audit-field anonymization (BR-12, D5)
 
-- The actor fields in A-1 to A-12 are set to null, or to the erased-actor marker in
+- The actor fields in A-1 to A-13 are set to null, or to the erased-actor marker in
   `forumReplies.deletedBy` only.
 - Business records are not deleted for that reason.
 - Readers must tolerate a null actor field. Each affected domain validator must accept
@@ -811,9 +815,9 @@ that an admin creates after erasure is a new, ordinary invitation.
 Erasure is complete only when:
 
 1. `final_sweep` returns zero matches for the inventory queries (I-1 to I-14, A-1 to
-   A-12, with I-15 excluded), with one narrow exception: the three membership-instance rows
-   A-5 (`roadmapItems.ownerRef`), I-7 `participantMemberRef`, and I-9 `memberRef` are not
-   re-queried after membership destruction. They are discharged by the transactional cleanup
+   A-13, with I-15 excluded), with one narrow exception: the four membership-instance rows
+   A-5 (`roadmapItems.ownerRef`), A-14 (`teamSystems.knowledgeMemberRefs`, added 2026-11-05), I-7
+   `participantMemberRef`, and I-9 `memberRef` are not re-queried after membership destruction. They are discharged by the transactional cleanup
    invariant in "Decision log: BR-17(1) membership-instance rows (approved 2026-11-02)". Every
    other inventory row, including every uid-, e-mail-, collection-group- and actor-addressable row,
    still requires zero matches at `final_sweep`;
@@ -1010,7 +1014,7 @@ overridden **only** by account erasure, as recorded in BR-9. The following must 
 - **BR-10 Memberships.** All memberships are deleted. Roadmap `ownerRef` values that
   matched them are nulled first. `memberRef` and `skillContribution` go with them.
 - **BR-11 Surveys.** `surveyParticipations` are deleted. Anonymous responses are kept.
-- **BR-12 Audit.** Actor fields A-1 to A-12 are nulled, or set to the erased-actor marker
+- **BR-12 Audit.** Actor fields A-1 to A-13 are nulled, or set to the erased-actor marker
   in `forumReplies.deletedBy`. Records are kept.
 - **BR-13 Invitations.** Deleted by normalized current email and by `resolvedUid`.
   Historical emails are a documented limitation.
@@ -1183,3 +1187,38 @@ use the same destruction primitives in two different ways, and the SPEC states b
 the target membership in the same transaction (roadmap owner assignment; invitation and replacement of a participant), so
 the conflict holds in both orders. The transactional argument therefore does not rely on erasure being the only membership
 deletion path. No new durable history is introduced.
+
+## Decision log: teamProjectParticipations erasure coverage, A-15 (owner decision, 2026-11-06)
+
+Source: `docs/features/team-experience-redesign/TASKS.md`, TASK-004, and the owner's approval to pull the participation part of TASK-012 forward. A-15 is registered before any participation write path exists. `teamProjects` (TASK-003) stores no actor uid or `memberRef`, so it is recorded as a non-person-owned collection in `ALLOWED_UNREGISTERED_COLLECTIONS`, not as a registry row. The approval covers only the local erasure integration and its tests, not the rest of TASK-012.
+
+- **Policy:** DELETE. A participation's `memberRef` is the only link to a person, and it is destroyed with the membership, so the record has no remaining meaning.
+- **Order:** in the `memberships` step, after the A-5 and A-14 steps and before the membership delete, in both the erasure orchestrator and the destruction orchestrator. Every read precedes the first queued write.
+- **Scope:** the query is scoped to the membership's `teamId`, so a participation in another team is never touched.
+
+## Decision log: teamSystems erasure coverage, A-13 and A-14 (owner decision OQ-1, approved 2026-11-05)
+
+Source: `docs/features/team-system-overview/SPEC.md`, OQ-1. The owner approved the two policies below for the new `teamSystems`
+collection.
+
+- **A-13 `teamSystems` `createdBy`, `updatedBy`, `assessedBy` — ANONYMIZE.** Each field is set to `null`. `assessedBy` is stored
+  inside each assessment map, so it is three closed targets (`availability.assessedBy`, `maintainability.assessedBy`,
+  `security.assessedBy`). The assessment value, note, `assessedAt` and the system record are kept. No replacement uid is written.
+  Run by the `actor_audit` step as a single-field equality per target (one document per batch).
+- **A-14 `teamSystems` `knowledgeMemberRefs` — DETACH.** The erased membership's `memberRef` is removed from each system's array in
+  that team. Other entries keep their order, the system record is kept, and a list that becomes empty stays as `[]`.
+  Discovered by `array-contains` on `teamId` and `knowledgeMemberRefs`, and run in the `memberships` step transaction that also
+  deletes the membership. The membership is not deleted while any system in the team still names its ref.
+- **Coordination (extends the BR-17(1) membership-instance invariant to A-14).** The team-system write that adds a knowledge ref
+  touches the target membership in the same transaction (`touchMembership`, unchanged `memberRef`). The erasure transaction and the
+  ordinary removal boundary both read the systems in their own transaction, so either ordering conflicts. A-14 is therefore a
+  membership-instance row in the BR-17 completion exception. This is an interpretation of the approved policy, which
+  depends on the existing convention for memberRef rows; the owner should confirm it.
+- **Ordinary removal.** `membership-destruction.ts` (ordinary admin `removeTeamMember`) detaches A-14 in the same final transaction,
+  so no removed membership's ref remains on a system.
+- **Readers.** A null `createdBy`, `updatedBy` or `assessedBy` is valid for `teamSystems` (the record stays readable). Editing an
+  erased-creator system keeps `createdBy` null; the editing member is never stamped as creator.
+- **Registry.** `inventory.ts` holds A-13 and A-14. The verification sweep counts A-13 by field equality (sum of the three nested
+  paths) and A-14 per membership (deferred, like A-5). The actor-audit target list grows by five closed entries.
+- **Known limitation, unchanged by this decision.** A team with more than 501 memberships can have a valid knowledge ref outside the
+  read slice. See `docs/features/team-system-overview/SPEC.md`, "Known limitations".

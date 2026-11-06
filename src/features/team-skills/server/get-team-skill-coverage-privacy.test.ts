@@ -33,9 +33,9 @@ const TEAM = "team-1";
 const WHEN = new Date("2026-02-01T00:00:00Z");
 const CALLERS = {
   member: { uid: "u-member", email: "member@example.com", role: "member" },
-  lead: { uid: "u-lead", email: "lead@example.com", role: "lead" },
+  lead: { uid: "u-lead", email: "lead@example.com", role: "teamadmin" },
   memberAdmin: { uid: "u-madmin", email: "admin@example.com", role: "member" },
-  leadAdmin: { uid: "u-ladmin", email: "admin@example.com", role: "lead" },
+  leadAdmin: { uid: "u-ladmin", email: "admin@example.com", role: "teamadmin" },
   nonMemberAdmin: { uid: "u-nadmin", email: "admin@example.com", role: undefined },
 } as const;
 type Caller = keyof typeof CALLERS;

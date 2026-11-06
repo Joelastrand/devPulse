@@ -20,16 +20,17 @@ const T0 = new Date("2026-01-01T00:00:00Z");
 const NOW = new Date("2026-06-15T10:00:00Z");
 const ADMIN_EMAIL = "admin@example.com";
 
-type Caller = "lead" | "leadAdmin" | "member" | "memberAdmin" | "nonMemberAdmin" | "unrelated" | "otherTeamLead";
+type Caller = "registrySuperadmin" | "lead" | "leadAdmin" | "member" | "memberAdmin" | "nonMemberAdmin" | "unrelated" | "otherTeamLead";
 
-const CALLERS: Record<Caller, { uid: string; email: string; membership?: Record<string, unknown>; teamId?: string }> = {
-  lead: { uid: "u-lead", email: "lead@example.com", membership: { role: "lead" } },
-  leadAdmin: { uid: "u-ladmin", email: ADMIN_EMAIL, membership: { role: "lead" } },
+const CALLERS: Record<Caller, { uid: string; email: string; membership?: Record<string, unknown>; teamId?: string; superadmin?: boolean }> = {
+  lead: { uid: "u-lead", email: "lead@example.com", membership: { role: "teamadmin" } },
+  leadAdmin: { uid: "u-ladmin", email: ADMIN_EMAIL, membership: { role: "teamadmin" } , superadmin: true },
   member: { uid: "u-member", email: "member@example.com", membership: { role: "member" } },
   memberAdmin: { uid: "u-madmin", email: ADMIN_EMAIL, membership: {} },
   nonMemberAdmin: { uid: "u-nadmin", email: ADMIN_EMAIL },
   unrelated: { uid: "u-other", email: "other@example.com" },
-  otherTeamLead: { uid: "u-olead", email: "olead@example.com", membership: { role: "lead" }, teamId: "team-2" },
+  registrySuperadmin: { uid: "u-registry", email: "registry@example.com", superadmin: true },
+  otherTeamLead: { uid: "u-olead", email: "olead@example.com", membership: { role: "teamadmin" }, teamId: "team-2" },
 };
 
 const tree = (name = "Testing") => ({
@@ -117,7 +118,16 @@ function setup(w: World) {
     if (!caller) throw new Error("bad token");
     return { uid: caller.uid, email: caller.email, email_verified: true } as never;
   });
-  return { needs, commits, deps: { verifyToken, store, now: () => NOW } };
+  return {
+    needs,
+    commits,
+    deps: {
+      verifyToken,
+      store,
+      now: () => NOW,
+      isSuperadmin: async (uid: string) => Object.values(CALLERS).some((c) => c.uid === uid && c.superadmin === true),
+    },
+  };
 }
 
 const BODY = { requiredLevel: 3, requiredCoverage: 4 };
@@ -313,6 +323,11 @@ describe("need put create/replace semantics", () => {
 
   it("a team without a lead cannot write (no admin bypass)", async () => {
     expect((await put({ caller: "nonMemberAdmin" })).result).toEqual({ ok: false, error: "forbidden" });
+  });
+
+  it("a registry superadmin without a team role may write a need on an active team (TA-SI)", async () => {
+    expect((await put({ caller: "registrySuperadmin" })).result).toEqual(expect.objectContaining({ ok: true }));
+    expect((await del({ caller: "registrySuperadmin" })).result).toEqual({ ok: true });
   });
 });
 

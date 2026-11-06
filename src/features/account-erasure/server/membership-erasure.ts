@@ -5,8 +5,10 @@ import { ErasureStepFailure, type BatchResult, type StepHandler } from "./erasur
  *
  * For each of the erased person's `teamMemberships` documents, one transaction:
  *   1. nulls every `roadmapItems.ownerRef` in that team that equals this membership's opaque `memberRef`, in bounded
- *      chunks (a membership is not deleted while any such owner reference remains); then
- *   2. deletes the membership document (this ends the membership, the lead role, and the team skill contribution it
+ *      chunks (a membership is not deleted while any such owner reference remains);
+ *   2. removes this `memberRef` from every `teamSystems.knowledgeMemberRefs` entry in that team (A-14, DETACH). The system
+ *      record and the other members stay; the membership is not deleted while any such entry remains; then
+ *   3. deletes the membership document (this ends the membership, the lead role, and the team skill contribution it
  *      carries; those fields are removed with the document, so this step never names them).
  *
  * `roadmapItems.ownerRef` holds a `memberRef`, not a uid (A-5), so the step matches by the membership's own `memberRef`
@@ -22,11 +24,30 @@ export interface MembershipRaw {
   readonly data: unknown;
 }
 
+/** A system that names a membership `memberRef` in its knowledge list (A-14). Only the id and the ref list are read. */
+export interface KnowledgeSystem {
+  readonly systemId: string;
+  readonly knowledgeMemberRefs: readonly string[];
+}
+
+/** The ref list without the erased membership's ref. Other members keep their order and entries. */
+export function withoutMemberRef(knowledgeMemberRefs: readonly string[], memberRef: string): string[] {
+  return knowledgeMemberRefs.filter((ref) => ref !== memberRef);
+}
+
 export interface MembershipTransaction {
   getMembership(membershipId: string): Promise<unknown>;
   /** Roadmap item ids in `teamId` whose `ownerRef` equals `memberRef`, at most `limit`. */
   roadmapItemIdsOwnedBy(teamId: string, memberRef: string, limit: number): Promise<string[]>;
   clearRoadmapOwnerRef(itemId: string): void;
+  /** Systems in `teamId` whose `knowledgeMemberRefs` contains `memberRef` (A-14), with their current refs, at most `limit`. */
+  systemsKnowingMemberRef(teamId: string, memberRef: string, limit: number): Promise<KnowledgeSystem[]>;
+  /** Replaces one system's `knowledgeMemberRefs`. Only that field changes; the system record is kept (A-14). */
+  setKnowledgeMemberRefs(systemId: string, knowledgeMemberRefs: string[]): void;
+  /** Project participation ids in `teamId` whose `memberRef` equals `memberRef` (A-15), at most `limit`. */
+  participationIdsOf(teamId: string, memberRef: string, limit: number): Promise<string[]>;
+  /** Deletes one participation record (A-15). A planning interval has no meaning once its member ref is gone. */
+  deleteParticipation(participationId: string): void;
   deleteMembership(membershipId: string): void;
 }
 
@@ -74,10 +95,25 @@ export async function runMembershipBatch(
     if (teamId === undefined) throw new ErasureStepFailure("verification_failed");
 
     if (record.memberRef !== undefined) {
-      // Nulling the owner references comes first; the membership is deleted only after none remain.
+      // Nulling the owner references comes first; the membership is deleted only after none remain. Every read in this
+      // transaction happens before its first write, as Firestore requires: the system query runs only when no roadmap
+      // write was queued.
       const itemIds = await tx.roadmapItemIdsOwnedBy(teamId, record.memberRef, maxWrites);
       if (itemIds.length > 0) {
         for (const itemId of itemIds) tx.clearRoadmapOwnerRef(itemId);
+        return;
+      }
+      const systems = await tx.systemsKnowingMemberRef(teamId, record.memberRef, maxWrites);
+      if (systems.length > 0) {
+        for (const system of systems) {
+          tx.setKnowledgeMemberRefs(system.systemId, withoutMemberRef(system.knowledgeMemberRefs, record.memberRef));
+        }
+        return;
+      }
+      // A-15: participation records are deleted before the membership. No write is queued yet, so the read is legal.
+      const participationIds = await tx.participationIdsOf(teamId, record.memberRef, maxWrites);
+      if (participationIds.length > 0) {
+        for (const participationId of participationIds) tx.deleteParticipation(participationId);
         return;
       }
     }

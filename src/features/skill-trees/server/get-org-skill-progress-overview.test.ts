@@ -15,6 +15,8 @@ import {
 } from "./get-org-skill-progress-overview";
 
 const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const MEMBER_UID = "member-1";
 
 function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
@@ -22,7 +24,7 @@ function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedId
 }
 
 function adminIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
-  return verifiedIdentity({ email: ADMIN_EMAIL, ...overrides });
+  return verifiedIdentity({ uid: ADMIN_UID, email: ADMIN_EMAIL, ...overrides });
 }
 
 function verifyTokenReturning(identity: VerifiedIdentity) {
@@ -127,7 +129,7 @@ function fakeTeamsReader(docs: RawTeamDoc[]): OrgTeamsReader {
 function baseDeps(overrides: Partial<GetOrgSkillProgressOverviewDeps> = {}): GetOrgSkillProgressOverviewDeps {
   return {
     verifyToken: verifyTokenReturning(adminIdentity()),
-    allowList: [ADMIN_EMAIL],
+    isSuperadmin: isAdminUid,
     treesReader: fakeTreesReader([]),
     progressReader: fakeProgressReader([]),
     teamsReader: fakeTeamsReader([]),
@@ -245,7 +247,7 @@ describe("getOrgSkillProgressOverview", () => {
       expect(listOrderedByUpdatedAtDesc).not.toHaveBeenCalled();
       expect(listAll).not.toHaveBeenCalled();
 
-      authGate.resolve({ uid: MEMBER_UID, email: ADMIN_EMAIL, email_verified: true });
+      authGate.resolve({ uid: ADMIN_UID, email: ADMIN_EMAIL, email_verified: true });
       const result = await resultPromise;
 
       expect(result.ok).toBe(true);

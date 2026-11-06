@@ -4,6 +4,8 @@ import type { TeamInvitationsCollection } from "./list-team-invitations";
 import { listTeamInvitations } from "./list-team-invitations";
 
 const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const CREATED_AT = new Date("2026-09-01T00:00:00Z");
 
 function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
@@ -24,7 +26,7 @@ function fakeCollection(rawDocs: unknown[]): TeamInvitationsCollection {
 
 const baseDeps = {
   verifyToken: verifyTokenReturning(verifiedIdentity()),
-  allowList: [ADMIN_EMAIL],
+  isSuperadmin: isAdminUid,
 };
 
 describe("listTeamInvitations", () => {
@@ -116,7 +118,7 @@ describe("listTeamInvitations", () => {
 
     const result = await listTeamInvitations("bad-token", "team-1", {
       verifyToken: vi.fn().mockRejectedValue(new Error("bad token")),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -128,8 +130,8 @@ describe("listTeamInvitations", () => {
     const collection = fakeCollection([]);
 
     const result = await listTeamInvitations("token", "team-1", {
-      verifyToken: verifyTokenReturning(verifiedIdentity({ email: "dev@example.com" })),
-      allowList: [ADMIN_EMAIL],
+      verifyToken: verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" })),
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -147,13 +149,13 @@ describe("listTeamInvitations", () => {
     expect(result).toEqual({ ok: false, error: "read_failed" });
   });
 
-  it("never includes the admin allow-list in the returned result", async () => {
-    const allowList = [ADMIN_EMAIL, "other-admin@example.com"];
+  it("never includes superadmin identifiers in the returned result", async () => {
+    const isSuperadmin = isAdminUid;
     const collection = fakeCollection([]);
 
     const result = await listTeamInvitations("token", "team-1", {
       verifyToken: verifyTokenReturning(verifiedIdentity()),
-      allowList,
+      isSuperadmin,
       collection,
     });
 

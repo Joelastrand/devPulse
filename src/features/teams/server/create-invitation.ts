@@ -163,7 +163,7 @@ export type CreateInvitationResult =
 export interface CreateInvitationDeps {
   now?: Date;
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: IsAppAdminDeps["allowList"];
+  isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   teamsCollection?: CreateInvitationTeamsCollection;
   membershipsCollection?: CreateInvitationMembershipsCollection;
   invitationsCollection?: CreateInvitationInvitationsCollection;
@@ -203,7 +203,7 @@ export async function createInvitation(
 ): Promise<CreateInvitationResult> {
   const admin = await requireAppAdmin(idToken, {
     verifyToken: deps.verifyToken,
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
   });
   if (!admin.ok) {
     return { ok: false, error: admin.error };

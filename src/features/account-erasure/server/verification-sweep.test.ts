@@ -39,13 +39,13 @@ function nonDeferredSweepsOf(rowId: string): InventorySweep[] {
 /** Owners written from the SPEC "Steps" table (SPEC lines for forum, memberships, conversations_owned, participant_bindings, locators, personal_data, survey_participations, actor_audit). Not derived from ROW_OWNING_STEP. */
 const SPEC_OWNING_STEP: Readonly<Record<ErasureStep, readonly string[]>> = {
   forum: ["I-13", "I-14"],
-  memberships: ["I-9", "I-10", "I-11", "A-5"],
+  memberships: ["I-9", "I-10", "I-11", "A-5", "A-14", "A-15"],
   conversations_owned: ["I-5"],
   participant_bindings: ["I-7", "I-8"],
   locators: ["I-6"],
-  personal_data: ["I-1", "I-2", "I-3", "I-4"],
+  personal_data: ["I-1", "I-2", "I-3", "I-4", "I-16"],
   survey_participations: ["I-12"],
-  actor_audit: ["A-1", "A-2", "A-3", "A-4", "A-6", "A-7", "A-8", "A-9", "A-10", "A-11", "A-12"],
+  actor_audit: ["A-1", "A-2", "A-3", "A-4", "A-6", "A-7", "A-8", "A-9", "A-10", "A-11", "A-12", "A-13", "A-16"],
   verify_data: [],
   auth_delete: [],
   final_sweep: [],

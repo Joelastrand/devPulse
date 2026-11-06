@@ -4,6 +4,7 @@ import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../domain/app-admin";
 import type { TeamStatus } from "../domain/team";
+import { DEFAULT_TEAM_VISIBILITY, type TeamVisibility } from "../domain/team-authority";
 import { requireAppAdmin } from "./require-app-admin";
 import { type AuthRefusal } from "../../auth/server/auth-refusal";
 const COLLECTION_NAME = "teams";
@@ -12,6 +13,8 @@ const COLLECTION_NAME = "teams";
 export interface TeamRecord {
   name: string;
   status: TeamStatus;
+  /** Always `private` at creation (docs/features/teamadmin-and-team-visibility/SPEC.md). */
+  visibility: TeamVisibility;
   createdAt: Date;
   createdBy: string;
 }
@@ -50,7 +53,7 @@ export type CreateTeamResult =
 export interface CreateTeamDeps {
   now?: Date;
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: IsAppAdminDeps["allowList"];
+  isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   collection?: TeamsCollection;
 }
 
@@ -68,7 +71,7 @@ export async function createTeam(
 ): Promise<CreateTeamResult> {
   const admin = await requireAppAdmin(idToken, {
     verifyToken: deps.verifyToken,
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
   });
   if (!admin.ok) {
     return { ok: false, error: admin.error };
@@ -81,6 +84,7 @@ export async function createTeam(
   const record: TeamRecord = {
     name: name.trim(),
     status: "active",
+    visibility: DEFAULT_TEAM_VISIBILITY,
     createdAt: deps.now ?? new Date(),
     createdBy: admin.identity.uid,
   };

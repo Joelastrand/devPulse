@@ -26,7 +26,7 @@ function verifyTokenFor(email: string, uid = "admin-1") {
   return vi.fn().mockResolvedValue({ uid, email, email_verified: true });
 }
 
-const asAdmin = { verifyToken: verifyTokenFor(ADMIN_EMAIL), allowList: [ADMIN_EMAIL] };
+const asAdmin = { verifyToken: verifyTokenFor(ADMIN_EMAIL), isSuperadmin: async (uid: string) => uid === "admin-1" };
 
 type Doc = Record<string, unknown>;
 
@@ -105,7 +105,7 @@ describe("materializeMemberRefs — authorization", () => {
     const fake = fakeCollection({ memberships: [member("u1")] });
     const result = await materializeMemberRefs("", "team-1", {
       verifyToken: vi.fn().mockRejectedValue(new Error("bad")),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: async (uid: string) => uid === "admin-1",
       collection: fake.collection,
     });
     expect(result).toEqual({ ok: false, error: "unauthenticated" });
@@ -113,7 +113,7 @@ describe("materializeMemberRefs — authorization", () => {
   });
 
   it("rejects a non-admin caller (even a team lead) with no transaction", async () => {
-    const fake = fakeCollection({ memberships: [member("lead-1", { role: "lead" })] });
+    const fake = fakeCollection({ memberships: [member("lead-1", { role: "teamadmin" })] });
     const result = await run(fake, { verifyToken: verifyTokenFor("lead@example.com", "lead-1") });
     expect(result).toEqual({ ok: false, error: "forbidden" });
     expect(fake.log.runs).toBe(0);
@@ -125,7 +125,7 @@ describe("materializeMemberRefs — preparation", () => {
   it("gives legacy memberships valid, distinct refs and preserves everything else", async () => {
     const fake = fakeCollection({
       memberships: [
-        member("u1", { role: "lead", roleUpdatedBy: "admin-0", roleUpdatedAt: EARLIER }),
+        member("u1", { role: "teamadmin", roleUpdatedBy: "admin-0", roleUpdatedAt: EARLIER }),
         member("u2"),
       ],
     });
@@ -142,7 +142,7 @@ describe("materializeMemberRefs — preparation", () => {
       delete rest.memberRef;
       expect(rest).toEqual(before.get(id));
     }
-    expect(fake.memberships.get("u1__team-1")?.role).toBe("lead");
+    expect(fake.memberships.get("u1__team-1")?.role).toBe("teamadmin");
     expect(fake.memberships.get("u2__team-1")).not.toHaveProperty("role");
   });
 

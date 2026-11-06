@@ -11,6 +11,7 @@ import { PageHeader } from "../../../components/ui/PageHeader";
 import { ADMIN_SCOPE_EYEBROW } from "../../../components/ui/copy";
 import { TextField } from "../../../components/ui/TextField";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
+import { TeamVisibilitySettings } from "./TeamVisibilitySettings";
 import {
   archiveAdminChallenge,
   deleteAdminChallenge,
@@ -524,7 +525,7 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
    * another. The server remains the only authority (incl. rejecting a
    * promotion on a disabled team), so a stale view is safely refused.
    */
-  async function handleSetMemberRole(token: string, generation: number, uid: string, role: "lead" | "member") {
+  async function handleSetMemberRole(token: string, generation: number, uid: string, role: "teamadmin" | "member") {
     if (memberActions[uid]?.status === "pending") {
       return;
     }
@@ -1065,6 +1066,8 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
         </form>
       </section>
 
+      <TeamVisibilitySettings key={`visibility:${generation}`} teamId={teamId} token={token} />
+
       <section id="admin-section-members" className="flex flex-col gap-3">
         <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
           {adminCopy.detail.membersSectionTitle}
@@ -1118,7 +1121,7 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
                     <p className="break-words text-sm text-zinc-600 dark:text-zinc-400">
                       {member.email ?? member.uid}
                     </p>
-                    {member.role === "lead" && (
+                    {member.role === "teamadmin" && (
                       <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
                         {team.status === "disabled"
                           ? adminCopy.detail.leadMarkerDormant
@@ -1136,14 +1139,14 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
                       variant="secondary"
                       size="sm"
                       pending={action.status === "pending"}
-                      disabled={member.role !== "lead" && team.status === "disabled"}
+                      disabled={member.role !== "teamadmin" && team.status === "disabled"}
                       onClick={() =>
-                        handleSetMemberRole(token, generation, member.uid, member.role === "lead" ? "member" : "lead")
+                        handleSetMemberRole(token, generation, member.uid, member.role === "teamadmin" ? "member" : "teamadmin")
                       }
                     >
                       {action.status === "pending" && action.kind === "role"
                         ? adminCopy.detail.savingRoleButton
-                        : member.role === "lead"
+                        : member.role === "teamadmin"
                           ? adminCopy.detail.makeMemberButton
                           : adminCopy.detail.makeLeadButton}
                     </Button>

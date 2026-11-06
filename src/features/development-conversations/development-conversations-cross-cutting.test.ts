@@ -40,6 +40,7 @@ const LEAD_UID = "lead-1";
 const LEAD_ADMIN_UID = "lead-admin-1";
 const MEMBER_UID = "member-1";
 const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const OUTSIDER_UID = "outsider-1";
 const OWNER_MEMBER_REF = "zyxwvtsrqpnmkjhgfedcba9876";
 const LEAD_REF = "2345678abcdefghjkmnpqrstvw";
@@ -309,7 +310,7 @@ describe("authorization matrix: every row, every operation (SPEC authorization m
   const rows = Object.keys(MATRIX) as RowId[];
   for (const row of rows) {
     it(`${row}: the exact outcome of each operation`, async () => {
-      const outcomes: Record<string, string> = {};
+    const outcomes: Record<string, string> = {};
       for (const op of OPS) outcomes[op] = await runOp(row, op);
       expect(outcomes).toEqual(MATRIX[row]);
     });
@@ -317,21 +318,21 @@ describe("authorization matrix: every row, every operation (SPEC authorization m
 });
 
 describe("app-admin rows are genuine app admins under production semantics (BR-5, BR-6, D2-SI-2)", () => {
-  const deps = { allowList: ADMIN_ALLOW_LIST };
+  const deps = { isSuperadmin: async (uid: string): Promise<boolean> => [ADMIN_UID, LEAD_ADMIN_UID].includes(uid) };
 
-  it("the non-member-admin and lead-and-admin identities pass isAppAdmin, with the allow-list injected", () => {
-    expect(isAppAdmin(IDENTITY["non-member-admin"], deps)).toBe(true);
-    expect(isAppAdmin(IDENTITY["lead-and-admin"], deps)).toBe(true);
+  it("the non-member-admin and lead-and-admin identities pass isAppAdmin, with the allow-list injected", async () => {
+    expect(await isAppAdmin(IDENTITY["non-member-admin"], deps)).toBe(true);
+    expect(await isAppAdmin(IDENTITY["lead-and-admin"], deps)).toBe(true);
   });
 
-  it("no other row's identity is an app admin, so the admin rows differ from the rest only by admin status", () => {
+  it("no other row's identity is an app admin, so the admin rows differ from the rest only by admin status", async () => {
     for (const row of Object.keys(MATRIX) as RowId[]) {
-      expect(isAppAdmin(IDENTITY[row], deps), row).toBe(ADMIN_ROWS.has(row));
+      expect(await isAppAdmin(IDENTITY[row], deps), row).toBe(ADMIN_ROWS.has(row));
     }
   });
 
-  it("an allow-listed e-mail that is not verified is not app-admin status", () => {
-    expect(isAppAdmin({ ...IDENTITY["non-member-admin"], emailVerified: false }, deps)).toBe(false);
+  it("an allow-listed e-mail that is not verified is not app-admin status", async () => {
+    expect(await isAppAdmin({ ...IDENTITY["non-member-admin"], emailVerified: false }, deps)).toBe(false);
   });
 
   it("non-member-admin holds no membership in any team, so the row is a true non-member", async () => {

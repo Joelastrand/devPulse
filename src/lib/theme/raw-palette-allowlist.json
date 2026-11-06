@@ -49,7 +49,7 @@
   "src/features/role-profiles/components/ExpectationsEditor.tsx": 4,
   "src/features/role-profiles/components/RoleForm.tsx": 6,
   "src/features/role-profiles/components/RoleTargetSection.tsx": 16,
-  "src/features/skill-profiles/components/SkillProfilePage.tsx": 30,
+  "src/features/skill-profiles/components/SkillProfilePage.tsx": 28,
   "src/features/skill-trees/components/AdminSkills.tsx": 6,
   "src/features/skill-trees/components/OrgSkillProgressOverview.tsx": 8,
   "src/features/skill-trees/components/SkillTreeCatalogList.tsx": 8,
@@ -62,7 +62,7 @@
   "src/features/team-skills/components/TeamSkillNeedsSection.tsx": 28,
   "src/features/teams/components/AdminTeamDetail.tsx": 58,
   "src/features/teams/components/AdminTeams.tsx": 10,
-  "src/features/teams/components/TeamDetail.tsx": 18,
+  "src/features/teams/components/TeamDetail.tsx": 8,
   "src/features/teams/components/TeamRosterSection.tsx": 4,
   "src/features/teams/components/TeamsOverview.tsx": 4
 }

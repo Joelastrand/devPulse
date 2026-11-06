@@ -10,6 +10,7 @@ import { EmptyState } from "../../../components/ui/EmptyState";
 import { LoadingState } from "../../../components/ui/LoadingState";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import { Select } from "../../../components/ui/Select";
+import { Badge } from "../../../components/ui/Badge";
 import { DeleteConfirmation, type DeleteActionState } from "../../forum/components/DeleteConfirmation";
 import {
   clearOwnSkillLevel,
@@ -453,7 +454,14 @@ function FilterControl({ value, onChange }: { value: SkillFilter; onChange: (val
     <fieldset className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
       <legend className="sr-only">{skillProfileCopy.filterLegend}</legend>
       {options.map((option) => (
-        <label key={option.value} className="flex items-center gap-2 text-sm text-zinc-900 dark:text-zinc-50">
+        <label
+          key={option.value}
+          className={`flex items-center gap-2 rounded-full border px-3 py-1 text-sm ${
+            value === option.value
+              ? "border-primary bg-primary-subtle font-medium text-text-primary"
+              : "border-border-subtle text-text-secondary"
+          }`}
+        >
           <input
             type="radio"
             name="skill-filter"
@@ -481,9 +489,13 @@ function SkillRow({
   onChangeLevel: (level: SelfAssessedLevel | null) => void;
 }) {
   const pending = status?.kind === "pending";
+  // Competence card (ref 22): the level indicator leads the card, the editable select (labelled with the skill name) follows.
   return (
     <>
-      <div className="min-w-0 break-words sm:max-w-sm sm:flex-1">
+      <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+        <LevelIndicator level={skill.level} />
+      </div>
+      <div className="min-w-0 break-words">
         <Select
           id={`skill-level-${skill.treeId}`}
           label={skill.name}
@@ -505,12 +517,9 @@ function SkillRow({
           ))}
         </Select>
       </div>
-      <div className="flex flex-col gap-1">
-        <LevelIndicator level={skill.level} />
-        <p role="status" className="text-sm text-zinc-600 dark:text-zinc-400">
-          {pending ? skillProfileCopy.saving : null}
-        </p>
-      </div>
+      <p role="status" className="text-sm text-zinc-600 dark:text-zinc-400">
+        {pending ? skillProfileCopy.saving : null}
+      </p>
     </>
   );
 }
@@ -530,11 +539,20 @@ function Overview({ dto }: { dto: OwnSkillsDto }) {
       <h2 id="skill-overview-heading" className="sr-only">
         {skillProfileCopy.overviewHeading}
       </h2>
-      <p className="text-text-secondary">
-        {dto.truncated
-          ? skillProfileCopy.assessedOfShown(overview.assessedCount)
-          : skillProfileCopy.assessedOfAll(overview.assessedCount, overview.totalCount)}
-      </p>
+      {/* Assessment status pill (ref 22). The text carries the meaning; the tone only reinforces it. */}
+      <div>
+        <Badge
+          className={
+            !dto.truncated && overview.assessedCount === overview.totalCount
+              ? "border-transparent bg-success-subtle text-success-text"
+              : "border-transparent bg-info-subtle text-info-text"
+          }
+        >
+          {dto.truncated
+            ? skillProfileCopy.assessedOfShown(overview.assessedCount)
+            : skillProfileCopy.assessedOfAll(overview.assessedCount, overview.totalCount)}
+        </Badge>
+      </div>
       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <li>
           <StatTile label={skillProfileCopy.overviewHeading} value={String(overview.assessedCount)} />

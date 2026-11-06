@@ -163,7 +163,7 @@ describe("createRoadmapItem — authorization", () => {
 
   it("gives a lead exactly the same capability", async () => {
     const world = baseWorld();
-    world.memberships["user-1__team-1"] = member("user-1", 1, { role: "lead" });
+    world.memberships["user-1__team-1"] = member("user-1", 1, { role: "teamadmin" });
     const { result } = await create(world, valid);
     expect(result.ok).toBe(true);
   });

@@ -86,7 +86,7 @@ export type SetTeamMemberRoleResult =
 export interface SetTeamMemberRoleDeps {
   now?: Date;
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: IsAppAdminDeps["allowList"];
+  isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   collection?: SetTeamMemberRoleCollection;
 }
 
@@ -95,7 +95,7 @@ function isSafeId(value: unknown): value is string {
 }
 
 /**
- * Marks a current team member as a lead, or returns them to an ordinary
+ * Grants or revokes the teamadmin role of a current team member, or returns them to an ordinary
  * member (docs/features/member-identity-and-team-roles/SPEC.md — BR-16,
  * BR-18 through BR-23). App-admin-only via `requireAppAdmin`; the caller's
  * role and the team's status are never client-supplied.
@@ -103,14 +103,14 @@ function isSafeId(value: unknown): value is string {
  * One Firestore transaction reads the membership, validates it with
  * `isValidMembershipFor` (a missing or mismatched document is `not_a_member`
  * and nothing is created — the write is an `update`, which cannot create a
- * document) and, **only when assigning `"lead"`**, reads `teams/{teamId}` and
+ * document) and, **only when assigning `"teamadmin"`**, reads `teams/{teamId}` and
  * requires its status to be exactly `"active"` — a disabled, missing or
  * malformed status is `team_disabled` with zero writes, even when the member
- * is already a lead. Returning a lead to `"member"` is allowed on any team
+ * is already a teamadmin. Revoking `"teamadmin"` is allowed on any team
  * status and only removes the `role` field. Both directions record the last
- * actor/time (`roleUpdatedBy`/`roleUpdatedAt`). Idempotent. Multiple leads
+ * actor/time (`roleUpdatedBy`/`roleUpdatedAt`). Idempotent. Multiple teamadmins
  * per team are allowed; nothing here touches any other membership. Removing
- * a membership elsewhere (`removeTeamMember`, unchanged) ends lead status
+ * a membership elsewhere (`removeTeamMember`, unchanged) ends the teamadmin role
  * because the role lives on that document.
  */
 export async function setTeamMemberRole(
@@ -122,13 +122,13 @@ export async function setTeamMemberRole(
 ): Promise<SetTeamMemberRoleResult> {
   const admin = await requireAppAdmin(idToken, {
     verifyToken: deps.verifyToken,
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
   });
   if (!admin.ok) {
     return { ok: false, error: admin.error };
   }
 
-  if ((role !== "lead" && role !== "member") || !isSafeId(teamId) || !isSafeId(uid)) {
+  if ((role !== "teamadmin" && role !== "member") || !isSafeId(teamId) || !isSafeId(uid)) {
     return { ok: false, error: "invalid_input" };
   }
 
@@ -141,7 +141,7 @@ export async function setTeamMemberRole(
         return "not_a_member";
       }
 
-      if (role === "lead") {
+      if (role === "teamadmin") {
         const status = await tx.getTeamStatus();
         if (!isValidTeamStatus(status) || status !== "active") {
           return "team_disabled";
@@ -149,7 +149,7 @@ export async function setTeamMemberRole(
       }
 
       tx.update({
-        role: role === "lead" ? "lead" : REMOVE_FIELD,
+        role: role === "teamadmin" ? "teamadmin" : REMOVE_FIELD,
         roleUpdatedAt: now,
         roleUpdatedBy: admin.identity.uid,
       });

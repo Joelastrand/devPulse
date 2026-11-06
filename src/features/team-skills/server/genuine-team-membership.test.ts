@@ -7,7 +7,7 @@ vi.mock("../../teams/domain/app-admin", () => ({
 }));
 
 import {
-  requireGenuineLead,
+  requireTeamAdministrator,
   requireGenuineMember,
   resolveGenuineTeamMembership,
   type GenuineMembershipReads,
@@ -73,11 +73,11 @@ describe("resolveGenuineTeamMembership", () => {
   it("reports a stored lead as lead", async () => {
     const r = reads({
       teams: { [TEAM]: "active" },
-      memberships: { [`user-1__${TEAM}`]: membership("user-1", TEAM, { role: "lead" }) },
+      memberships: { [`user-1__${TEAM}`]: membership("user-1", TEAM, { role: "teamadmin" }) },
     });
     expect(await resolveGenuineTeamMembership(identity(), TEAM, { reads: r })).toEqual({
       ok: true,
-      relationship: "lead",
+      relationship: "teamadmin",
       teamStatus: "active",
     });
   });
@@ -85,10 +85,10 @@ describe("resolveGenuineTeamMembership", () => {
   it("keeps lead for a lead who is also on the app-admin allow-list", async () => {
     const r = reads({
       teams: { [TEAM]: "active" },
-      memberships: { [`user-1__${TEAM}`]: membership("user-1", TEAM, { role: "lead" }) },
+      memberships: { [`user-1__${TEAM}`]: membership("user-1", TEAM, { role: "teamadmin" }) },
     });
     const result = await resolveGenuineTeamMembership(adminIdentity(), TEAM, { reads: r });
-    expect(result).toMatchObject({ ok: true, relationship: "lead" });
+    expect(result).toMatchObject({ ok: true, relationship: "teamadmin" });
   });
 
   it("keeps member for a member who is also an app admin", async () => {
@@ -116,7 +116,7 @@ describe("resolveGenuineTeamMembership", () => {
   it("never consults app-admin status", async () => {
     const r = reads({
       teams: { [TEAM]: "active" },
-      memberships: { [`user-1__${TEAM}`]: membership("user-1", TEAM, { role: "lead" }) },
+      memberships: { [`user-1__${TEAM}`]: membership("user-1", TEAM, { role: "teamadmin" }) },
     });
     await resolveGenuineTeamMembership(adminIdentity(), TEAM, { reads: r });
     await resolveGenuineTeamMembership(identity(), "nope", { reads: r });
@@ -140,7 +140,7 @@ describe("resolveGenuineTeamMembership", () => {
     const r = reads({
       teams: { [TEAM]: "active" },
       memberships: {
-        [`user-1__${TEAM}`]: membership("someone-else", TEAM, { role: "lead" }),
+        [`user-1__${TEAM}`]: membership("someone-else", TEAM, { role: "teamadmin" }),
       },
     });
     expect(await resolveGenuineTeamMembership(identity(), TEAM, { reads: r })).toMatchObject({
@@ -148,7 +148,7 @@ describe("resolveGenuineTeamMembership", () => {
     });
     const r2 = reads({
       teams: { [TEAM]: "active" },
-      memberships: { [`user-1__${TEAM}`]: membership("user-1", OTHER_TEAM, { role: "lead" }) },
+      memberships: { [`user-1__${TEAM}`]: membership("user-1", OTHER_TEAM, { role: "teamadmin" }) },
     });
     expect(await resolveGenuineTeamMembership(identity(), TEAM, { reads: r2 })).toMatchObject({
       relationship: "denied",
@@ -158,7 +158,7 @@ describe("resolveGenuineTeamMembership", () => {
   it("does not let a membership in team A prove membership in team B", async () => {
     const r = reads({
       teams: { [TEAM]: "active", [OTHER_TEAM]: "active" },
-      memberships: { [`user-1__${TEAM}`]: membership("user-1", TEAM, { role: "lead" }) },
+      memberships: { [`user-1__${TEAM}`]: membership("user-1", TEAM, { role: "teamadmin" }) },
     });
     expect(await resolveGenuineTeamMembership(identity(), OTHER_TEAM, { reads: r })).toMatchObject({
       relationship: "denied",
@@ -169,7 +169,7 @@ describe("resolveGenuineTeamMembership", () => {
   it("does not let another uid's membership authorize the caller", async () => {
     const r = reads({
       teams: { [TEAM]: "active" },
-      memberships: { [`user-2__${TEAM}`]: membership("user-2", TEAM, { role: "lead" }) },
+      memberships: { [`user-2__${TEAM}`]: membership("user-2", TEAM, { role: "teamadmin" }) },
     });
     expect(await resolveGenuineTeamMembership(identity(), TEAM, { reads: r })).toMatchObject({
       relationship: "denied",
@@ -181,13 +181,13 @@ describe("resolveGenuineTeamMembership", () => {
     const r = reads({
       teams: { [TEAM]: "disabled" },
       memberships: {
-        [`user-1__${TEAM}`]: membership("user-1", TEAM, { role: "lead" }),
+        [`user-1__${TEAM}`]: membership("user-1", TEAM, { role: "teamadmin" }),
         [`user-2__${TEAM}`]: membership("user-2", TEAM),
       },
     });
     expect(await resolveGenuineTeamMembership(identity(), TEAM, { reads: r })).toEqual({
       ok: true,
-      relationship: "lead",
+      relationship: "teamadmin",
       teamStatus: "disabled",
     });
     expect(
@@ -199,9 +199,9 @@ describe("resolveGenuineTeamMembership", () => {
     const r = reads({
       teams: { bad: "archived", worse: 5 },
       memberships: {
-        [`user-1__${TEAM}`]: membership("user-1", TEAM, { role: "lead" }),
+        [`user-1__${TEAM}`]: membership("user-1", TEAM, { role: "teamadmin" }),
         user_bad: null,
-        [`user-1__bad`]: membership("user-1", "bad", { role: "lead" }),
+        [`user-1__bad`]: membership("user-1", "bad", { role: "teamadmin" }),
       },
     });
     for (const id of [TEAM, "bad", "worse"]) {
@@ -234,7 +234,7 @@ describe("resolveGenuineTeamMembership", () => {
     const r = reads({
       teams: { [TEAM]: "active" },
       memberships: {
-        [`user-1__${TEAM}`]: membership("user-1", TEAM, { role: "lead", memberRef: "m1" }),
+        [`user-1__${TEAM}`]: membership("user-1", TEAM, { role: "teamadmin", memberRef: "m1" }),
       },
     });
     const result = await resolveGenuineTeamMembership(identity(), TEAM, { reads: r });
@@ -245,7 +245,7 @@ describe("resolveGenuineTeamMembership", () => {
     const r = reads({
       teams: { [TEAM]: "active" },
       memberships: {
-        "other__team-1": { uid: "other", teamId: TEAM, role: "lead", memberRef: "user-1", email: "dev@example.com" },
+        "other__team-1": { uid: "other", teamId: TEAM, role: "teamadmin", memberRef: "user-1", email: "dev@example.com" },
       },
     });
     expect(await resolveGenuineTeamMembership(identity(), TEAM, { reads: r })).toMatchObject({
@@ -254,11 +254,17 @@ describe("resolveGenuineTeamMembership", () => {
   });
 });
 
-describe("requireGenuineMember / requireGenuineLead", () => {
+describe("requireGenuineMember / requireTeamAdministrator", () => {
+  beforeEach(() => {
+    // Superadmin is decided by the verified identity, so only the admin identity is a superadmin here.
+    isAppAdminSpy.mockReset();
+    isAppAdminSpy.mockImplementation((id: VerifiedIdentity) => id.email === ADMIN_EMAIL);
+  });
+
   const lead = () =>
     reads({
       teams: { [TEAM]: "active" },
-      memberships: { [`user-1__${TEAM}`]: membership("user-1", TEAM, { role: "lead" }) },
+      memberships: { [`user-1__${TEAM}`]: membership("user-1", TEAM, { role: "teamadmin" }) },
     });
   const member = (status = "active") =>
     reads({
@@ -268,35 +274,38 @@ describe("requireGenuineMember / requireGenuineLead", () => {
 
   it("lets a member through for member requirement and a lead for both", async () => {
     expect(await requireGenuineMember(identity(), TEAM, { reads: member() })).toEqual({ ok: true, relationship: "member" });
-    expect(await requireGenuineMember(identity(), TEAM, { reads: lead() })).toEqual({ ok: true, relationship: "lead" });
-    expect(await requireGenuineLead(identity(), TEAM, { reads: lead() })).toEqual({ ok: true });
+    expect(await requireGenuineMember(identity(), TEAM, { reads: lead() })).toEqual({ ok: true, relationship: "teamadmin" });
+    expect(await requireTeamAdministrator(identity(), TEAM, { reads: lead() })).toEqual({ ok: true });
   });
 
   it("forbids an ordinary member from lead requirement", async () => {
-    expect(await requireGenuineLead(identity(), TEAM, { reads: member() })).toEqual({ ok: false, error: "forbidden" });
+    expect(await requireTeamAdministrator(identity(), TEAM, { reads: member() })).toEqual({ ok: false, error: "forbidden" });
   });
 
-  it("forbids non-members and non-member admins, with no team_disabled leak", async () => {
+  it("forbids non-members with no team_disabled leak; a superadmin administers any active team without membership", async () => {
     const none = reads({ teams: { [TEAM]: "disabled" }, memberships: {} });
-    for (const who of [identity(), adminIdentity()]) {
-      expect(await requireGenuineMember(who, TEAM, { reads: none })).toEqual({ ok: false, error: "forbidden" });
-      expect(await requireGenuineLead(who, TEAM, { reads: none })).toEqual({ ok: false, error: "forbidden" });
-    }
+    expect(await requireGenuineMember(identity(), TEAM, { reads: none })).toEqual({ ok: false, error: "forbidden" });
+    expect(await requireTeamAdministrator(identity(), TEAM, { reads: none })).toEqual({ ok: false, error: "forbidden" });
+    expect(await requireGenuineMember(adminIdentity(), TEAM, { reads: none })).toEqual({ ok: false, error: "forbidden" });
+
+    const activeNone = reads({ teams: { [TEAM]: "active" }, memberships: {} });
+    expect(await requireTeamAdministrator(adminIdentity(), TEAM, { reads: activeNone })).toEqual({ ok: true });
+    expect(await requireTeamAdministrator(adminIdentity(), TEAM, { reads: none })).toEqual({ ok: false, error: "team_disabled" });
   });
 
   it("orders role before status: member on disabled team is forbidden for lead, lead gets team_disabled", async () => {
-    expect(await requireGenuineLead(identity(), TEAM, { reads: member("disabled") })).toEqual({ ok: false, error: "forbidden" });
+    expect(await requireTeamAdministrator(identity(), TEAM, { reads: member("disabled") })).toEqual({ ok: false, error: "forbidden" });
     const disabledLead = reads({
       teams: { [TEAM]: "disabled" },
-      memberships: { [`user-1__${TEAM}`]: membership("user-1", TEAM, { role: "lead" }) },
+      memberships: { [`user-1__${TEAM}`]: membership("user-1", TEAM, { role: "teamadmin" }) },
     });
-    expect(await requireGenuineLead(identity(), TEAM, { reads: disabledLead })).toEqual({ ok: false, error: "team_disabled" });
+    expect(await requireTeamAdministrator(identity(), TEAM, { reads: disabledLead })).toEqual({ ok: false, error: "team_disabled" });
     expect(await requireGenuineMember(identity(), TEAM, { reads: member("disabled") })).toEqual({ ok: false, error: "team_disabled" });
   });
 
   it("propagates read_failed", async () => {
     const failing = reads({ teams: {}, memberships: {}, failMembership: true, failTeam: true });
     expect(await requireGenuineMember(identity(), TEAM, { reads: failing })).toEqual({ ok: false, error: "read_failed" });
-    expect(await requireGenuineLead(identity(), TEAM, { reads: failing })).toEqual({ ok: false, error: "read_failed" });
+    expect(await requireTeamAdministrator(identity(), TEAM, { reads: failing })).toEqual({ ok: false, error: "read_failed" });
   });
 });

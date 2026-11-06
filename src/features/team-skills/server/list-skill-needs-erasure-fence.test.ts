@@ -67,7 +67,7 @@ function run(fence: "none" | "in_progress" | "terminal" | "malformed" | "read_fa
   const reader: SkillNeedsReader = { listByTeam: spies.listByTeam };
   const result = listSkillNeeds("token", TEAM, {
     verifyToken: async () => ({ uid: UID, email: "member@example.com", email_verified: true }) as never,
-    allowList: [],
+    isSuperadmin: async () => false,
     collection: { getTeamStatus: spies.getTeamStatus, getMembership: spies.getMembership },
     reads: { getTeamStatus: spies.getTeamStatus, getMembership: spies.getMembership },
     store: getDefaultSkillNeedsStore(reader),

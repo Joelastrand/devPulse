@@ -18,6 +18,7 @@ vi.mock("../../../lib/firebase/admin", () => ({
 }));
 
 const ADMIN_EMAIL = "admin@example.com";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === "admin-1";
 const T0 = new Date("2026-01-01T00:00:00Z");
 const day = (n: number) => new Date(T0.getTime() + n * 86_400_000);
 
@@ -69,7 +70,7 @@ function build(world: World) {
 
   const deps: ListTeamRosterDeps = {
     verifyToken: tokenFor("user-1"),
-    allowList: [ADMIN_EMAIL],
+    isSuperadmin: isAdminUid,
     collection,
     store,
     profileReader: {
@@ -90,7 +91,7 @@ function teamWorld(): World {
     teams: { "team-1": "active", "team-2": "active" },
     memberships: {
       "user-1__team-1": member("user-1", day(1)),
-      "user-2__team-1": member("user-2", day(2), { role: "lead", roleUpdatedAt: day(9), roleUpdatedBy: "admin-secret" }),
+      "user-2__team-1": member("user-2", day(2), { role: "teamadmin", roleUpdatedAt: day(9), roleUpdatedBy: "admin-secret" }),
       "user-3__team-1": member("user-3", day(3)),
       "user-9__team-2": { ...member("user-9", day(1)), teamId: "team-2" },
     },
@@ -342,7 +343,7 @@ describe("listTeamRoster — isLead", () => {
     const world = teamWorld();
     world.memberships = {
       ...world.memberships,
-      "user-1__team-1": member("user-1", day(1), { role: "lead" }),
+      "user-1__team-1": member("user-1", day(1), { role: "teamadmin" }),
     };
     const { deps } = build(world);
 
@@ -378,11 +379,11 @@ describe("listTeamRoster — ordering", () => {
       memberships: {
         "user-1__team-1": member("user-1", day(5)),
         "user-2__team-1": member("user-2", day(4)),
-        "user-3__team-1": member("user-3", day(3), { role: "lead" }),
+        "user-3__team-1": member("user-3", day(3), { role: "teamadmin" }),
         "user-4__team-1": member("user-4", day(2)),
         "user-5__team-1": member("user-5", day(1)),
         "user-6__team-1": member("user-6", day(6)),
-        "user-7__team-1": member("user-7", day(7), { role: "lead" }),
+        "user-7__team-1": member("user-7", day(7), { role: "teamadmin" }),
       },
       profiles: {
         "user-1": profile("åse"),

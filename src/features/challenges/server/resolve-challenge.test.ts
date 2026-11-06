@@ -6,6 +6,7 @@ import { resolveChallenge } from "./resolve-challenge";
 
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const TEAM_ID = "team-42";
 const CHALLENGE_ID = "challenge-1";
 const NOW = new Date("2026-09-01T00:00:00Z");
@@ -54,7 +55,7 @@ function fakeChallengeDocStore(data: Record<string, unknown> | undefined): FakeC
 function baseDeps(overrides: Partial<ResolveChallengeDeps> = {}): ResolveChallengeDeps {
   return {
     verifyToken: verifyTokenReturning(verifiedIdentity()),
-    allowList: [ADMIN_EMAIL],
+    isSuperadmin: isAdminUid,
     docs: fakeChallengeDocStore(challengeData()),
     now: NOW,
     ...overrides,
@@ -84,7 +85,7 @@ describe("resolveChallenge", () => {
       baseDeps({
         docs,
         verifyToken: verifyTokenReturning(identity),
-        allowList: [ADMIN_EMAIL, "second-admin@example.com"],
+        isSuperadmin: async (uid: string) => uid === ADMIN_UID || uid === "admin-2",
       }),
     );
 
@@ -155,7 +156,7 @@ describe("resolveChallenge", () => {
 
   it("rejects a non-admin caller and reads nothing", async () => {
     const docs = fakeChallengeDocStore(challengeData());
-    const verifyToken = verifyTokenReturning(verifiedIdentity({ email: "dev@example.com" }));
+    const verifyToken = verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" }));
 
     const result = await resolveChallenge("token", TEAM_ID, CHALLENGE_ID, baseDeps({ docs, verifyToken }));
 

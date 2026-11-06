@@ -223,7 +223,7 @@ export type CloseSurveyResult = CloseSurveyResultOk | CloseSurveyResultErr;
 export interface CloseSurveyDeps {
   now?: Date;
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: IsAppAdminDeps["allowList"];
+  isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   db?: CloseSurveyDb;
 }
 
@@ -257,7 +257,7 @@ export async function closeSurvey(
 ): Promise<CloseSurveyResult> {
   const admin = await requireAppAdmin(idToken, {
     verifyToken: deps.verifyToken,
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
   });
   if (!admin.ok) {
     return { ok: false, error: admin.error };

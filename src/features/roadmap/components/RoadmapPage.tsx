@@ -6,10 +6,8 @@ import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { LoadingState } from "../../../components/ui/LoadingState";
-import { PageHeader } from "../../../components/ui/PageHeader";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
-import { fetchTeamsOverview } from "../../teams/client/teams-overview-gateway";
-import { TeamRouteNav } from "../../teams/components/TeamRouteNav";
+import { TeamPageHeader } from "../../teams/components/TeamPageHeader";
 import { teamsCopy } from "../../teams/copy";
 import { useRoadmapPageData } from "../client/use-roadmap-page-data";
 import { useRoadmapView } from "../client/use-roadmap-view";
@@ -33,15 +31,14 @@ import { RoadmapViewSwitch } from "./RoadmapViewSwitch";
 type ViewState =
   | { phase: "loading" }
   | { phase: "signed_out" }
-  | { phase: "signed_in"; token: string; name?: string };
+  | { phase: "signed_in"; token: string };
 
 /**
  * `/teams/[teamId]/roadmap` shell (docs/features/team-roadmap/SPEC.md — BR-1,
  * BR-2, BR-3, BR-4). Route foundation: auth gating, the shared team
- * navigation, the link back to Kompetanseområder and a best-effort team-name
- * heading. The name comes from the existing teams-overview read and is purely
- * presentational: a failed read, or a team absent from the response, leaves
- * the generic heading and never blocks the shell. Absence from the overview is
+ * navigation (via the shared `TeamPageHeader`) and the link back to
+ * Kompetanseområder. The header's team name is purely presentational: a failed
+ * read leaves the generic heading and never blocks the shell. Absence from the overview is
  * not an access decision — the authoritative no-access state belongs to the
  * roadmap read (TASK-006). The roadmap and skills reads live in `RoadmapContent` (TASK-006).
  */
@@ -49,22 +46,13 @@ export function RoadmapPage({ teamId }: { teamId: string }) {
   const [state, setState] = useState<ViewState>({ phase: "loading" });
 
   useAuthGatedResource(
-    (token, generation, isCurrentGeneration) => {
+    (token) => {
       if (!token) {
         setState({ phase: "signed_out" });
         return;
       }
 
       setState({ phase: "signed_in", token });
-      fetchTeamsOverview(token).then((overview) => {
-        if (!isCurrentGeneration(generation) || overview.status !== "ok") {
-          return;
-        }
-        const name = overview.teams.find((team) => team.teamId === teamId)?.name;
-        if (name) {
-          setState({ phase: "signed_in", token, name });
-        }
-      });
     },
     [teamId],
   );
@@ -86,8 +74,7 @@ export function RoadmapPage({ teamId }: { teamId: string }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader title={state.name ?? teamsCopy.detail.fallbackName} />
-      <TeamRouteNav teamId={teamId} />
+      <TeamPageHeader teamId={teamId} />
       <Link
         href={`/teams/${encodeURIComponent(teamId)}#team-skill-section-heading`}
         className="w-fit font-medium text-zinc-900 underline dark:text-zinc-50"

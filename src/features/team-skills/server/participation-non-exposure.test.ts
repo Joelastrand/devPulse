@@ -89,6 +89,7 @@ const fakeDb = {
 };
 
 const ADMIN_EMAIL = "admin@example.com";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === "admin";
 const TEAM = "team-1";
 const NOW = new Date("2026-10-01T00:00:00Z");
 const CONSENT_SENTINEL = new Date("2031-02-03T04:05:06Z");
@@ -101,6 +102,11 @@ const identities: Record<string, { uid: string; email: string; email_verified: b
   "t-stale": { uid: "stale", email: "stale@example.com", email_verified: true },
   "t-admin": { uid: "admin", email: ADMIN_EMAIL, email_verified: true },
 };
+
+vi.mock("../../superadmins/server/superadmin-policy", () => ({
+  // Route-level tests call services with their default superadmin lookup. Nobody here is a registry superadmin.
+  readSuperadminActive: async (uid: string) => uid === "admin",
+}));
 
 vi.mock("../../../lib/firebase/admin", () => ({
   getFirestoreDb: () => fakeDb,
@@ -153,7 +159,7 @@ function seed({ withParticipation }: { withParticipation: boolean }) {
   const p = (value: Doc) => (withParticipation ? { [SKILL_CONTRIBUTION_FIELD]: value } : {});
   db.set(`teamMemberships/anna__${TEAM}`, membership("anna", p(validContribution)));
   db.set(`teamMemberships/bo__${TEAM}`, membership("bo"));
-  db.set(`teamMemberships/lead__${TEAM}`, membership("lead", { role: "lead", ...p(validContribution) }));
+  db.set(`teamMemberships/lead__${TEAM}`, membership("lead", { role: "teamadmin", ...p(validContribution) }));
   // Stale version, plus malformed shape with a sentinel future field.
   db.set(`teamMemberships/stale__${TEAM}`, membership("stale", p({ noticeVersion: 999, consentedAt: CONSENT_SENTINEL, extra: "SENTINEL-FUTURE" })));
   for (const uid of ["anna", "bo", "lead", "stale"]) {
@@ -200,7 +206,6 @@ const NON_OWNER_SURFACES: Array<[string, Handler, string[]]> = [
 ];
 
 beforeEach(() => {
-  vi.stubEnv("APP_ADMIN_EMAILS", ADMIN_EMAIL);
   seed({ withParticipation: true });
 });
 
@@ -262,10 +267,10 @@ describe("no membership-derived response exposes participation (BR-10)", () => {
   });
 
   it("role change and member-ref preparation operations preserve the stored field", async () => {
-    const adminOps = { verifyToken: vi.fn().mockResolvedValue(identities["t-admin"]), allowList: [ADMIN_EMAIL], now: NOW };
+    const adminOps = { verifyToken: vi.fn().mockResolvedValue(identities["t-admin"]), isSuperadmin: isAdminUid, now: NOW };
     db.set(`teamMemberships/anna__${TEAM}`, membership("anna", { memberRef: "bad", [SKILL_CONTRIBUTION_FIELD]: validContribution }));
 
-    await setTeamMemberRole("t", TEAM, "anna", "lead", adminOps);
+    await setTeamMemberRole("t", TEAM, "anna", "teamadmin", adminOps);
     await materializeMemberRefs("t", TEAM, adminOps);
     await setTeamMemberRole("t", TEAM, "anna", "member", adminOps);
 

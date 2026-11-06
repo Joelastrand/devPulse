@@ -45,7 +45,7 @@ describe("GET /api/me/conversations/create-options", () => {
   it("returns exactly { items: [{ teamId, name }], truncated } with no-store, even if the operation carries extra fields", async () => {
     readCreateOptionsMock.mockResolvedValue({
       ok: true,
-      items: [{ teamId: "team-a", name: "Plattform", status: "active", role: "lead", memberRef: "ref-1", uid: "x" }],
+      items: [{ teamId: "team-a", name: "Plattform", status: "active", role: "teamadmin", memberRef: "ref-1", uid: "x" }],
       truncated: true,
     });
 

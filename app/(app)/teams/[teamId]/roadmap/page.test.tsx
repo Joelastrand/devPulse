@@ -5,12 +5,12 @@ import { cleanup } from "@testing-library/react";
 import { render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 
-const roadmapPageMock = vi.fn<(props: { teamId: string }) => ReactElement>(() => (
+const teamProjectRoadmapMock = vi.fn<(props: { teamId: string }) => ReactElement>(() => (
   <div data-testid="roadmap-page" />
 ));
 
-vi.mock("../../../../../src/features/roadmap/components/RoadmapPage", () => ({
-  RoadmapPage: roadmapPageMock,
+vi.mock("../../../../../src/features/team-projects/components/TeamProjectRoadmap", () => ({
+  TeamProjectRoadmap: teamProjectRoadmapMock,
 }));
 
 const { default: TeamRoadmapPage } = await import("./page");
@@ -21,7 +21,7 @@ describe("TeamRoadmapPage", () => {
 
     expect(screen.getByRole("main")).toBeTruthy();
     expect(screen.getByTestId("roadmap-page")).toBeTruthy();
-    expect(roadmapPageMock.mock.calls[0]?.[0]).toEqual({ teamId: "team-1" });
+    expect(teamProjectRoadmapMock.mock.calls[0]?.[0]).toEqual({ teamId: "team-1" });
   });
 });
 

@@ -14,14 +14,14 @@
  * One team member row — email resolved live server-side, never persisted;
  * `displayName` is the member's self-set name (`null` when none, never an
  * e-mail fallback); `role` is the **stored** team role, `"member"` for
- * anything but exactly `"lead"`. Admin-only shape (it carries the `uid`
+ * anything but exactly `"teamadmin"`. Admin-only shape (it carries the `uid`
  * admin operations need) — unrelated to the member-facing roster.
  */
 export interface AdminTeamMemberEntry {
   uid: string;
   email: string | null;
   displayName: string | null;
-  role: "lead" | "member";
+  role: "teamadmin" | "member";
   /** Admin-only readiness flag; `false` only when the server says so (the ref value is never sent). */
   hasMemberRef: boolean;
 }
@@ -74,7 +74,7 @@ export type FetchTeamMembersResult =
  * Parses one member row defensively. `uid`/`email` keep their existing strict
  * validation. The additive fields fail safe rather than failing the row: a
  * missing/malformed `displayName` is `null`, and a missing/unknown `role` is
- * `"member"` — never `"lead"` — so an older response shape stays readable.
+ * `"member"` — never `"teamadmin"` — so an older response shape stays readable.
  */
 function parseAdminTeamMemberEntry(value: unknown): AdminTeamMemberEntry | null {
   if (typeof value !== "object" || value === null) {
@@ -88,7 +88,7 @@ function parseAdminTeamMemberEntry(value: unknown): AdminTeamMemberEntry | null 
     uid,
     email,
     displayName: isNonEmptyString(displayName) ? displayName : null,
-    role: role === "lead" ? "lead" : "member",
+    role: role === "teamadmin" ? "teamadmin" : "member",
     hasMemberRef: hasMemberRef !== false,
   };
 }
@@ -214,7 +214,7 @@ export type SetAdminTeamMemberRoleError =
   | "unknown";
 
 export type SetAdminTeamMemberRoleResult =
-  | { ok: true; role: "lead" | "member" }
+  | { ok: true; role: "teamadmin" | "member" }
   | { ok: false; error: SetAdminTeamMemberRoleError };
 
 const KNOWN_SET_ROLE_ERRORS = new Set<string>([
@@ -229,7 +229,7 @@ const KNOWN_SET_ROLE_ERRORS = new Set<string>([
 function parseSetRoleResponse(body: unknown): SetAdminTeamMemberRoleResult {
   if (typeof body === "object" && body !== null) {
     const { ok, role, error } = body as Record<string, unknown>;
-    if (ok === true && (role === "lead" || role === "member")) {
+    if (ok === true && (role === "teamadmin" || role === "member")) {
       return { ok: true, role };
     }
     if (typeof error === "string" && KNOWN_SET_ROLE_ERRORS.has(error)) {
@@ -244,7 +244,7 @@ export interface SetAdminTeamMemberRoleGateway {
     idToken: string,
     teamId: string,
     uid: string,
-    role: "lead" | "member",
+    role: "teamadmin" | "member",
   ): Promise<SetAdminTeamMemberRoleResult>;
 }
 
@@ -281,7 +281,7 @@ export async function setAdminTeamMemberRole(
   idToken: string,
   teamId: string,
   uid: string,
-  role: "lead" | "member",
+  role: "teamadmin" | "member",
   deps: SetAdminTeamMemberRoleDeps = {},
 ): Promise<SetAdminTeamMemberRoleResult> {
   const gateway = deps.gateway ?? getDefaultSetMemberRoleGateway();

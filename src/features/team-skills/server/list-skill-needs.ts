@@ -1,5 +1,6 @@
 import "server-only";
 import { sortSkillRows } from "../../skill-profiles/domain/skill-profile-view";
+import { isAppAdmin } from "../../teams/domain/app-admin";
 import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import {
   authorizeTeamAccess,
@@ -47,7 +48,7 @@ export type ListSkillNeedsResult =
 
 export interface ListSkillNeedsDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: AuthorizeTeamAccessDeps["allowList"];
+  isSuperadmin?: AuthorizeTeamAccessDeps["isSuperadmin"];
   /** Seam for `authorizeTeamAccess`'s own reads. */
   collection?: AuthorizeTeamAccessDeps["collection"];
   /** Seam for the genuine-membership facts behind the `viewer` hints. */
@@ -75,7 +76,7 @@ export async function listSkillNeeds(
   }
 
   const authorized = await authorizeTeamAccess(verified.identity, teamId, {
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
     collection: deps.collection,
   });
   if (!authorized.ok) return { ok: false, error: "read_failed" };
@@ -111,7 +112,7 @@ export async function listSkillNeeds(
       catalogTruncated: catalog.truncated,
       needsTruncated: listed.truncated,
       viewer: {
-        canManageNeeds: membership.relationship === "lead" && active,
+        canManageNeeds: (membership.relationship === "teamadmin" || await isAppAdmin(verified.identity, { isSuperadmin: deps.isSuperadmin })) && active,
         canReadCoverage: membership.relationship !== "denied" && active,
       },
     };

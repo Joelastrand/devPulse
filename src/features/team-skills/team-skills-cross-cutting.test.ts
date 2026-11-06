@@ -25,7 +25,10 @@ function walk(dir: string): string[] {
   });
 }
 
-const isTest = (path: string) => /\.test\.tsx?$/.test(path);
+// Matches a team-nav link whose sub-route is NOT one of the five SPEC BR-30 tabs (Oversikt is the bare base).
+const UNAPPROVED_TEAM_NAV_HREF = /href:\s*`\$\{base\}\/(?!(roadmap|systems|competence-plan|competence)`)/;
+
+const isTest =(path: string) => /\.test\.tsx?$/.test(path);
 const read = (path: string) => readFileSync(join(ROOT, path), "utf8");
 
 /**
@@ -131,11 +134,22 @@ describe("C2 scope regression — nothing outside the approved surface (BR-35, B
     expect(C2_PRODUCTION.filter((p) => /\.(set|create|update|delete)\(/.test(read(p)) && !/skill-needs-store|skill-contribution-store/.test(p))).toEqual([]);
   });
 
-  it("team navigation still exposes only Oversikt and Roadmap (no C2 destination)", () => {
+  it("team navigation exposes only the approved destinations (the five SPEC BR-30 tabs — no other sub-route)", () => {
     const nav = walk("src/features/teams/components").filter((p) => /Nav\.tsx$/.test(p));
     expect(nav.length).toBeGreaterThan(0);
-    // Links are declared as `{ href: base | `${base}/roadmap`, label }` — any other destination fails.
-    for (const p of nav) expect(read(p)).not.toMatch(/href:\s*`\$\{base\}\/(?!roadmap`)/);
+    // Links are declared as `{ href: base | `${base}/<approved>`, label }`. The approved set is exactly the five
+    // SPEC BR-30 tabs: Oversikt (base), Roadmap, Kompetanseplan, Teamkompetanse, Systemoversikt. Any other
+    // sub-route (including C2 skill-needs/profile destinations) fails. Keep this list in sync with the spec.
+    for (const p of nav) expect(read(p)).not.toMatch(UNAPPROVED_TEAM_NAV_HREF);
+  });
+
+  it("team navigation guard rejects unapproved destinations and accepts the five approved tabs", () => {
+    for (const sub of ["roadmap", "systems", "competence-plan", "competence"]) {
+      expect(`href: \`\${base}/${sub}\``).not.toMatch(UNAPPROVED_TEAM_NAV_HREF);
+    }
+    for (const sub of ["skill-needs", "competence-plan/extra", "competence-x", "forum"]) {
+      expect(`href: \`\${base}/${sub}\``).toMatch(UNAPPROVED_TEAM_NAV_HREF);
+    }
   });
 });
 

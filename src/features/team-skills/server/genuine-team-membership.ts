@@ -1,6 +1,7 @@
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { type VerifiedIdentity } from "../../auth/server/verify-identity";
+import { isAppAdmin } from "../../teams/domain/app-admin";
 import { isValidTeamStatus, type TeamStatus } from "../../teams/domain/team";
 import {
   isValidMembershipFor,
@@ -21,7 +22,7 @@ const MEMBERSHIPS_COLLECTION = "teamMemberships";
  * Deliberately exposes facts, not permissions. Each C2 operation (need
  * write, coverage read, participation) composes its own rule from these.
  */
-export type GenuineRelationship = "denied" | "member" | "lead";
+export type GenuineRelationship = "denied" | "member" | "teamadmin";
 
 export type GenuineMembershipResult =
   | { ok: true; relationship: GenuineRelationship; teamStatus: TeamStatus }
@@ -35,7 +36,9 @@ export interface GenuineMembershipReads {
   getMembership(uid: string, teamId: string): Promise<unknown>;
 }
 
+import type { IsAppAdminDeps } from "../../teams/domain/app-admin";
 export interface GenuineMembershipDeps {
+  isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   reads?: GenuineMembershipReads;
 }
 
@@ -61,7 +64,7 @@ function getDefaultReads(): GenuineMembershipReads {
 /**
  * Order: team read (missing/invalid status ⇒ denied for everyone) →
  * membership read, validated for the exact (verified uid, teamId) pair →
- * role (exactly `lead`, anything else is `member`). A read failure is
+ * role (exactly `teamadmin`, anything else is `member`). A read failure is
  * `read_failed`, never `denied`. A disabled team still reports the stored
  * relationship; callers needing an active team must check `teamStatus`
  * (use the `require*` helpers).
@@ -106,11 +109,7 @@ export async function resolveGenuineTeamMembership(
 export type RequireGenuineError = "forbidden" | "team_disabled" | "read_failed";
 
 export type RequireGenuineMemberResult =
-  | { ok: true; relationship: "member" | "lead" }
-  | { ok: false; error: RequireGenuineError };
-
-export type RequireGenuineLeadResult =
-  | { ok: true }
+  | { ok: true; relationship: "member" | "teamadmin" }
   | { ok: false; error: RequireGenuineError };
 
 /**
@@ -133,18 +132,26 @@ export async function requireGenuineMember(
   return { ok: true, relationship: result.relationship };
 }
 
+export type RequireTeamAdministratorResult =
+  | { ok: true }
+  | { ok: false; error: RequireGenuineError };
+
 /**
- * Genuine lead of an **active** team. Role is checked before status, so an
- * ordinary member is `forbidden` (not `team_disabled`) on a disabled team.
+ * Team administrator of an **active** team: a superadmin (global app admin,
+ * `isAppAdmin` on the verified identity) or a genuine `teamadmin` membership.
+ * Role is checked before status, so an ordinary member is `forbidden` (not
+ * `team_disabled`) on a disabled team. Only the need-management writes use
+ * this; participation and coverage never call it.
  */
-export async function requireGenuineLead(
+export async function requireTeamAdministrator(
   identity: VerifiedIdentity,
   teamId: string,
   deps: GenuineMembershipDeps = {},
-): Promise<RequireGenuineLeadResult> {
+): Promise<RequireTeamAdministratorResult> {
   const result = await resolveGenuineTeamMembership(identity, teamId, deps);
   if (!result.ok) return result;
-  if (result.relationship !== "lead") {
+  const superadmin = await isAppAdmin(identity, { isSuperadmin: deps.isSuperadmin });
+  if (!superadmin && result.relationship !== "teamadmin") {
     return { ok: false, error: "forbidden" };
   }
   if (result.teamStatus !== "active") {

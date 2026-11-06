@@ -51,7 +51,7 @@ export async function updateRole(
   input: unknown,
   deps: UpdateRoleDeps = {},
 ): Promise<UpdateRoleResult> {
-  const admin = await requireAppAdmin(idToken, { verifyToken: deps.verifyToken, allowList: deps.allowList });
+  const admin = await requireAppAdmin(idToken, { verifyToken: deps.verifyToken, isSuperadmin: deps.isSuperadmin });
   if (!admin.ok) {
     return { ok: false, error: admin.error };
   }

@@ -94,7 +94,7 @@ export type CreateAccessRequestResult =
 export interface CreateAccessRequestDeps {
   now?: Date;
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: AuthorizeTeamAccessDeps["allowList"];
+  isSuperadmin?: AuthorizeTeamAccessDeps["isSuperadmin"];
   authorizeCollection?: AuthorizeTeamAccessDeps["collection"];
   teamsCollection?: CreateAccessRequestTeamsCollection;
   collection?: CreateAccessRequestCollection;
@@ -133,7 +133,7 @@ export async function createAccessRequest(
   }
 
   const authResult = await authorizeTeamAccess(verified.identity, teamId, {
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
     collection: deps.authorizeCollection,
   });
   if (!authResult.ok) {

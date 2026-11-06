@@ -32,6 +32,54 @@ const PERSONAL_COLLECTION = new RegExp(["skill", "Profiles"].join(""));
 
 const stripComments = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 
+/**
+ * The one approved C1 → C2 composition (TASK-009, owner decision 2026-11-06, Option A; C1 SPEC "C2 participation control
+ * composition exception"). `/me/skills` may mount the C2 "Del kompetanse med teamet" control and nothing else from C2.
+ * It is matched by exact file, exact import specifier, exact identifier and exactly one JSX use. The control calls only
+ * the owner's C2 participation gateway; it grants no access to private C1 assessments.
+ */
+const APPROVED_C2_COMPOSITION = {
+  file: "app/(app)/me/skills/page.tsx",
+  specifier: "../../../../src/features/team-skills/components/OwnCompetenceSharing",
+  identifier: "OwnCompetenceSharing",
+} as const;
+
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+
+/**
+ * Returns the source with the approved composition removed, so the rest of the file is still scanned in full.
+ * Only the exact file is affected. `approvedUses` counts the approved import and JSX use that were removed; any other
+ * file, or a different specifier/identifier, is returned unchanged.
+ */
+function withoutApprovedComposition(path: string, text: string): { code: string; approvedUses: number } {
+  if (path !== APPROVED_C2_COMPOSITION.file) return { code: text, approvedUses: 0 };
+  const { identifier, specifier } = APPROVED_C2_COMPOSITION;
+  const importLine = new RegExp(`^import \\{ ${identifier} \\} from "${escapeRegExp(specifier)}";\\n`, "gm");
+  const jsxUse = new RegExp(`<${identifier} />`, "g");
+  const imports = text.match(importLine)?.length ?? 0;
+  const jsx = text.match(jsxUse)?.length ?? 0;
+  const code = text.replace(importLine, "").replace(jsxUse, "");
+  return { code, approvedUses: imports + jsx };
+}
+
+/**
+ * C1 → C2 dependency violations for the given C1 files: any remaining import of a `team-skills` module, any remaining
+ * reference to the approved identifier, and any use of the approved composition beyond exactly one import and one JSX use.
+ */
+function c1ToC2Violations(files: { path: string; text: string }[]): string[] {
+  return files.flatMap(({ path, text }) => {
+    const { code, approvedUses } = withoutApprovedComposition(path, text);
+    const stripped = stripComments(code);
+    const out: string[] = [];
+    if (path === APPROVED_C2_COMPOSITION.file && approvedUses !== 2) out.push(`${path}: approved composition used ${approvedUses} times, expected 2`);
+    for (const match of stripped.matchAll(/(?:from|import)\s*\(?\s*["']([^"']+)["']/g)) {
+      if (/team-skills/.test(match[1])) out.push(`${path} -> ${match[1]}`);
+    }
+    if (new RegExp(`\\b${APPROVED_C2_COMPOSITION.identifier}\\b`).test(stripped)) out.push(`${path}: ${APPROVED_C2_COMPOSITION.identifier}`);
+    return out;
+  });
+}
+
 /** Every user-visible string in copy.ts, with sample arguments for the parameterised ones. */
 function collectCopyStrings(value: unknown, out: string[]): void {
   if (typeof value === "string") out.push(value);
@@ -153,12 +201,46 @@ describe("C1 scope on all C1 surfaces including the page route (BR-19, BR-29, BR
     expect(C1_PRODUCTION).toContain("src/features/skill-profiles/copy.ts");
   });
 
-  it("C1 production code contains no C2, sharing, history, ranking or aggregate identifiers", () => {
+  it("C1 production code contains no C2, sharing, history, ranking or aggregate identifiers (apart from the approved composition)", () => {
     const hits = C1_PRODUCTION.flatMap((path) => {
-      const code = stripComments(read(path)).toLowerCase();
+      const code = stripComments(withoutApprovedComposition(path, read(path)).code).toLowerCase();
       return FORBIDDEN.filter((id) => code.includes(id.toLowerCase())).map((id) => `${path}: ${id}`);
     });
     expect(hits).toEqual([]);
+  });
+
+  it("the only C1 → C2 dependency on disk is the approved /me/skills composition", () => {
+    const files = C1_PRODUCTION.map((path) => ({ path, text: read(path) }));
+    expect(c1ToC2Violations(files)).toEqual([]);
+    const importsC2 = files.filter((f) => /(?:from|import)\s*\(?\s*["'][^"']*team-skills/.test(stripComments(f.text))).map((f) => f.path);
+    expect(importsC2).toEqual([APPROVED_C2_COMPOSITION.file]);
+  });
+
+  it("the approved composition is allowed exactly once, on the approved page, through the approved specifier", () => {
+    const page = read(APPROVED_C2_COMPOSITION.file);
+    expect(withoutApprovedComposition(APPROVED_C2_COMPOSITION.file, page).approvedUses).toBe(2);
+    expect(c1ToC2Violations([{ path: APPROVED_C2_COMPOSITION.file, text: page }])).toEqual([]);
+  });
+
+  it("rejects unapproved C1 → C2 dependencies (negative fixtures)", () => {
+    const page = read(APPROVED_C2_COMPOSITION.file);
+    const extraImport = `import { getTeamSkillCoverage } from "../../../../src/features/team-skills/server/get-team-skill-coverage";\n${page}`;
+    const secondUse = page.replace("</div>\n    </PageShell>", "<OwnCompetenceSharing />\n</div>\n    </PageShell>");
+    expect(c1ToC2Violations([{ path: APPROVED_C2_COMPOSITION.file, text: extraImport }])).toEqual([
+      `${APPROVED_C2_COMPOSITION.file} -> ../../../../src/features/team-skills/server/get-team-skill-coverage`,
+    ]);
+    expect(c1ToC2Violations([{ path: APPROVED_C2_COMPOSITION.file, text: secondUse }])).not.toEqual([]);
+    expect(
+      c1ToC2Violations([{ path: "src/features/skill-profiles/components/SkillProfilePage.tsx", text: `import { OwnCompetenceSharing } from "../../team-skills/components/OwnCompetenceSharing";` }]),
+    ).not.toEqual([]);
+    expect(
+      c1ToC2Violations([{ path: "app/(app)/me/skills/other.tsx", text: `export const x = () => <OwnCompetenceSharing />;` }]),
+    ).toEqual(["app/(app)/me/skills/other.tsx: OwnCompetenceSharing"]);
+  });
+
+  it("keeps the approved composition's own declared identifier and specifier pinned", () => {
+    expect(APPROVED_C2_COMPOSITION.specifier).toMatch(/src\/features\/team-skills\/components\/OwnCompetenceSharing$/);
+    expect(APPROVED_C2_COMPOSITION.identifier).toBe("OwnCompetenceSharing");
   });
 
   it("no chart/canvas/svg element or chart library is used by C1 UI", () => {

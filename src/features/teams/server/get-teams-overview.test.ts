@@ -80,7 +80,7 @@ describe("getTeamsOverview", () => {
       ]),
       resolveInvitationsCollection: noopResolveInvitations(),
       collection: fakeOverviewCollection({}),
-      allowList: [],
+      isSuperadmin: async () => false,
     });
 
     expect(result).toEqual({
@@ -100,7 +100,7 @@ describe("getTeamsOverview", () => {
       collection: fakeOverviewCollection({
         memberships: [{ uid: "user-1", teamId: "team-1" }],
       }),
-      allowList: [],
+      isSuperadmin: async () => false,
     });
 
     expect(result).toEqual({
@@ -111,11 +111,11 @@ describe("getTeamsOverview", () => {
 
   it("shows 'admin' for every team when the caller is an app admin, regardless of membership", async () => {
     const result = await getTeamsOverview(TOKEN, {
-      verifyToken: verifyToken({ email: "admin@example.com" }),
+      verifyToken: verifyToken({ uid: "admin-1", email: "admin@example.com" }),
       activeTeamsCollection: fakeActiveTeams([{ teamId: "team-1", name: "Team One" }]),
       resolveInvitationsCollection: noopResolveInvitations(),
       collection: fakeOverviewCollection({}),
-      allowList: ["admin@example.com"],
+      isSuperadmin: async (uid: string) => uid === "admin-1",
     });
 
     expect(result).toEqual({
@@ -132,7 +132,7 @@ describe("getTeamsOverview", () => {
       collection: fakeOverviewCollection({
         accessRequests: [{ uid: "user-1", teamId: "team-1", status: "pending" }],
       }),
-      allowList: [],
+      isSuperadmin: async () => false,
     });
 
     expect(result).toEqual({
@@ -149,7 +149,7 @@ describe("getTeamsOverview", () => {
       collection: fakeOverviewCollection({
         accessRequests: [{ uid: "user-1", teamId: "team-1", status: "rejected" }],
       }),
-      allowList: [],
+      isSuperadmin: async () => false,
     });
 
     expect(result).toEqual({
@@ -171,7 +171,7 @@ describe("getTeamsOverview", () => {
         memberships: [{ uid: "user-1", teamId: "team-1" }],
         accessRequests: [{ uid: "user-1", teamId: "team-2", status: "pending" }],
       }),
-      allowList: [],
+      isSuperadmin: async () => false,
     });
 
     expect(result).toEqual({
@@ -195,7 +195,7 @@ describe("getTeamsOverview", () => {
       collection: fakeOverviewCollection({
         memberships: [{ uid: "user-1", teamId: "team-1" }],
       }),
-      allowList: [],
+      isSuperadmin: async () => false,
     });
 
     expect(result.ok).toBe(true);
@@ -214,7 +214,7 @@ describe("getTeamsOverview", () => {
         memberships: [{ uid: "user-1", teamId: "team-2" }],
         teams: { "team-2": { name: "Team Two", status: "disabled" } },
       }),
-      allowList: [],
+      isSuperadmin: async () => false,
     });
 
     expect(result).toEqual({
@@ -234,7 +234,7 @@ describe("getTeamsOverview", () => {
       collection: fakeOverviewCollection({
         memberships: [{ uid: "user-1" }, null, "not-an-object"],
       }),
-      allowList: [],
+      isSuperadmin: async () => false,
     });
 
     expect(result).toEqual({
@@ -252,7 +252,7 @@ describe("getTeamsOverview", () => {
         memberships: [{ uid: "user-1", teamId: "team-2" }],
         teams: { "team-2": { name: "Team Two", status: "not-a-real-status" } },
       }),
-      allowList: [],
+      isSuperadmin: async () => false,
     });
 
     expect(result).toEqual({ ok: true, teams: [] });
@@ -266,7 +266,7 @@ describe("getTeamsOverview", () => {
       collection: fakeOverviewCollection({
         accessRequests: [{ uid: "user-1", teamId: "gone-team", status: "pending" }],
       }),
-      allowList: [],
+      isSuperadmin: async () => false,
     });
 
     expect(result).toEqual({ ok: true, teams: [] });
@@ -281,7 +281,7 @@ describe("getTeamsOverview", () => {
         },
       },
       resolveInvitationsCollection: noopResolveInvitations(),
-      allowList: [],
+      isSuperadmin: async () => false,
     });
 
     expect(result).toEqual({ ok: false, error: "read_failed" });
@@ -303,7 +303,7 @@ describe("getTeamsOverview", () => {
           return undefined;
         },
       },
-      allowList: [],
+      isSuperadmin: async () => false,
     });
 
     expect(result).toEqual({ ok: false, error: "read_failed" });
@@ -321,7 +321,7 @@ describe("getTeamsOverview", () => {
           return "no_longer_pending" as ResolveOneOutcome;
         },
       },
-      allowList: [],
+      isSuperadmin: async () => false,
     });
 
     expect(result).toEqual({ ok: false, error: "read_failed" });
@@ -357,7 +357,7 @@ describe("getTeamsOverview", () => {
           return undefined;
         },
       },
-      allowList: [],
+      isSuperadmin: async () => false,
     });
 
     expect(result).toEqual({
@@ -374,7 +374,7 @@ describe("getTeamsOverview", () => {
       collection: fakeOverviewCollection({
         memberships: [{ uid: "user-1", teamId: "team-1" }],
       }),
-      allowList: [],
+      isSuperadmin: async () => false,
     });
 
     expect(result.ok).toBe(true);

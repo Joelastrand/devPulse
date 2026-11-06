@@ -21,9 +21,21 @@ interface Item {
   ownerRef: string | null;
 }
 
-function fakeMembershipStore(options: { memberships?: Record<string, Record<string, unknown>>; items?: Record<string, Item> } = {}) {
+interface SystemFixture {
+  teamId: string;
+  knowledgeMemberRefs: string[];
+}
+
+function fakeMembershipStore(
+  options: {
+    memberships?: Record<string, Record<string, unknown>>;
+    items?: Record<string, Item>;
+    systems?: Record<string, SystemFixture>;
+  } = {},
+) {
   const memberships = new Map<string, Record<string, unknown>>(Object.entries(options.memberships ?? {}));
   const items = new Map<string, Item>(Object.entries(options.items ?? {}));
+  const systems = new Map<string, SystemFixture>(Object.entries(options.systems ?? {}));
   const log: string[] = [];
 
   const tx: MembershipTransaction = {
@@ -41,6 +53,23 @@ function fakeMembershipStore(options: { memberships?: Record<string, Record<stri
       log.push(`clear:${itemId}`);
       const item = items.get(itemId);
       if (item) items.set(itemId, { ...item, ownerRef: null });
+    },
+    async systemsKnowingMemberRef(teamId, memberRef, limit) {
+      return [...systems.entries()]
+        .filter(([, system]) => system.teamId === teamId && system.knowledgeMemberRefs.includes(memberRef))
+        .slice(0, limit)
+        .map(([systemId, system]) => ({ systemId, knowledgeMemberRefs: [...system.knowledgeMemberRefs] }));
+    },
+    setKnowledgeMemberRefs(systemId, knowledgeMemberRefs) {
+      log.push(`set-refs:${systemId}`);
+      const system = systems.get(systemId);
+      if (system) systems.set(systemId, { ...system, knowledgeMemberRefs: [...knowledgeMemberRefs] });
+    },
+    async participationIdsOf() {
+      return [];
+    },
+    deleteParticipation() {
+      throw new Error("no participation fixture");
     },
     deleteMembership(id) {
       log.push(`delete:${id}`);

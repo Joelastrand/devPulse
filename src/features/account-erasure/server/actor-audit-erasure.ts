@@ -49,11 +49,23 @@ export async function runActorAuditBatch(deps: ActorAuditStepDeps, uid: string, 
       const raw = await tx.getDocument(target, documentId);
       // A listed document that no longer reads back is inconsistent with the listing: fail closed, change nothing.
       if (raw === undefined) throw new ErasureStepFailure("verification_failed");
-      if (raw[target.field] !== uid) throw new ErasureStepFailure("verification_failed");
+      if (readActorField(raw, target.field) !== uid) throw new ErasureStepFailure("verification_failed");
       tx.clearActorField(target, documentId);
     });
     return "more";
   }
 
   return "done";
+}
+
+/**
+ * Reads a target field. A dotted target (`availability.assessedBy`, A-13) names a field inside a stored map, one level deep.
+ * A missing parent reads as `undefined`, which never equals a uid, so the step fails closed.
+ */
+function readActorField(raw: Record<string, unknown>, field: string): unknown {
+  const [parent, child] = field.split(".");
+  if (child === undefined) return raw[field];
+  const nested = raw[parent];
+  if (typeof nested !== "object" || nested === null) return undefined;
+  return (nested as Record<string, unknown>)[child];
 }

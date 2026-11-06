@@ -223,7 +223,7 @@ export type GetTeamSkillProgressResult =
 
 export interface GetTeamSkillProgressDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: AuthorizeTeamAccessDeps["allowList"];
+  isSuperadmin?: AuthorizeTeamAccessDeps["isSuperadmin"];
   authCollection?: AuthorizeTeamAccessDeps["collection"];
   progressReader?: SkillProgressReader;
   treeReader?: SkillTreeReader;
@@ -294,7 +294,7 @@ export async function getTeamSkillProgress(
   }
 
   const authResult = await authorizeTeamAccess(verified.identity, teamId, {
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
     collection: deps.authCollection,
   });
   if (!authResult.ok) {

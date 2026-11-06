@@ -93,7 +93,7 @@ export type ResolveChallengeResult =
 export interface ResolveChallengeDeps {
   now?: Date;
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: IsAppAdminDeps["allowList"];
+  isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   docs?: ChallengeDocStore;
 }
 
@@ -139,7 +139,7 @@ export async function resolveChallenge(
 ): Promise<ResolveChallengeResult> {
   const admin = await requireAppAdmin(idToken, {
     verifyToken: deps.verifyToken,
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
   });
   if (!admin.ok) {
     return { ok: false, error: admin.error };

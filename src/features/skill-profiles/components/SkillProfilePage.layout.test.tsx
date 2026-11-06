@@ -41,6 +41,43 @@ function gridOf(element: HTMLElement): HTMLElement {
   return grid;
 }
 
+describe("SkillProfilePage assessment status and filter chips (TASK-009, ref 22)", () => {
+  it("shows the assessed count as a success pill only when every skill is assessed, and an info pill otherwise", async () => {
+    observeIdTokenMock.mockImplementation((callback: (token: string | null) => void) => {
+      callback("a-token");
+      return () => {};
+    });
+    fetchOwnSkillsMock.mockResolvedValue({
+      status: "ok",
+      dto: {
+        skills: [
+          { treeId: "api", name: "API-design", level: 2 },
+          { treeId: "test", name: "Testing", level: null },
+        ],
+        truncated: false,
+        profile: "ok",
+      },
+    });
+    render(<SkillProfilePage />);
+
+    const pill = await screen.findByText(skillProfileCopy.assessedOfAll(1, 2));
+    expect(pill.className).toContain("text-info-text");
+    expect(pill.className).not.toContain("text-success-text");
+  });
+
+  it("marks the selected filter option as a chip without relying on colour alone (checked radio)", async () => {
+    signedInWithOneSkill();
+    render(<SkillProfilePage />);
+    await screen.findByText("API-design");
+
+    const all = screen.getByRole("radio", { name: skillProfileCopy.filterAll });
+    const unassessed = screen.getByRole("radio", { name: skillProfileCopy.filterUnassessed });
+    expect((all as HTMLInputElement).checked).toBe(true);
+    expect(all.closest("label")?.className).toContain("font-medium");
+    expect(unassessed.closest("label")?.className).not.toContain("font-medium");
+  });
+});
+
 describe("SkillProfilePage three-panel layout (TASK-012)", () => {
   it("lays the legend, competency list and side panel in one lg three-column grid, in that order", async () => {
     signedInWithOneSkill();

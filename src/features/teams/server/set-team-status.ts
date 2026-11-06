@@ -32,7 +32,7 @@ export type SetTeamStatusResult =
 
 export interface SetTeamStatusDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: IsAppAdminDeps["allowList"];
+  isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   collection?: TeamStatusCollection;
 }
 
@@ -50,7 +50,7 @@ export async function setTeamStatus(
 ): Promise<SetTeamStatusResult> {
   const admin = await requireAppAdmin(idToken, {
     verifyToken: deps.verifyToken,
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
   });
   if (!admin.ok) {
     return { ok: false, error: admin.error };

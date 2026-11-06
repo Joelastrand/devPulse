@@ -11,6 +11,7 @@ vi.mock("../../../lib/firebase/admin", () => ({
 vi.mock("server-only", () => ({}));
 
 const ADMIN_UID = "admin-35b";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const ADMIN_EMAIL = "admin35b@example.com";
 const TREE_ID = "tree-35b";
 const TREE_PATH = `skillTrees/${TREE_ID}`;
@@ -46,7 +47,7 @@ holder.db = {
 };
 
 const verifyToken = vi.fn().mockResolvedValue({ uid: ADMIN_UID, email: ADMIN_EMAIL, email_verified: true });
-const allowList = [ADMIN_EMAIL];
+const isSuperadmin = isAdminUid;
 
 function seedTree(): void {
   docs.set(TREE_PATH, {
@@ -71,7 +72,7 @@ describe("skill-tree update is refused while the acting admin's erasure record e
     docs.set(ADMIN_FENCE, { status: "in_progress", step: "forum" });
     const before = docs.get(TREE_PATH);
 
-    const result = await updateSkillTree("t", TREE_ID, "Renamed", ["Start", "Next"], { verifyToken, allowList });
+    const result = await updateSkillTree("t", TREE_ID, "Renamed", ["Start", "Next"], { verifyToken, isSuperadmin: isAdminUid });
 
     expect(result).toEqual({ ok: false, error: "erasure_in_progress" });
     expect(writes).toEqual([]);
@@ -81,7 +82,7 @@ describe("skill-tree update is refused while the acting admin's erasure record e
   it("without an erasure record, the update writes and stamps updatedBy (unchanged behaviour)", async () => {
     seedTree();
 
-    const result = await updateSkillTree("t", TREE_ID, "Renamed", ["Start", "Next"], { verifyToken, allowList });
+    const result = await updateSkillTree("t", TREE_ID, "Renamed", ["Start", "Next"], { verifyToken, isSuperadmin: isAdminUid });
 
     expect(result).toEqual({ ok: true });
     expect(writes).toEqual([`update|${TREE_PATH}`]);

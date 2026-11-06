@@ -11,6 +11,8 @@ vi.mock("../../../lib/firebase/admin", () => ({
 }));
 
 const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const NOW = new Date("2026-10-01T00:00:00Z");
 const EARLIER = new Date("2026-01-01T00:00:00Z");
 
@@ -18,7 +20,7 @@ function verifyTokenFor(email: string, uid = "admin-1") {
   return vi.fn().mockResolvedValue({ uid, email, email_verified: true });
 }
 
-const asAdmin = { verifyToken: verifyTokenFor(ADMIN_EMAIL), allowList: [ADMIN_EMAIL], now: NOW };
+const asAdmin = { verifyToken: verifyTokenFor(ADMIN_EMAIL), isSuperadmin: isAdminUid, now: NOW };
 
 type Doc = Record<string, unknown>;
 
@@ -83,12 +85,12 @@ describe("setTeamMemberRole — promotion", () => {
       teams: { "team-1": "active" },
     });
 
-    const result = await setTeamMemberRole("token", "team-1", "user-1", "lead", { ...asAdmin, collection });
+    const result = await setTeamMemberRole("token", "team-1", "user-1", "teamadmin", { ...asAdmin, collection });
 
-    expect(result).toEqual({ ok: true, role: "lead" });
+    expect(result).toEqual({ ok: true, role: "teamadmin" });
     expect(memberships.get("user-1__team-1")).toEqual({
       ...plainMember,
-      role: "lead",
+      role: "teamadmin",
       roleUpdatedAt: NOW,
       roleUpdatedBy: "admin-1",
     });
@@ -104,26 +106,26 @@ describe("setTeamMemberRole — promotion", () => {
       teams: { "team-1": "active" },
     });
 
-    await setTeamMemberRole("token", "team-1", "user-1", "lead", { ...asAdmin, collection });
-    await setTeamMemberRole("token", "team-1", "user-2", "lead", { ...asAdmin, collection });
+    await setTeamMemberRole("token", "team-1", "user-1", "teamadmin", { ...asAdmin, collection });
+    await setTeamMemberRole("token", "team-1", "user-2", "teamadmin", { ...asAdmin, collection });
 
-    expect(memberships.get("user-1__team-1")?.role).toBe("lead");
-    expect(memberships.get("user-2__team-1")?.role).toBe("lead");
+    expect(memberships.get("user-1__team-1")?.role).toBe("teamadmin");
+    expect(memberships.get("user-2__team-1")?.role).toBe("teamadmin");
     expect(memberships.get("user-3__team-1")).not.toHaveProperty("role");
   });
 
   it("is idempotent for an existing lead on an active team", async () => {
     const { collection, memberships } = fakeCollection({
-      memberships: { "user-1__team-1": { ...plainMember, role: "lead" } },
+      memberships: { "user-1__team-1": { ...plainMember, role: "teamadmin" } },
       teams: { "team-1": "active" },
     });
 
-    const first = await setTeamMemberRole("token", "team-1", "user-1", "lead", { ...asAdmin, collection });
-    const second = await setTeamMemberRole("token", "team-1", "user-1", "lead", { ...asAdmin, collection });
+    const first = await setTeamMemberRole("token", "team-1", "user-1", "teamadmin", { ...asAdmin, collection });
+    const second = await setTeamMemberRole("token", "team-1", "user-1", "teamadmin", { ...asAdmin, collection });
 
-    expect(first).toEqual({ ok: true, role: "lead" });
-    expect(second).toEqual({ ok: true, role: "lead" });
-    expect(memberships.get("user-1__team-1")?.role).toBe("lead");
+    expect(first).toEqual({ ok: true, role: "teamadmin" });
+    expect(second).toEqual({ ok: true, role: "teamadmin" });
+    expect(memberships.get("user-1__team-1")?.role).toBe("teamadmin");
   });
 
   it.each([
@@ -138,7 +140,7 @@ describe("setTeamMemberRole — promotion", () => {
       teams: { "team-1": status },
     });
 
-    const result = await setTeamMemberRole("token", "team-1", "user-1", "lead", { ...asAdmin, collection });
+    const result = await setTeamMemberRole("token", "team-1", "user-1", "teamadmin", { ...asAdmin, collection });
 
     expect(result).toEqual({ ok: false, error: "team_disabled" });
     expect(log.updates).toEqual([]);
@@ -146,13 +148,13 @@ describe("setTeamMemberRole — promotion", () => {
   });
 
   it("rejects re-assigning lead to an existing lead on a disabled team and leaves the membership untouched", async () => {
-    const lead = { ...plainMember, role: "lead", roleUpdatedAt: EARLIER, roleUpdatedBy: "admin-0" };
+    const lead = { ...plainMember, role: "teamadmin", roleUpdatedAt: EARLIER, roleUpdatedBy: "admin-0" };
     const { collection, memberships, log } = fakeCollection({
       memberships: { "user-1__team-1": lead },
       teams: { "team-1": "disabled" },
     });
 
-    const result = await setTeamMemberRole("token", "team-1", "user-1", "lead", { ...asAdmin, collection });
+    const result = await setTeamMemberRole("token", "team-1", "user-1", "teamadmin", { ...asAdmin, collection });
 
     expect(result).toEqual({ ok: false, error: "team_disabled" });
     expect(log.updates).toEqual([]);
@@ -162,7 +164,7 @@ describe("setTeamMemberRole — promotion", () => {
   it("reports a missing team with no membership as not_a_member and creates nothing", async () => {
     const { collection, memberships, log } = fakeCollection({});
 
-    const result = await setTeamMemberRole("token", "team-404", "user-1", "lead", { ...asAdmin, collection });
+    const result = await setTeamMemberRole("token", "team-404", "user-1", "teamadmin", { ...asAdmin, collection });
 
     expect(result).toEqual({ ok: false, error: "not_a_member" });
     expect(memberships.size).toBe(0);
@@ -175,7 +177,7 @@ describe("setTeamMemberRole — promotion", () => {
       teams: { "team-1": "active", "team-2": "active" },
     });
 
-    const result = await setTeamMemberRole("token", "team-1", "user-1", "lead", { ...asAdmin, collection });
+    const result = await setTeamMemberRole("token", "team-1", "user-1", "teamadmin", { ...asAdmin, collection });
 
     expect(result).toEqual({ ok: false, error: "not_a_member" });
     expect(memberships.has("user-1__team-1")).toBe(false);
@@ -189,7 +191,7 @@ describe("setTeamMemberRole — promotion", () => {
       teams: { "team-1": "active" },
     });
 
-    const result = await setTeamMemberRole("token", "team-1", "user-1", "lead", { ...asAdmin, collection });
+    const result = await setTeamMemberRole("token", "team-1", "user-1", "teamadmin", { ...asAdmin, collection });
 
     expect(result).toEqual({ ok: false, error: "not_a_member" });
     expect(log.updates).toEqual([]);
@@ -199,7 +201,7 @@ describe("setTeamMemberRole — promotion", () => {
 describe("setTeamMemberRole — demotion", () => {
   it("returns a lead to an ordinary member by removing the role field, keeping the membership", async () => {
     const { collection, memberships } = fakeCollection({
-      memberships: { "user-1__team-1": { ...plainMember, role: "lead" } },
+      memberships: { "user-1__team-1": { ...plainMember, role: "teamadmin" } },
       teams: { "team-1": "active" },
     });
 
@@ -213,7 +215,7 @@ describe("setTeamMemberRole — demotion", () => {
 
   it("is allowed on a disabled team and does not even read the team status", async () => {
     const { collection, memberships, log } = fakeCollection({
-      memberships: { "user-1__team-1": { ...plainMember, role: "lead" } },
+      memberships: { "user-1__team-1": { ...plainMember, role: "teamadmin" } },
       teams: { "team-1": "disabled" },
     });
 
@@ -253,7 +255,7 @@ describe("setTeamMemberRole — transaction and sanitisation", () => {
       teams: { "team-1": "active" },
     });
 
-    await setTeamMemberRole("token", "team-1", "user-1", "lead", { ...asAdmin, collection });
+    await setTeamMemberRole("token", "team-1", "user-1", "teamadmin", { ...asAdmin, collection });
 
     expect(log.runs).toBe(1);
     expect(log.membershipReads).toBe(1);
@@ -264,7 +266,7 @@ describe("setTeamMemberRole — transaction and sanitisation", () => {
   it("never reads team status or writes once the membership check fails", async () => {
     const { collection, log } = fakeCollection({ teams: { "team-1": "active" } });
 
-    await setTeamMemberRole("token", "team-1", "user-1", "lead", { ...asAdmin, collection });
+    await setTeamMemberRole("token", "team-1", "user-1", "teamadmin", { ...asAdmin, collection });
 
     expect(log.teamStatusReads).toBe(0);
     expect(log.updates).toEqual([]);
@@ -276,7 +278,7 @@ describe("setTeamMemberRole — transaction and sanitisation", () => {
       teams: { "team-1": "active" },
     });
 
-    await setTeamMemberRole("token", "team-1", "user-1", "lead", { ...asAdmin, collection });
+    await setTeamMemberRole("token", "team-1", "user-1", "teamadmin", { ...asAdmin, collection });
 
     expect(Object.keys(log.updates[0]).sort()).toEqual(["role", "roleUpdatedAt", "roleUpdatedBy"]);
   });
@@ -286,7 +288,7 @@ describe("setTeamMemberRole — transaction and sanitisation", () => {
       run: vi.fn().mockRejectedValue(new Error("secret internal detail")),
     };
 
-    const result = await setTeamMemberRole("token", "team-1", "user-1", "lead", { ...asAdmin, collection });
+    const result = await setTeamMemberRole("token", "team-1", "user-1", "teamadmin", { ...asAdmin, collection });
 
     expect(result).toEqual({ ok: false, error: "persistence_failed" });
     expect(JSON.stringify(result)).not.toContain("secret");
@@ -297,9 +299,9 @@ describe("setTeamMemberRole — authorization and input", () => {
   it("rejects an authenticated non-admin without opening a transaction", async () => {
     const collection = { run: vi.fn() };
 
-    const result = await setTeamMemberRole("token", "team-1", "user-1", "lead", {
+    const result = await setTeamMemberRole("token", "team-1", "user-1", "teamadmin", {
       verifyToken: verifyTokenFor("dev@example.com", "dev-1"),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -310,9 +312,9 @@ describe("setTeamMemberRole — authorization and input", () => {
   it("rejects an allow-listed but unverified-email caller as forbidden", async () => {
     const collection = { run: vi.fn() };
 
-    const result = await setTeamMemberRole("token", "team-1", "user-1", "lead", {
+    const result = await setTeamMemberRole("token", "team-1", "user-1", "teamadmin", {
       verifyToken: vi.fn().mockResolvedValue({ uid: "admin-1", email: ADMIN_EMAIL, email_verified: false }),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -323,9 +325,9 @@ describe("setTeamMemberRole — authorization and input", () => {
   it("rejects an invalid token as unauthenticated", async () => {
     const collection = { run: vi.fn() };
 
-    const result = await setTeamMemberRole("token", "team-1", "user-1", "lead", {
+    const result = await setTeamMemberRole("token", "team-1", "user-1", "teamadmin", {
       verifyToken: vi.fn().mockRejectedValue(new Error("bad token")),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -338,7 +340,7 @@ describe("setTeamMemberRole — authorization and input", () => {
 
     const result = await setTeamMemberRole("token", "team-1", "user-1", "garbage", {
       verifyToken: verifyTokenFor("dev@example.com", "dev-1"),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -351,7 +353,7 @@ describe("setTeamMemberRole — authorization and input", () => {
     ["null", null],
     ["undefined", undefined],
     ["a number", 1],
-    ["an object", { role: "lead" }],
+    ["an object", { role: "teamadmin" }],
   ])("rejects %s as invalid_input without opening a transaction", async (_label, role) => {
     const collection = { run: vi.fn() };
 
@@ -369,7 +371,7 @@ describe("setTeamMemberRole — authorization and input", () => {
   ])("rejects %s as invalid_input", async (_label, teamId, uid) => {
     const collection = { run: vi.fn() };
 
-    const result = await setTeamMemberRole("token", teamId, uid, "lead", { ...asAdmin, collection });
+    const result = await setTeamMemberRole("token", teamId, uid, "teamadmin", { ...asAdmin, collection });
 
     expect(result).toEqual({ ok: false, error: "invalid_input" });
     expect(collection.run).not.toHaveBeenCalled();
@@ -381,9 +383,9 @@ describe("setTeamMemberRole — authorization and input", () => {
       teams: { "team-1": "active" },
     });
 
-    const result = await setTeamMemberRole("token", "team-1", "admin-2", "lead", { ...asAdmin, collection });
+    const result = await setTeamMemberRole("token", "team-1", "admin-2", "teamadmin", { ...asAdmin, collection });
 
-    expect(result).toEqual({ ok: true, role: "lead" });
-    expect(memberships.get("admin-2__team-1")?.role).toBe("lead");
+    expect(result).toEqual({ ok: true, role: "teamadmin" });
+    expect(memberships.get("admin-2__team-1")?.role).toBe("teamadmin");
   });
 });

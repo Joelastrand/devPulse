@@ -56,7 +56,10 @@ describe("actor audit for TASK-024 fields (A-4, A-6, A-11, A-12)", () => {
   it("registers exactly the TASK-024 fields in the closed actor-audit target list", () => {
     const registered = ACTOR_AUDIT_TARGETS.filter((target) => NEW_TARGETS.some((expected) => expected.collection === target.collection && expected.field === target.field));
     expect(registered).toHaveLength(NEW_TARGETS.length);
-    expect(ACTOR_AUDIT_TARGETS).toHaveLength(15);
+    // 15 before TASK-039; TASK-039 (A-13) adds createdBy, updatedBy and three assessedBy targets.
+    // Team-system overview round 2 adds one assessedBy target for each of the four newer attributes (seven total).
+    // Owner decision (account erasure Option A) adds superadmin grantedByUid and revokedByUid (A-16): 26 in total.
+    expect(ACTOR_AUDIT_TARGETS).toHaveLength(26);
   });
 
   it.each(NEW_TARGETS)("clears $collection.$field to null, keeps the record and its other fields", async ({ collection, field }) => {

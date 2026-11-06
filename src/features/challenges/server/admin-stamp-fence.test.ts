@@ -13,6 +13,7 @@ vi.mock("../../../lib/firebase/admin", () => ({
 vi.mock("server-only", () => ({}));
 
 const ADMIN_UID = "admin-34";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const ADMIN_EMAIL = "admin34@example.com";
 const TEAM_ID = "team-34";
 const CHALLENGE_ID = "challenge-34";
@@ -45,7 +46,7 @@ holder.db = {
 };
 
 const verifyToken = vi.fn().mockResolvedValue({ uid: ADMIN_UID, email: ADMIN_EMAIL, email_verified: true });
-const allowList = [ADMIN_EMAIL];
+const isSuperadmin = isAdminUid;
 
 function seedChallenge(): void {
   docs.set(CHALLENGE_PATH, {
@@ -68,7 +69,7 @@ describe("admin challenge stamp writes are refused while the admin's erasure rec
     seedChallenge();
     docs.set(`accountErasures/${ADMIN_UID}`, { status: "in_progress", step: "forum" });
 
-    const result = await archiveChallenge("t", TEAM_ID, CHALLENGE_ID, { verifyToken, allowList });
+    const result = await archiveChallenge("t", TEAM_ID, CHALLENGE_ID, { verifyToken, isSuperadmin: isAdminUid });
 
     expect(result).toEqual({ ok: false, error: "erasure_in_progress" });
     expect(updates).toEqual([]);
@@ -79,7 +80,7 @@ describe("admin challenge stamp writes are refused while the admin's erasure rec
     seedChallenge();
     docs.set(`accountErasures/${ADMIN_UID}`, { status: "in_progress", step: "forum" });
 
-    const result = await resolveChallenge("t", TEAM_ID, CHALLENGE_ID, { verifyToken, allowList });
+    const result = await resolveChallenge("t", TEAM_ID, CHALLENGE_ID, { verifyToken, isSuperadmin: isAdminUid });
 
     expect(result).toEqual({ ok: false, error: "erasure_in_progress" });
     expect(updates).toEqual([]);
@@ -89,7 +90,7 @@ describe("admin challenge stamp writes are refused while the admin's erasure rec
   it("archive without an erasure record stamps the admin uid (unchanged behaviour)", async () => {
     seedChallenge();
 
-    const result = await archiveChallenge("t", TEAM_ID, CHALLENGE_ID, { verifyToken, allowList });
+    const result = await archiveChallenge("t", TEAM_ID, CHALLENGE_ID, { verifyToken, isSuperadmin: isAdminUid });
 
     expect(result).toEqual({ ok: true });
     expect(docs.get(CHALLENGE_PATH)).toMatchObject({ archivedBy: ADMIN_UID });

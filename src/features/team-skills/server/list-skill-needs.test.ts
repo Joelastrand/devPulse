@@ -21,9 +21,9 @@ type Caller = "member" | "lead" | "memberAdmin" | "leadAdmin" | "nonMemberAdmin"
 
 const CALLERS: Record<Caller, { uid: string; email: string; membership?: Record<string, unknown> }> = {
   member: { uid: "u-member", email: "member@example.com", membership: { role: "member" } },
-  lead: { uid: "u-lead", email: "lead@example.com", membership: { role: "lead" } },
+  lead: { uid: "u-lead", email: "lead@example.com", membership: { role: "teamadmin" } },
   memberAdmin: { uid: "u-madmin", email: ADMIN_EMAIL, membership: {} },
-  leadAdmin: { uid: "u-ladmin", email: ADMIN_EMAIL, membership: { role: "lead" } },
+  leadAdmin: { uid: "u-ladmin", email: ADMIN_EMAIL, membership: { role: "teamadmin" } },
   nonMemberAdmin: { uid: "u-nadmin", email: ADMIN_EMAIL },
   unrelated: { uid: "u-other", email: "other@example.com" },
 };
@@ -101,7 +101,7 @@ function setup(s: Setup) {
       if (!caller) throw new Error("bad token");
       return { uid: caller.uid, email: caller.email, email_verified: true } as never;
     }),
-    allowList: [ADMIN_EMAIL],
+    isSuperadmin: async (uid: string) => ["u-madmin", "u-ladmin", "u-nadmin"].includes(uid),
     collection: accessReads,
     reads: accessReads,
     store: getDefaultSkillNeedsStore(reader),
@@ -144,7 +144,7 @@ describe("need read authorization", () => {
         return "active";
       },
       async getMembership() {
-        return { uid: "someone-else", teamId: TEAM, role: "lead", memberRef: "m-1", email: "other@example.com" };
+        return { uid: "someone-else", teamId: TEAM, role: "teamadmin", memberRef: "m-1", email: "other@example.com" };
       },
     };
     const result = await listSkillNeeds("token", TEAM, { ...deps, collection: forged, reads: forged });
@@ -172,11 +172,11 @@ describe("viewer hints", () => {
   it("ordinary member can read coverage only", async () => {
     expect(await viewerOf({ caller: "member" })).toEqual({ canManageNeeds: false, canReadCoverage: true });
   });
-  it("member + app admin stays a member", async () => {
-    expect(await viewerOf({ caller: "memberAdmin" })).toEqual({ canManageNeeds: false, canReadCoverage: true });
+  it("member + registry superadmin may manage needs (TA-SI) and keeps coverage read", async () => {
+    expect(await viewerOf({ caller: "memberAdmin" })).toEqual({ canManageNeeds: true, canReadCoverage: true });
   });
-  it("admin-only caller gets both false", async () => {
-    expect(await viewerOf({ caller: "nonMemberAdmin" })).toEqual({ canManageNeeds: false, canReadCoverage: false });
+  it("non-member registry superadmin may manage needs but reads no coverage", async () => {
+    expect(await viewerOf({ caller: "nonMemberAdmin" })).toEqual({ canManageNeeds: true, canReadCoverage: false });
   });
   it("lead + app admin keeps the lead hints", async () => {
     expect(await viewerOf({ caller: "leadAdmin" })).toEqual({ canManageNeeds: true, canReadCoverage: true });

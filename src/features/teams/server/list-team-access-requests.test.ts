@@ -4,6 +4,8 @@ import type { TeamAccessRequestsCollection } from "./list-team-access-requests";
 import { listTeamAccessRequests } from "./list-team-access-requests";
 
 const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const CREATED_AT = new Date("2026-09-01T00:00:00Z");
 
 function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
@@ -46,7 +48,7 @@ async function flushMicrotasks(turns = 20): Promise<void> {
 
 const baseDeps = {
   verifyToken: verifyTokenReturning(verifiedIdentity()),
-  allowList: [ADMIN_EMAIL],
+  isSuperadmin: isAdminUid,
 };
 
 describe("listTeamAccessRequests", () => {
@@ -136,7 +138,7 @@ describe("listTeamAccessRequests", () => {
 
     const result = await listTeamAccessRequests("bad-token", "team-1", {
       verifyToken: vi.fn().mockRejectedValue(new Error("bad token")),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -148,8 +150,8 @@ describe("listTeamAccessRequests", () => {
     const collection = fakeCollection([]);
 
     const result = await listTeamAccessRequests("token", "team-1", {
-      verifyToken: verifyTokenReturning(verifiedIdentity({ email: "dev@example.com" })),
-      allowList: [ADMIN_EMAIL],
+      verifyToken: verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" })),
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -167,13 +169,13 @@ describe("listTeamAccessRequests", () => {
     expect(result).toEqual({ ok: false, error: "read_failed" });
   });
 
-  it("never includes the admin allow-list in the returned result", async () => {
-    const allowList = [ADMIN_EMAIL, "other-admin@example.com"];
+  it("never includes superadmin identifiers in the returned result", async () => {
+    const isSuperadmin = isAdminUid;
     const collection = fakeCollection([]);
 
     const result = await listTeamAccessRequests("token", "team-1", {
       verifyToken: verifyTokenReturning(verifiedIdentity()),
-      allowList,
+      isSuperadmin,
       collection,
     });
 

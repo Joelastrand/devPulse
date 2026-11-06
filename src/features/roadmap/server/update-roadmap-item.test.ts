@@ -181,7 +181,7 @@ describe("updateRoadmapItem — authorization", () => {
 
   it("gives a lead the same rights", async () => {
     const world = baseWorld();
-    world.memberships["user-1__team-1"] = member("user-1", 1, { role: "lead" });
+    world.memberships["user-1__team-1"] = member("user-1", 1, { role: "teamadmin" });
     expect((await patch(world, { priority: "low" })).result.ok).toBe(true);
   });
 

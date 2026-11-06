@@ -5,6 +5,8 @@ import type { GetCurrentTeamSurveyCollections, GetCurrentTeamSurveyDeps, RawSurv
 import { getCurrentTeamSurvey } from "./get-current-team-survey";
 
 const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const MEMBER_UID = "member-1";
 const TEAM_ID = "team-42";
 const NOW = new Date("2026-09-01T00:00:00Z");
@@ -14,7 +16,7 @@ function memberIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIden
 }
 
 function adminIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
-  return memberIdentity({ email: ADMIN_EMAIL, ...overrides });
+  return memberIdentity({ uid: ADMIN_UID, email: ADMIN_EMAIL, ...overrides });
 }
 
 function verifyTokenReturning(identity: VerifiedIdentity) {
@@ -83,7 +85,7 @@ function baseDeps(overrides: Partial<GetCurrentTeamSurveyDeps> = {}): GetCurrent
   return {
     now: NOW,
     verifyToken: verifyTokenReturning(memberIdentity()),
-    allowList: [ADMIN_EMAIL],
+    isSuperadmin: isAdminUid,
     authCollection: fakeAuthCollection({
       teamStatus: { [TEAM_ID]: "active" },
       memberships: { [`${MEMBER_UID}__${TEAM_ID}`]: { uid: MEMBER_UID, teamId: TEAM_ID } },

@@ -24,6 +24,9 @@ export const ALLOWED_UNREGISTERED_NAMES: Readonly<Record<string, string>> = {
   regionRef: "UI DOM reference name in a dialog component. Not stored.",
   feedbackRef: "UI DOM reference name for a feedback region. Not stored.",
   invalidEmail: "UI validation message key in an admin component. Not stored.",
+  actorUid: "Function parameter naming the verified superadmin caller in the superadmin registry operations. Stored only through the registered grantedByUid/revokedByUid fields (A-16), never as a field name of its own.",
+  targetUid: "Function parameter naming the superadmin registry target. Stored only as the superadmins/{uid} document id (I-16).",
+  lookupAuthUserByEmail: "Dependency function that resolves an Auth account by a typed email for a grant. The email is a lookup input only and is never stored (superadmin-operations.ts).",
 };
 
 /**
@@ -33,7 +36,23 @@ export const ALLOWED_UNREGISTERED_NAMES: Readonly<Record<string, string>> = {
 export const ALLOWED_MEMBER_ACCESS_NAMES: Readonly<Record<string, string>> = {};
 
 /** Collection names that are not person-owned and need no registry row (none at TASK-006). */
-export const ALLOWED_UNREGISTERED_COLLECTIONS: Readonly<Record<string, string>> = {};
+export const ALLOWED_UNREGISTERED_COLLECTIONS: Readonly<Record<string, string>> = {
+  superadminRegistry:
+    "Superadmin registry control document (superadmin-registry.ts): one activeCount and a timestamp. No uid, actor or memberRef field, so there is no person-linked data to erase. Do not add an actor field without a registry row.",
+  teamProjects:
+    "Team-scoped delivery planning (title, dates, lifecycle, priority). Stores no uid-bearing field: TASK-003 writes no " +
+    "createdBy/updatedBy/archivedBy and no memberRef, so there is no person-linked data to erase. Do not add an actor field " +
+    "without a registry row.",
+  teamCompetenceAreas:
+    "A team's assignment of admin-owned catalog areas (TASK-007). Stores teamId, treeId, status, sortOrder and timestamps only: " +
+    "no uid-bearing field, no actor and no memberRef, so there is no person-linked data to erase. Do not add an actor field " +
+    "without a registry row.",
+  teamCompetencePlans:
+    "A team's competence development plan for one assigned catalog area (TASK-006): teamId, treeId, a target stage (a goal, " +
+    "not a rating), priority, archived flag, embedded milestones (id, title, optional target date, status) and timestamps. " +
+    "No uid-bearing field, no actor and no memberRef and no member assessment is copied in, so there is no person-linked data " +
+    "to erase. Do not add an actor field without a registry row.",
+};
 
 /**
  * The exact structure of the C1 skill-profile transaction (`getDefaultSkillProfileStore` returns the object whose

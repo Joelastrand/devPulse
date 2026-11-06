@@ -40,7 +40,7 @@ describe("PUT/DELETE /api/teams/[teamId]/skill-needs/[treeId]", () => {
       ok: true,
       need: { treeId: "tree-9", areaName: "N", areaAvailable: true, requiredLevel: 3, requiredCoverage: 2, uid: "leak" },
     });
-    const body = { requiredLevel: 3, requiredCoverage: 2, uid: "x", teamId: "other", role: "lead" };
+    const body = { requiredLevel: 3, requiredCoverage: 2, uid: "x", teamId: "other", role: "teamadmin" };
     const response = await PUT(request("PUT", JSON.stringify(body), "Bearer abc.def"), params("team-42", "tree-9"));
 
     expect(upsertMock).toHaveBeenCalledWith("abc.def", "team-42", "tree-9", body);

@@ -108,7 +108,7 @@ const verifyAs = (uid: string, email = `${uid}@example.com`) =>
   vi.fn().mockResolvedValue({ uid, email, email_verified: true });
 const adminOps = {
   verifyToken: verifyAs("admin-1", ADMIN_EMAIL),
-  allowList: [ADMIN_EMAIL],
+  isSuperadmin: async (uid: string) => uid === "admin-1",
   now: NOW,
 };
 
@@ -144,7 +144,7 @@ beforeEach(() => {
 describe("opt-in (setOwnSkillContribution)", () => {
   it.each([
     ["ordinary member", {}],
-    ["lead", { role: "lead" }],
+    ["lead", { role: "teamadmin" }],
   ])("a genuine %s opts in with exactly the canonical object, preserving every other field", async (_label, extra) => {
     const before = membership("u1", extra);
     db.set(PATH("u1"), before);
@@ -164,11 +164,11 @@ describe("opt-in (setOwnSkillContribution)", () => {
 
   it("works for member+admin and lead+admin (admin status is irrelevant) but not for a non-member admin", async () => {
     db.set(PATH("m-admin"), membership("m-admin"));
-    db.set(PATH("l-admin"), membership("l-admin", { role: "lead" }));
+    db.set(PATH("l-admin"), membership("l-admin", { role: "teamadmin" }));
 
     expect(await optIn("m-admin", undefined, TEAM, ADMIN_EMAIL)).not.toMatchObject({ ok: false });
     expect(await optIn("l-admin", undefined, TEAM, ADMIN_EMAIL)).not.toMatchObject({ ok: false });
-    expect(db.get(PATH("l-admin"))?.role).toBe("lead");
+    expect(db.get(PATH("l-admin"))?.role).toBe("teamadmin");
 
     const outsider = await optIn("n-admin", undefined, TEAM, ADMIN_EMAIL);
     expect(outsider).toEqual({ ok: false, error: "forbidden" });
@@ -310,7 +310,7 @@ describe("opt-in (setOwnSkillContribution)", () => {
 
 describe("withdrawal (withdrawOwnSkillContribution)", () => {
   it("physically deletes the field and nothing else, writing no negative state", async () => {
-    const base = membership("u1", { role: "lead" });
+    const base = membership("u1", { role: "teamadmin" });
     db.set(PATH("u1"), { ...base, [SKILL_CONTRIBUTION_FIELD]: stored });
 
     expect(await withdraw("u1")).toEqual({ ok: true, contributing: false });
@@ -364,7 +364,7 @@ describe("withdrawal (withdrawOwnSkillContribution)", () => {
 
 describe("own state (getOwnSkillContribution)", () => {
   it("reports effective consent and canOptIn, writes nothing, and exposes only two booleans", async () => {
-    db.set(PATH("u1"), membership("u1", { role: "lead", [SKILL_CONTRIBUTION_FIELD]: stored }));
+    db.set(PATH("u1"), membership("u1", { role: "teamadmin", [SKILL_CONTRIBUTION_FIELD]: stored }));
     db.set(PATH("u2"), membership("u2"));
 
     expect(await read("u1")).toEqual({ ok: true, contributing: true, canOptIn: true });
@@ -445,7 +445,7 @@ describe("lifecycle with production membership code", () => {
     const { [SKILL_CONTRIBUTION_FIELD]: written, ...withoutField } = optedIn ?? {};
     expect(withoutField).toEqual(fresh);
 
-    await setTeamMemberRole("t", TEAM, "u1", "lead", adminOps);
+    await setTeamMemberRole("t", TEAM, "u1", "teamadmin", adminOps);
     expect(db.get(PATH("u1"))?.[SKILL_CONTRIBUTION_FIELD]).toEqual(written);
     await setTeamMemberRole("t", TEAM, "u1", "member", adminOps);
     expect(db.get(PATH("u1"))?.[SKILL_CONTRIBUTION_FIELD]).toEqual(written);
@@ -458,9 +458,9 @@ describe("lifecycle with production membership code", () => {
 
   it("a participation role change (member to lead) never changes what participation allows", async () => {
     await grant();
-    await setTeamMemberRole("t", TEAM, "u1", "lead", adminOps);
+    await setTeamMemberRole("t", TEAM, "u1", "teamadmin", adminOps);
     expect(await optIn("u1")).toEqual({ ok: true, contributing: true });
-    expect(db.get(PATH("u1"))?.role).toBe("lead");
+    expect(db.get(PATH("u1"))?.role).toBe("teamadmin");
   });
 });
 

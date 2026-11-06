@@ -172,10 +172,10 @@ const FORBIDDEN_CLIENT_PREFIXES = [
   "src/lib/firebase/admin",
 ];
 
-/** Exact seam call each operation must make (BR-5/BR-18); write operations must use the lead seam. */
+/** Exact seam call each operation must make (BR-5/BR-18); write operations must use the team-administrator seam (TA-SI-4). */
 const REQUIRED_SEAM: Record<string, string> = {
-  [`${C2_DIR}server/upsert-skill-need.ts`]: "requireGenuineLead(",
-  [`${C2_DIR}server/delete-skill-need.ts`]: "requireGenuineLead(",
+  [`${C2_DIR}server/upsert-skill-need.ts`]: "requireTeamAdministrator(",
+  [`${C2_DIR}server/delete-skill-need.ts`]: "requireTeamAdministrator(",
   [`${C2_DIR}server/set-own-skill-contribution.ts`]: "requireGenuineMember(",
   [`${C2_DIR}server/get-team-skill-coverage.ts`]: "requireGenuineMember(",
   [`${C2_DIR}server/get-own-skill-contribution.ts`]: "resolveGenuineTeamMembership(",
@@ -427,7 +427,10 @@ function crossFeatureImportViolations(files: SourceFile[]): string[] {
 
 /* (5) authorization seam --------------------------------------------------------------------------- */
 
-const FORBIDDEN_AUTH_IDENTIFIER = /\b(?:resolveTeamRole|isAppAdmin|requireAppAdmin|allowList|authorizeTeamAccess)\b/;
+const FORBIDDEN_AUTH_IDENTIFIER = /\b(?:resolveTeamRole|requireAppAdmin|allowList|authorizeTeamAccess)\b/;
+
+/** TA-SI-4: superadmin status (`isAppAdmin`) may decide team administration of needs only in these two modules. */
+const APP_ADMIN_NEED_FILES: readonly string[] = [`${C2_DIR}server/genuine-team-membership.ts`, `${C2_DIR}server/list-skill-needs.ts`];
 
 function authorizationViolations(files: SourceFile[]): string[] {
   const out: string[] = [];
@@ -438,6 +441,7 @@ function authorizationViolations(files: SourceFile[]): string[] {
     const scanned = file.path === `${C2_DIR}server/list-skill-needs.ts` ? code.replace(/\b(?:authorizeTeamAccess|allowList)\b/g, "") : code;
     const hit = FORBIDDEN_AUTH_IDENTIFIER.exec(scanned);
     if (hit) out.push(`${file.path}: ${hit[0]}`);
+    else if (/\bisAppAdmin\b/.test(scanned) && !APP_ADMIN_NEED_FILES.includes(file.path)) out.push(`${file.path}: isAppAdmin`);
   }
   for (const [path, seam] of Object.entries(REQUIRED_SEAM)) {
     const file = files.find((f) => f.path === path);
@@ -888,7 +892,7 @@ describe("C2 scope guard — write boundary, collections and aggregate persisten
         virtual(COVERAGE_MODULE, `await db.collection("skillProfiles").doc(uid).set({ levels: {} });\nawait ref.delete();`),
         virtual(`${SRV}helper.ts`, `batch.update(ref, { a: 1 });`),
         virtual(`${SRV}skill-needs-store.ts`, `tx.set(db.collection(SKILL_NEEDS_COLLECTION).doc(docId), { coverage: 1 });`),
-        virtual(`${SRV}skill-contribution-store.ts`, `tx.update(membershipRef(uid, teamId), { role: "lead" });\nimport { FieldValue } from "firebase-admin/firestore";`),
+        virtual(`${SRV}skill-contribution-store.ts`, `tx.update(membershipRef(uid, teamId), { role: "teamadmin" });\nimport { FieldValue } from "firebase-admin/firestore";`),
       ]),
     ).toEqual([
       `${COVERAGE_MODULE}: unapproved write call: await db.collection("skillProfiles").doc(uid).set({ levels: {} });`,
@@ -897,7 +901,7 @@ describe("C2 scope guard — write boundary, collections and aggregate persisten
       `${SRV}skill-needs-store.ts: unapproved write call: tx.set(db.collection(SKILL_NEEDS_COLLECTION).doc(docId), { coverage: 1 });`,
       `${SRV}skill-needs-store.ts: approved write missing: tx.set(db.collection(SKILL_NEEDS_COLLECTION).doc(docId), record);`,
       `${SRV}skill-needs-store.ts: approved write missing: tx.delete(db.collection(SKILL_NEEDS_COLLECTION).doc(docId));`,
-      `${SRV}skill-contribution-store.ts: unapproved write call: tx.update(membershipRef(uid, teamId), { role: "lead" });`,
+      `${SRV}skill-contribution-store.ts: unapproved write call: tx.update(membershipRef(uid, teamId), { role: "teamadmin" });`,
       `${SRV}skill-contribution-store.ts: approved write missing: tx.update(membershipRef(uid, teamId), { [SKILL_CONTRIBUTION_FIELD]: record });`,
       `${SRV}skill-contribution-store.ts: approved write missing: tx.update(membershipRef(uid, teamId), { [SKILL_CONTRIBUTION_FIELD]: FieldValue.delete() });`,
     ]);
@@ -992,8 +996,8 @@ describe("C2 scope guard — authorization seam and routes (BR-34 #6, #7; BR-5, 
       `${SRV}upsert-skill-need.ts: authorizeTeamAccess`,
       `${SRV}delete-skill-need.ts: isAppAdmin`,
       `${SRV}get-team-skill-coverage.ts: resolveTeamRole`,
-      `${SRV}upsert-skill-need.ts: does not call requireGenuineLead(`,
-      `${SRV}delete-skill-need.ts: does not call requireGenuineLead(`,
+      `${SRV}upsert-skill-need.ts: does not call requireTeamAdministrator(`,
+      `${SRV}delete-skill-need.ts: does not call requireTeamAdministrator(`,
       `${SRV}upsert-skill-need.ts: need write uses a non-lead seam`,
     ]);
   });

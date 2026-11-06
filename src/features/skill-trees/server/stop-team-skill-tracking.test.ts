@@ -5,6 +5,7 @@ import { stopTeamSkillTracking } from "./stop-team-skill-tracking";
 
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const TEAM_ID = "team-1";
 const TREE_ID = "tree-1";
 
@@ -37,7 +38,7 @@ function fakeProgressStore(): FakeProgressStore {
 function baseDeps(overrides: Partial<StopTeamSkillTrackingDeps> = {}): StopTeamSkillTrackingDeps {
   return {
     verifyToken: verifyTokenReturning(verifiedIdentity()),
-    allowList: [ADMIN_EMAIL],
+    isSuperadmin: isAdminUid,
     progress: fakeProgressStore(),
     ...overrides,
   };
@@ -79,7 +80,7 @@ describe("stopTeamSkillTracking", () => {
 
   it("rejects a non-admin caller and attempts no delete", async () => {
     const progress = fakeProgressStore();
-    const verifyToken = verifyTokenReturning(verifiedIdentity({ email: "dev@example.com" }));
+    const verifyToken = verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" }));
 
     const result = await stopTeamSkillTracking("token", TEAM_ID, TREE_ID, baseDeps({ progress, verifyToken }));
 

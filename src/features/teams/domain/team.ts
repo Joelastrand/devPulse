@@ -1,3 +1,5 @@
+import type { TeamVisibility } from "./team-authority";
+
 export type TeamStatus = "active" | "disabled";
 
 const TEAM_STATUSES: readonly TeamStatus[] = ["active", "disabled"];
@@ -27,6 +29,8 @@ export interface Team {
   teamId: string;
   name: string;
   status: TeamStatus;
+  /** Absent or malformed ⇒ `private` (fail closed). See `effectiveTeamVisibility`. */
+  visibility?: TeamVisibility;
   createdAt: Date;
   /** `null` after the creating account was erased (account-erasure A-12). Accountability only. */
   createdBy: string | null;

@@ -16,6 +16,8 @@ const TEAM_ID = "team-42";
 const OTHER_TEAM_ID = "team-99";
 const MEMBER_UID = "member-1";
 const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const TREE_ID = "tree-1";
 
 function memberIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
@@ -23,7 +25,7 @@ function memberIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIden
 }
 
 function adminIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
-  return memberIdentity({ email: ADMIN_EMAIL, ...overrides });
+  return memberIdentity({ uid: ADMIN_UID, email: ADMIN_EMAIL, ...overrides });
 }
 
 function verifyTokenReturning(identity: VerifiedIdentity) {
@@ -135,7 +137,7 @@ function memberBaseDeps(overrides: Partial<GetTeamSkillProgressDeps> = {}): GetT
     });
   return {
     verifyToken: verifyTokenReturning(memberIdentity()),
-    allowList: [ADMIN_EMAIL],
+    isSuperadmin: isAdminUid,
     authCollection,
     membershipReader: authCollection,
     teamStatusReader: authCollection,

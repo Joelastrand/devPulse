@@ -38,6 +38,7 @@ function inMemoryCollection() {
 
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const MEMBER_UID = "member-1";
 const TEAM_ID = "team-1";
 const TREE_ID = "tree-1";
@@ -86,7 +87,7 @@ describe("BR-35 full regression: startTeamSkillTracking -> updateTeamSkillProgre
 
     const adminDeps = {
       verifyToken: verifyTokenReturning(adminIdentity()),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
     };
 
     // 1-2. Start tracking for the team against the existing tree.
@@ -126,7 +127,7 @@ describe("BR-35 full regression: startTeamSkillTracking -> updateTeamSkillProgre
     const authCollection = fakeAuthCollection();
     const read = await getTeamSkillProgress("token", TEAM_ID, {
       verifyToken: verifyTokenReturning(memberIdentity()),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       authCollection,
       membershipReader: authCollection,
       teamStatusReader: authCollection,

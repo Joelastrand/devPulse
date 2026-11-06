@@ -71,6 +71,9 @@ const COUNTERS: ReadonlyMap<string, Counter> = new Map<string, Counter>([
   // I-9: memberships by id prefix and by uid field; memberRef-linked roadmap ownerRef (A-5).
   ["teamMemberships|docIdStartsWith|uid", async (db, b) =>
     (await db.collection("teamMemberships").where(FieldPath.documentId(), ">=", `${b.uid}__`).where(FieldPath.documentId(), "<", `${b.uid}__${PREFIX_END}`).select().get()).size],
+  ["superadmins|docIdEquals|uid", async (db, b) => ((await db.collection("superadmins").doc(b.uid).get()).exists ? 1 : 0)],
+  ["superadmins|fieldEquals|grantedByUid", async (db, b) => (await db.collection("superadmins").where("grantedByUid", "==", b.uid).select().get()).size],
+  ["superadmins|fieldEquals|revokedByUid", async (db, b) => (await db.collection("superadmins").where("revokedByUid", "==", b.uid).select().get()).size],
   ["teamMemberships|fieldEquals|uid", async (db, b) => (await db.collection("teamMemberships").where("uid", "==", b.uid).select().get()).size],
   ["teamMemberships|perMembership|memberRef", async (db, b) => (await membershipsOf(db, b.uid)).length],
   ["roadmapItems|perMembership|ownerRef", async (db, b) => {
@@ -120,6 +123,40 @@ const COUNTERS: ReadonlyMap<string, Counter> = new Map<string, Counter>([
   ["teamMemberships|fieldEquals|grantedBy", async (db, b) => (await db.collection("teamMemberships").where("grantedBy", "==", b.uid).select().get()).size],
   ["teamMemberships|fieldEquals|roleUpdatedBy", async (db, b) => (await db.collection("teamMemberships").where("roleUpdatedBy", "==", b.uid).select().get()).size],
   ["teams|fieldEquals|createdBy", async (db, b) => (await db.collection("teams").where("createdBy", "==", b.uid).select().get()).size],
+  // A-13 (teamSystems). `assessedBy` is one registry field stored in seven assessment maps; the counter sums the seven.
+  ["teamSystems|fieldEquals|createdBy", async (db, b) => (await db.collection("teamSystems").where("createdBy", "==", b.uid).select().get()).size],
+  ["teamSystems|fieldEquals|updatedBy", async (db, b) => (await db.collection("teamSystems").where("updatedBy", "==", b.uid).select().get()).size],
+  ["teamSystems|fieldEquals|assessedBy", async (db, b) => {
+    let total = 0;
+    total += (await db.collection("teamSystems").where("availability.assessedBy", "==", b.uid).select().get()).size;
+    total += (await db.collection("teamSystems").where("maintainability.assessedBy", "==", b.uid).select().get()).size;
+    total += (await db.collection("teamSystems").where("security.assessedBy", "==", b.uid).select().get()).size;
+    total += (await db.collection("teamSystems").where("reliability.assessedBy", "==", b.uid).select().get()).size;
+    total += (await db.collection("teamSystems").where("testability.assessedBy", "==", b.uid).select().get()).size;
+    total += (await db.collection("teamSystems").where("deployability.assessedBy", "==", b.uid).select().get()).size;
+    total += (await db.collection("teamSystems").where("observability.assessedBy", "==", b.uid).select().get()).size;
+    return total;
+  }],
+  // A-14 (teamSystems.knowledgeMemberRefs, memberRef kind): one array-contains query per membership, scoped to its team.
+  ["teamSystems|perMembership|knowledgeMemberRefs", async (db, b) => {
+    let total = 0;
+    for (const membership of await membershipsOf(db, b.uid)) {
+      if (typeof membership.teamId !== "string" || typeof membership.memberRef !== "string") continue;
+      total += (await db.collection("teamSystems").where("teamId", "==", membership.teamId)
+        .where("knowledgeMemberRefs", "array-contains", membership.memberRef).select().get()).size;
+    }
+    return total;
+  }],
+  // A-15 (teamProjectParticipations.memberRef, memberRef kind, DELETE): one equality query per membership, scoped to its team.
+  ["teamProjectParticipations|perMembership|memberRef", async (db, b) => {
+    let total = 0;
+    for (const membership of await membershipsOf(db, b.uid)) {
+      if (typeof membership.teamId !== "string" || typeof membership.memberRef !== "string") continue;
+      total += (await db.collection("teamProjectParticipations").where("teamId", "==", membership.teamId)
+        .where("memberRef", "==", membership.memberRef).select().get()).size;
+    }
+    return total;
+  }],
 ]);
 
 export function createSweepCounter(): SweepCounter {

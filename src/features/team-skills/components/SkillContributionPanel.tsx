@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
 import {
@@ -11,7 +11,7 @@ import {
   type SkillContributionWriteError,
   type SkillContributionWriteResult,
 } from "../client/team-skills-gateway";
-import { participationCopy as copy } from "../copy";
+import { participationCopy as copy, sharingCopy } from "../copy";
 import { SKILL_CONTRIBUTION_NOTICE_VERSION } from "../domain/skill-coverage-policy";
 
 type View =
@@ -22,7 +22,6 @@ type View =
 
 type Message = { kind: "info" | "error"; text: string } | null;
 
-const HEADING_ID = "skill-contribution-heading";
 
 /** After these the server's view may differ from ours, so the state is re-read rather than guessed. */
 function shouldReread(error: SkillContributionWriteError): boolean {
@@ -42,7 +41,20 @@ function toView(result: FetchSkillContributionResult): View {
  * when the team or token changes: a response for another team/token then cannot touch this instance.
  * After every change the state is re-read from the server instead of being invented here.
  */
-export function SkillContributionPanel({ teamId, token, teamName }: { teamId: string; token: string; teamName?: string }) {
+export function SkillContributionPanel({
+  teamId,
+  token,
+  teamName,
+  wording = "participation",
+}: {
+  teamId: string;
+  token: string;
+  teamName?: string;
+  /** `sharing` shows the same record under the owner's "Del kompetanse med teamet" wording on `/me/skills`. */
+  wording?: "participation" | "sharing";
+}) {
+  const text = wording === "sharing" ? { ...copy, ...sharingCopy } : copy;
+  const headingId = useId();
   const [view, setView] = useState<View>({ kind: "loading" });
   const [message, setMessage] = useState<Message>(null);
   const [pending, setPending] = useState<"opt-in" | "withdraw" | null>(null);
@@ -96,9 +108,9 @@ export function SkillContributionPanel({ teamId, token, teamName }: { teamId: st
   const name = teamName && teamName.length > 0 ? teamName : copy.fallbackTeamName;
 
   return (
-    <section aria-labelledby={HEADING_ID} className="flex flex-col gap-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-      <h4 id={HEADING_ID} className="text-base font-medium text-zinc-900 dark:text-zinc-50">
-        {copy.heading(name)}
+    <section aria-labelledby={headingId} className="flex flex-col gap-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+      <h4 id={headingId} className="text-base font-medium text-zinc-900 dark:text-zinc-50">
+        {text.heading(name)}
       </h4>
       {view.kind === "loading" && <p className="text-zinc-600 dark:text-zinc-400">{copy.loading}</p>}
       {view.kind === "error" && (
@@ -130,18 +142,18 @@ export function SkillContributionPanel({ teamId, token, teamName }: { teamId: st
             </details>
           </div>
           <p className="font-medium text-zinc-900 dark:text-zinc-50">
-            {view.contributing ? copy.stateContributing : copy.stateNotContributing}
+            {view.contributing ? text.stateContributing : text.stateNotContributing}
           </p>
           {view.contributing ? (
             <div>
               <Button type="button" variant="secondary" pending={pending !== null} onClick={() => void change("withdraw")}>
-                {pending === "withdraw" ? copy.saving : copy.withdrawButton}
+                {pending === "withdraw" ? copy.saving : text.withdrawButton}
               </Button>
             </div>
           ) : view.canOptIn ? (
             <div>
               <Button type="button" pending={pending !== null} onClick={() => void change("opt-in")}>
-                {pending === "opt-in" ? copy.saving : copy.optInButton}
+                {pending === "opt-in" ? copy.saving : text.optInButton}
               </Button>
             </div>
           ) : (

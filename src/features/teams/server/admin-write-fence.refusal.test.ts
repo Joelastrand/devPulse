@@ -17,6 +17,7 @@ vi.mock("../../../lib/firebase/admin", () => ({
 vi.mock("server-only", () => ({}));
 
 const ADMIN_UID = "admin-35";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const ADMIN_EMAIL = "admin35@example.com";
 const TARGET_UID = "member-35";
 const TEAM_ID = "team-35";
@@ -68,7 +69,7 @@ holder.db = {
 };
 
 const verifyToken = vi.fn().mockResolvedValue({ uid: ADMIN_UID, email: ADMIN_EMAIL, email_verified: true });
-const allowList = [ADMIN_EMAIL];
+const isSuperadmin = isAdminUid;
 
 function seedAdminFence(): void {
   docs.set(ADMIN_FENCE, { status: "in_progress", step: "forum" });
@@ -83,7 +84,7 @@ describe("team admin writes are refused while the acting admin's erasure record 
   it("setting a member role refuses with erasure_in_progress and writes nothing", async () => {
     seedAdminFence();
 
-    const result = await setTeamMemberRole("t", TEAM_ID, TARGET_UID, "lead", { verifyToken, allowList });
+    const result = await setTeamMemberRole("t", TEAM_ID, TARGET_UID, "teamadmin", { verifyToken, isSuperadmin: isAdminUid });
 
     expect(result).toEqual({ ok: false, error: "erasure_in_progress" });
     expect(writes).toEqual([]);
@@ -93,7 +94,7 @@ describe("team admin writes are refused while the acting admin's erasure record 
     seedAdminFence();
     docs.set(`teamAccessRequests/${TARGET_UID}__${TEAM_ID}`, { uid: TARGET_UID, teamId: TEAM_ID, status: "pending" });
 
-    const result = await rejectAccessRequest("t", TARGET_UID, TEAM_ID, { verifyToken, allowList });
+    const result = await rejectAccessRequest("t", TARGET_UID, TEAM_ID, { verifyToken, isSuperadmin: isAdminUid });
 
     expect(result).toEqual({ ok: false, error: "erasure_in_progress" });
     expect(writes).toEqual([]);
@@ -104,7 +105,7 @@ describe("team admin writes are refused while the acting admin's erasure record 
     seedAdminFence();
     docs.set(`teamAccessRequests/${TARGET_UID}__${TEAM_ID}`, { uid: TARGET_UID, teamId: TEAM_ID, status: "pending" });
 
-    const result = await approveAccessRequest("t", TARGET_UID, TEAM_ID, { verifyToken, allowList });
+    const result = await approveAccessRequest("t", TARGET_UID, TEAM_ID, { verifyToken, isSuperadmin: isAdminUid });
 
     expect(result).toEqual({ ok: false, error: "erasure_in_progress" });
     expect(writes).toEqual([]);
@@ -131,7 +132,7 @@ describe("team admin writes are refused while the acting admin's erasure record 
 
     const result = await createInvitation("t", TEAM_ID, "invitee@example.com", {
       verifyToken,
-      allowList,
+      isSuperadmin,
       teamsCollection: { getStatus: async () => "active" },
       membershipsCollection: { get: async () => undefined },
       findAccount: async () => null,
@@ -144,7 +145,7 @@ describe("team admin writes are refused while the acting admin's erasure record 
   it("seeding legacy teams creates no team document while the admin's erasure record exists", async () => {
     seedAdminFence();
 
-    const result = await seedLegacyTeams("t", { verifyToken, allowList });
+    const result = await seedLegacyTeams("t", { verifyToken, isSuperadmin: isAdminUid });
 
     // Each seed create is refused: no team is created, and every outcome reports the public `erasure_in_progress` code.
     expect(result.ok).toBe(true);

@@ -52,7 +52,7 @@ describe("GET /api/me/conversations/[conversationId]/selectable-members", () => 
     readSelectableMembersMock.mockResolvedValue({
       ok: true,
       members: [
-        { memberRef: "ref-1", displayName: "Synthetic", ordinal: 1, isSelf: false, uid: "x", role: "lead", email: "a@b.test" },
+        { memberRef: "ref-1", displayName: "Synthetic", ordinal: 1, isSelf: false, uid: "x", role: "teamadmin", email: "a@b.test" },
       ],
       unavailableCount: 2,
       truncated: true,

@@ -174,7 +174,7 @@ function verifyActor() {
 }
 
 /** Admin allow-list for the actor, so the actor may delete any thread or reply in the tests. */
-const ADMIN_ALLOW_LIST = ["admin@example.com"];
+const isSuperadmin = async (uid: string): Promise<boolean> => uid === ACTOR;
 
 describe("forum write transactions (TASK-029, BR-4(b))", () => {
   beforeEach(() => {
@@ -226,7 +226,7 @@ describe("forum write transactions (TASK-029, BR-4(b))", () => {
 
       const result = await deleteThread("token", TEAM_ID, THREAD_ID, {
         verifyToken: verifyActor(),
-        allowList: ADMIN_ALLOW_LIST,
+        isSuperadmin,
       });
 
       expect(result).toEqual({ ok: true });
@@ -243,7 +243,7 @@ describe("forum write transactions (TASK-029, BR-4(b))", () => {
       const double = createDouble({ [thread]: threadDoc(), [reply]: replyDoc(), [fence]: { status: "in_progress" } });
       holder.db = double.db;
 
-      expect(await deleteThread("token", TEAM_ID, THREAD_ID, { verifyToken: verifyActor(), allowList: ADMIN_ALLOW_LIST })).toEqual({
+      expect(await deleteThread("token", TEAM_ID, THREAD_ID, { verifyToken: verifyActor(), isSuperadmin })).toEqual({
         ok: false,
         error: "erasure_in_progress",
       });
@@ -260,7 +260,7 @@ describe("forum write transactions (TASK-029, BR-4(b))", () => {
 
       const result = await deleteReply("token", TEAM_ID, THREAD_ID, REPLY_ID, {
         verifyToken: verifyActor(),
-        allowList: ADMIN_ALLOW_LIST,
+        isSuperadmin,
         now: new Date("2026-09-01T00:00:00Z"),
       });
 
@@ -273,7 +273,7 @@ describe("forum write transactions (TASK-029, BR-4(b))", () => {
       const double = createDouble({ [reply]: replyDoc(), [fence]: { status: "in_progress" } });
       holder.db = double.db;
 
-      expect(await deleteReply("token", TEAM_ID, THREAD_ID, REPLY_ID, { verifyToken: verifyActor(), allowList: ADMIN_ALLOW_LIST })).toEqual({
+      expect(await deleteReply("token", TEAM_ID, THREAD_ID, REPLY_ID, { verifyToken: verifyActor(), isSuperadmin })).toEqual({
         ok: false,
         error: "erasure_in_progress",
       });
@@ -293,7 +293,7 @@ describe("forum write transactions (TASK-029, BR-4(b))", () => {
       const double = createDouble({ [reply]: tombstoned }, { [reply]: replyDoc() });
       holder.db = double.db;
 
-      const result = await deleteReply("token", TEAM_ID, THREAD_ID, REPLY_ID, { verifyToken: verifyActor(), allowList: ADMIN_ALLOW_LIST });
+      const result = await deleteReply("token", TEAM_ID, THREAD_ID, REPLY_ID, { verifyToken: verifyActor(), isSuperadmin });
 
       expect(result).toEqual({ ok: true });
       expect(double.log).toContain(`tx.get|${reply}`);
@@ -306,7 +306,7 @@ describe("forum write transactions (TASK-029, BR-4(b))", () => {
       double.abortAttempts = 1;
       holder.db = double.db;
 
-      expect(await deleteReply("token", TEAM_ID, THREAD_ID, REPLY_ID, { verifyToken: verifyActor(), allowList: ADMIN_ALLOW_LIST })).toEqual({
+      expect(await deleteReply("token", TEAM_ID, THREAD_ID, REPLY_ID, { verifyToken: verifyActor(), isSuperadmin })).toEqual({
         ok: true,
       });
       expect(double.committed).toEqual([`update ${reply}`]);

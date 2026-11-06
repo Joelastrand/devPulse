@@ -5,6 +5,7 @@ import { listTeamSurveys } from "./list-team-surveys";
 
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const TEAM_ID = "team-42";
 const NOW = new Date("2026-09-01T00:00:00Z");
 
@@ -48,7 +49,7 @@ function surveyDoc(id: string, overrides: Record<string, unknown> = {}): RawSurv
 function baseDeps(overrides: Partial<ListTeamSurveysDeps> = {}): ListTeamSurveysDeps {
   return {
     verifyToken: verifyTokenReturning(verifiedIdentity()),
-    allowList: [ADMIN_EMAIL],
+    isSuperadmin: isAdminUid,
     collection: fakeCollection([]),
     now: NOW,
     ...overrides,
@@ -192,7 +193,7 @@ describe("listTeamSurveys", () => {
 
   it("rejects a non-admin caller and never queries surveys", async () => {
     const collection = fakeCollection([surveyDoc("survey-1")]);
-    const verifyToken = verifyTokenReturning(verifiedIdentity({ email: "dev@example.com" }));
+    const verifyToken = verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" }));
 
     const result = await listTeamSurveys("token", TEAM_ID, baseDeps({ collection, verifyToken }));
 

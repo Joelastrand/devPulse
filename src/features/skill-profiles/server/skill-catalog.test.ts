@@ -223,7 +223,7 @@ describe("(k) duplicated-reader parity with listSkillTrees", () => {
     const c1 = await readSkillCatalog(fakeReader(docs).reader);
     const admin = await listSkillTrees("token", {
       verifyToken: vi.fn().mockResolvedValue({ uid: "a", email: "admin@example.com", email_verified: true }),
-      allowList: ["admin@example.com"],
+      isSuperadmin: async (uid: string) => uid === "a",
       reader: { listOrderedByCreatedAt: async (limit) => docs.slice(0, limit) as RawSkillTreeDoc[] },
     });
 

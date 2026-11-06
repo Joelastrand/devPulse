@@ -148,12 +148,46 @@ const ACTOR_AUDIT_ACCESS: ReadonlyMap<string, ActorAccess> = new Map<string, Act
   ["teamMemberships|grantedBy", access(
     async (db, uid) => (await db.collection("teamMemberships").where("grantedBy", "==", uid).select().limit(1).get()).docs[0]?.id,
     (db, id) => db.collection("teamMemberships").doc(id))],
+  ["superadmins|grantedByUid", access(
+    async (db, uid) => (await db.collection("superadmins").where("grantedByUid", "==", uid).select().limit(1).get()).docs[0]?.id,
+    (db, id) => db.collection("superadmins").doc(id))],
+  ["superadmins|revokedByUid", access(
+    async (db, uid) => (await db.collection("superadmins").where("revokedByUid", "==", uid).select().limit(1).get()).docs[0]?.id,
+    (db, id) => db.collection("superadmins").doc(id))],
   ["teamMemberships|roleUpdatedBy", access(
     async (db, uid) => (await db.collection("teamMemberships").where("roleUpdatedBy", "==", uid).select().limit(1).get()).docs[0]?.id,
     (db, id) => db.collection("teamMemberships").doc(id))],
   ["teams|createdBy", access(
     async (db, uid) => (await db.collection("teams").where("createdBy", "==", uid).select().limit(1).get()).docs[0]?.id,
     (db, id) => db.collection("teams").doc(id))],
+  // A-13 (teamSystems). `assessedBy` lives inside each assessment map, so each map is its own closed target.
+  ["teamSystems|createdBy", access(
+    async (db, uid) => (await db.collection("teamSystems").where("createdBy", "==", uid).select().limit(1).get()).docs[0]?.id,
+    (db, id) => db.collection("teamSystems").doc(id))],
+  ["teamSystems|updatedBy", access(
+    async (db, uid) => (await db.collection("teamSystems").where("updatedBy", "==", uid).select().limit(1).get()).docs[0]?.id,
+    (db, id) => db.collection("teamSystems").doc(id))],
+  ["teamSystems|availability.assessedBy", access(
+    async (db, uid) => (await db.collection("teamSystems").where("availability.assessedBy", "==", uid).select().limit(1).get()).docs[0]?.id,
+    (db, id) => db.collection("teamSystems").doc(id))],
+  ["teamSystems|maintainability.assessedBy", access(
+    async (db, uid) => (await db.collection("teamSystems").where("maintainability.assessedBy", "==", uid).select().limit(1).get()).docs[0]?.id,
+    (db, id) => db.collection("teamSystems").doc(id))],
+  ["teamSystems|security.assessedBy", access(
+    async (db, uid) => (await db.collection("teamSystems").where("security.assessedBy", "==", uid).select().limit(1).get()).docs[0]?.id,
+    (db, id) => db.collection("teamSystems").doc(id))],
+  ["teamSystems|reliability.assessedBy", access(
+    async (db, uid) => (await db.collection("teamSystems").where("reliability.assessedBy", "==", uid).select().limit(1).get()).docs[0]?.id,
+    (db, id) => db.collection("teamSystems").doc(id))],
+  ["teamSystems|testability.assessedBy", access(
+    async (db, uid) => (await db.collection("teamSystems").where("testability.assessedBy", "==", uid).select().limit(1).get()).docs[0]?.id,
+    (db, id) => db.collection("teamSystems").doc(id))],
+  ["teamSystems|deployability.assessedBy", access(
+    async (db, uid) => (await db.collection("teamSystems").where("deployability.assessedBy", "==", uid).select().limit(1).get()).docs[0]?.id,
+    (db, id) => db.collection("teamSystems").doc(id))],
+  ["teamSystems|observability.assessedBy", access(
+    async (db, uid) => (await db.collection("teamSystems").where("observability.assessedBy", "==", uid).select().limit(1).get()).docs[0]?.id,
+    (db, id) => db.collection("teamSystems").doc(id))],
 ]);
 
 function accessFor(target: ActorAuditTarget): ActorAccess {
@@ -183,6 +217,16 @@ export function createActorAuditPort(): ActorAuditErasurePort {
             else if (target.field === "resolvedBy") tx.update(ref, { resolvedBy: null });
             else if (target.field === "grantedBy") tx.update(ref, { grantedBy: null });
             else if (target.field === "roleUpdatedBy") tx.update(ref, { roleUpdatedBy: null });
+            else if (target.field === "grantedByUid") tx.update(ref, { grantedByUid: null });
+            else if (target.field === "revokedByUid") tx.update(ref, { revokedByUid: null });
+            // A-13 nested assessment actor: only the `assessedBy` leaf is nulled; `assessedAt` and the value are kept.
+            else if (target.field === "availability.assessedBy") tx.update(ref, { "availability.assessedBy": null });
+            else if (target.field === "maintainability.assessedBy") tx.update(ref, { "maintainability.assessedBy": null });
+            else if (target.field === "security.assessedBy") tx.update(ref, { "security.assessedBy": null });
+            else if (target.field === "reliability.assessedBy") tx.update(ref, { "reliability.assessedBy": null });
+            else if (target.field === "testability.assessedBy") tx.update(ref, { "testability.assessedBy": null });
+            else if (target.field === "deployability.assessedBy") tx.update(ref, { "deployability.assessedBy": null });
+            else if (target.field === "observability.assessedBy") tx.update(ref, { "observability.assessedBy": null });
             else throw new Error("erasure adapter: unknown actor-audit field");
           },
         }),

@@ -628,6 +628,7 @@ describe("reportTeamSkillProgress", () => {
 
       const readResult = await getTeamSkillProgress("token", TEAM_ID, {
         verifyToken: verifyTokenReturning(verifiedIdentity()),
+        isSuperadmin: async () => false,
         progressReader: getProgressReader,
         treeReader: getTreeReader,
         authCollection,

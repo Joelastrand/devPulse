@@ -4,6 +4,7 @@ import { authRefusalFor, type AuthRefusal } from "../../auth/server/auth-refusal
 import { isRecentAuth } from "../../auth/server/recent-auth";
 import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import { normalizeEmail } from "../../teams/domain/normalize-email";
+import { revokeSuperadminForErasureStart, type RevokeForErasureStartResult } from "../../superadmins/server/superadmin-erasure";
 import { RECENT_AUTH_WINDOW_SECONDS } from "../domain/erasure-constants";
 import type { ErasureStep } from "../domain/erasure-state";
 import { createErasureInTransaction, readErasureRecord } from "./erasure-store";
@@ -33,7 +34,8 @@ export type StartErasureError =
   | AuthRefusal
   | "recent_auth_required"
   | "confirmation_mismatch"
-  | "erasure_unavailable";
+  | "erasure_unavailable"
+  | "last_superadmin";
 
 export type StartErasureResult = { ok: true; state: StartErasureState } | { ok: false; error: StartErasureError };
 
@@ -69,6 +71,11 @@ export interface StartErasureDeps {
   };
   readonly verifyToken?: VerifyIdTokenDeps["verifyToken"];
   readonly readFence?: VerifyIdTokenDeps["readFence"];
+  /**
+   * Owner decision (Option A): the start revokes this uid's superadmin privilege before the fence exists, and refuses the
+   * last active superadmin. Defaults to the production registry; tests inject a fake.
+   */
+  readonly revokeSuperadminForErasure?: (uid: string) => Promise<RevokeForErasureStartResult>;
 }
 
 export interface StartErasureInput {
@@ -130,6 +137,9 @@ export async function startOrResumeErasure(
   if (!deps.ready) return UNAVAILABLE;
   const request = toErasureRequest(uid, email, emailVerified);
   if (request === undefined) return UNAVAILABLE;
+
+  const revoke = await (deps.revokeSuperadminForErasure ?? ((id: string) => revokeSuperadminForErasureStart(id)))(uid);
+  if (!revoke.ok) return revoke.error === "last_superadmin" ? { ok: false, error: "last_superadmin" } : UNAVAILABLE;
 
   const created = await createErasureInTransaction(deps.port, uid, deps.now());
   if (!created.ok) return UNAVAILABLE;

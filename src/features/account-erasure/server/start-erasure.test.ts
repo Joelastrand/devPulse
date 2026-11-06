@@ -46,6 +46,7 @@ function depsWith(overrides: Partial<StartErasureDeps> & Pick<StartErasureDeps, 
     now: () => new Date(NOW_SECONDS * 1000),
     nowSeconds: () => NOW_SECONDS,
     ready: true,
+    revokeSuperadminForErasure: async () => ({ ok: true as const }),
     ...overrides,
   };
 }
@@ -349,6 +350,63 @@ describe("startOrResumeErasure (TASK-013 operation)", () => {
     expect(await startOrResumeErasure("token", { confirmation: EMAIL }, deps)).toEqual({
       ok: false,
       error: "unauthenticated",
+    });
+    expect(store.documents.size).toBe(0);
+  });
+});
+
+describe("startOrResumeErasure and the superadmin privilege (owner decision, Option A)", () => {
+  it("refuses to start for the last active superadmin with last_superadmin, creating no fence and running no step", async () => {
+    const store = createFakeErasureStore();
+    const calls: ErasureStep[] = [];
+    const deps = depsWith({
+      port: store,
+      handlers: recordingHandlers(calls),
+      verifyToken: tokenFor(FRESH_AUTH),
+      readFence: noRecordFence,
+      revokeSuperadminForErasure: async () => ({ ok: false as const, error: "last_superadmin" as const }),
+    });
+
+    const result = await startOrResumeErasure("token", { confirmation: EMAIL }, deps);
+
+    expect(result).toEqual({ ok: false, error: "last_superadmin" });
+    expect(store.documents.size).toBe(0);
+    expect(calls).toEqual([]);
+  });
+
+  it("revokes the superadmin privilege before the erasure fence is created", async () => {
+    const store = createFakeErasureStore();
+    const order: string[] = [];
+    const deps = depsWith({
+      port: store,
+      handlers: {},
+      verifyToken: tokenFor(FRESH_AUTH),
+      readFence: noRecordFence,
+      revokeSuperadminForErasure: async () => {
+        order.push(store.documents.size === 0 ? "revoke:no-fence-yet" : "revoke:fence-exists");
+        return { ok: true as const };
+      },
+    });
+
+    await startOrResumeErasure("token", { confirmation: EMAIL }, deps);
+
+    expect(order).toEqual(["revoke:no-fence-yet"]);
+    expect(store.documents.has(UID)).toBe(true);
+  });
+
+  it("stays resumable (erasure_unavailable) and creates no fence when the revoke cannot be decided", async () => {
+    const store = createFakeErasureStore();
+    const deps = depsWith({
+      port: store,
+      handlers: {},
+      verifyToken: tokenFor(FRESH_AUTH),
+      readFence: noRecordFence,
+      revokeSuperadminForErasure: async () => ({ ok: false as const, error: "unavailable" as const }),
+    });
+
+    expect(await startOrResumeErasure("token", { confirmation: EMAIL }, deps)).toEqual({
+      ok: false,
+      error: "erasure_unavailable",
     });
     expect(store.documents.size).toBe(0);
   });

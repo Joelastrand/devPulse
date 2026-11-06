@@ -133,7 +133,7 @@ export type ListTeamSurveysResult =
 export interface ListTeamSurveysDeps {
   now?: Date;
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: IsAppAdminDeps["allowList"];
+  isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   collection?: TeamSurveysCollection;
 }
 
@@ -153,7 +153,7 @@ export async function listTeamSurveys(
 ): Promise<ListTeamSurveysResult> {
   const admin = await requireAppAdmin(idToken, {
     verifyToken: deps.verifyToken,
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
   });
   if (!admin.ok) {
     return { ok: false, error: admin.error };

@@ -10,6 +10,7 @@ import { createSurvey } from "./create-survey";
 
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const TEAM_ID = "team-42";
 const NOW = new Date("2026-09-01T00:00:00Z");
 
@@ -50,7 +51,7 @@ function fakeTeamStatusReader(status: unknown): TeamStatusReader & { calls: stri
 function baseDeps(overrides: Partial<CreateSurveyDeps> = {}): CreateSurveyDeps {
   return {
     verifyToken: verifyTokenReturning(verifiedIdentity()),
-    allowList: [ADMIN_EMAIL],
+    isSuperadmin: isAdminUid,
     collection: fakeSurveysCollection(),
     teamStatusReader: fakeTeamStatusReader("active"),
     now: NOW,
@@ -223,7 +224,7 @@ describe("createSurvey", () => {
 
   it("rejects a non-admin caller and attempts no write", async () => {
     const collection = fakeSurveysCollection();
-    const verifyToken = verifyTokenReturning(verifiedIdentity({ email: "dev@example.com" }));
+    const verifyToken = verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" }));
 
     const result = await createSurvey(
       "token",

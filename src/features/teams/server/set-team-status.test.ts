@@ -4,6 +4,8 @@ import type { TeamStatusCollection } from "./set-team-status";
 import { setTeamStatus } from "./set-team-status";
 
 const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 
 function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
   return { uid: "admin-1", email: ADMIN_EMAIL, emailVerified: true, ...overrides };
@@ -36,7 +38,7 @@ describe("setTeamStatus", () => {
 
     const result = await setTeamStatus("token", "team-1", "disabled", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -50,7 +52,7 @@ describe("setTeamStatus", () => {
 
     const result = await setTeamStatus("token", "team-1", "active", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -64,7 +66,7 @@ describe("setTeamStatus", () => {
 
     const result = await setTeamStatus("bad-token", "team-1", "disabled", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -75,12 +77,12 @@ describe("setTeamStatus", () => {
   it("rejects a non-admin caller and attempts no write", async () => {
     const collection = fakeCollection();
     const verifyToken = verifyTokenReturning(
-      verifiedIdentity({ email: "dev@example.com" }),
+      verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" }),
     );
 
     const result = await setTeamStatus("token", "team-1", "disabled", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -96,26 +98,26 @@ describe("setTeamStatus", () => {
 
     const result = await setTeamStatus("token", "team-1", "disabled", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
     expect(result).toEqual({ ok: false, error: "persistence_failed" });
   });
 
-  it("never includes the admin allow-list in the returned result, success or failure", async () => {
-    const allowList = [ADMIN_EMAIL, "other-admin@example.com"];
+  it("never includes superadmin identifiers in the returned result, success or failure", async () => {
+    const isSuperadmin = isAdminUid;
 
     const okResult = await setTeamStatus("token", "team-1", "disabled", {
       verifyToken: verifyTokenReturning(verifiedIdentity()),
-      allowList,
+      isSuperadmin,
       collection: fakeCollection(),
     });
     const forbiddenResult = await setTeamStatus("token", "team-1", "disabled", {
       verifyToken: verifyTokenReturning(
-        verifiedIdentity({ email: "dev@example.com" }),
+        verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" }),
       ),
-      allowList,
+      isSuperadmin,
       collection: fakeCollection(),
     });
 
@@ -133,7 +135,7 @@ describe("setTeamStatus", () => {
     const verifyToken = verifyTokenReturning(verifiedIdentity());
     await setTeamStatus("token", "team-1", "disabled", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection: fakeCollection(),
     });
 
@@ -142,7 +144,7 @@ describe("setTeamStatus", () => {
     };
     await setTeamStatus("token", "team-1", "disabled", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection: failingCollection,
     });
 

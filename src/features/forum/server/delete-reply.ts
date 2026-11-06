@@ -105,7 +105,7 @@ export type DeleteReplyResult =
 export interface DeleteReplyDeps {
   now?: Date;
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: IsAppAdminDeps["allowList"];
+  isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   docs?: ForumReplyDocStore;
 }
 
@@ -193,7 +193,7 @@ export async function deleteReply(
     return { ok: true };
   }
 
-  const admin = isAppAdmin(verified.identity, { allowList: deps.allowList });
+  const admin = await isAppAdmin(verified.identity, { isSuperadmin: deps.isSuperadmin });
   if (!admin && reply.authorUid !== verified.identity.uid) {
     return { ok: false, error: "forbidden" };
   }

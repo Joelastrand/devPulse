@@ -1,12 +1,14 @@
 export type MembershipSource = "invitation" | "access_request" | "admin_direct";
 
 /**
- * The team authorization role a membership carries: `"lead"` or an ordinary
- * `"member"` (docs/features/member-identity-and-team-roles/SPEC.md — BR-16).
- * Only `"lead"` is ever persisted (as `role`); `"member"` is represented by
- * the field being absent. This is a *team role*, never a professional role.
+ * The team authorization role a membership carries: `"teamadmin"` or an
+ * ordinary `"member"` (docs/features/teamadmin-and-team-visibility/SPEC.md).
+ * Only `"teamadmin"` is ever persisted (as `role`); `"member"` is represented
+ * by the field being absent. This is a *team role*, never a professional role.
+ * It replaces the former `"lead"` editing authority: a stored legacy
+ * `role: "lead"` classifies as `"member"` and grants nothing.
  */
-export type MembershipRole = "lead" | "member";
+export type MembershipRole = "teamadmin" | "member";
 
 /**
  * A Firestore `teamMemberships` document (docs/features/team-management/
@@ -25,8 +27,8 @@ export interface TeamMembershipRecord {
    * on legacy documents until an explicit admin preparation. Never authorization.
    */
   memberRef?: string;
-  /** Present only while the member is a team lead; absent ≡ ordinary member. */
-  role?: "lead";
+  /** Present only while the member is a team admin; absent ≡ ordinary member. Written only by a superadmin. */
+  role?: "teamadmin";
   /** Paired with `roleUpdatedBy`: the last role assignment/removal (audit only, never consulted for authorization). */
   roleUpdatedAt?: Date;
   /** `null` after the account that set the role was erased (account-erasure A-11). Audit only. */
@@ -84,17 +86,17 @@ export function extractMemberUid(data: unknown): string | null {
 }
 
 /**
- * Classifies a raw `teamMemberships` document's team role (SPEC — BR-17).
- * Fail-safe toward least privilege: `"lead"` only when `role === "lead"`
- * exactly; a missing field (every pre-existing document), any other value,
- * or non-object input is an ordinary `"member"`. Pure domain
- * classification — it neither validates the membership (use
- * `isValidMembershipFor`) nor authorizes anything.
+ * Classifies a raw `teamMemberships` document's team role. Fail-safe toward
+ * least privilege: `"teamadmin"` only when `role === "teamadmin"` exactly; a
+ * missing field, any other value (including a legacy `"lead"`, which no
+ * longer grants anything), or non-object input is an ordinary `"member"`.
+ * Pure domain classification — it neither validates the membership (use
+ * `isValidMembershipFor`) nor authorizes anything on its own.
  */
 export function membershipRoleOf(data: unknown): MembershipRole {
   if (typeof data !== "object" || data === null) {
     return "member";
   }
 
-  return (data as Record<string, unknown>).role === "lead" ? "lead" : "member";
+  return (data as Record<string, unknown>).role === "teamadmin" ? "teamadmin" : "member";
 }

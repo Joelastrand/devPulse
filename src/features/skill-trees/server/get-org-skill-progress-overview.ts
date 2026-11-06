@@ -211,7 +211,7 @@ function compareTeamEntries(
 
 export interface GetOrgSkillProgressOverviewDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: IsAppAdminDeps["allowList"];
+  isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   treesReader?: SkillTreesReader;
   progressReader?: OrgSkillProgressReader;
   teamsReader?: OrgTeamsReader;
@@ -261,7 +261,7 @@ export async function getOrgSkillProgressOverview(
 ): Promise<GetOrgSkillProgressOverviewResult> {
   const admin = await requireAppAdmin(idToken, {
     verifyToken: deps.verifyToken,
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
   });
   if (!admin.ok) {
     return { ok: false, error: admin.error };

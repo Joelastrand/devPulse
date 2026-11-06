@@ -188,7 +188,7 @@ export type GetCurrentTeamSurveyResult =
 export interface GetCurrentTeamSurveyDeps {
   now?: Date;
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: AuthorizeTeamAccessDeps["allowList"];
+  isSuperadmin?: AuthorizeTeamAccessDeps["isSuperadmin"];
   authCollection?: AuthorizeTeamAccessDeps["collection"];
   collections?: GetCurrentTeamSurveyCollections;
 }
@@ -222,7 +222,7 @@ export async function getCurrentTeamSurvey(
   }
 
   const authResult = await authorizeTeamAccess(verified.identity, teamId, {
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
     collection: deps.authCollection,
   });
   if (!authResult.ok) {

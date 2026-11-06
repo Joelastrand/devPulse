@@ -1,19 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import dynamic from "next/dynamic";
-import { catchError } from "next/error";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
-import { EmptyState } from "../../../components/ui/EmptyState";
 import { LoadingState } from "../../../components/ui/LoadingState";
 import { useAnnounceTeamName } from "../../../components/nav/TeamContext";
 import { TeamSummaryStrip } from "./TeamSummaryStrip";
 import { TeamIdentity } from "./TeamIdentity";
-import { ResultsSummaryStrip } from "../../results/components/ResultsSummaryStrip";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import {
   fetchTeamChallenges,
@@ -38,16 +34,6 @@ import {
 import { RoadmapPlanningScope } from "../../roadmap/components/RoadmapPlanning";
 import { fetchTeamSkills, type FetchTeamSkillsResult, type TeamSkillView } from "../../skill-trees/client/skill-trees-gateway";
 import { TeamSkillSection, type TeamSkillSectionState } from "../../skill-trees/components/TeamSkillSection";
-import { PeriodSummary } from "../../results/components/PeriodSummary";
-import { TrendTable } from "../../results/components/TrendTable";
-import { formatSurveyDate } from "../../results/domain/format-survey-date";
-import { resultsCopy } from "../../results/copy";
-import {
-  fetchCurrentTeamSurvey,
-  type CurrentTeamSurveySummary,
-  type FetchCurrentTeamSurveyResult,
-} from "../../surveys/client/current-team-survey-gateway";
-import { surveysCopy } from "../../surveys/copy";
 import { teamsCopy } from "../copy";
 import {
   fetchTeamsOverview,
@@ -56,73 +42,12 @@ import {
 import { requestAccessErrorMessage } from "./request-access-messages";
 import { TeamSkillNeedsSection } from "../../team-skills/components/TeamSkillNeedsSection";
 import { TeamRosterSection } from "./TeamRosterSection";
+import { TeamVisibilitySettings } from "./TeamVisibilitySettings";
 import { TeamRouteNav } from "./TeamRouteNav";
-import { TeamOverviewSummary } from "./TeamOverviewSummary";
+import { TeamOversiktSummary } from "./TeamOversiktSummary";
 
-/**
- * `TrendChart` code-split out of this page's eager client bundle
- * (docs/features/performance-phase-a/SPEC.md — TASK-003, AD-3/AD-5):
- * `recharts` (its single largest dependency) only enters the client bundle
- * once this lazy component actually renders, never merely because
- * `TeamDetail` mounts. `ssr: false` because `TeamDetail` is already a Client
- * Component with no server-rendered data for this content to begin with.
- * Declared at module scope (never inside the component body) — required for
- * Next.js's webpack bundle matching/preloading, mirroring `next/dynamic`'s
- * own `React.lazy()` requirement.
- */
-const LazyTrendChart = dynamic<{ results: readonly SurveyResultSummary[] }>(
-  () => import("../../results/components/TrendChart").then((mod) => mod.TrendChart),
-  {
-    ssr: false,
-    loading: () => <LoadingState label={resultsCopy.trendChart.loading} />,
-  },
-);
-
-/**
- * The chart-local error-boundary fallback (SPEC → AD-6): minimal, static,
- * non-interactive, and containing no data fetching, auth, or product logic
- * of its own — exactly what AD-6 constrains it to. Never renders
- * `errorInfo.error`'s message (no sensitive/internal exception detail is
- * ever shown to the user).
- */
-function TrendChartFallback() {
-  return <Alert variant="error">{resultsCopy.trendChart.loadError}</Alert>;
-}
-
-/**
- * Wraps only the dynamically-imported `TrendChart` region in an error
- * boundary via Next.js's first-party `catchError` (`next/error`, stable
- * since Next.js 16.3.0, callable from Client Components — verified against
- * this repository's installed `next@16.3.4` types/docs) — SPEC → AD-6. A
- * chunk-load failure or a render-time exception in `LazyTrendChart` is
- * caught here and isolated to this region only; every sibling section on
- * `/teams/[teamId]` is unaffected (BR-18).
- */
-const TrendChartBoundary = catchError(TrendChartFallback);
 
 type DeniedRelationship = "none" | "request_pending" | "request_rejected";
-
-/**
- * The "Pågående undersøkelse" section's own composed state, resolved
- * independently of the results read above it (docs/features/
- * managed-surveys/SPEC.md — TASK-010: "Keep survey discovery and protected
- * results as separate server contracts"). `"unavailable"` covers both a
- * genuine read failure and the rare race where the parallel current-survey
- * read reports `forbidden`/`unauthenticated` even though the results read
- * just above it succeeded — never fabricated as "no current survey" in
- * either case (SPEC → "Error isolation").
- */
-type CurrentSurveySectionState =
-  | { status: "loaded"; survey: CurrentTeamSurveySummary | null }
-  | { status: "unavailable" };
-
-function toCurrentSurveySectionState(
-  result: FetchCurrentTeamSurveyResult,
-): CurrentSurveySectionState {
-  return result.status === "ok"
-    ? { status: "loaded", survey: result.survey }
-    : { status: "unavailable" };
-}
 
 /**
  * The "Utfordringer" section's own composed state, resolved independently
@@ -213,7 +138,6 @@ type TeamDetailResult =
   | {
       status: "results_unavailable";
       name?: string;
-      currentSurvey: CurrentSurveySectionState;
       challenges: ChallengesSectionState;
       forum: ForumSectionState;
       skills: SkillSectionState;
@@ -222,7 +146,6 @@ type TeamDetailResult =
       status: "authorized";
       name?: string;
       results: SurveyResultSummary[];
-      currentSurvey: CurrentSurveySectionState;
       challenges: ChallengesSectionState;
       forum: ForumSectionState;
       skills: SkillSectionState;
@@ -300,9 +223,8 @@ async function resolveViaResults(
   // disabled, no Forum fetch is ever initiated by this component; the
   // placeholder result below is never rendered (`ForumSection` is not
   // rendered at all in that case — see the JSX below).
-  const [results, surveyResult, challengesResult, forumResult, skillsResult] = await Promise.all([
+  const [results, challengesResult, forumResult, skillsResult] = await Promise.all([
     fetchTeamResults(idToken, teamId),
-    fetchCurrentTeamSurvey(idToken, teamId),
     fetchTeamChallenges(idToken, teamId),
     forumEnabled
       ? fetchTeamThreads(idToken, teamId)
@@ -315,7 +237,6 @@ async function resolveViaResults(
       status: "authorized",
       name,
       results: results.results,
-      currentSurvey: toCurrentSurveySectionState(surveyResult),
       challenges: toChallengesSectionState(challengesResult),
       forum: toForumSectionState(forumResult),
       skills: toSkillSectionState(skillsResult),
@@ -340,7 +261,6 @@ async function resolveViaResults(
   return {
     status: "results_unavailable",
     name,
-    currentSurvey: toCurrentSurveySectionState(surveyResult),
     challenges: toChallengesSectionState(challengesResult),
     forum: toForumSectionState(forumResult),
     skills: toSkillSectionState(skillsResult),
@@ -524,9 +444,6 @@ export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnab
         <TeamHeading name={result.name} teamId={teamId} />
         <TeamRouteNav teamId={teamId} />
         <Alert variant="error">{teamsCopy.detail.resultsUnavailable}</Alert>
-        <ResultaterZone>
-          <CurrentSurveySection state={result.currentSurvey} />
-        </ResultaterZone>
         <TeamaktivitetZone>
           {/*
             Reading order (DOM order, BR-14 section order): planning, needs, challenges, forum, members. On lg the needs
@@ -569,6 +486,7 @@ export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnab
             )}
             <div className="min-w-0 lg:col-span-2">
               <TeamRosterSection key={`roster:${generation}`} teamId={teamId} token={token} />
+              <TeamVisibilitySettings key={`visibility:${generation}`} teamId={teamId} token={token} />
             </div>
           </div>
         </TeamaktivitetZone>
@@ -593,23 +511,24 @@ export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnab
       <RoadmapPlanningScope key={`planning:${generation}`} token={token} teamId={teamId}>
         {(planning) => (
           <div className="flex flex-col gap-6">
-            <TeamHeading name={result.name} teamId={teamId} summary={latest ? <TeamSummaryStrip latest={latest} /> : null} />
-            <TeamRouteNav teamId={teamId} />
-            <TeamOverviewSummary
+            <TeamHeading
+              name={result.name}
               teamId={teamId}
-              openChallenges={openChallenges}
-              plans={planning.plans}
+              competenceAreaCount={result.skills.status === "loaded" ? result.skills.skills.length : null}
+              summary={latest ? <TeamSummaryStrip latest={latest} /> : null}
             />
+            <TeamRouteNav teamId={teamId} />
+            <TeamOversiktSummary teamId={teamId} token={token} openChallenges={openChallenges} />
+            <Link
+              href={`/teams/${encodeURIComponent(teamId)}/results`}
+              className="w-fit text-label font-medium text-text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            >
+              {teamsCopy.results.openLink}
+            </Link>
             {/*
               Results zone (visual-redesign BR-14). The summary, current survey and period stack, followed by the trend table.
               The team development chart is placed beside the competency needs panel in the activity zone (TASK-029).
             */}
-            <ResultaterZone>
-              <ResultsSummaryStrip results={result.results} />
-              <CurrentSurveySection state={result.currentSurvey} />
-              <PeriodSummary result={latest} />
-              <TrendTable results={result.results} />
-            </ResultaterZone>
             <TeamaktivitetZone>
               {/*
                 Reading order: planning, needs, trend chart, challenges, members, forum. At lg the needs and chart pair
@@ -629,13 +548,6 @@ export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnab
                   <TeamSkillNeedsSection key={`needs:${generation}`} teamId={teamId} token={token} teamName={result.name} />
                 </div>
                 <div className="min-w-0">
-                  {result.results.length > 0 && (
-                    <TrendChartBoundary>
-                      <LazyTrendChart results={result.results} />
-                    </TrendChartBoundary>
-                  )}
-                </div>
-                <div className="min-w-0">
                   <ChallengesSection
                     teamId={teamId}
                     token={token}
@@ -645,6 +557,7 @@ export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnab
                 </div>
                 <div className="min-w-0">
                   <TeamRosterSection key={`roster:${generation}`} teamId={teamId} token={token} />
+                  <TeamVisibilitySettings key={`visibility:${generation}`} teamId={teamId} token={token} />
                 </div>
                 {forumEnabled && (
                   <div className="min-w-0 lg:col-span-2">
@@ -687,7 +600,18 @@ export function TeamDetail({ teamId, forumEnabled }: { teamId: string; forumEnab
   );
 }
 
-function TeamHeading({ name, teamId, summary }: { name?: string; teamId: string; summary?: ReactNode }) {
+function TeamHeading({
+  name,
+  teamId,
+  competenceAreaCount = null,
+  summary,
+}: {
+  name?: string;
+  teamId: string;
+  /** Already-loaded skill count; `null` when the skill read is unavailable, so no count is fabricated. */
+  competenceAreaCount?: number | null;
+  summary?: ReactNode;
+}) {
   // The shell shows the team name as context; the name is the one already loaded here.
   useAnnounceTeamName(name ?? null);
   return (
@@ -699,32 +623,12 @@ function TeamHeading({ name, teamId, summary }: { name?: string; teamId: string;
         <h1 className="break-words text-page-title font-semibold text-text-primary">
           {name ?? teamsCopy.detail.fallbackName}
         </h1>
+        {competenceAreaCount !== null && (
+          <p className="text-sm text-text-secondary">{teamsCopy.detail.competenceAreas(competenceAreaCount)}</p>
+        )}
         {summary}
       </div>
     </header>
-  );
-}
-
-/**
- * Presentation-only visual grouping for the "results" half of `TeamDetail`
- * (docs/features/ui-refresh/SPEC.md — BR-15, BR-16): a plain `<section>` +
- * heading around already-rendered children, never a `Card` — every child
- * section already renders its own `Card as="section"`, so wrapping them in
- * another `Card` would nest cards rather than merely group them. Carries no
- * fetch, state, or capability logic of its own; it only arranges JSX the
- * caller has already fully computed.
- */
-function ResultaterZone({ children }: { children: ReactNode }) {
-  return (
-    <section aria-labelledby="team-detail-resultater-heading" className="flex flex-col gap-6">
-      <h2
-        id="team-detail-resultater-heading"
-        className="text-section-title font-semibold text-text-primary"
-      >
-        {teamsCopy.detail.resultaterHeading}
-      </h2>
-      {children}
-    </section>
   );
 }
 
@@ -740,38 +644,6 @@ function TeamaktivitetZone({ children }: { children: ReactNode }) {
       </h2>
       {children}
     </section>
-  );
-}
-
-/**
- * `/teams/[teamId]`'s "Pågående undersøkelse" section
- * (docs/features/managed-surveys/SPEC.md — BR-30, BR-31, BR-32). Renders
- * exactly what `getCurrentTeamSurvey` (via `fetchCurrentTeamSurvey`)
- * returned — it never computes lifecycle, availability, or `accessMode`
- * eligibility itself, and never renders response/result content
- * (`.claude/rules/security.md`).
- */
-function CurrentSurveySection({ state }: { state: CurrentSurveySectionState }) {
-  return (
-    <Card as="section" variant="bordered" padding="md" aria-labelledby="current-survey-heading">
-      <h2
-        id="current-survey-heading"
-        className="text-lg font-semibold text-zinc-900 dark:text-zinc-50"
-      >
-        {surveysCopy.teamCurrent.sectionTitle}
-      </h2>
-      {state.status === "unavailable" && (
-        <Alert variant="error" className="mt-4">
-          {surveysCopy.teamCurrent.error}
-        </Alert>
-      )}
-      {state.status === "loaded" && state.survey === null && (
-        <EmptyState className="mt-4">{surveysCopy.teamCurrent.empty}</EmptyState>
-      )}
-      {state.status === "loaded" && state.survey !== null && (
-        <CurrentSurveyCard survey={state.survey} />
-      )}
-    </Card>
   );
 }
 
@@ -869,37 +741,6 @@ function ForumSection({
         <ThreadList teamId={teamId} state={listState} />
       </div>
     </Card>
-  );
-}
-
-function CurrentSurveyCard({ survey }: { survey: CurrentTeamSurveySummary }) {
-  const title = survey.title ?? surveysCopy.teamCurrent.fallbackTitle;
-
-  return (
-    <div className="mt-4 flex flex-col items-start gap-2">
-      <p className="break-words font-medium text-zinc-900 dark:text-zinc-50">{title}</p>
-      <p className="text-sm text-zinc-600 dark:text-zinc-400">
-        {surveysCopy.admin.lifecycleLabels[survey.lifecycle]} ·{" "}
-        {surveysCopy.admin.accessModeLabels[survey.accessMode]}
-      </p>
-      {(survey.startAt !== undefined || survey.endAt !== undefined) && (
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          {survey.startAt !== undefined
-            ? `${surveysCopy.teamCurrent.startAtLabel} ${formatSurveyDate(new Date(survey.startAt))}`
-            : null}
-          {survey.startAt !== undefined && survey.endAt !== undefined ? " · " : null}
-          {survey.endAt !== undefined
-            ? `${surveysCopy.teamCurrent.endAtLabel} ${formatSurveyDate(new Date(survey.endAt))}`
-            : null}
-        </p>
-      )}
-      <Link
-        href={`/survey/${encodeURIComponent(survey.surveyId)}`}
-        className="font-medium text-zinc-900 underline dark:text-zinc-50"
-      >
-        {surveysCopy.teamCurrent.answerLink}
-      </Link>
-    </div>
   );
 }
 

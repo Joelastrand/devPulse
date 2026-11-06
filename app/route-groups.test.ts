@@ -23,14 +23,19 @@ const EXPECTED_URLS = [
   "/me/goals",
   "/me/profile",
   "/me/skills",
+  "/public/teams/[teamId]",
   "/results",
   "/sign-in",
   "/sign-up",
   "/survey/[surveyId]",
   "/teams",
   "/teams/[teamId]",
+  "/teams/[teamId]/competence",
+  "/teams/[teamId]/competence-plan",
   "/teams/[teamId]/forum/[threadId]",
+  "/teams/[teamId]/results",
   "/teams/[teamId]/roadmap",
+  "/teams/[teamId]/systems",
 ];
 
 function listPages(dir: string, found: string[] = []) {

@@ -18,6 +18,7 @@ vi.mock("../../../lib/firebase/admin", () => ({
 }));
 
 const ADMIN_EMAIL = "admin@example.com";
+const superadmin = async (uid: string) => uid === "user-1";
 
 function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
   return { uid: "user-1", email: ADMIN_EMAIL, emailVerified: true, ...overrides };
@@ -35,7 +36,7 @@ describe("getOwnAdminStatus", () => {
   it("returns isAdmin: true for a verified, allow-listed caller", async () => {
     const result = await getOwnAdminStatus("token", {
       verifyToken: verifyTokenReturning(verifiedIdentity()),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
     });
 
     expect(result).toEqual({ ok: true, isAdmin: true });
@@ -43,8 +44,8 @@ describe("getOwnAdminStatus", () => {
 
   it("returns isAdmin: false for a verified, non-allow-listed caller", async () => {
     const result = await getOwnAdminStatus("token", {
-      verifyToken: verifyTokenReturning(verifiedIdentity({ email: "dev@example.com" })),
-      allowList: [ADMIN_EMAIL],
+      verifyToken: verifyTokenReturning(verifiedIdentity({ uid: "dev-1", email: "dev@example.com" })),
+      isSuperadmin: superadmin,
     });
 
     expect(result).toEqual({ ok: true, isAdmin: false });
@@ -53,7 +54,7 @@ describe("getOwnAdminStatus", () => {
   it("returns isAdmin: false (never an auth error) for an allow-listed but unverified-email caller", async () => {
     const result = await getOwnAdminStatus("token", {
       verifyToken: verifyTokenReturning(verifiedIdentity({ emailVerified: false })),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
     });
 
     expect(result).toEqual({ ok: true, isAdmin: false });
@@ -62,7 +63,7 @@ describe("getOwnAdminStatus", () => {
   it("rejects an unauthenticated/invalid-token caller with a generic error, never a boolean", async () => {
     const result = await getOwnAdminStatus("bad-token", {
       verifyToken: vi.fn().mockRejectedValue(new Error("bad token")),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
     });
 
     expect(result).toEqual({ ok: false, error: "unauthenticated" });
@@ -71,7 +72,7 @@ describe("getOwnAdminStatus", () => {
   it("returns no field other than isAdmin on success", async () => {
     const result = await getOwnAdminStatus("token", {
       verifyToken: verifyTokenReturning(verifiedIdentity()),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
     });
 
     expect(result.ok).toBe(true);
@@ -79,15 +80,15 @@ describe("getOwnAdminStatus", () => {
   });
 
   it("never includes the admin allow-list in the returned result, success or failure", async () => {
-    const allowList = [ADMIN_EMAIL, "other-admin@example.com"];
+    const isSuperadmin = superadmin;
 
     const okResult = await getOwnAdminStatus("token", {
       verifyToken: verifyTokenReturning(verifiedIdentity()),
-      allowList,
+      isSuperadmin,
     });
     const failResult = await getOwnAdminStatus("bad-token", {
       verifyToken: vi.fn().mockRejectedValue(new Error("bad token")),
-      allowList,
+      isSuperadmin,
     });
 
     expect(JSON.stringify(okResult)).not.toContain("other-admin@example.com");
@@ -97,11 +98,11 @@ describe("getOwnAdminStatus", () => {
   it("performs no Firestore read", async () => {
     await getOwnAdminStatus("token", {
       verifyToken: verifyTokenReturning(verifiedIdentity()),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
     });
     await getOwnAdminStatus("bad-token", {
       verifyToken: vi.fn().mockRejectedValue(new Error("bad token")),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
     });
 
     expect(getFirestoreDbMock).not.toHaveBeenCalled();
@@ -110,7 +111,7 @@ describe("getOwnAdminStatus", () => {
   it("checks token revocation by default when no verifyToken override is supplied", async () => {
     verifyIdTokenSpy.mockClear();
 
-    await getOwnAdminStatus("token", { allowList: [ADMIN_EMAIL] });
+    await getOwnAdminStatus("token", { isSuperadmin: superadmin });
 
     expect(verifyIdTokenSpy).toHaveBeenCalledWith("token", true);
   });
@@ -122,11 +123,11 @@ describe("getOwnAdminStatus", () => {
 
     await getOwnAdminStatus("token", {
       verifyToken: verifyTokenReturning(verifiedIdentity()),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
     });
     await getOwnAdminStatus("bad-token", {
       verifyToken: vi.fn().mockRejectedValue(new Error("bad token")),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
     });
 
     expect(logSpy).not.toHaveBeenCalled();

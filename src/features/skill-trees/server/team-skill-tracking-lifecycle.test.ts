@@ -37,6 +37,7 @@ function inMemoryCollection() {
 
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const TEAM_ID = "team-1";
 const TREE_ID = "tree-1";
 
@@ -69,7 +70,7 @@ describe("team skill tracking lifecycle", () => {
 
     const deps = {
       verifyToken: verifyTokenReturning(verifiedIdentity()),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
     };
 
     const started = await startTeamSkillTracking(
@@ -121,7 +122,7 @@ describe("team skill tracking lifecycle", () => {
     const progress = inMemoryCollection();
     const deps = {
       verifyToken: verifyTokenReturning(verifiedIdentity()),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       progress,
     };
 
@@ -148,7 +149,7 @@ describe("team skill tracking lifecycle", () => {
 
     const deps = {
       verifyToken: verifyTokenReturning(verifiedIdentity()),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
     };
 
     await startTeamSkillTracking("token", TEAM_ID, TREE_ID, {

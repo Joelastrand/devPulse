@@ -22,6 +22,7 @@ const THREAD_ID = "thread-1";
 const AUTHOR_UID = "author-1";
 const OTHER_MEMBER_UID = "member-2";
 const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const ADMIN_EMAIL = "admin@example.com";
 
 function memberIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
@@ -115,7 +116,7 @@ function failingRepliesCascadeStore(): RepliesCascadeStore {
 function baseDeps(overrides: Partial<DeleteThreadDeps> = {}): DeleteThreadDeps {
   return {
     verifyToken: verifyTokenReturning(memberIdentity()),
-    allowList: [ADMIN_EMAIL],
+    isSuperadmin: isAdminUid,
     threadDocs: fakeThreadDocStore(threadRecord()),
     repliesCascade: fakeRepliesCascadeStore(0),
     ...overrides,
@@ -314,7 +315,7 @@ describe("deleteThread", () => {
     const threadDocs = fakeThreadDocStore(threadRecord());
     // No membership-related dependency exists on this operation's signature
     // at all — proven structurally: deleteThread succeeds using only
-    // verifyToken/threadDocs/repliesCascade/allowList, with no membership
+    // verifyToken/threadDocs/repliesCascade/isSuperadmin, with no membership
     // seam to stub or fail.
     const result = await deleteThread("token", TEAM_ID, THREAD_ID, baseDeps({ threadDocs }));
 
@@ -467,7 +468,7 @@ describe("deleteThread", () => {
 
       const beforeDelete = await listTeamThreads("token", TEAM_ID, {
         verifyToken: verifyTokenReturning(memberIdentity()),
-        allowList: [ADMIN_EMAIL],
+        isSuperadmin: isAdminUid,
         authCollection: fakeAuthCollection(),
         reader: store,
       });
@@ -477,7 +478,7 @@ describe("deleteThread", () => {
 
       const deleted = await deleteThread("token", TEAM_ID, created.threadId, {
         verifyToken: verifyTokenReturning(memberIdentity()),
-        allowList: [ADMIN_EMAIL],
+        isSuperadmin: isAdminUid,
         threadDocs: store,
         repliesCascade: { async deleteNextBatch() { return 0; } },
       });
@@ -486,7 +487,7 @@ describe("deleteThread", () => {
 
       const afterDelete = await listTeamThreads("token", TEAM_ID, {
         verifyToken: verifyTokenReturning(memberIdentity()),
-        allowList: [ADMIN_EMAIL],
+        isSuperadmin: isAdminUid,
         authCollection: fakeAuthCollection(),
         reader: store,
       });

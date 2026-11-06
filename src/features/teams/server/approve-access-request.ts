@@ -83,7 +83,7 @@ export type ApproveAccessRequestResult =
 export interface ApproveAccessRequestDeps {
   now?: Date;
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: IsAppAdminDeps["allowList"];
+  isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   collection?: ApproveAccessRequestCollection;
 }
 
@@ -110,7 +110,7 @@ export async function approveAccessRequest(
 ): Promise<ApproveAccessRequestResult> {
   const admin = await requireAppAdmin(idToken, {
     verifyToken: deps.verifyToken,
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
   });
   if (!admin.ok) {
     return { ok: false, error: admin.error };

@@ -5,7 +5,12 @@ import { fileURLToPath } from "node:url";
 // Credentials come only from runtime environment variables. Their values are
 // never printed, logged, written to a file, or included in an error message.
 
-export const BASE_URL = "http://localhost:3000";
+// Optional override for a freshly started local dev server (e.g. a port other than 3000 when an older
+// process holds 3000). Only localhost origins are accepted; anything else falls back to the default.
+const LOCAL_ORIGIN = /^http:\/\/localhost:\d{2,5}$/;
+export const BASE_URL = LOCAL_ORIGIN.test(process.env.DEVPULSE_VERIFY_BASE_URL ?? "")
+  ? (process.env.DEVPULSE_VERIFY_BASE_URL as string)
+  : "http://localhost:3000";
 export const OUTPUT_DIR = fileURLToPath(new URL("../.verify-output/", import.meta.url));
 const ENV_LOCAL = fileURLToPath(new URL("../.env.local", import.meta.url));
 

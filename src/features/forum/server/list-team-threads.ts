@@ -126,7 +126,7 @@ export type ListTeamThreadsResult =
 
 export interface ListTeamThreadsDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: AuthorizeTeamAccessDeps["allowList"];
+  isSuperadmin?: AuthorizeTeamAccessDeps["isSuperadmin"];
   authCollection?: AuthorizeTeamAccessDeps["collection"];
   reader?: ThreadsReader;
   decryptContent?: (payload: EncryptedPayload) => string;
@@ -172,7 +172,7 @@ export async function listTeamThreads(
   }
 
   const authResult = await authorizeTeamAccess(verified.identity, teamId, {
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
     collection: deps.authCollection,
   });
   if (!authResult.ok) {

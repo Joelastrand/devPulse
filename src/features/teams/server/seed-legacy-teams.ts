@@ -93,7 +93,7 @@ export type SeedLegacyTeamsResult =
 export interface SeedLegacyTeamsDeps {
   now?: Date;
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: IsAppAdminDeps["allowList"];
+  isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   collection?: LegacyTeamSeedCollection;
 }
 
@@ -122,7 +122,7 @@ export async function seedLegacyTeams(
 ): Promise<SeedLegacyTeamsResult> {
   const admin = await requireAppAdmin(idToken, {
     verifyToken: deps.verifyToken,
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
   });
   if (!admin.ok) {
     return { ok: false, error: admin.error };

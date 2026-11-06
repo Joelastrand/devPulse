@@ -29,7 +29,7 @@ export type CreateRoleResult =
  * `persistence_failed`, never as a missing tree.
  */
 export async function createRole(idToken: string, input: unknown, deps: CreateRoleDeps = {}): Promise<CreateRoleResult> {
-  const admin = await requireAppAdmin(idToken, { verifyToken: deps.verifyToken, allowList: deps.allowList });
+  const admin = await requireAppAdmin(idToken, { verifyToken: deps.verifyToken, isSuperadmin: deps.isSuperadmin });
   if (!admin.ok) {
     return { ok: false, error: admin.error };
   }

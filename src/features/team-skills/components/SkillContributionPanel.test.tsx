@@ -47,6 +47,27 @@ afterEach(() => {
   policy.k = 9;
 });
 
+describe("SkillContributionPanel sharing wording (TASK-009, /me/skills)", () => {
+  it("shows the owner's sharing control OFF by default with the required Norwegian label", async () => {
+    fetchMock.mockResolvedValue(state(false));
+    render(<SkillContributionPanel teamId="team-1" token="t" teamName="Demoteam" wording="sharing" />);
+    expect(await screen.findByRole("button", { name: "Del kompetanse med teamet" })).toBeTruthy();
+    expect(screen.getByText("Du deler ikke kompetanse med teamet")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: WITHDRAW })).toBeNull();
+    expect(screen.queryByRole("button", { name: OPT_IN })).toBeNull();
+  });
+
+  it("turns sharing on through the existing participation write and re-reads the server state", async () => {
+    fetchMock.mockResolvedValueOnce(state(false)).mockResolvedValueOnce(state(true));
+    optInMock.mockResolvedValue({ ok: true });
+    render(<SkillContributionPanel teamId="team-1" token="t" teamName="Demoteam" wording="sharing" />);
+    await userEvent.click(await screen.findByRole("button", { name: "Del kompetanse med teamet" }));
+    await waitFor(() => expect(optInMock).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("Du deler kompetanse med teamet")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Slutt å dele kompetanse med teamet" })).toBeTruthy();
+  });
+});
+
 describe("SkillContributionPanel", () => {
   it("names the team, states «Du bidrar ikke» and offers an unselected opt-in button", async () => {
     fetchMock.mockResolvedValue(state(false));

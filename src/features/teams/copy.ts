@@ -28,6 +28,8 @@ export const teamsCopy = {
     resultsUnavailable:
       "Noe gikk galt under lasting av teamets resultater. Prøv igjen senere.",
     fallbackName: "Team",
+    /** Identity count under the team name (TASK-008, reference 18). Only a count already loaded on Oversikt is shown. */
+    competenceAreas: (count: number) => `${count} ${count === 1 ? "kompetanseområde" : "kompetanseområder"}`,
     /**
      * The two presentation-only visual zones `TeamDetail` groups its
      * already-rendered sections into (docs/features/ui-refresh/SPEC.md —
@@ -49,6 +51,24 @@ export const teamsCopy = {
     label: "Teamnavigasjon",
     overview: "Oversikt",
     roadmap: "Roadmap",
+    competencePlan: "Kompetanseplan",
+    competence: "Teamkompetanse",
+    systems: "Systemoversikt",
+  },
+  /**
+   * `/teams/[teamId]/results` (BR-5): survey history, trends and the long
+   * competence ladder moved out of Oversikt. Not a sixth tab — reached from
+   * Oversikt and returned to via `backToOverview`.
+   */
+  results: {
+    title: "Resultater",
+    description: "Undersøkelser, trender og kompetansestiger for teamet.",
+    openLink: "Se resultater og trender",
+    backToOverview: "Tilbake til Oversikt",
+    loading: "Laster resultater…",
+    forbidden: "Du har ikke tilgang til resultatene for dette teamet.",
+    error: "Resultatene kunne ikke lastes. Prøv igjen senere.",
+    signIn: "Logg inn for å se resultatene for teamet.",
   },
   /** The collapsed, read-only member roster on `/teams/[teamId]` (docs/features/member-identity-and-team-roles/SPEC.md — BR-31). */
   roster: {
@@ -61,7 +81,7 @@ export const teamsCopy = {
     retryButton: "Prøv igjen",
     empty: "Ingen medlemmer å vise.",
     unnamedMember: "Medlem uten navn",
-    leadLabel: "Teamlead",
+    leadLabel: "Teamadmin",
     selfLabel: "Deg",
     truncated: "Listen viser bare de første medlemmene og er ikke fullstendig.",
   },
@@ -151,12 +171,12 @@ export const adminCopy = {
     removeButton: "Fjern",
     removingButton: "Fjerner…",
     unnamedMember: "Medlem uten navn",
-    leadMarker: "Teamlead",
-    leadMarkerDormant: "Teamlead (lagret rolle, ikke aktiv mens teamet er deaktivert)",
-    makeLeadButton: "Gjør til teamlead",
+    leadMarker: "Teamadmin",
+    leadMarkerDormant: "Teamadmin (ikke aktiv mens teamet er deaktivert)",
+    makeLeadButton: "Gjør til teamadmin",
     makeMemberButton: "Gjør til vanlig medlem",
     savingRoleButton: "Lagrer…",
-    leadRoleHint: "Teamlead er en rolle som settes for hvert medlem i teamet.",
+    leadRoleHint: "Teamadmin er en rolle som kun superadmin kan gi eller fjerne. Teamadmin kan administrere teamets innhold og innstillinger.",
     prepareMemberRefsHint:
       "Noen medlemmer er ikke klargjort for medlemsvelgeren ennå. Klargjøring gjøres én gang per team.",
     prepareMemberRefsButton: "Klargjør medlemsvelger",
@@ -169,9 +189,9 @@ export const adminCopy = {
       generic: "Noe gikk galt under klargjøring. Ingenting ble endret. Prøv igjen.",
     },
     leadDisabledTeamNote:
-      "Mens dette teamet står som deaktivert kan nye teamledere ikke utnevnes, men en teamlead kan fortsatt gjøres til vanlig medlem.",
+      "Mens dette teamet står som deaktivert kan nye teamadmins ikke utnevnes, men en teamadmin kan fortsatt fjernes.",
     roleError: {
-      teamDisabled: "Dette teamet er deaktivert. Aktiver det på nytt før du utnevner en teamlead.",
+      teamDisabled: "Dette teamet er deaktivert. Aktiver det på nytt før du utnevner en teamadmin.",
       notAMember: "Personen er ikke lenger medlem av dette teamet.",
     },
     invitationsSectionTitle: "Ventende invitasjoner",

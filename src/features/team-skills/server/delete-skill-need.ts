@@ -1,8 +1,9 @@
 import "server-only";
+import type { IsAppAdminDeps } from "../../teams/domain/app-admin";
 import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import { isWellFormedTreeId } from "../../skill-profiles/domain/skill-profile";
 import { skillNeedDocId } from "../domain/skill-need";
-import { requireGenuineLead } from "./genuine-team-membership";
+import { requireTeamAdministrator } from "./genuine-team-membership";
 import { getDefaultSkillNeedWriteStore, type SkillNeedWriteStore } from "./skill-needs-store";
 import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 
@@ -11,6 +12,7 @@ export type DeleteSkillNeedError = AuthRefusal | "forbidden" | "team_disabled" |
 export type DeleteSkillNeedResult = { ok: true } | { ok: false; error: DeleteSkillNeedError };
 
 export interface DeleteSkillNeedDeps {
+  isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
   store?: SkillNeedWriteStore;
 }
@@ -36,8 +38,8 @@ export async function deleteSkillNeed(
 
   try {
     return await store.runTransaction(async (tx): Promise<DeleteSkillNeedResult> => {
-      const lead = await requireGenuineLead(identity, teamId, { reads: tx.reads });
-      if (!lead.ok) return { ok: false, error: lead.error === "read_failed" ? "persistence_failed" : lead.error };
+      const admin = await requireTeamAdministrator(identity, teamId, { reads: tx.reads, isSuperadmin: deps.isSuperadmin });
+      if (!admin.ok) return { ok: false, error: admin.error === "read_failed" ? "persistence_failed" : admin.error };
 
       // A malformed id cannot name a slot, so there is nothing to delete.
       if (!isWellFormedTreeId(treeId)) return { ok: true };

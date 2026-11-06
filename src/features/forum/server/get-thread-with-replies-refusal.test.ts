@@ -23,7 +23,7 @@ function memberAccess(): AuthorizeTeamAccessCollection {
 function depsFor(overrides: Partial<GetThreadWithRepliesDeps>): GetThreadWithRepliesDeps {
   return {
     verifyToken: vi.fn().mockResolvedValue({ uid: MEMBER_UID, email: "m@example.com", email_verified: true }),
-    allowList: [],
+    isSuperadmin: async () => false,
     authCollection: memberAccess(),
     threadReader: { getThread: vi.fn(async () => undefined) },
     repliesReader: { listOrderedForThread: vi.fn(async () => []) },

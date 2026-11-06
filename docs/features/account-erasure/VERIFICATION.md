@@ -1497,3 +1497,14 @@ Verification on the current tree (real exit codes):
 D-EMU: the repairs changed neither `src/features/auth/server/erasure-write-fence.ts` nor `src/features/auth/server/erasure-fence.race.emulator.test.ts` (SHA-256 unchanged: 3fd0f3b0…042ed and 702deaf2…9a89, as recorded at closure). The fence transaction semantics the race test exercises are unchanged: `runFencedTransaction` and `assertNoErasureRecordInTransaction` are not modified, and the owner-only transactions keep their fence reads. The owner-provided D-EMU PASS therefore remains valid. No rerun is required.
 
 Task status: TASK-038, TASK-040 and TASK-041 were reopened for these repairs and are closed again on the review and gate results above. TASK-039, TASK-042, TASK-043 and TASK-044 were not affected by the repairs.
+
+## TASK-039 — teamSystems coverage: A-13 (ANONYMIZE) and A-14 (DETACH), 2026-11-05
+
+Owner decision OQ-1 (approved 2026-11-05) from `docs/features/team-system-overview/SPEC.md`. Decision log: SPEC "Decision log: teamSystems erasure coverage".
+
+- Registry: `inventory.ts` holds A-13 and A-14. `inventory.test.ts` expects A-1 to A-14 and passes without a weakened guard.
+- Actor audit: five closed targets (`createdBy`, `updatedBy`, `availability|maintainability|security.assessedBy`); nested field nulled, `assessedAt` kept. Tests: `actor-audit-team-systems.test.ts`.
+- Membership: A-14 detached in the `memberships` step and in ordinary removal, in the same transaction that deletes the membership. Tests: `membership-erasure-knowledge.test.ts`.
+- Sweep: A-13 by field equality (three nested paths summed); A-14 deferred per membership and cleared by the `memberships` step.
+- Independent security/privacy review: PASS WITH RISKS (no Critical, High or Medium). Details in `docs/features/team-system-overview/VERIFICATION.md`.
+- Gates (2026-11-05): `pnpm test` 9468 passed, 2 skipped; `pnpm typecheck` clean; `pnpm build` exit 0; `pnpm lint` 0 errors.

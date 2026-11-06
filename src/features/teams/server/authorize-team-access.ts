@@ -53,7 +53,7 @@ function getDefaultCollection(): AuthorizeTeamAccessCollection {
 }
 
 export interface AuthorizeTeamAccessDeps {
-  allowList?: IsAppAdminDeps["allowList"];
+  isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   collection?: AuthorizeTeamAccessCollection;
 }
 
@@ -97,7 +97,13 @@ export async function authorizeTeamAccess(
     return { ok: true, access: "denied" };
   }
 
-  if (isAppAdmin(identity, { allowList: deps.allowList })) {
+  let isAdmin: boolean;
+  try {
+    isAdmin = await isAppAdmin(identity, { isSuperadmin: deps.isSuperadmin });
+  } catch {
+    return { ok: false, error: "read_failed" };
+  }
+  if (isAdmin) {
     return { ok: true, access: "admin" };
   }
 

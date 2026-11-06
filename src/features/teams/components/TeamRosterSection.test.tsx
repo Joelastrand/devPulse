@@ -118,7 +118,7 @@ describe("TeamRosterSection — content", () => {
     await openRoster();
 
     const items = within(await screen.findByRole("list")).getAllByRole("listitem");
-    expect(visibleText(items[0])).toBe("LeaTeamlead");
+    expect(visibleText(items[0])).toBe("LeaTeamadmin");
     expect(visibleText(items[1])).toBe("PerDeg");
     expect(visibleText(items[2])).toBe("Ola");
   });
@@ -129,7 +129,7 @@ describe("TeamRosterSection — content", () => {
     await openRoster();
 
     const item = within(await screen.findByRole("list")).getByRole("listitem");
-    expect(within(item).getByText("Teamlead")).toBeTruthy();
+    expect(within(item).getByText("Teamadmin")).toBeTruthy();
     expect(within(item).getByText("Deg")).toBeTruthy();
   });
 

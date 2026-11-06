@@ -5,6 +5,7 @@ import type { RawSkillTreeRead, RawSkillTreeReader } from "./skill-tree-seam-typ
 
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const NOW = new Date("2026-10-01T10:00:00Z");
 
 const validTree = {
@@ -33,7 +34,7 @@ function verifyAs(uid: string) {
 function deps(overrides: Partial<CreateRoleDeps> = {}): CreateRoleDeps {
   return {
     verifyToken: verifyAs(ADMIN_UID),
-    allowList: [ADMIN_EMAIL],
+    isSuperadmin: isAdminUid,
     store: createFakeRoleStore({ generateId: () => "role-1" }),
     treeReader: treeReader({ api: validTree }),
     now: () => NOW,
@@ -62,7 +63,7 @@ describe("createRole", () => {
   it("refuses a non-admin caller with zero writes", async () => {
     const store = createFakeRoleStore();
     const spy = vi.spyOn(store, "create");
-    const result = await createRole("token", VALID_INPUT, deps({ store, allowList: [] }));
+    const result = await createRole("token", VALID_INPUT, deps({ store, isSuperadmin: async () => false }));
     expect(result).toEqual({ ok: false, error: "forbidden" });
     expect(spy).not.toHaveBeenCalled();
   });

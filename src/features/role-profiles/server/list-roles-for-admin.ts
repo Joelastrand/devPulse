@@ -36,7 +36,7 @@ export async function listRolesForAdmin(
   input: ListRolesForAdminInput = {},
   deps: ListRolesForAdminDeps = {},
 ): Promise<ListRolesForAdminResult> {
-  const admin = await requireAppAdmin(idToken, { verifyToken: deps.verifyToken, allowList: deps.allowList });
+  const admin = await requireAppAdmin(idToken, { verifyToken: deps.verifyToken, isSuperadmin: deps.isSuperadmin });
   if (!admin.ok) {
     return { ok: false, error: admin.error };
   }

@@ -1,5 +1,6 @@
 import type { BoundConversation, ParticipantBindingsDeps } from "./participant-bindings-erasure";
 import { eraseParticipantBinding } from "./participant-bindings-erasure";
+import { withoutMemberRef, type KnowledgeSystem } from "./membership-erasure";
 
 /**
  * Destruction of one membership instance for ordinary admin `removeTeamMember` (TASK-038, owner decision 2026-11-02). Account
@@ -11,7 +12,8 @@ import { eraseParticipantBinding } from "./participant-bindings-erasure";
  * destroyed instance and can no longer be discovered. The memberRef-dependent references are:
  * - A-5 `roadmapItems.ownerRef == memberRef` (cleared to null, the roadmap's neutral representation);
  * - I-7 bindings `conversations.participantMemberRef == memberRef` (the existing neutral removal: the five binding fields are
- *   cleared, the participation index is deleted and the notes are dropped, through `eraseParticipantBinding`).
+ *   cleared, the participation index is deleted and the notes are dropped, through `eraseParticipantBinding`);
+ * - A-14 `teamSystems.knowledgeMemberRefs` contains `memberRef` (the entry is removed; the system and other members stay).
  *
  * Ordering. Each binding is cleared in its own owner transaction, then the membership is deleted by a FINAL transaction that
  * reads the membership, the roadmap owner set and the binding set, clears any roadmap reference it finds, and deletes the
@@ -40,6 +42,14 @@ export interface MembershipDestructionFinalTransaction {
   roadmapItemIdsOwnedBy(teamId: string, memberRef: string, limit: number): Promise<string[]>;
   clearRoadmapOwnerRef(itemId: string): void;
   boundConversationCount(memberRef: string, limit: number): Promise<number>;
+  /** Systems in `teamId` whose `knowledgeMemberRefs` contains `memberRef` (A-14), with their current refs, at most `limit`. */
+  systemsKnowingMemberRef(teamId: string, memberRef: string, limit: number): Promise<KnowledgeSystem[]>;
+  /** Replaces one system's `knowledgeMemberRefs`. Only that field changes; the system record is kept (A-14). */
+  setKnowledgeMemberRefs(systemId: string, knowledgeMemberRefs: string[]): void;
+  /** Project participation ids in `teamId` whose `memberRef` equals `memberRef` (A-15), at most `limit`. */
+  participationIdsOf(teamId: string, memberRef: string, limit: number): Promise<string[]>;
+  /** Deletes one participation record (A-15). */
+  deleteParticipation(participationId: string): void;
   deleteMembership(membershipId: string): void;
 }
 
@@ -128,6 +138,20 @@ export async function destroyMembershipInstance(
           return "more" as const;
         }
         if ((await tx.boundConversationCount(memberRef, maxWrites)) > 0) return "more" as const;
+        // A-14: detach before the delete. No write has been queued in this transaction yet, so the read is still legal.
+        const systems = await tx.systemsKnowingMemberRef(teamId as string, memberRef, maxWrites);
+        if (systems.length > 0) {
+          for (const system of systems) {
+            tx.setKnowledgeMemberRefs(system.systemId, withoutMemberRef(system.knowledgeMemberRefs, memberRef));
+          }
+          return "more" as const;
+        }
+        // A-15: participation records go before the delete. Reads still precede the first queued write of this transaction.
+        const participationIds = await tx.participationIdsOf(teamId as string, memberRef, maxWrites);
+        if (participationIds.length > 0) {
+          for (const participationId of participationIds) tx.deleteParticipation(participationId);
+          return "more" as const;
+        }
       }
       tx.deleteMembership(membershipId);
       return "deleted" as const;

@@ -8,6 +8,8 @@ import type {
 import { isAlreadyExistsError, seedLegacyTeams } from "./seed-legacy-teams";
 
 const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const LEGACY_IDS = LEGACY_TEAM_SEEDS.map((seed) => seed.teamId);
 
 function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
@@ -52,7 +54,7 @@ describe("seedLegacyTeams", () => {
 
     const result = await seedLegacyTeams("token", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
       now: new Date("2026-09-01T00:00:00Z"),
     });
@@ -76,10 +78,10 @@ describe("seedLegacyTeams", () => {
     const collection = fakeCollection();
     const verifyToken = verifyTokenReturning(verifiedIdentity());
 
-    await seedLegacyTeams("token", { verifyToken, allowList: [ADMIN_EMAIL], collection });
+    await seedLegacyTeams("token", { verifyToken, isSuperadmin: isAdminUid, collection });
     const second = await seedLegacyTeams("token", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -103,7 +105,7 @@ describe("seedLegacyTeams", () => {
 
     const result = await seedLegacyTeams("token", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -127,7 +129,7 @@ describe("seedLegacyTeams", () => {
 
     const result = await seedLegacyTeams("token", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
       now: new Date("2026-09-01T00:00:00Z"),
     });
@@ -149,13 +151,13 @@ describe("seedLegacyTeams", () => {
     const [first, second] = await Promise.all([
       seedLegacyTeams("token", {
         verifyToken,
-        allowList: [ADMIN_EMAIL],
+        isSuperadmin: isAdminUid,
         collection,
         now: new Date("2026-09-01T00:00:00Z"),
       }),
       seedLegacyTeams("token", {
         verifyToken,
-        allowList: [ADMIN_EMAIL],
+        isSuperadmin: isAdminUid,
         collection,
         now: new Date("2026-09-02T00:00:00Z"),
       }),
@@ -199,7 +201,7 @@ describe("seedLegacyTeams", () => {
     const verifyToken = verifyTokenReturning(verifiedIdentity());
     const result = await seedLegacyTeams("token", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -231,7 +233,7 @@ describe("seedLegacyTeams", () => {
     const verifyToken = verifyTokenReturning(verifiedIdentity());
     const result = await seedLegacyTeams("token", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -250,7 +252,7 @@ describe("seedLegacyTeams", () => {
 
     const result = await seedLegacyTeams("token", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -268,7 +270,7 @@ describe("seedLegacyTeams", () => {
 
     const result = await seedLegacyTeams("bad-token", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -279,12 +281,12 @@ describe("seedLegacyTeams", () => {
   it("rejects a non-admin caller and attempts no write", async () => {
     const collection = fakeCollection();
     const verifyToken = verifyTokenReturning(
-      verifiedIdentity({ email: "dev@example.com" }),
+      verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" }),
     );
 
     const result = await seedLegacyTeams("token", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -292,19 +294,19 @@ describe("seedLegacyTeams", () => {
     expect(Object.keys(collection.store)).toHaveLength(0);
   });
 
-  it("never includes the admin allow-list in the returned result, success or failure", async () => {
-    const allowList = [ADMIN_EMAIL, "other-admin@example.com"];
+  it("never includes superadmin identifiers in the returned result, success or failure", async () => {
+    const isSuperadmin = isAdminUid;
 
     const okResult = await seedLegacyTeams("token", {
       verifyToken: verifyTokenReturning(verifiedIdentity()),
-      allowList,
+      isSuperadmin,
       collection: fakeCollection(),
     });
     const forbiddenResult = await seedLegacyTeams("token", {
       verifyToken: verifyTokenReturning(
-        verifiedIdentity({ email: "dev@example.com" }),
+        verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" }),
       ),
-      allowList,
+      isSuperadmin,
       collection: fakeCollection(),
     });
 
@@ -320,7 +322,7 @@ describe("seedLegacyTeams", () => {
     const verifyToken = verifyTokenReturning(verifiedIdentity());
     await seedLegacyTeams("token", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection: fakeCollection(),
     });
 
@@ -329,7 +331,7 @@ describe("seedLegacyTeams", () => {
     };
     await seedLegacyTeams("token", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection: failingCollection,
     });
 

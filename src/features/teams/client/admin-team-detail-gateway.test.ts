@@ -256,13 +256,13 @@ describe("fetchTeamMembers — additive displayName/role fields", () => {
   }
 
   it("parses the new shape: display name and a lead role", async () => {
-    respondWith([{ uid: "uid-1", email: "a@example.com", displayName: "Anna Berg", role: "lead" }]);
+    respondWith([{ uid: "uid-1", email: "a@example.com", displayName: "Anna Berg", role: "teamadmin" }]);
 
     const result = await fetchTeamMembers("t", "team-1");
 
     expect(result).toEqual({
       status: "ok",
-      members: [{ uid: "uid-1", email: "a@example.com", displayName: "Anna Berg", role: "lead", hasMemberRef: true }],
+      members: [{ uid: "uid-1", email: "a@example.com", displayName: "Anna Berg", role: "teamadmin", hasMemberRef: true }],
     });
     vi.unstubAllGlobals();
   });
@@ -296,19 +296,19 @@ describe("fetchTeamMembers — additive displayName/role fields", () => {
     ["an empty string", ""],
     ["an object", { name: "x" }],
   ])("treats a malformed displayName (%s) as null without failing the row", async (_label, displayName) => {
-    respondWith([{ uid: "uid-1", email: "a@example.com", displayName, role: "lead" }]);
+    respondWith([{ uid: "uid-1", email: "a@example.com", displayName, role: "teamadmin" }]);
 
     const result = await fetchTeamMembers("t", "team-1");
 
     expect(result).toEqual({
       status: "ok",
-      members: [{ uid: "uid-1", email: "a@example.com", displayName: null, role: "lead", hasMemberRef: true }],
+      members: [{ uid: "uid-1", email: "a@example.com", displayName: null, role: "teamadmin", hasMemberRef: true }],
     });
     vi.unstubAllGlobals();
   });
 
   it("still rejects the whole list when uid or email is malformed (existing strictness)", async () => {
-    respondWith([{ uid: "uid-1", email: "a@example.com", displayName: "Ok", role: "lead" }, { uid: 5, email: null }]);
+    respondWith([{ uid: "uid-1", email: "a@example.com", displayName: "Ok", role: "teamadmin" }, { uid: 5, email: null }]);
 
     expect(await fetchTeamMembers("t", "team-1")).toEqual({ status: "read_failed" });
     vi.unstubAllGlobals();
@@ -317,17 +317,17 @@ describe("fetchTeamMembers — additive displayName/role fields", () => {
 
 describe("setAdminTeamMemberRole default gateway", () => {
   it("PATCHes the existing member endpoint with exactly {role} and the Authorization header", async () => {
-    const fetchMock = vi.fn(async () => ({ status: 200, json: async () => ({ ok: true, role: "lead" }) }));
+    const fetchMock = vi.fn(async () => ({ status: 200, json: async () => ({ ok: true, role: "teamadmin" }) }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await setAdminTeamMemberRole("an-id-token", "team-1", "uid 1/x", "lead");
+    const result = await setAdminTeamMemberRole("an-id-token", "team-1", "uid 1/x", "teamadmin");
 
     expect(fetchMock).toHaveBeenCalledWith("/api/admin/teams/team-1/members/uid%201%2Fx", {
       method: "PATCH",
       headers: { Authorization: "Bearer an-id-token", "Content-Type": "application/json" },
-      body: JSON.stringify({ role: "lead" }),
+      body: JSON.stringify({ role: "teamadmin" }),
     });
-    expect(result).toEqual({ ok: true, role: "lead" });
+    expect(result).toEqual({ ok: true, role: "teamadmin" });
     vi.unstubAllGlobals();
   });
 
@@ -343,7 +343,7 @@ describe("setAdminTeamMemberRole default gateway", () => {
     async (error) => {
       vi.stubGlobal("fetch", vi.fn(async () => ({ json: async () => ({ error }) })));
 
-      expect(await setAdminTeamMemberRole("t", "team-1", "uid-1", "lead")).toEqual({ ok: false, error });
+      expect(await setAdminTeamMemberRole("t", "team-1", "uid-1", "teamadmin")).toEqual({ ok: false, error });
       vi.unstubAllGlobals();
     },
   );
@@ -356,7 +356,7 @@ describe("setAdminTeamMemberRole default gateway", () => {
   ])("maps %s to unknown, never to success", async (_label, body) => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ json: async () => body })));
 
-    expect(await setAdminTeamMemberRole("t", "team-1", "uid-1", "lead")).toEqual({ ok: false, error: "unknown" });
+    expect(await setAdminTeamMemberRole("t", "team-1", "uid-1", "teamadmin")).toEqual({ ok: false, error: "unknown" });
     vi.unstubAllGlobals();
   });
 
@@ -368,7 +368,7 @@ describe("setAdminTeamMemberRole default gateway", () => {
       }),
     );
 
-    expect(await setAdminTeamMemberRole("t", "team-1", "uid-1", "lead")).toEqual({ ok: false, error: "unknown" });
+    expect(await setAdminTeamMemberRole("t", "team-1", "uid-1", "teamadmin")).toEqual({ ok: false, error: "unknown" });
     vi.unstubAllGlobals();
   });
 });

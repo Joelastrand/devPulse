@@ -45,6 +45,7 @@ export const ERASURE_API_ERROR_CODES = [
   "recent_auth_required",
   "confirmation_mismatch",
   "erasure_unavailable",
+  "last_superadmin",
 ] as const;
 export type ErasureApiErrorCode = (typeof ERASURE_API_ERROR_CODES)[number];
 

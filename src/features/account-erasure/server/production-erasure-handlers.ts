@@ -11,6 +11,7 @@ import { createInvitationsStepHandler } from "./invitations-erasure";
 import { createMembershipStepHandler } from "./membership-erasure";
 import { createParticipantBindingsStepHandler } from "./participant-bindings-erasure";
 import { createPersonalDataStepHandler } from "./personal-data-erasure";
+import { createSuperadminRecordStepHandler } from "./superadmin-record-erasure";
 import { createSurveyParticipationsStepHandler } from "./survey-participations-erasure";
 import { createVerifyHandler } from "./verification-sweep";
 import { createSweepCounter } from "./erasure-adapters-sweep";
@@ -85,6 +86,9 @@ export function buildProductionStepHandlers(identity: ErasureIdentity, now: () =
   });
   const locators = createLocatorsStepHandler({ store });
   const personalData = createPersonalDataStepHandler({ port: createPersonalDataPort() });
+  const superadminRecord = createSuperadminRecordStepHandler();
+  const personalDataWithRegistry = phased(personalData, superadminRecord);
+  const personalDataCleanup = both(personalData, superadminRecord);
   const surveyParticipations = createSurveyParticipationsStepHandler({ port: createSurveyParticipationsPort() });
   const actorAudit = createActorAuditStepHandler({ port: createActorAuditPort() });
 
@@ -97,7 +101,7 @@ export function buildProductionStepHandlers(identity: ErasureIdentity, now: () =
     conversations_owned: ownedConversations,
     participant_bindings: bindings,
     locators,
-    personal_data: personalData,
+    personal_data: personalDataWithRegistry,
     survey_participations: surveyParticipations,
     actor_audit: actorAudit,
   };
@@ -113,7 +117,7 @@ export function buildProductionStepHandlers(identity: ErasureIdentity, now: () =
       conversations_owned: ownedConversations,
       participant_bindings: bindings,
       locators,
-      personal_data: personalData,
+      personal_data: personalDataCleanup,
       survey_participations: surveyParticipations,
       actor_audit: actorAudit,
     },

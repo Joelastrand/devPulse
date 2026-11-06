@@ -68,7 +68,7 @@ function getDefaultStore(): TeamRosterStore {
 
 export interface ListTeamRosterDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: AuthorizeTeamAccessDeps["allowList"];
+  isSuperadmin?: AuthorizeTeamAccessDeps["isSuperadmin"];
   /** Seam for `authorizeTeamAccess`'s own reads. */
   collection?: AuthorizeTeamAccessDeps["collection"];
   store?: TeamRosterStore;
@@ -96,10 +96,11 @@ const NAME_COLLATOR = new Intl.Collator("nb", { sensitivity: "accent" });
  * of the userProfiles of exactly those members — never Firebase Auth, never
  * e-mail. A member with no (or a corrupt) profile has `displayName: null`.
  *
- * `isLead` is an **effective** lead — a stored `role: "lead"` (classified by
- * `membershipRoleOf`) on a team whose status is exactly `"active"` — the same
- * definition `resolveTeamRole` uses, so a dormant lead on a disabled team is
- * not marked. `isSelf` is computed from the verified uid, which never leaves
+ * `isLead` is an **effective** teamadmin flag — a stored `role: "teamadmin"`
+ * (classified by `membershipRoleOf`) on a team whose status is exactly
+ * `"active"`, so a dormant teamadmin on a disabled team is not marked. The wire
+ * field keeps its name for the existing roster contract; it now means teamadmin.
+ * Legacy `"lead"` values are not marked. `isSelf` is computed from the verified uid, which never leaves
  * the server. Order: leads first, then name (locale-aware, case-insensitive,
  * nameless last), then earlier join time. Presentation only: neither
  * `isLead` nor `displayName` is ever an authorization input.
@@ -116,7 +117,7 @@ export async function listTeamRoster(
   const callerUid = verified.identity.uid;
 
   const authorized = await authorizeTeamAccess(verified.identity, teamId, {
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
     collection: deps.collection,
   });
   if (!authorized.ok) {
@@ -142,12 +143,12 @@ export async function listTeamRoster(
         {
           uid,
           joinedAt: createdAt instanceof Date && !Number.isNaN(createdAt.getTime()) ? createdAt.getTime() : Infinity,
-          storedLead: membershipRoleOf(raw) === "lead",
+          storedLead: membershipRoleOf(raw) === "teamadmin",
         },
       ];
     });
 
-    // A stored lead is only effective while the team is active; one status
+    // A stored teamadmin is only effective while the team is active; one status
     // read, and only when someone actually carries the role.
     const teamActive = members.some((member) => member.storedLead)
       ? await readTeamIsActive(store, teamId)

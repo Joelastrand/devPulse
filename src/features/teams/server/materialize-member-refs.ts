@@ -86,7 +86,7 @@ export type MaterializeMemberRefsResult =
 
 export interface MaterializeMemberRefsDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: IsAppAdminDeps["allowList"];
+  isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   collection?: MaterializeMemberRefsCollection;
   createKey?: () => string;
 }
@@ -117,7 +117,7 @@ export async function materializeMemberRefs(
 ): Promise<MaterializeMemberRefsResult> {
   const admin = await requireAppAdmin(idToken, {
     verifyToken: deps.verifyToken,
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
   });
   if (!admin.ok) {
     return { ok: false, error: admin.error };

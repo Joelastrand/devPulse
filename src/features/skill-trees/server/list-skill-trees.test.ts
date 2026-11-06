@@ -4,6 +4,8 @@ import type { ListSkillTreesDeps, RawSkillTreeDoc, SkillTreesReader } from "./li
 import { LIST_SKILL_TREES_LIMIT, listSkillTrees } from "./list-skill-trees";
 
 const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 
 function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
   return { uid: "admin-1", email: ADMIN_EMAIL, emailVerified: true, ...overrides };
@@ -54,7 +56,7 @@ function fakeReader(docs: RawSkillTreeDoc[]): SkillTreesReader {
 function baseDeps(overrides: Partial<ListSkillTreesDeps> = {}): ListSkillTreesDeps {
   return {
     verifyToken: verifyTokenReturning(verifiedIdentity()),
-    allowList: [ADMIN_EMAIL],
+    isSuperadmin: isAdminUid,
     reader: fakeReader([]),
     ...overrides,
   };
@@ -103,7 +105,7 @@ describe("listSkillTrees", () => {
   });
 
   it("rejects a non-admin caller", async () => {
-    const verifyToken = verifyTokenReturning(verifiedIdentity({ email: "dev@example.com" }));
+    const verifyToken = verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" }));
 
     const result = await listSkillTrees("token", baseDeps({ verifyToken }));
 

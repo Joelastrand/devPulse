@@ -40,7 +40,7 @@ function seedPerson(): void {
   db.docs.set(`userDevelopment/${UID}/roleTarget/current`, { roleId: "r" });
   db.docs.set(`surveyParticipations/${UID}__s1`, { uid: UID, surveyId: "s1" });
   db.docs.set(`surveys/sv1`, { createdBy: UID, title: "kept" });
-  db.docs.set(`teamMemberships/${UID}__${TEAM}`, { uid: UID, teamId: TEAM, memberRef: "ref-e2e", role: "lead" });
+  db.docs.set(`teamMemberships/${UID}__${TEAM}`, { uid: UID, teamId: TEAM, memberRef: "ref-e2e", role: "teamadmin" });
   db.docs.set(`roadmapItems/${TEAM}__tree`, { teamId: TEAM, ownerRef: "ref-e2e", targetNodeId: "n" });
   db.docs.set(`teamInvitations/${TEAM}__${NORMALIZED}`, { email: NORMALIZED, status: "pending", invitedBy: OTHER });
   db.docs.set(`forumThreads/th-own`, threadRecord(UID));

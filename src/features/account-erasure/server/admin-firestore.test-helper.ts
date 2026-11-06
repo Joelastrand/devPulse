@@ -91,7 +91,9 @@ export class CollectionDouble {
   }
 
   where(field: unknown, op: string, value: unknown): CollectionDouble {
-    if (op !== "==" && op !== ">=" && op !== "<") throw new Error(`admin double: operator ${op} not modelled`);
+    if (op !== "==" && op !== ">=" && op !== "<" && op !== "array-contains") {
+      throw new Error(`admin double: operator ${op} not modelled`);
+    }
     return new CollectionDouble(this.db, this.path, [...this.filters, { field: fieldName(field), op, value }], this.max, this.group);
   }
 
@@ -225,6 +227,7 @@ function passes(db: FakeAdminFirestore, path: string, f: { field: string; op: st
   const id = path.split("/").at(-1) as string;
   const actual: unknown = f.field === DOC_ID ? id : db.docs.get(path)?.[f.field];
   if (f.op === "==") return actual === f.value;
+  if (f.op === "array-contains") return Array.isArray(actual) && actual.includes(f.value);
   if (f.op === ">=") return typeof actual === "string" && actual >= (f.value as string);
   if (f.op === "<") return typeof actual === "string" && actual < (f.value as string);
   return false;

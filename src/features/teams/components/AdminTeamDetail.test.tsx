@@ -34,6 +34,12 @@ vi.mock("../../auth/client/auth-client", () => ({
   observeIdToken: observeIdTokenMock,
 }));
 
+vi.mock("../client/team-visibility-gateway", () => ({
+  // Pending: the visibility panel stays in its loading state and does not compete with the component under test.
+  fetchTeamVisibility: () => new Promise(() => {}),
+  saveTeamVisibility: vi.fn(),
+  fetchPublicTeam: vi.fn(),
+}));
 vi.mock("../client/admin-teams-gateway", () => ({
   fetchAdminTeams: fetchAdminTeamsMock,
 }));
@@ -97,7 +103,7 @@ function mockOk({
   teamSkills = [],
 }: {
   teams?: { teamId: string; name: string; status: "active" | "disabled" }[];
-  members?: { uid: string; email: string | null; displayName?: string | null; role?: "lead" | "member" }[];
+  members?: { uid: string; email: string | null; displayName?: string | null; role?: "teamadmin" | "member" }[];
   invitations?: { email: string; invitedBy: string; createdAt: string }[];
   requests?: { uid: string; email: string | null; createdAt: string }[];
   surveys?: unknown[];
@@ -2030,43 +2036,43 @@ describe("AdminTeamDetail — member display names and team lead role", () => {
 
   it("marks a lead with visible text and leaves an ordinary member unmarked", async () => {
     await renderWith([
-      { uid: "uid-1", email: "lead@example.com", displayName: "Lea", role: "lead" },
+      { uid: "uid-1", email: "lead@example.com", displayName: "Lea", role: "teamadmin" },
       { uid: "uid-2", email: "plain@example.com", displayName: "Per", role: "member" },
     ]);
 
-    expect(within(rowOf("lead@example.com")).getByText("Teamlead")).toBeTruthy();
-    expect(within(rowOf("plain@example.com")).queryByText("Teamlead")).toBeNull();
+    expect(within(rowOf("lead@example.com")).getByText("Teamadmin")).toBeTruthy();
+    expect(within(rowOf("plain@example.com")).queryByText("Teamadmin")).toBeNull();
   });
 
   it("describes the lead role as a per-member role, promising no capability", async () => {
     await renderWith([{ uid: "uid-1", email: "a@example.com", displayName: null, role: "member" }]);
 
-    expect(screen.getByText(/rolle som settes for hvert medlem/i)).toBeTruthy();
+    expect(screen.getByText(/kun superadmin kan gi eller fjerne/i)).toBeTruthy();
   });
 
   it("promotes a member with exactly role 'lead' and re-reads the authoritative list, which then shows the lead", async () => {
     const user = userEvent.setup();
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     mockOk({ members: [{ uid: "uid-1", email: "a@example.com", displayName: null, role: "member" }] });
-    setAdminTeamMemberRoleMock.mockResolvedValue({ ok: true, role: "lead" });
+    setAdminTeamMemberRoleMock.mockResolvedValue({ ok: true, role: "teamadmin" });
     render(<AdminTeamDetail teamId="team-1" />);
     await screen.findByText("a@example.com");
     fetchTeamMembersMock.mockResolvedValue({
       status: "ok",
-      members: [{ uid: "uid-1", email: "a@example.com", displayName: null, role: "lead" }],
+      members: [{ uid: "uid-1", email: "a@example.com", displayName: null, role: "teamadmin" }],
     });
 
-    await user.click(screen.getByRole("button", { name: "Gjør til teamlead" }));
+    await user.click(screen.getByRole("button", { name: "Gjør til teamadmin" }));
 
-    expect(setAdminTeamMemberRoleMock).toHaveBeenCalledWith("a-token", "team-1", "uid-1", "lead");
-    expect(await screen.findByText("Teamlead")).toBeTruthy();
+    expect(setAdminTeamMemberRoleMock).toHaveBeenCalledWith("a-token", "team-1", "uid-1", "teamadmin");
+    expect(await screen.findByText("Teamadmin")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Gjør til vanlig medlem" })).toBeTruthy();
   });
 
   it("demotes a lead with exactly role 'member'", async () => {
     const user = userEvent.setup();
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
-    mockOk({ members: [{ uid: "uid-1", email: "a@example.com", displayName: "Lea", role: "lead" }] });
+    mockOk({ members: [{ uid: "uid-1", email: "a@example.com", displayName: "Lea", role: "teamadmin" }] });
     setAdminTeamMemberRoleMock.mockResolvedValue({ ok: true, role: "member" });
     render(<AdminTeamDetail teamId="team-1" />);
     await screen.findByText("a@example.com");
@@ -2078,8 +2084,8 @@ describe("AdminTeamDetail — member display names and team lead role", () => {
     await user.click(screen.getByRole("button", { name: "Gjør til vanlig medlem" }));
 
     expect(setAdminTeamMemberRoleMock).toHaveBeenCalledWith("a-token", "team-1", "uid-1", "member");
-    expect(await screen.findByRole("button", { name: "Gjør til teamlead" })).toBeTruthy();
-    expect(screen.queryByText("Teamlead")).toBeNull();
+    expect(await screen.findByRole("button", { name: "Gjør til teamadmin" })).toBeTruthy();
+    expect(screen.queryByText("Teamadmin")).toBeNull();
   });
 
   it("blocks a second mutation on the same row while one is pending, and never calls the server twice", async () => {
@@ -2089,7 +2095,7 @@ describe("AdminTeamDetail — member display names and team lead role", () => {
     await renderWith([{ uid: "uid-1", email: "a@example.com", displayName: null, role: "member" }]);
     const row = rowOf("a@example.com");
 
-    await user.click(within(row).getByRole("button", { name: "Gjør til teamlead" }));
+    await user.click(within(row).getByRole("button", { name: "Gjør til teamadmin" }));
     const saving = within(row).getByRole("button", { name: "Lagrer…" }) as HTMLButtonElement;
     await user.click(saving);
     await user.click(within(row).getByRole("button", { name: "Fjern" }));
@@ -2108,10 +2114,10 @@ describe("AdminTeamDetail — member display names and team lead role", () => {
     setAdminTeamMemberRoleMock.mockResolvedValue({ ok: false, error: "persistence_failed" });
     await renderWith([{ uid: "uid-1", email: "a@example.com", displayName: null, role: "member" }]);
 
-    await user.click(screen.getByRole("button", { name: "Gjør til teamlead" }));
+    await user.click(screen.getByRole("button", { name: "Gjør til teamadmin" }));
 
     expect((await screen.findByRole("alert")).textContent).toMatch(/noe gikk galt/i);
-    expect(screen.queryByText("Teamlead")).toBeNull();
+    expect(screen.queryByText("Teamadmin")).toBeNull();
     expect(fetchTeamMembersMock).toHaveBeenCalledTimes(1);
   });
 
@@ -2120,9 +2126,9 @@ describe("AdminTeamDetail — member display names and team lead role", () => {
     setAdminTeamMemberRoleMock.mockResolvedValue({ ok: false, error: "team_disabled" });
     await renderWith([{ uid: "uid-1", email: "a@example.com", displayName: null, role: "member" }]);
 
-    await user.click(screen.getByRole("button", { name: "Gjør til teamlead" }));
+    await user.click(screen.getByRole("button", { name: "Gjør til teamadmin" }));
 
-    expect((await screen.findByRole("alert")).textContent).toMatch(/aktiver det på nytt før du utnevner en teamlead/i);
+    expect((await screen.findByRole("alert")).textContent).toMatch(/aktiver det på nytt før du utnevner en teamadmin/i);
   });
 
   it("explains not_a_member when the person has meanwhile been removed", async () => {
@@ -2130,7 +2136,7 @@ describe("AdminTeamDetail — member display names and team lead role", () => {
     setAdminTeamMemberRoleMock.mockResolvedValue({ ok: false, error: "not_a_member" });
     await renderWith([{ uid: "uid-1", email: "a@example.com", displayName: null, role: "member" }]);
 
-    await user.click(screen.getByRole("button", { name: "Gjør til teamlead" }));
+    await user.click(screen.getByRole("button", { name: "Gjør til teamadmin" }));
 
     expect((await screen.findByRole("alert")).textContent).toMatch(/ikke lenger medlem/i);
   });
@@ -2140,13 +2146,13 @@ describe("AdminTeamDetail — member display names and team lead role", () => {
     setAdminTeamMemberRoleMock.mockResolvedValue({ ok: true, role: "member" });
     await renderWith(
       [
-        { uid: "uid-1", email: "lead@example.com", displayName: "Lea", role: "lead" },
+        { uid: "uid-1", email: "lead@example.com", displayName: "Lea", role: "teamadmin" },
         { uid: "uid-2", email: "plain@example.com", displayName: "Per", role: "member" },
       ],
       "disabled",
     );
 
-    expect((within(rowOf("plain@example.com")).getByRole("button", { name: "Gjør til teamlead" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((within(rowOf("plain@example.com")).getByRole("button", { name: "Gjør til teamadmin" }) as HTMLButtonElement).disabled).toBe(true);
     const demote = within(rowOf("lead@example.com")).getByRole("button", { name: "Gjør til vanlig medlem" }) as HTMLButtonElement;
     expect(demote.disabled).toBe(false);
 
@@ -2156,10 +2162,10 @@ describe("AdminTeamDetail — member display names and team lead role", () => {
   });
 
   it("on a disabled team labels a stored lead as a stored, currently inactive role — and explains why promotion is off", async () => {
-    await renderWith([{ uid: "uid-1", email: "lead@example.com", displayName: "Lea", role: "lead" }], "disabled");
+    await renderWith([{ uid: "uid-1", email: "lead@example.com", displayName: "Lea", role: "teamadmin" }], "disabled");
 
-    expect(within(rowOf("lead@example.com")).getByText("Teamlead (lagret rolle, ikke aktiv mens teamet er deaktivert)")).toBeTruthy();
-    expect(screen.getByText(/kan nye teamledere ikke utnevnes/i)).toBeTruthy();
+    expect(within(rowOf("lead@example.com")).getByText("Teamadmin (ikke aktiv mens teamet er deaktivert)")).toBeTruthy();
+    expect(screen.getByText(/kan nye teamadmins ikke utnevnes/i)).toBeTruthy();
   });
 
   it("supports several leads: promoting one member never changes or hides another lead", async () => {
@@ -2167,39 +2173,39 @@ describe("AdminTeamDetail — member display names and team lead role", () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     mockOk({
       members: [
-        { uid: "uid-1", email: "lead1@example.com", displayName: "Lea", role: "lead" },
+        { uid: "uid-1", email: "lead1@example.com", displayName: "Lea", role: "teamadmin" },
         { uid: "uid-2", email: "plain@example.com", displayName: "Per", role: "member" },
-        { uid: "uid-3", email: "lead3@example.com", displayName: "Leo", role: "lead" },
+        { uid: "uid-3", email: "lead3@example.com", displayName: "Leo", role: "teamadmin" },
       ],
     });
-    setAdminTeamMemberRoleMock.mockResolvedValue({ ok: true, role: "lead" });
+    setAdminTeamMemberRoleMock.mockResolvedValue({ ok: true, role: "teamadmin" });
     render(<AdminTeamDetail teamId="team-1" />);
     await screen.findByText("plain@example.com");
     fetchTeamMembersMock.mockResolvedValue({
       status: "ok",
       members: [
-        { uid: "uid-1", email: "lead1@example.com", displayName: "Lea", role: "lead" },
-        { uid: "uid-2", email: "plain@example.com", displayName: "Per", role: "lead" },
-        { uid: "uid-3", email: "lead3@example.com", displayName: "Leo", role: "lead" },
+        { uid: "uid-1", email: "lead1@example.com", displayName: "Lea", role: "teamadmin" },
+        { uid: "uid-2", email: "plain@example.com", displayName: "Per", role: "teamadmin" },
+        { uid: "uid-3", email: "lead3@example.com", displayName: "Leo", role: "teamadmin" },
       ],
     });
 
-    await user.click(within(rowOf("plain@example.com")).getByRole("button", { name: "Gjør til teamlead" }));
+    await user.click(within(rowOf("plain@example.com")).getByRole("button", { name: "Gjør til teamadmin" }));
 
     expect(setAdminTeamMemberRoleMock).toHaveBeenCalledTimes(1);
-    expect(setAdminTeamMemberRoleMock).toHaveBeenCalledWith("a-token", "team-1", "uid-2", "lead");
-    await vi.waitFor(() => expect(screen.getAllByText("Teamlead")).toHaveLength(3));
+    expect(setAdminTeamMemberRoleMock).toHaveBeenCalledWith("a-token", "team-1", "uid-2", "teamadmin");
+    await vi.waitFor(() => expect(screen.getAllByText("Teamadmin")).toHaveLength(3));
   });
 
   it("does not offer to 'replace' or demote other leads when promoting (no singleton-manager behaviour)", async () => {
     await renderWith([
-      { uid: "uid-1", email: "lead1@example.com", displayName: "Lea", role: "lead" },
+      { uid: "uid-1", email: "lead1@example.com", displayName: "Lea", role: "teamadmin" },
       { uid: "uid-2", email: "plain@example.com", displayName: "Per", role: "member" },
     ]);
 
-    expect(screen.queryByText(/erstatt|bytt teamlead|replace/i)).toBeNull();
+    expect(screen.queryByText(/erstatt|bytt teamadmin|replace/i)).toBeNull();
     expect(within(rowOf("lead1@example.com")).getByRole("button", { name: "Gjør til vanlig medlem" })).toBeTruthy();
-    expect(within(rowOf("plain@example.com")).getByRole("button", { name: "Gjør til teamlead" })).toBeTruthy();
+    expect(within(rowOf("plain@example.com")).getByRole("button", { name: "Gjør til teamadmin" })).toBeTruthy();
   });
 
   it("renders a hostile display name as inert text", async () => {
@@ -2213,7 +2219,7 @@ describe("AdminTeamDetail — member display names and team lead role", () => {
   it("keeps the existing removal flow working for a lead (removal ends the membership, not just the role)", async () => {
     const user = userEvent.setup();
     removeAdminTeamMemberMock.mockResolvedValue({ ok: true });
-    await renderWith([{ uid: "uid-1", email: "lead@example.com", displayName: "Lea", role: "lead" }]);
+    await renderWith([{ uid: "uid-1", email: "lead@example.com", displayName: "Lea", role: "teamadmin" }]);
 
     await user.click(within(rowOf("lead@example.com")).getByRole("button", { name: "Fjern" }));
 

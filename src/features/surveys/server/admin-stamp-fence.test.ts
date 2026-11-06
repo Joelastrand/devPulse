@@ -15,6 +15,7 @@ vi.mock("../../../lib/firebase/admin", () => ({
 vi.mock("server-only", () => ({}));
 
 const ADMIN_UID = "admin-34";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const ADMIN_EMAIL = "admin34@example.com";
 const TEAM_ID = "team-34";
 const ADMIN_FENCE = `accountErasures/${ADMIN_UID}`;
@@ -63,7 +64,7 @@ holder.db = {
 };
 
 const verifyToken = vi.fn().mockResolvedValue({ uid: ADMIN_UID, email: ADMIN_EMAIL, email_verified: true });
-const allowList = [ADMIN_EMAIL];
+const isSuperadmin = isAdminUid;
 const teamStatusReader = { getTeamStatus: async () => "active" };
 
 beforeEach(() => {
@@ -77,7 +78,7 @@ describe("admin survey stamp writes are refused while the admin's erasure record
   it("create refuses with erasure_in_progress and creates no survey", async () => {
     const result = await createSurvey("t", TEAM_ID, { accessMode: "public", minimumResponses: 5 }, {
       verifyToken,
-      allowList,
+      isSuperadmin,
       teamStatusReader,
     });
 
@@ -88,7 +89,7 @@ describe("admin survey stamp writes are refused while the admin's erasure record
   it("open refuses with erasure_in_progress and opens nothing", async () => {
     docs.set("surveys/survey-1", { teamId: TEAM_ID });
 
-    const result = await openSurvey("t", TEAM_ID, "survey-1", { verifyToken, allowList, db: holder.db as never });
+    const result = await openSurvey("t", TEAM_ID, "survey-1", { verifyToken, isSuperadmin, db: holder.db as never });
 
     expect(result).toEqual({ ok: false, error: "erasure_in_progress" });
     expect(writes).toEqual([]);
@@ -97,7 +98,7 @@ describe("admin survey stamp writes are refused while the admin's erasure record
   it("close refuses with erasure_in_progress and closes nothing", async () => {
     docs.set("surveys/survey-1", { teamId: TEAM_ID });
 
-    const result = await closeSurvey("t", "survey-1", { verifyToken, allowList, db: holder.db as never });
+    const result = await closeSurvey("t", "survey-1", { verifyToken, isSuperadmin, db: holder.db as never });
 
     expect(result).toEqual({ ok: false, error: "erasure_in_progress" });
     expect(writes).toEqual([]);
@@ -123,7 +124,7 @@ describe("admin survey delete and archive writes are refused while the admin's e
 
     const result = await deleteOrArchiveSurvey("t", TEAM_ID, "survey-1", {
       verifyToken,
-      allowList,
+      isSuperadmin,
       responses: noResponses,
     });
 
@@ -138,7 +139,7 @@ describe("admin survey delete and archive writes are refused while the admin's e
 
     const result = await deleteOrArchiveSurvey("t", TEAM_ID, "survey-1", {
       verifyToken,
-      allowList,
+      isSuperadmin,
       responses: { hasAnyResponses: async () => true },
     });
 
@@ -153,7 +154,7 @@ describe("admin survey delete and archive writes are refused while the admin's e
 
     const result = await deleteOrArchiveSurvey("t", TEAM_ID, "survey-1", {
       verifyToken,
-      allowList,
+      isSuperadmin,
       responses: noResponses,
     });
 

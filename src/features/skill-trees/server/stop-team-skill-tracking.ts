@@ -39,7 +39,7 @@ export type StopTeamSkillTrackingResult =
 
 export interface StopTeamSkillTrackingDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: IsAppAdminDeps["allowList"];
+  isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   progress?: SkillProgressDocStore;
 }
 
@@ -80,7 +80,7 @@ export async function stopTeamSkillTracking(
 ): Promise<StopTeamSkillTrackingResult> {
   const admin = await requireAppAdmin(idToken, {
     verifyToken: deps.verifyToken,
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
   });
   if (!admin.ok) {
     return { ok: false, error: admin.error };

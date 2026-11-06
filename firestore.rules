@@ -181,6 +181,31 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // teamProjects holds team-scoped delivery projects (docs/features/team-experience-redesign
+    // SPEC — AD-1, BR-6). Server-only via the Admin SDK in src/features/team-projects/server/;
+    // the deny rule covers the client-SDK path unconditionally, as for every collection above.
+    match /teamProjects/{document=**} {
+      allow read, write: if false;
+    }
+
+    // teamProjectParticipations holds planned member-to-project intervals (TASK-004, BR-8). Server-only via the Admin SDK
+    // in src/features/team-projects/server/; deny-only for the client SDK, as for every collection above.
+    match /teamProjectParticipations/{document=**} {
+      allow read, write: if false;
+    }
+
+    // teamCompetenceAreas holds a team's own assignment of admin-owned catalog areas (TASK-007, BR-18): team-level state only,
+    // no uid or rating. Server-only via the Admin SDK in src/features/team-skills/server/; deny-only for the client SDK.
+    match /teamCompetenceAreas/{document=**} {
+      allow read, write: if false;
+    }
+
+    // teamCompetencePlans holds a team's development plan for one assigned catalog area (TASK-006, BR-15): team-level
+    // planning state (target stage, priority, milestones), no uid or rating. Server-only via the Admin SDK; deny-only for the client SDK.
+    match /teamCompetencePlans/{document=**} {
+      allow read, write: if false;
+    }
+
     // userProfiles holds one self-set display name per Firebase uid
     // (document id = uid; displayName, createdAt, updatedAt — no e-mail or
     // other identity field). It is personal data, read/written only by the
@@ -259,6 +284,15 @@ service cloud.firestore {
     // (src/features/account-erasure/server/), which bypasses these rules. See
     // docs/features/account-erasure/SPEC.md (BR-4, AE-SI-5).
     match /accountErasures/{document=**} {
+      allow read, write: if false;
+    }
+
+    // Superadmin registry (src/features/superadmins/). Authority for global administration: Admin SDK only, so client
+    // writes and reads are denied. The catch-all below would deny these anyway; the explicit rule documents the intent.
+    match /superadmins/{document=**} {
+      allow read, write: if false;
+    }
+    match /superadminRegistry/{document=**} {
       allow read, write: if false;
     }
 

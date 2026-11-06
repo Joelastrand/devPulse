@@ -103,7 +103,7 @@ export type ListSkillTreesResult =
 
 export interface ListSkillTreesDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: IsAppAdminDeps["allowList"];
+  isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   reader?: SkillTreesReader;
 }
 
@@ -128,7 +128,7 @@ export async function listSkillTrees(
 ): Promise<ListSkillTreesResult> {
   const admin = await requireAppAdmin(idToken, {
     verifyToken: deps.verifyToken,
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
   });
   if (!admin.ok) {
     return { ok: false, error: admin.error };

@@ -93,6 +93,7 @@ describe("closed enums", () => {
       "recent_auth_required",
       "confirmation_mismatch",
       "erasure_unavailable",
+      "last_superadmin",
     ]);
   });
 

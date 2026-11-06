@@ -44,7 +44,7 @@ export type CreateSkillTreeResult =
 export interface CreateSkillTreeDeps {
   now?: Date;
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: IsAppAdminDeps["allowList"];
+  isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   collection?: SkillTreesCollection;
 }
 
@@ -70,7 +70,7 @@ export async function createSkillTree(
 ): Promise<CreateSkillTreeResult> {
   const admin = await requireAppAdmin(idToken, {
     verifyToken: deps.verifyToken,
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
   });
   if (!admin.ok) {
     return { ok: false, error: admin.error };

@@ -4,6 +4,8 @@ import type { RemoveMemberCollection } from "./remove-team-member";
 import { removeTeamMember } from "./remove-team-member";
 
 const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 
 function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
   return { uid: "admin-1", email: ADMIN_EMAIL, emailVerified: true, ...overrides };
@@ -36,7 +38,7 @@ describe("removeTeamMember", () => {
 
     const result = await removeTeamMember("token", "team-1", "user-1", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -50,7 +52,7 @@ describe("removeTeamMember", () => {
 
     const result = await removeTeamMember("bad-token", "team-1", "user-1", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -61,12 +63,12 @@ describe("removeTeamMember", () => {
   it("rejects a non-admin caller and attempts no removal", async () => {
     const collection = fakeCollection();
     const verifyToken = verifyTokenReturning(
-      verifiedIdentity({ email: "dev@example.com" }),
+      verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" }),
     );
 
     const result = await removeTeamMember("token", "team-1", "user-1", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -82,19 +84,19 @@ describe("removeTeamMember", () => {
 
     const result = await removeTeamMember("token", "team-1", "user-1", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
     expect(result).toEqual({ ok: false, error: "persistence_failed" });
   });
 
-  it("never includes the admin allow-list in the returned result", async () => {
-    const allowList = [ADMIN_EMAIL, "other-admin@example.com"];
+  it("never includes superadmin identifiers in the returned result", async () => {
+    const isSuperadmin = isAdminUid;
 
     const result = await removeTeamMember("token", "team-1", "user-1", {
       verifyToken: verifyTokenReturning(verifiedIdentity()),
-      allowList,
+      isSuperadmin,
       collection: fakeCollection(),
     });
 
@@ -109,7 +111,7 @@ describe("removeTeamMember", () => {
     const verifyToken = verifyTokenReturning(verifiedIdentity());
     await removeTeamMember("token", "team-1", "user-1", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection: fakeCollection(),
     });
 
@@ -118,7 +120,7 @@ describe("removeTeamMember", () => {
     };
     await removeTeamMember("token", "team-1", "user-1", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection: failingCollection,
     });
 

@@ -126,7 +126,7 @@ export type DeleteOrArchiveSurveyResult =
 export interface DeleteOrArchiveSurveyDeps {
   now?: Date;
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: IsAppAdminDeps["allowList"];
+  isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   surveyDocs?: SurveyDocStore;
   responses?: SurveyResponsesExistenceReader;
 }
@@ -167,7 +167,7 @@ export async function deleteOrArchiveSurvey(
 ): Promise<DeleteOrArchiveSurveyResult> {
   const admin = await requireAppAdmin(idToken, {
     verifyToken: deps.verifyToken,
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
   });
   if (!admin.ok) {
     return { ok: false, error: admin.error };

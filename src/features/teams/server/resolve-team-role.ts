@@ -3,6 +3,7 @@ import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { type VerifiedIdentity } from "../../auth/server/verify-identity";
 import { isValidTeamStatus } from "../domain/team";
 import { isValidMembershipFor, membershipDocId, membershipRoleOf } from "../domain/team-membership";
+import { canAdministerTeamScope } from "../domain/team-authority";
 import {
   authorizeTeamAccess,
   type AuthorizeTeamAccessCollection,
@@ -12,21 +13,24 @@ import {
 const TEAMS_COLLECTION = "teams";
 const MEMBERSHIPS_COLLECTION = "teamMemberships";
 
-/** A caller's effective authorization role for one team (docs/features/member-identity-and-team-roles/SPEC.md — BR-24). This is a *team authorization role*, never a professional role. */
-export type TeamRole = "admin" | "lead" | "member" | "denied";
+/**
+ * A caller's effective team-scoped role (docs/features/teamadmin-and-team-visibility/SPEC.md).
+ * `admin` is the superadmin (global app admin), `teamadmin` a membership with
+ * the approved team-admin role, `member` any other genuine membership.
+ * This is a team authorization role, never a professional role.
+ */
+export type TeamRole = "admin" | "teamadmin" | "member" | "denied";
 
 /** `ok: false` means the decision could not be made — never collapsed into `"denied"`. */
 export type ResolveTeamRoleResult =
-  | { ok: true; role: TeamRole }
+  | { ok: true; role: TeamRole; canAdminister: boolean }
   | { ok: false; error: "read_failed" };
 
 export type ResolveTeamRoleDeps = AuthorizeTeamAccessDeps;
 
-// Same two document reads `authorizeTeamAccess` uses by default; kept here
-// (rather than exporting that file's private helper) so `authorize-team-
-// access.ts` stays untouched. Only the reads are repeated — every decision
-// about them is made by `authorizeTeamAccess` or by the shared domain
-// helpers, never re-implemented.
+// Same two document reads `authorizeTeamAccess` uses by default, plus the
+// team status read needed for the write right. Every decision about the raw
+// values is made by `authorizeTeamAccess` or the shared domain helpers.
 function getDefaultCollection(): AuthorizeTeamAccessCollection {
   return {
     async getTeamStatus(teamId) {
@@ -44,28 +48,16 @@ function getDefaultCollection(): AuthorizeTeamAccessCollection {
 }
 
 /**
- * Resolves a *verified* identity's relationship to one team as
- * `admin | lead | member | denied` (SPEC — BR-24 through BR-28), re-derived
- * from fresh server-side state on every call. The identity must already
- * have been verified by the caller (`verifyIdToken`); nothing the client
- * sends ever decides a role.
+ * Resolves a *verified* identity's relationship to one team, re-derived from
+ * fresh server-side state on every call. The identity must already have been
+ * verified by the caller (`verifyIdToken`); nothing the client sends decides a role.
  *
- * It **wraps** `authorizeTeamAccess` without changing it: `admin`, `denied`
- * and a failed read pass through verbatim, so app-admin resolution and team
- * lifecycle semantics (nonexistent/malformed team ⇒ denied for everyone,
- * disabled team ⇒ members keep access) have a single definition. An app
- * admin is always `"admin"`, even with a lead membership, and a lead is
- * never an admin. Only for a `member` result does it look further: it
- * re-reads the caller's membership, classifies it with `membershipRoleOf`
- * (exact `"lead"` only, everything else `member`), and returns `"lead"` only
- * while the team's status is exactly `"active"` — a stored lead on a
- * disabled team is a plain `"member"` (BR-27), its role left dormant in
- * storage. If the membership vanished between the two reads the result is
- * `"denied"`; any Firestore read failure is `read_failed`.
+ * `canAdminister` is the single server-side write right for team-scoped
+ * administration: the caller is a superadmin or a genuine `teamadmin` AND the
+ * team is `active`. Callers must use it for `canEdit` flags and must still
+ * re-check the same rule inside their write transactions.
  *
- * `authorizeTeamAccess` itself still reports a lead as `"member"`. Nothing in
- * the codebase calls this function yet: lead confers no permission until a
- * later feature explicitly opts in (BR-26, BR-28).
+ * A legacy stored `role: "lead"` classifies as `member` and grants nothing.
  */
 export async function resolveTeamRole(
   identity: VerifiedIdentity,
@@ -74,25 +66,28 @@ export async function resolveTeamRole(
 ): Promise<ResolveTeamRoleResult> {
   const collection = deps.collection ?? getDefaultCollection();
 
-  const authorized = await authorizeTeamAccess(identity, teamId, { allowList: deps.allowList, collection });
+  const authorized = await authorizeTeamAccess(identity, teamId, { isSuperadmin: deps.isSuperadmin, collection });
   if (!authorized.ok) {
     return { ok: false, error: "read_failed" };
   }
-  if (authorized.access !== "member") {
-    return { ok: true, role: authorized.access };
-  }
 
   try {
-    const membership = await collection.getMembership(identity.uid, teamId);
-    if (!isValidMembershipFor(membership, { uid: identity.uid, teamId })) {
-      return { ok: true, role: "denied" };
+    const rawStatus = await collection.getTeamStatus(teamId);
+    const teamStatus = isValidTeamStatus(rawStatus) ? rawStatus : null;
+
+    if (authorized.access === "denied") {
+      return { ok: true, role: "denied", canAdminister: false };
     }
-    if (membershipRoleOf(membership) !== "lead") {
-      return { ok: true, role: "member" };
+    if (authorized.access === "admin") {
+      return { ok: true, role: "admin", canAdminister: canAdministerTeamScope({ role: "admin", teamStatus }) };
     }
 
-    const status = await collection.getTeamStatus(teamId);
-    return { ok: true, role: isValidTeamStatus(status) && status === "active" ? "lead" : "member" };
+    const membership = await collection.getMembership(identity.uid, teamId);
+    if (!isValidMembershipFor(membership, { uid: identity.uid, teamId })) {
+      return { ok: true, role: "denied", canAdminister: false };
+    }
+    const role: TeamRole = membershipRoleOf(membership) === "teamadmin" ? "teamadmin" : "member";
+    return { ok: true, role, canAdminister: canAdministerTeamScope({ role, teamStatus }) };
   } catch {
     return { ok: false, error: "read_failed" };
   }

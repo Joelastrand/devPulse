@@ -12,6 +12,7 @@ import { startTeamSkillTracking } from "./start-team-skill-tracking";
 
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const TEAM_ID = "team-1";
 const TREE_ID = "tree-1";
 const NOW = new Date("2026-09-01T00:00:00Z");
@@ -73,7 +74,7 @@ function fakeProgressStore(existing?: Record<string, unknown>): FakeSkillProgres
 function baseDeps(overrides: Partial<StartTeamSkillTrackingDeps> = {}): StartTeamSkillTrackingDeps {
   return {
     verifyToken: verifyTokenReturning(verifiedIdentity()),
-    allowList: [ADMIN_EMAIL],
+    isSuperadmin: isAdminUid,
     treeReader: fakeTreeReader(validTreeData()),
     teamStatusReader: fakeTeamStatusReader("active"),
     progress: fakeProgressStore(undefined),
@@ -140,7 +141,7 @@ describe("startTeamSkillTracking", () => {
 
   it("rejects a non-admin caller and attempts no write", async () => {
     const progress = fakeProgressStore(undefined);
-    const verifyToken = verifyTokenReturning(verifiedIdentity({ email: "dev@example.com" }));
+    const verifyToken = verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" }));
 
     const result = await startTeamSkillTracking(
       "token",
@@ -263,7 +264,7 @@ describe("startTeamSkillTracking", () => {
       baseDeps({
         progress,
         verifyToken: verifyTokenReturning(identity),
-        allowList: [ADMIN_EMAIL, "second-admin@example.com"],
+        isSuperadmin: async (uid: string) => uid === ADMIN_UID || uid === "admin-2",
       }),
     );
 

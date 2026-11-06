@@ -213,7 +213,7 @@ export type GetThreadWithRepliesResult =
 export interface GetThreadWithRepliesDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
   readFence?: VerifyIdTokenDeps["readFence"];
-  allowList?: AuthorizeTeamAccessDeps["allowList"];
+  isSuperadmin?: AuthorizeTeamAccessDeps["isSuperadmin"];
   authCollection?: AuthorizeTeamAccessDeps["collection"];
   threadReader?: ForumThreadReader;
   repliesReader?: ForumRepliesReader;
@@ -260,7 +260,7 @@ export async function getThreadWithReplies(
   }
 
   const authResult = await authorizeTeamAccess(verified.identity, teamId, {
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
     collection: deps.authCollection,
   });
   if (!authResult.ok) {

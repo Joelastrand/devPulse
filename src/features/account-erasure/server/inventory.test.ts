@@ -69,8 +69,8 @@ function guardOver(files: SourceFile[]) {
 
 /** The SPEC row ids (SPEC "Erasure inventory"). Every one must appear exactly once in the registry. */
 const SPEC_ROW_IDS = [
-  ...Array.from({ length: 15 }, (_, i) => `I-${i + 1}`),
-  ...Array.from({ length: 12 }, (_, i) => `A-${i + 1}`),
+  ...Array.from({ length: 16 }, (_, i) => `I-${i + 1}`),
+  ...Array.from({ length: 16 }, (_, i) => `A-${i + 1}`),
   ...Array.from({ length: 6 }, (_, i) => `P-${i + 1}`),
   ...Array.from({ length: 4 }, (_, i) => `E-${i + 1}`),
 ];

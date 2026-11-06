@@ -1,5 +1,5 @@
 import { PageShell } from "../../../../../src/components/ui/PageShell";
-import { RoadmapPage } from "../../../../../src/features/roadmap/components/RoadmapPage";
+import { TeamProjectRoadmap } from "../../../../../src/features/team-projects/components/TeamProjectRoadmap";
 
 export default async function TeamRoadmapPage({
   params,
@@ -10,7 +10,7 @@ export default async function TeamRoadmapPage({
 
   return (
     <PageShell width="3xl">
-      <RoadmapPage teamId={teamId} />
+      <TeamProjectRoadmap teamId={teamId} />
     </PageShell>
   );
 }

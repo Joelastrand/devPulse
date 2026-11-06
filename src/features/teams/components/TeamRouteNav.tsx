@@ -13,11 +13,12 @@ function normalizePathname(pathname: string | null): string | null {
 }
 
 /**
- * Route-level team navigation: exactly `Oversikt · Roadmap`
- * (docs/features/team-roadmap/SPEC.md — BR-2). Kompetanse stays a section of
- * Oversikt, never a destination. `aria-current="page"` is set on an exact
- * pathname match only — no prefix matching, so other sub-routes (e.g. the
- * forum thread page) and unknown paths mark nothing.
+ * Route-level team navigation with the five team tabs of
+ * docs/features/team-experience-redesign/SPEC.md (BR-30):
+ * `Oversikt · Roadmap · Kompetanseplan · Teamkompetanse · Systemoversikt`.
+ * `aria-current="page"` is set on an exact pathname match only — no prefix
+ * matching, so other sub-routes (e.g. the forum thread page) and unknown
+ * paths mark nothing.
  */
 export function TeamRouteNav({ teamId }: { teamId: string }) {
   const pathname = normalizePathname(usePathname());
@@ -25,6 +26,9 @@ export function TeamRouteNav({ teamId }: { teamId: string }) {
   const links = [
     { href: base, label: teamsCopy.nav.overview },
     { href: `${base}/roadmap`, label: teamsCopy.nav.roadmap },
+    { href: `${base}/competence-plan`, label: teamsCopy.nav.competencePlan },
+    { href: `${base}/competence`, label: teamsCopy.nav.competence },
+    { href: `${base}/systems`, label: teamsCopy.nav.systems },
   ];
 
   return (

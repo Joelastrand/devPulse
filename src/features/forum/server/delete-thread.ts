@@ -140,7 +140,7 @@ export type DeleteThreadResult =
 
 export interface DeleteThreadDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: IsAppAdminDeps["allowList"];
+  isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   threadDocs?: ForumThreadDocStore;
   repliesCascade?: RepliesCascadeStore;
 }
@@ -210,7 +210,7 @@ export async function deleteThread(
   }
 
   const rawData = snapshot.exists ? snapshot.data() : undefined;
-  const admin = isAppAdmin(verified.identity, { allowList: deps.allowList });
+  const admin = await isAppAdmin(verified.identity, { isSuperadmin: deps.isSuperadmin });
 
   const erasedCandidate = toCandidateErasedThread(rawData);
   if (isErasedForumThread(erasedCandidate)) {

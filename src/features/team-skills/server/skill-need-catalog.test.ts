@@ -183,7 +183,7 @@ describe("parity with listSkillTrees candidate mapping", () => {
     const own = await readSkillNeedCatalog(fakeReader(fixtures).reader);
     const admin = await listSkillTrees("token", {
       verifyToken: vi.fn().mockResolvedValue({ uid: "a", email: "admin@example.com", email_verified: true }),
-      allowList: ["admin@example.com"],
+      isSuperadmin: async (uid: string) => uid === "a",
       reader: { listOrderedByCreatedAt: async (limit) => fixtures.slice(0, limit) as RawSkillTreeDoc[] },
     });
 

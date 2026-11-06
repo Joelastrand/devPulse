@@ -5,6 +5,8 @@ import type { TeamListCollection } from "./list-teams";
 import { listTeams } from "./list-teams";
 
 const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 
 function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
   return { uid: "admin-1", email: ADMIN_EMAIL, emailVerified: true, ...overrides };
@@ -33,7 +35,7 @@ describe("listTeams", () => {
 
     const result = await listTeams("token", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -46,7 +48,7 @@ describe("listTeams", () => {
 
     const result = await listTeams("bad-token", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -56,13 +58,13 @@ describe("listTeams", () => {
 
   it("rejects a non-admin caller and attempts no read", async () => {
     const verifyToken = verifyTokenReturning(
-      verifiedIdentity({ email: "dev@example.com" }),
+      verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" }),
     );
     const collection = fakeCollection([]);
 
     const result = await listTeams("token", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -70,19 +72,19 @@ describe("listTeams", () => {
     expect(collection.listAll).not.toHaveBeenCalled();
   });
 
-  it("never includes the admin allow-list in the returned result, success or failure", async () => {
-    const allowList = [ADMIN_EMAIL, "other-admin@example.com"];
+  it("never includes superadmin identifiers in the returned result, success or failure", async () => {
+    const isSuperadmin = isAdminUid;
 
     const okResult = await listTeams("token", {
       verifyToken: verifyTokenReturning(verifiedIdentity()),
-      allowList,
+      isSuperadmin,
       collection: fakeCollection([]),
     });
     const forbiddenResult = await listTeams("token", {
       verifyToken: verifyTokenReturning(
-        verifiedIdentity({ email: "dev@example.com" }),
+        verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" }),
       ),
-      allowList,
+      isSuperadmin,
       collection: fakeCollection([]),
     });
 
@@ -100,7 +102,7 @@ describe("listTeams", () => {
 
     const result = await listTeams("token", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 

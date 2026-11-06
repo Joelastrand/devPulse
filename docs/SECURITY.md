@@ -85,6 +85,8 @@ is considered done.
     It decides this from the genuine membership read in the write
     transaction, not through `resolveTeamRole`, and no other lead capability
     exists.
+*TA-SI amendment (2026-11-06):* the stored `lead` role no longer grants any capability (see TA-SI-2, TA-SI-3). The
+team editing authority is the `teamadmin` role, granted only by a superadmin (TA-SI-1, TA-SI-2).
 23. Roadmap data (`roadmapItems`) is team-scoped and server-only (client
     Firestore rules deny all). Every roadmap operation re-derives
     authorization from the verified identity and fresh state. Reads follow
@@ -148,7 +150,10 @@ is considered done.
     use, ranking and productivity scoring remain prohibited. Levels are
     ordinal: no average, sum or overall score is computed. Logs never carry
     levels, tree ids, skill names or the profile. C1 provides no sharing and
-    no aggregate. *C2 amendment (2026-10-10):* the single reader C2 added is
+    no aggregate. The one approved composition (2026-11-06, TASK-009) mounts the
+    C2 "Del kompetanse med teamet" participation control on `/me/skills`; it is
+    owned and enforced by C2 (invariant 32) and reads no `skillProfiles` content.
+    *C2 amendment (2026-10-10):* the single reader C2 added is
     governed by invariants 32–36 and does not widen owner access: no other
     person can read a profile, and the only derived output is the
     privacy-thresholded categorical team coverage. Any *other* future reader
@@ -187,6 +192,8 @@ is considered done.
     `active` team, decided from a fresh genuine-membership read; it grants no
     access to any profile or richer output. App-admin status never grants
     need mutation, coverage or participation.
+*TA-SI amendment (2026-11-06):* the single C2 capability is now team administration of `teamSkillNeeds` for a superadmin or
+a genuine `teamadmin` of an active team (TA-SI-4). Participation and coverage remain unchanged and never use this check.
 34. The coverage threshold `k = 5` is the code constant
     `SKILL_COVERAGE_MIN_CONTRIBUTORS` (with the notice version
     `SKILL_CONTRIBUTION_NOTICE_VERSION`, both owned by
@@ -523,3 +530,39 @@ prefix, so the numbered invariants above are not renumbered. They do not weaken 
   TASK-012). Create is count-then-create: a small overshoot under concurrent creates is accepted (BR-7).
 - **RP-SI-12 (static guards are not authorization).** The scope guards are change detection. Authorization evidence is the
   actor × operation matrix (`role-profiles-authz-matrix.test.ts`) and the route suites.
+
+## Superadmin, teamadmin and team visibility (TA-SI, 2026-11-06)
+
+Source: `docs/features/teamadmin-and-team-visibility/SPEC.md`. These invariants supersede the stored team `lead` as
+the team editing authority (invariants 22, 23 and 33 are amended accordingly; their residual-risk statements still apply
+to the data they describe). The superadmin is the existing app-admin allow-list (`isAppAdmin`); no client-supplied role
+is ever trusted.
+
+- **TA-SI-1 Server-side role.** Superadmin, teamadmin and member are derived per request on the server from the verified
+  identity, the `APP_ADMIN_EMAILS` allow-list and the `teamMemberships` document of the same (uid, teamId). No request
+  field decides a role.
+- **TA-SI-2 Only a superadmin assigns teamadmin.** `teamMemberships.role` accepts only `teamadmin` or `member`, is written
+  only by `setTeamMemberRole` behind `requireAppAdmin`, and is never client-supplied. A teamadmin cannot promote themselves
+  or another person, and cannot administer another team.
+- **TA-SI-3 Legacy lead grants nothing.** A stored `role: "lead"` classifies as `member`. Nothing is migrated automatically.
+- **TA-SI-4 Team-administration writes.** Writes to projects, participations, the competence catalog, competence plans and
+  team skill needs require superadmin or a genuine `teamadmin` of an `active` team, re-checked inside the write transaction.
+  Team status is checked after the role. No other capability is granted by the teamadmin role. Superadmin does not override
+  personal data rules: `skillProfiles`, goals, role targets and development conversations remain owner-only, and
+  participation and coverage never use the team-admin check.
+- **TA-SI-5 Visibility is a persisted, validated field.** `teams/{teamId}.visibility` is `public` only when exactly that
+  value is stored. Missing or malformed values are `private`. New teams are created `private`. The write path is server-only
+  and authorized by superadmin or teamadmin on an `active` team.
+- **TA-SI-6 Public read is an explicit projection.** The anonymous endpoint returns only `{teamId, name}` for an active,
+  public team. Private, disabled, malformed and missing teams return the same `not_found`. No token is read on this path, no
+  member, competence, project, planning, forum or audit field is returned, and the response is never cached. Further public
+  fields need a separate approval and privacy review; any competence data would additionally need consent (invariants
+  31–36) and the k = 5 threshold (invariant 34).
+- **TA-SI-7 Visibility does not bypass consent.** A public team exposes no competence data, so no consent decision is
+  bypassed. Any future public coverage must still apply invariants 32–35.
+- **TA-SI-8 No actor uid for visibility.** A visibility change stores `visibility` and `visibilityUpdatedAt` only, so it adds
+  no person linkage that account erasure would need to clear (AE-SI-7).
+
+Known, accepted limitation: a demoted teamadmin loses write access on their next request (TA-SI-1), but any client-side
+state already rendered continues until the next read. Team-admin management of ordinary membership and access requests
+remains superadmin-only pending an owner decision.

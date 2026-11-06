@@ -64,7 +64,7 @@ export type RejectAccessRequestResult =
 export interface RejectAccessRequestDeps {
   now?: Date;
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: IsAppAdminDeps["allowList"];
+  isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   collection?: RejectAccessRequestCollection;
 }
 
@@ -86,7 +86,7 @@ export async function rejectAccessRequest(
 ): Promise<RejectAccessRequestResult> {
   const admin = await requireAppAdmin(idToken, {
     verifyToken: deps.verifyToken,
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
   });
   if (!admin.ok) {
     return { ok: false, error: admin.error };

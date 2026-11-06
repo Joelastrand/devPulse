@@ -10,6 +10,7 @@ import { listTeamInvitations } from "./list-team-invitations";
 // Fixtures are synthetic.
 
 const ADMIN_EMAIL = "admin@example.com";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === "admin-1";
 const CREATED_AT = new Date("2026-09-01T00:00:00Z");
 const TEAM = "team-1";
 
@@ -52,7 +53,7 @@ describe("preserved invitation with invitedBy: null (erased inviter)", () => {
   it("stays visible in the admin list, with the inviter absent and no identity of any kind", async () => {
     const result = await listTeamInvitations("token", TEAM, {
       verifyToken: verifyAs(verifiedAdmin()),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection: collectionOf([pending({ invitedBy: null, email: "kept@example.com" })]),
     });
 
@@ -70,13 +71,13 @@ describe("preserved invitation with invitedBy: null (erased inviter)", () => {
     const member = { uid: "member-1", email: "member@example.com", emailVerified: true };
     const nullInviter = await listTeamInvitations("token", TEAM, {
       verifyToken: verifyAs(member),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection: collectionOf([pending({ invitedBy: null })]),
     });
     // Contrast: the same non-admin with a normal string inviter is refused in exactly the same way.
     const stringInviter = await listTeamInvitations("token", TEAM, {
       verifyToken: verifyAs(member),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection: collectionOf([pending({ invitedBy: "admin-1" })]),
     });
 
@@ -101,7 +102,7 @@ describe("malformed inviter values remain rejected (not made acceptable by the n
   it("drops a malformed-inviter row from the admin list while keeping a valid neighbour", async () => {
     const result = await listTeamInvitations("token", TEAM, {
       verifyToken: verifyAs(verifiedAdmin()),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection: collectionOf([
         pending({ email: "bad@example.com", invitedBy: 42 }),
         pending({ email: "good@example.com", invitedBy: null }),

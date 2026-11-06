@@ -30,12 +30,15 @@ interface Harness {
   readonly roadmap: Map<string, { ownerRef: string | null; teamId: string; treeId: string }>;
   readonly bindings: BoundConversation[];
   readonly memberships: Map<string, Record<string, unknown>>;
+  readonly participations: Map<string, { teamId: string; memberRef: string }>;
   readonly port: MembershipDestructionPort;
 }
 
 function harness(init: {
   membership?: Record<string, unknown> | undefined;
   roadmap?: Array<[string, { ownerRef: string | null; teamId: string; treeId: string }]>;
+  /** A-15 project participation records: id → team and member reference. */
+  participations?: Array<[string, { teamId: string; memberRef: string }]>;
   bindings?: BoundConversation[];
   /** uids whose erasure record exists (the fence refuses them). */
   erasingUids?: string[];
@@ -52,6 +55,7 @@ function harness(init: {
   const bindings = [...(init.bindings ?? [])];
   const memberships = new Map<string, Record<string, unknown>>();
   if (init.membership !== undefined) memberships.set(MEMBERSHIP, init.membership);
+  const participations = new Map(init.participations ?? []);
 
   const finalTx: MembershipDestructionFinalTransaction = {
     async assertNoErasureRecord(uid) {
@@ -78,6 +82,24 @@ function harness(init: {
       log.push(`tx.boundConversationCount:${memberRef}`);
       return Math.min(bindings.length, limit);
     },
+    // A-14 (teamSystems): these tests fix no system fixtures, so no system references the membership.
+    async systemsKnowingMemberRef() {
+      return [];
+    },
+    setKnowledgeMemberRefs() {
+      throw new Error("no system fixture references this membership");
+    },
+    async participationIdsOf(teamId, memberRef, limit) {
+      log.push(`tx.participationIdsOf:${teamId}`);
+      return [...participations.entries()]
+        .filter(([, p]) => p.teamId === teamId && p.memberRef === memberRef)
+        .map(([id]) => id)
+        .slice(0, limit);
+    },
+    deleteParticipation(participationId) {
+      log.push(`tx.deleteParticipation:${participationId}`);
+      participations.delete(participationId);
+    },
     deleteMembership(id) {
       log.push(`tx.deleteMembership:${id}`);
       memberships.delete(id);
@@ -103,7 +125,7 @@ function harness(init: {
       return result;
     },
   };
-  return { log, roadmap, bindings, memberships, port };
+  return { log, roadmap, bindings, memberships, participations, port };
 }
 
 beforeEach(() => {
@@ -138,6 +160,58 @@ describe("ordinary removal: roadmap owner references", () => {
     expect(h.roadmap.get("item-b")).toEqual({ ownerRef: "ref-other", teamId: TEAM, treeId: "tree-2" });
     expect(h.roadmap.get("item-c")).toEqual({ ownerRef: REF, teamId: "team-other", treeId: "tree-3" });
     expect(h.roadmap.get("item-a")).toMatchObject({ teamId: TEAM, treeId: "tree-1" });
+  });
+});
+
+describe("ordinary removal: project participation (A-15)", () => {
+  it("deletes the member's participations in the team before the membership delete, in the final transaction", async () => {
+    const h = harness({
+      membership: { uid: UID, teamId: TEAM, memberRef: REF },
+      participations: [["pp-1", { teamId: TEAM, memberRef: REF }]],
+    });
+
+    await expect(destroyMembershipInstance({ port: h.port, bindings: deps }, TARGET, 100)).resolves.toBe("done");
+
+    expect(h.participations.has("pp-1")).toBe(false);
+    expect(h.memberships.has(MEMBERSHIP)).toBe(false);
+    // The participation delete happens inside a final transaction (the first round), and the membership delete comes after it.
+    const participationAt = h.log.indexOf("tx.deleteParticipation:pp-1");
+    const membershipAt = h.log.indexOf("tx.deleteMembership:" + MEMBERSHIP);
+    expect(h.log.slice(0, participationAt)).toContain("final:begin");
+    expect(membershipAt).toBeGreaterThan(participationAt);
+  });
+
+  it("leaves participations of the same member ref in another team and of other members in this team", async () => {
+    const h = harness({
+      membership: { uid: UID, teamId: TEAM, memberRef: REF },
+      participations: [
+        ["pp-same-team", { teamId: TEAM, memberRef: REF }],
+        ["pp-other-team", { teamId: "team-2", memberRef: REF }],
+        ["pp-other-member", { teamId: TEAM, memberRef: "ref-other" }],
+      ],
+    });
+
+    await destroyMembershipInstance({ port: h.port, bindings: deps }, TARGET, 100);
+
+    expect([...h.participations.keys()].sort()).toEqual(["pp-other-member", "pp-other-team"]);
+  });
+
+  it("drains participations across rounds under a small write budget, and deletes the membership only after the last one", async () => {
+    const h = harness({
+      membership: { uid: UID, teamId: TEAM, memberRef: REF },
+      participations: [
+        ["pp-1", { teamId: TEAM, memberRef: REF }],
+        ["pp-2", { teamId: TEAM, memberRef: REF }],
+      ],
+    });
+
+    await expect(destroyMembershipInstance({ port: h.port, bindings: deps }, TARGET, 1)).resolves.toBe("done");
+
+    expect(h.participations.size).toBe(0);
+    const deleteMembershipAt = h.log.indexOf("tx.deleteMembership:" + MEMBERSHIP);
+    const lastParticipationDelete = Math.max(h.log.indexOf("tx.deleteParticipation:pp-1"), h.log.indexOf("tx.deleteParticipation:pp-2"));
+    expect(lastParticipationDelete).toBeGreaterThanOrEqual(0);
+    expect(deleteMembershipAt).toBeGreaterThan(lastParticipationDelete);
   });
 });
 

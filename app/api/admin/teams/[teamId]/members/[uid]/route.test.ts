@@ -103,13 +103,13 @@ describe("PATCH /api/admin/teams/[teamId]/members/[uid]", () => {
   });
 
   it("sets the role for an app admin and returns exactly {ok, role}", async () => {
-    setTeamMemberRoleMock.mockResolvedValue({ ok: true, role: "lead" });
+    setTeamMemberRoleMock.mockResolvedValue({ ok: true, role: "teamadmin" });
 
-    const response = await PATCH(patchRequest("Bearer abc.def", { role: "lead" }), params("team-42", "user-99"));
+    const response = await PATCH(patchRequest("Bearer abc.def", { role: "teamadmin" }), params("team-42", "user-99"));
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ ok: true, role: "lead" });
-    expect(setTeamMemberRoleMock).toHaveBeenCalledWith("abc.def", "team-42", "user-99", "lead");
+    expect(await response.json()).toEqual({ ok: true, role: "teamadmin" });
+    expect(setTeamMemberRoleMock).toHaveBeenCalledWith("abc.def", "team-42", "user-99", "teamadmin");
   });
 
   it("supports returning a lead to member", async () => {
@@ -123,16 +123,16 @@ describe("PATCH /api/admin/teams/[teamId]/members/[uid]", () => {
   it("returns 401 when unauthenticated (missing header passes an empty token)", async () => {
     setTeamMemberRoleMock.mockResolvedValue({ ok: false, error: "unauthenticated" });
 
-    const response = await PATCH(patchRequest(undefined, { role: "lead" }), params());
+    const response = await PATCH(patchRequest(undefined, { role: "teamadmin" }), params());
 
     expect(response.status).toBe(401);
-    expect(setTeamMemberRoleMock).toHaveBeenCalledWith("", "team-1", "user-1", "lead");
+    expect(setTeamMemberRoleMock).toHaveBeenCalledWith("", "team-1", "user-1", "teamadmin");
   });
 
   it("returns 403 for an authenticated non-admin", async () => {
     setTeamMemberRoleMock.mockResolvedValue({ ok: false, error: "forbidden" });
 
-    const response = await PATCH(patchRequest("Bearer t", { role: "lead" }), params());
+    const response = await PATCH(patchRequest("Bearer t", { role: "teamadmin" }), params());
 
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({ error: "forbidden" });
@@ -150,7 +150,7 @@ describe("PATCH /api/admin/teams/[teamId]/members/[uid]", () => {
   it("maps team_disabled to 400, consistent with the other admin routes that gate a write on team status", async () => {
     setTeamMemberRoleMock.mockResolvedValue({ ok: false, error: "team_disabled" });
 
-    const response = await PATCH(patchRequest("Bearer t", { role: "lead" }), params());
+    const response = await PATCH(patchRequest("Bearer t", { role: "teamadmin" }), params());
 
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: "team_disabled" });
@@ -159,7 +159,7 @@ describe("PATCH /api/admin/teams/[teamId]/members/[uid]", () => {
   it("maps not_a_member to 404", async () => {
     setTeamMemberRoleMock.mockResolvedValue({ ok: false, error: "not_a_member" });
 
-    const response = await PATCH(patchRequest("Bearer t", { role: "lead" }), params());
+    const response = await PATCH(patchRequest("Bearer t", { role: "teamadmin" }), params());
 
     expect(response.status).toBe(404);
   });
@@ -167,15 +167,15 @@ describe("PATCH /api/admin/teams/[teamId]/members/[uid]", () => {
   it("returns 500 with only a generic code on a persistence failure", async () => {
     setTeamMemberRoleMock.mockResolvedValue({ ok: false, error: "persistence_failed" });
 
-    const response = await PATCH(patchRequest("Bearer t", { role: "lead" }), params());
+    const response = await PATCH(patchRequest("Bearer t", { role: "teamadmin" }), params());
 
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({ error: "persistence_failed" });
   });
 
   it.each([
-    ["an extra key", { role: "lead", teamStatus: "active" }],
-    ["an extra uid key", { role: "lead", uid: "someone-else" }],
+    ["an extra key", { role: "teamadmin", teamStatus: "active" }],
+    ["an extra uid key", { role: "teamadmin", uid: "someone-else" }],
     ["a missing role key", {}],
     ["a wrong key", { isLead: true }],
     ["an array body", ["lead"]],

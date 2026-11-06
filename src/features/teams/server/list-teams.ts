@@ -39,7 +39,7 @@ export type ListTeamsResult =
 
 export interface ListTeamsDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: IsAppAdminDeps["allowList"];
+  isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   collection?: TeamListCollection;
 }
 
@@ -55,7 +55,7 @@ export async function listTeams(
 ): Promise<ListTeamsResult> {
   const admin = await requireAppAdmin(idToken, {
     verifyToken: deps.verifyToken,
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
   });
   if (!admin.ok) {
     return { ok: false, error: admin.error };

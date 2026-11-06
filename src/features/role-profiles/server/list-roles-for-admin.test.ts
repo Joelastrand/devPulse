@@ -4,6 +4,8 @@ import { listRolesForAdmin, type ListRolesForAdminDeps } from "./list-roles-for-
 import type { RawSkillTreeRead, RawSkillTreeReader } from "./skill-tree-seam-types";
 
 const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const BASE = new Date("2026-10-01T10:00:00Z");
 const at = (minutes: number) => new Date(BASE.getTime() + minutes * 60_000);
 
@@ -29,7 +31,7 @@ function treeReader(docs: Record<string, unknown>, failOn?: string): RawSkillTre
 function deps(overrides: Partial<ListRolesForAdminDeps> = {}): ListRolesForAdminDeps {
   return {
     verifyToken: vi.fn().mockResolvedValue({ uid: "admin-1", email: ADMIN_EMAIL, email_verified: true }),
-    allowList: [ADMIN_EMAIL],
+    isSuperadmin: isAdminUid,
     store: createFakeRoleStore(),
     treeReader: treeReader({ api: validTree }),
     ...overrides,
@@ -48,7 +50,7 @@ function seedValid(store: ReturnType<typeof createFakeRoleStore>, id: string, mi
 
 describe("listRolesForAdmin", () => {
   it("refuses a non-admin caller", async () => {
-    const result = await listRolesForAdmin("token", {}, deps({ allowList: [] }));
+    const result = await listRolesForAdmin("token", {}, deps({ isSuperadmin: async () => false }));
     expect(result).toEqual({ ok: false, error: "forbidden" });
   });
 

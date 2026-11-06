@@ -4,7 +4,9 @@ import type { AuthorizeTeamAccessCollection } from "./authorize-team-access";
 import { authorizeTeamAccess } from "./authorize-team-access";
 
 const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_UID = "admin-1";
 const MEMBER_UID = "member-1";
+const superadmin = async (uid: string) => uid === ADMIN_UID;
 const OTHER_TEAM_ID = "other-team";
 
 function identity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
@@ -12,7 +14,7 @@ function identity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
 }
 
 function adminIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
-  return identity({ email: ADMIN_EMAIL, ...overrides });
+  return identity({ uid: ADMIN_UID, email: ADMIN_EMAIL, ...overrides });
 }
 
 interface FakeState {
@@ -45,7 +47,7 @@ describe("authorizeTeamAccess", () => {
     });
 
     const result = await authorizeTeamAccess(adminIdentity(), "team-1", {
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
       collection,
     });
 
@@ -59,7 +61,7 @@ describe("authorizeTeamAccess", () => {
     });
 
     const result = await authorizeTeamAccess(adminIdentity(), "team-1", {
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
       collection,
     });
 
@@ -70,7 +72,7 @@ describe("authorizeTeamAccess", () => {
     const collection = fakeCollection({ teamStatus: {}, memberships: {} });
 
     const result = await authorizeTeamAccess(adminIdentity(), "nonexistent-team", {
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
       collection,
     });
 
@@ -84,7 +86,7 @@ describe("authorizeTeamAccess", () => {
     });
 
     await authorizeTeamAccess(adminIdentity(), "team-1", {
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
       collection,
     });
 
@@ -98,7 +100,7 @@ describe("authorizeTeamAccess", () => {
     });
 
     const result = await authorizeTeamAccess(identity(), "team-1", {
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
       collection,
     });
 
@@ -112,7 +114,7 @@ describe("authorizeTeamAccess", () => {
     });
 
     const result = await authorizeTeamAccess(identity(), "team-1", {
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
       collection,
     });
 
@@ -126,7 +128,7 @@ describe("authorizeTeamAccess", () => {
     });
 
     const result = await authorizeTeamAccess(identity(), "team-1", {
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
       collection,
     });
 
@@ -140,7 +142,7 @@ describe("authorizeTeamAccess", () => {
     });
 
     const result = await authorizeTeamAccess(identity(), "team-1", {
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
       collection,
     });
 
@@ -151,7 +153,7 @@ describe("authorizeTeamAccess", () => {
     const collection = fakeCollection({ teamStatus: {}, memberships: {} });
 
     const result = await authorizeTeamAccess(identity(), "nonexistent-team", {
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
       collection,
     });
 
@@ -165,11 +167,11 @@ describe("authorizeTeamAccess", () => {
     });
 
     const memberResult = await authorizeTeamAccess(identity(), "team-1", {
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
       collection,
     });
     const adminResult = await authorizeTeamAccess(adminIdentity(), "team-1", {
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
       collection,
     });
 
@@ -186,7 +188,7 @@ describe("authorizeTeamAccess", () => {
     });
 
     const result = await authorizeTeamAccess(identity(), "team-1", {
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
       collection,
     });
 
@@ -200,11 +202,11 @@ describe("authorizeTeamAccess", () => {
     });
 
     const teamOneResult = await authorizeTeamAccess(identity(), "team-1", {
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
       collection,
     });
     const teamTwoResult = await authorizeTeamAccess(identity(), OTHER_TEAM_ID, {
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
       collection,
     });
 
@@ -220,14 +222,14 @@ describe("authorizeTeamAccess", () => {
     const collection = fakeCollection(state);
 
     const before = await authorizeTeamAccess(identity(), "team-1", {
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
       collection,
     });
 
     delete state.memberships[`${MEMBER_UID}__team-1`];
 
     const after = await authorizeTeamAccess(identity(), "team-1", {
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
       collection,
     });
 
@@ -242,7 +244,7 @@ describe("authorizeTeamAccess", () => {
     };
 
     const result = await authorizeTeamAccess(identity(), "team-1", {
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
       collection,
     });
 
@@ -260,7 +262,7 @@ describe("authorizeTeamAccess", () => {
     };
 
     const result = await authorizeTeamAccess(identity(), "team-1", {
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
       collection,
     });
 
@@ -276,7 +278,7 @@ describe("authorizeTeamAccess", () => {
     };
 
     const result = await authorizeTeamAccess(identity(), "team-1", {
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
       collection,
     });
 

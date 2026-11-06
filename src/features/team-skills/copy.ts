@@ -83,6 +83,33 @@ export const teamSkillsCopy = {
  * policy constant, never a typed literal. It states the residual-risk caveat and never claims absolute
  * anonymity (BR-21); editorial rewording does not bump the notice version, a change of meaning does (BR-8).
  */
+/**
+ * Wording for the same C2 participation record when it is shown as the owner's sharing control on `/me/skills`
+ * (TASK-009, SPEC BR-21). Only labels change; the behaviour, notice and disclosure are the participation panel's.
+ */
+export const sharingCopy = {
+  heading: (teamName: string) => `Kompetansedeling i «${teamName}»`,
+  stateContributing: "Du deler kompetanse med teamet",
+  stateNotContributing: "Du deler ikke kompetanse med teamet",
+  optInButton: "Del kompetanse med teamet",
+  withdrawButton: "Slutt å dele kompetanse med teamet",
+} as const;
+
+export const sharingExplanationCopy = {
+  title: "Om deling av kompetanse",
+  close: "Lukk",
+  open: "Om deling",
+  description: (teamName: string) =>
+    `Her forklares hva som deles med «${teamName}», hvem som kan se det, og hva som skjer når du slutter.`,
+  points: [
+    "Deling er valgfritt og er av som standard. Du velger selv, team for team.",
+    "Bare nivåene du selv har satt, og bare for kompetanseområder du har vurdert, brukes i teamets grove status.",
+    "Teamet ser bare en grov status per kompetansebehov, og først når nok bidragsytere har vurdert området. Ingen ser hvem som bidrar eller hvilke nivåer som er satt.",
+    "Slutter du å dele, telles du ikke med neste gang statusen vises. Egenvurderingen din slettes ikke.",
+    "Forlater du teamet, fjernes deltakelsen din automatisk.",
+  ],
+} as const;
+
 export const participationCopy = {
   heading: (teamName: string) => `Din deltakelse i «${teamName}»`,
   fallbackTeamName: "dette teamet",

@@ -266,7 +266,7 @@ async function fetchTeamChallenges(
 
 export interface ListTeamChallengesForMemberDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: AuthorizeTeamAccessDeps["allowList"];
+  isSuperadmin?: AuthorizeTeamAccessDeps["isSuperadmin"];
   authCollection?: AuthorizeTeamAccessDeps["collection"];
   reader?: ChallengesReader;
   decryptText?: (payload: EncryptedPayload) => string;
@@ -310,7 +310,7 @@ export async function listTeamChallengesForMember(
   }
 
   const authResult = await authorizeTeamAccess(verified.identity, teamId, {
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
     collection: deps.authCollection,
   });
   if (!authResult.ok) {
@@ -339,7 +339,7 @@ export async function listTeamChallengesForMember(
 
 export interface ListTeamChallengesForAdminDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: IsAppAdminDeps["allowList"];
+  isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   reader?: ChallengesReader;
   decryptText?: (payload: EncryptedPayload) => string;
 }
@@ -365,7 +365,7 @@ export async function listTeamChallengesForAdmin(
 ): Promise<ListTeamChallengesResult> {
   const admin = await requireAppAdmin(idToken, {
     verifyToken: deps.verifyToken,
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
   });
   if (!admin.ok) {
     return { ok: false, error: admin.error };

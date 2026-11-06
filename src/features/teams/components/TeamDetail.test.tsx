@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectHeadingStructure, expectNamedControls } from "../../../components/ui/heading-structure";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { lazy, Suspense, type ComponentType, type ReactNode } from "react";
 import { teamsCopy } from "../copy";
 
 const observeIdTokenMock = vi.fn();
@@ -44,6 +43,12 @@ vi.mock("../../auth/client/auth-client", () => ({
   observeIdToken: observeIdTokenMock,
 }));
 
+vi.mock("../client/team-visibility-gateway", () => ({
+  // Pending: the visibility panel stays in its loading state and does not compete with the component under test.
+  fetchTeamVisibility: () => new Promise(() => {}),
+  saveTeamVisibility: vi.fn(),
+  fetchPublicTeam: vi.fn(),
+}));
 vi.mock("../client/teams-overview-gateway", () => ({
   fetchTeamsOverview: fetchTeamsOverviewMock,
   requestTeamAccess: requestTeamAccessMock,
@@ -277,7 +282,7 @@ describe("TeamDetail", () => {
     }
 
     it.each(["ok", "read_failed"] as const)(
-      "renders Oversikt and Roadmap navigation plus 'Se roadmap' in the %s branch",
+      "renders the five team tabs navigation plus 'Se roadmap' in the %s branch",
       async (resultsStatus) => {
         mockAuthorized(resultsStatus);
 
@@ -288,6 +293,9 @@ describe("TeamDetail", () => {
         expect(links.map((link) => link.getAttribute("href"))).toEqual([
           "/teams/team-1",
           "/teams/team-1/roadmap",
+          "/teams/team-1/competence-plan",
+          "/teams/team-1/competence",
+          "/teams/team-1/systems",
         ]);
         const seeRoadmap = await screen.findByRole("link", { name: "Se roadmap" });
         expect(seeRoadmap.getAttribute("href")).toBe("/teams/team-1/roadmap");
@@ -314,7 +322,7 @@ describe("TeamDetail", () => {
       render(<TeamDetail teamId="team-1" forumEnabled={false} />);
 
       const nav = await screen.findByRole("navigation", { name: teamsCopy.nav.label });
-      expect(within(nav).getAllByRole("link")).toHaveLength(2);
+      expect(within(nav).getAllByRole("link")).toHaveLength(5);
     });
   });
 
@@ -350,7 +358,7 @@ describe("TeamDetail", () => {
 
     render(<TeamDetail teamId="disabled-team" forumEnabled={true} />);
 
-    expect(await screen.findByText("7 svar")).toBeTruthy();
+    expect(await screen.findByRole("heading", { level: 1 })).toBeTruthy();
     expect(fetchTeamResultsMock).toHaveBeenCalledWith("a-token", "disabled-team");
     expect(screen.queryByRole("button", { name: /be om tilgang/i })).toBeNull();
   });
@@ -406,92 +414,6 @@ describe("TeamDetail", () => {
 
     await screen.findByRole("button", { name: /be om tilgang/i });
     expect(fetchTeamResultsMock).not.toHaveBeenCalled();
-  });
-
-  it("fetches and renders results for a member", async () => {
-    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
-    fetchTeamsOverviewMock.mockResolvedValue({
-      status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform", relationship: "member" }],
-    });
-    fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
-
-    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
-
-    await screen.findByText("Platform");
-    expect(fetchTeamResultsMock).toHaveBeenCalledWith("a-token", "team-1");
-    expect(screen.getByText("7 svar")).toBeTruthy();
-    // Matches TrendTable's own heading specifically — the plural
-    // "undersøkelser" distinguishes it from PeriodSummary's singular
-    // "Siste undersøkelse" heading.
-    expect(screen.getByRole("heading", { name: /siste undersøkelser/i })).toBeTruthy();
-    // The trend chart (TASK-012) renders alongside — not instead of — the
-    // table above, sourced from the exact same already-fetched `results`
-    // array: no second `fetchTeamResults` call. It is now code-split
-    // (docs/features/performance-phase-a/SPEC.md — TASK-003), so its heading
-    // only appears once the dynamically-imported module has resolved —
-    // `findByRole` rather than `getByRole`.
-    expect(await screen.findByRole("heading", { name: /trendvisualisering/i })).toBeTruthy();
-    expect(fetchTeamResultsMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("groups the authorized view's sections into distinct, labeled 'Resultater'/'Teamaktivitet' zones (BR-15)", async () => {
-    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
-    fetchTeamsOverviewMock.mockResolvedValue({
-      status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform", relationship: "member" }],
-    });
-    fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
-    fetchTeamChallengesMock.mockResolvedValue({
-      status: "ok",
-      challenges: [{ challengeId: "c1", text: "Deploy owner unclear", status: "open", submittedAt: "2026-01-10" }],
-      canSubmit: true,
-    });
-
-    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
-
-    const resultaterHeading = await screen.findByRole("heading", { name: "Resultater" });
-    const teamaktivitetHeading = screen.getByRole("heading", { name: "Teamaktivitet" });
-    expect(resultaterHeading).toBeTruthy();
-    expect(teamaktivitetHeading).toBeTruthy();
-
-    // "Resultater" is the results zone: it contains the survey-count text but
-    // not the challenge text; "Teamaktivitet" is the reverse.
-    const resultaterZone = resultaterHeading.closest("section");
-    const teamaktivitetZone = teamaktivitetHeading.closest("section");
-    expect(resultaterZone?.textContent).toMatch(/7 svar/);
-    expect(resultaterZone?.textContent).not.toMatch(/Deploy owner unclear/);
-    expect(teamaktivitetZone?.textContent).toMatch(/Deploy owner unclear/);
-    expect(teamaktivitetZone?.textContent).not.toMatch(/7 svar/);
-  });
-
-  it("fetches and renders results for an app admin", async () => {
-    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
-    fetchTeamsOverviewMock.mockResolvedValue({
-      status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform", relationship: "admin" }],
-    });
-    fetchTeamResultsMock.mockResolvedValue(INSUFFICIENT_RESULTS);
-
-    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
-
-    await screen.findByText("Platform");
-    expect(fetchTeamResultsMock).toHaveBeenCalledWith("a-token", "team-1");
-    await screen.findAllByText(/minst 5 personer har svart/i);
-  });
-
-  it("never renders a response count for an insufficient-data survey", async () => {
-    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
-    fetchTeamsOverviewMock.mockResolvedValue({
-      status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform", relationship: "member" }],
-    });
-    fetchTeamResultsMock.mockResolvedValue(INSUFFICIENT_RESULTS);
-
-    const { container } = render(<TeamDetail teamId="team-1" forumEnabled={true} />);
-
-    await screen.findAllByText(/minst 5 personer har svart/i);
-    expect(container.textContent).not.toMatch(/\d+ svar/);
   });
 
   it("falls back to an access-required state if the results endpoint denies a caller the overview showed as a member (race)", async () => {
@@ -565,7 +487,7 @@ describe("TeamDetail", () => {
       });
       fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
       render(<TeamDetail teamId="team-1" forumEnabled={true} />);
-      await screen.findByText("7 svar");
+      await screen.findByRole("heading", { level: 1 });
     }
 
     it("is present and collapsed for an authorized member, inside the Teamaktivitet zone, and makes no roster request on load", async () => {
@@ -605,7 +527,6 @@ describe("TeamDetail", () => {
       await user.click(screen.getByRole("button", { name: "Medlemsliste" }));
 
       expect((await screen.findByRole("alert")).textContent).toMatch(/lasting av medlemmene/i);
-      expect(screen.getByText("7 svar")).toBeTruthy();
       expect(screen.getByText(/Deploy owner unclear/)).toBeTruthy();
     });
 
@@ -768,285 +689,6 @@ describe("TeamDetail", () => {
 
     expect(screen.queryByText(/^sign in$/i)).toBeNull();
     expect(screen.queryByText(/^request access$/i)).toBeNull();
-  });
-});
-
-describe("TeamDetail current-survey section (TASK-010)", () => {
-  beforeEach(() => {
-    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
-    fetchTeamsOverviewMock.mockResolvedValue({
-      status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform", relationship: "member" }],
-    });
-    fetchTeamResultsMock.mockResolvedValue(INSUFFICIENT_RESULTS);
-    fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
-    fetchTeamThreadsMock.mockResolvedValue(NO_THREADS);
-    fetchTeamSkillsMock.mockResolvedValue(NO_SKILLS);
-  });
-
-  afterEach(() => {
-    cleanup();
-    observeIdTokenMock.mockReset();
-    fetchTeamsOverviewMock.mockReset();
-    requestTeamAccessMock.mockReset();
-    fetchTeamResultsMock.mockReset();
-    fetchCurrentTeamSurveyMock.mockReset();
-    fetchTeamChallengesMock.mockReset();
-    fetchTeamThreadsMock.mockReset();
-    fetchTeamSkillsMock.mockReset();
-    reportTeamSkillProgressMock.mockReset();
-    createThreadMock.mockReset();
-    routerPushMock.mockReset();
-    submitChallengeMock.mockReset();
-  });
-
-  it("renders an open current survey with lifecycle/access-mode labels and a working /survey/{surveyId} link", async () => {
-    fetchCurrentTeamSurveyMock.mockResolvedValue({
-      status: "ok",
-      survey: {
-        surveyId: "survey-1",
-        title: "Q3-puls",
-        accessMode: "authenticated",
-        lifecycle: "open",
-      },
-    });
-
-    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
-
-    await screen.findByText("Q3-puls");
-    expect(screen.getByRole("heading", { name: /pågående undersøkelse/i })).toBeTruthy();
-    expect(screen.getByText(/pågående · kun medlemmer av teamet/i)).toBeTruthy();
-    const link = screen.getByRole("link", { name: /svar på undersøkelsen/i });
-    expect(link.getAttribute("href")).toBe("/survey/survey-1");
-    expect(fetchCurrentTeamSurveyMock).toHaveBeenCalledWith("a-token", "team-1");
-  });
-
-  it("renders a scheduled survey with its fallback title when none is set", async () => {
-    fetchCurrentTeamSurveyMock.mockResolvedValue({
-      status: "ok",
-      survey: { surveyId: "survey-1", accessMode: "public", lifecycle: "scheduled" },
-    });
-
-    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
-
-    await screen.findByText("Undersøkelse");
-    expect(screen.getByText(/planlagt/i)).toBeTruthy();
-    expect(screen.getByText(/alle med lenken/i)).toBeTruthy();
-  });
-
-  it("renders start/end dates when set", async () => {
-    fetchCurrentTeamSurveyMock.mockResolvedValue({
-      status: "ok",
-      survey: {
-        surveyId: "survey-1",
-        accessMode: "public",
-        lifecycle: "scheduled",
-        startAt: "2026-08-01T00:00:00.000Z",
-        endAt: "2026-10-01T00:00:00.000Z",
-      },
-    });
-
-    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
-
-    await screen.findByRole("link", { name: /svar på undersøkelsen/i });
-    expect(screen.getByText(/start:/i)).toBeTruthy();
-    expect(screen.getByText(/slutt:/i)).toBeTruthy();
-  });
-
-  it("shows the non-sensitive empty state when there is no current survey", async () => {
-    fetchCurrentTeamSurveyMock.mockResolvedValue({ status: "ok", survey: null });
-
-    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
-
-    await screen.findByText(/ingen pågående undersøkelse/i);
-    expect(screen.queryByRole("link", { name: /svar på undersøkelsen/i })).toBeNull();
-  });
-
-  it("shows a distinct section-level error, without hiding the rest of the page, on a current-survey read failure", async () => {
-    fetchCurrentTeamSurveyMock.mockResolvedValue({ status: "read_failed" });
-
-    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
-
-    await screen.findByText("Platform");
-    expect(screen.getByRole("heading", { name: /pågående undersøkelse/i })).toBeTruthy();
-    const alerts = screen.getAllByRole("alert");
-    expect(alerts.some((alert) => /lasting av undersøkelsen/i.test(alert.textContent ?? ""))).toBe(true);
-  });
-
-  it("treats a forbidden/unauthenticated current-survey race as unavailable, never as a fabricated empty state", async () => {
-    fetchCurrentTeamSurveyMock.mockResolvedValue({ status: "forbidden" });
-
-    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
-
-    await screen.findByText("Platform");
-    expect(screen.queryByText(/ingen pågående undersøkelse/i)).toBeNull();
-    expect(screen.getAllByRole("alert").length).toBeGreaterThan(0);
-  });
-
-  it("also renders the section alongside a results-unavailable error", async () => {
-    fetchTeamResultsMock.mockResolvedValue({ status: "read_failed" });
-    fetchCurrentTeamSurveyMock.mockResolvedValue({
-      status: "ok",
-      survey: { surveyId: "survey-1", accessMode: "public", lifecycle: "open" },
-    });
-
-    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
-
-    await screen.findByRole("link", { name: /svar på undersøkelsen/i });
-    expect(screen.getByText(/teamets resultater/i)).toBeTruthy();
-  });
-
-  it("never renders response count or result content in this section", async () => {
-    fetchCurrentTeamSurveyMock.mockResolvedValue({
-      status: "ok",
-      survey: { surveyId: "survey-1", accessMode: "public", lifecycle: "open" },
-    });
-
-    const { container } = render(<TeamDetail teamId="team-1" forumEnabled={true} />);
-
-    await screen.findByRole("link", { name: /svar på undersøkelsen/i });
-    expect(container.textContent).not.toMatch(/\d+ svar/);
-  });
-
-  it("never queries the current-survey endpoint for a caller the overview already reports as denied", async () => {
-    fetchTeamsOverviewMock.mockResolvedValue({
-      status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform", relationship: "none" }],
-    });
-
-    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
-
-    await screen.findByRole("button", { name: /be om tilgang/i });
-    expect(fetchCurrentTeamSurveyMock).not.toHaveBeenCalled();
-  });
-
-  it("contains no leftover English copy in the current-survey section", async () => {
-    fetchCurrentTeamSurveyMock.mockResolvedValue({
-      status: "ok",
-      survey: { surveyId: "survey-1", accessMode: "public", lifecycle: "open" },
-    });
-
-    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
-
-    await screen.findByRole("link", { name: /svar på undersøkelsen/i });
-    expect(screen.queryByText(/^answer the survey$/i)).toBeNull();
-    expect(screen.queryByText(/^no current survey$/i)).toBeNull();
-  });
-});
-
-describe("TeamDetail current-survey section auth/route races (TASK-010)", () => {
-  beforeEach(() => {
-    fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
-    fetchTeamThreadsMock.mockResolvedValue(NO_THREADS);
-    fetchTeamSkillsMock.mockResolvedValue(NO_SKILLS);
-  });
-
-  afterEach(() => {
-    cleanup();
-    observeIdTokenMock.mockReset();
-    fetchTeamsOverviewMock.mockReset();
-    requestTeamAccessMock.mockReset();
-    fetchTeamResultsMock.mockReset();
-    fetchCurrentTeamSurveyMock.mockReset();
-    fetchTeamChallengesMock.mockReset();
-    fetchTeamThreadsMock.mockReset();
-    fetchTeamSkillsMock.mockReset();
-    reportTeamSkillProgressMock.mockReset();
-    createThreadMock.mockReset();
-    routerPushMock.mockReset();
-    submitChallengeMock.mockReset();
-  });
-
-  it("ignores a stale current-survey result that resolves after the user has signed out", async () => {
-    const observer = capturingObserver();
-    fetchTeamsOverviewMock.mockResolvedValue({
-      status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform", relationship: "member" }],
-    });
-    fetchTeamResultsMock.mockResolvedValue(INSUFFICIENT_RESULTS);
-    const calls = queuedCalls(fetchCurrentTeamSurveyMock);
-
-    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
-    observer.emit("token-a");
-    await waitFor(() => expect(fetchCurrentTeamSurveyMock).toHaveBeenCalledTimes(1));
-
-    observer.emit(null);
-    await screen.findByRole("link", { name: /logg inn/i });
-
-    calls.resolve(0, {
-      status: "ok",
-      survey: { surveyId: "survey-1", accessMode: "public", lifecycle: "open" },
-    });
-    await flushMicrotasks();
-
-    expect(screen.queryByRole("link", { name: /svar på undersøkelsen/i })).toBeNull();
-    expect(screen.getByRole("link", { name: /logg inn/i })).toBeTruthy();
-  });
-
-  it("ignores team A's stale current-survey result once the route has changed to team B", async () => {
-    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
-    fetchTeamsOverviewMock.mockResolvedValue({
-      status: "ok",
-      teams: [
-        { teamId: "team-a", name: "Team A", relationship: "member" },
-        { teamId: "team-b", name: "Team B", relationship: "member" },
-      ],
-    });
-    fetchTeamResultsMock.mockResolvedValue({
-      status: "ok",
-      teamId: "team-a",
-      results: INSUFFICIENT_RESULTS.results,
-    });
-    let resolveTeamASurvey: (value: unknown) => void = () => {};
-    fetchCurrentTeamSurveyMock
-      .mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            resolveTeamASurvey = resolve;
-          }),
-      )
-      .mockResolvedValue({ status: "ok", survey: null });
-
-    const { rerender } = render(<TeamDetail teamId="team-a" forumEnabled={true} />);
-    await waitFor(() => expect(fetchCurrentTeamSurveyMock).toHaveBeenCalledWith("a-token", "team-a"));
-
-    rerender(<TeamDetail teamId="team-b" forumEnabled={true} />);
-    await screen.findByText("Team B");
-
-    resolveTeamASurvey({
-      status: "ok",
-      survey: { surveyId: "team-a-survey", accessMode: "public", lifecycle: "open" },
-    });
-    await flushMicrotasks();
-
-    expect(screen.queryByRole("link", { name: /svar på undersøkelsen/i })).toBeNull();
-  });
-
-  it("does not update state after unmount even if a pending current-survey fetch resolves later", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
-    fetchTeamsOverviewMock.mockResolvedValue({
-      status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform", relationship: "member" }],
-    });
-    fetchTeamResultsMock.mockResolvedValue(INSUFFICIENT_RESULTS);
-    const calls = queuedCalls(fetchCurrentTeamSurveyMock);
-
-    const { unmount } = render(<TeamDetail teamId="team-1" forumEnabled={true} />);
-    await waitFor(() => expect(fetchCurrentTeamSurveyMock).toHaveBeenCalledTimes(1));
-
-    unmount();
-
-    expect(() =>
-      calls.resolve(0, {
-        status: "ok",
-        survey: { surveyId: "survey-1", accessMode: "public", lifecycle: "open" },
-      }),
-    ).not.toThrow();
-    await flushMicrotasks();
-
-    expect(errorSpy).not.toHaveBeenCalled();
-    errorSpy.mockRestore();
   });
 });
 
@@ -1266,7 +908,7 @@ describe("TeamDetail auth/route races", () => {
     await waitFor(() => expect(fetchTeamResultsMock).toHaveBeenCalledWith("a-token", "team-a"));
 
     rerender(<TeamDetail teamId="team-b" forumEnabled={true} />);
-    await screen.findAllByText(/minst 5 personer har svart/i);
+    await screen.findByRole("heading", { level: 1 });
 
     // Team A's fallback results request resolves late as fully authorized —
     // it must never be allowed to render on team B's now-current page.
@@ -1274,7 +916,7 @@ describe("TeamDetail auth/route races", () => {
     await flushMicrotasks();
 
     expect(screen.queryByText("7 svar")).toBeNull();
-    expect(screen.getAllByText(/minst 5 personer har svart/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Team");
   });
 
   it("ignores a post-request-access refresh result if the account switches before it resolves", async () => {
@@ -1433,17 +1075,6 @@ describe("TeamDetail challenges section (TASK-005)", () => {
     expect(screen.getByText(/ingen utfordringer ennå/i)).toBeTruthy();
   });
 
-  it("shows a distinct challenge-list error without hiding results/current survey (independent section failures)", async () => {
-    fetchTeamChallengesMock.mockResolvedValue({ status: "read_failed" });
-    fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
-
-    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
-
-    await screen.findByText("7 svar");
-    const alerts = screen.getAllByRole("alert");
-    expect(alerts.some((alert) => /lasting av utfordringer/i.test(alert.textContent ?? ""))).toBe(true);
-  });
-
   it("keeps the challenges section on a results read failure (results_unavailable branch)", async () => {
     fetchTeamResultsMock.mockResolvedValue({ status: "read_failed" });
     fetchTeamChallengesMock.mockResolvedValue({ status: "ok", challenges: [OPEN_CHALLENGE], canSubmit: true });
@@ -1452,16 +1083,6 @@ describe("TeamDetail challenges section (TASK-005)", () => {
 
     await screen.findByText(/teamets resultater/i);
     expect(screen.getByText(OPEN_CHALLENGE.text)).toBeTruthy();
-  });
-
-  it("keeps the challenges section on a current-survey read failure", async () => {
-    fetchCurrentTeamSurveyMock.mockResolvedValue({ status: "read_failed" });
-    fetchTeamChallengesMock.mockResolvedValue({ status: "ok", challenges: [OPEN_CHALLENGE], canSubmit: true });
-
-    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
-
-    await screen.findByText(OPEN_CHALLENGE.text);
-    expect(screen.getByRole("heading", { name: /pågående undersøkelse/i })).toBeTruthy();
   });
 
   it("never fetches challenges for a caller the overview already reports as denied", async () => {
@@ -1664,7 +1285,7 @@ describe("TeamDetail forum section (TASK-005)", () => {
 
     render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
-    await screen.findByText("7 svar");
+    await screen.findByRole("heading", { level: 1 });
     const alerts = screen.getAllByRole("alert");
     expect(alerts.some((alert) => /lasting av forumet/i.test(alert.textContent ?? ""))).toBe(true);
   });
@@ -1956,6 +1577,18 @@ describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
     expect(fetchTeamSkillsMock).toHaveBeenCalledWith("a-token", "team-1");
   });
 
+  it("shows the loaded competence-area count under the team name, and no count when the skill read fails", async () => {
+    fetchTeamSkillsMock.mockResolvedValue({ status: "ok", skills: [TRACKED_SKILL], canReportProgress: true });
+    const { unmount } = render(<TeamDetail teamId="team-1" forumEnabled={true} />);
+    expect(await screen.findByText("1 kompetanseområde")).toBeTruthy();
+    unmount();
+
+    fetchTeamSkillsMock.mockResolvedValue({ status: "read_failed" });
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
+    await screen.findByRole("heading", { name: "Kompetanseområder" });
+    expect(screen.queryByText(/kompetanseområde(r)?$/)).toBeNull();
+  });
+
   it("shows the Norwegian empty state when the team tracks no SkillTree", async () => {
     fetchTeamSkillsMock.mockResolvedValue(NO_SKILLS);
 
@@ -1990,7 +1623,7 @@ describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
 
     render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
-    await screen.findByText("7 svar");
+    await screen.findByRole("heading", { level: 1 });
     const alerts = screen.getAllByRole("alert");
     expect(alerts.some((alert) => /lasting av kompetanseområder/i.test(alert.textContent ?? ""))).toBe(true);
   });
@@ -2040,7 +1673,7 @@ describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
 
     render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
-    await screen.findByText("7 svar");
+    await screen.findByRole("heading", { level: 1 });
     expect(screen.getByText("Containers")).toBeTruthy();
     expect(pathStageItem("Fundamentals")).toBeTruthy();
     expect(await screen.findByText(/planene kunne ikke lastes/i)).toBeTruthy();
@@ -2052,7 +1685,7 @@ describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
 
     render(<TeamDetail teamId="team-1" forumEnabled={true} />);
 
-    await screen.findByText("7 svar");
+    await screen.findByRole("heading", { level: 1 });
     expect(screen.getAllByRole("alert").some((a) => /lasting av kompetanseområder/i.test(a.textContent ?? ""))).toBe(true);
   });
 
@@ -2254,228 +1887,10 @@ describe("TeamDetail skill section (TASK-007, extended by TASK-002)", () => {
  * behavior TASK-003 adds: the empty-results skip gate, the chart-local
  * loading fallback, and chart-local failure isolation.
  */
-describe("TeamDetail lazy TrendChart (TASK-003)", () => {
-  beforeEach(() => {
-    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
-    fetchTeamsOverviewMock.mockResolvedValue({
-      status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform", relationship: "member" }],
-    });
-    fetchCurrentTeamSurveyMock.mockResolvedValue(NO_CURRENT_SURVEY);
-    fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
-    fetchTeamThreadsMock.mockResolvedValue(NO_THREADS);
-    fetchTeamSkillsMock.mockResolvedValue(NO_SKILLS);
-  });
-
-  afterEach(() => {
-    cleanup();
-    vi.resetModules();
-    // Restores next/dynamic's real implementation for later tests — only
-    // the module-load-failure test below narrowly mocks it.
-    vi.doUnmock("next/dynamic");
-    observeIdTokenMock.mockReset();
-    fetchTeamsOverviewMock.mockReset();
-    fetchTeamResultsMock.mockReset();
-    fetchCurrentTeamSurveyMock.mockReset();
-    fetchTeamChallengesMock.mockReset();
-    fetchTeamThreadsMock.mockReset();
-    fetchTeamSkillsMock.mockReset();
-  });
-
-  it("renders no chart region and no chart-local loading state when there are no results to chart (BR-15)", async () => {
-    fetchTeamResultsMock.mockResolvedValue({ status: "ok", teamId: "team-1", results: [] });
-
-    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
-
-    await screen.findByText("Platform");
-    expect(screen.queryByRole("heading", { name: /trendvisualisering/i })).toBeNull();
-    expect(screen.queryByText(/laster trendvisualisering/i)).toBeNull();
-
-    // Give any stray async work a chance to settle, then re-confirm nothing
-    // appeared afterward either — never merely a synchronous snapshot.
-    await flushMicrotasks();
-    expect(screen.queryByRole("heading", { name: /trendvisualisering/i })).toBeNull();
-    expect(screen.queryByText(/laster trendvisualisering/i)).toBeNull();
-  });
-
-  it("does not increase TrendChart module-load invocations when there are no results to chart (BR-15)", async () => {
-    const callsBefore = trendChartModuleLoadedMock.mock.calls.length;
-    fetchTeamResultsMock.mockResolvedValue({ status: "ok", teamId: "team-1", results: [] });
-
-    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
-
-    await screen.findByText("Platform");
-    await flushMicrotasks();
-
-    expect(trendChartModuleLoadedMock.mock.calls.length).toBe(callsBefore);
-  });
-
-  it("shows the chart-local LoadingState while the chart module is pending, without hiding surrounding sections (BR-16)", async () => {
-    fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
-    const gate = deferredPromise<void>();
-
-    vi.resetModules();
-    vi.doMock("../../results/components/TrendChart", async (importOriginal) => {
-      await gate.promise;
-      return importOriginal();
-    });
-    const { TeamDetail: FreshTeamDetail } = await import("./TeamDetail");
-
-    render(<FreshTeamDetail teamId="team-1" forumEnabled={true} />);
-
-    await screen.findByText("Platform");
-    // Surrounding sections (the table above the chart) are already rendered,
-    // independent of the still-pending chart module.
-    expect(screen.getByRole("heading", { name: /siste undersøkelser/i })).toBeTruthy();
-    expect(await screen.findByText(/laster trendvisualisering/i)).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: /trendvisualisering/i })).toBeNull();
-
-    gate.resolve();
-
-    expect(await screen.findByRole("heading", { name: /trendvisualisering/i })).toBeTruthy();
-    expect(screen.queryByText(/laster trendvisualisering/i)).toBeNull();
-  });
-
-  it("isolates a chart module-load failure to the chart's own section, leaving every sibling section rendered (BR-18)", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
-    fetchTeamChallengesMock.mockResolvedValue({
-      status: "ok",
-      challenges: [{ challengeId: "c1", text: "Deploy process has no clear owner", status: "open", submittedAt: "2026-01-10" }],
-    });
-
-    vi.resetModules();
-    vi.doMock("../../results/components/TrendChart", () => {
-      throw new Error("simulated chunk-load failure");
-    });
-    // `next/dynamic` is documented as "a composite of React.lazy() and
-    // Suspense" (verified against the installed Next.js docs/types — SPEC →
-    // AD-6). Under jsdom/Vitest (no live Next.js App Router runtime),
-    // `next/dynamic`'s own internal wrapping does not reliably surface a
-    // rejected loader promise the way it does in a real Next.js render —
-    // this substitutes its documented, first-party-equivalent composition
-    // so the module-load rejection this test forces propagates
-    // deterministically. It changes none of `TeamDetail.tsx`'s production
-    // code: the real loader function and the real `catchError` boundary
-    // from `TeamDetail.tsx` are exercised unmodified — only `next/dynamic`'s
-    // own internal wiring is substituted, and only for this one test.
-    // `next/dynamic` itself is exercised for real by every other test in
-    // this file (e.g. the "fetches and renders results for a member" and
-    // loading-state tests above), and again by `pnpm build`.
-    vi.doMock("next/dynamic", () => ({
-      default: (loader: () => Promise<ComponentType<unknown>>, options: { loading?: () => ReactNode }) => {
-        const Lazy = lazy(() => loader().then((Component) => ({ default: Component })));
-        return function DynamicStub(props: object) {
-          return (
-            <Suspense fallback={options?.loading ? options.loading() : null}>
-              <Lazy {...props} />
-            </Suspense>
-          );
-        };
-      },
-    }));
-    const { TeamDetail: FreshTeamDetail } = await import("./TeamDetail");
-
-    render(<FreshTeamDetail teamId="team-1" forumEnabled={true} />);
-
-    await screen.findByText("Platform");
-    const fallback = await screen.findByText(/trendvisualiseringen kunne ikke lastes/i);
-    expect(fallback.getAttribute("role")).toBe("alert");
-
-    // No sensitive/internal exception detail is ever shown.
-    expect(document.body.textContent).not.toMatch(/simulated chunk-load failure/);
-
-    // Every sibling section remains rendered — never a page-level failure.
-    expect(screen.queryByText(teamsCopy.detail.error)).toBeNull();
-    expect(screen.getByText("7 svar")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: /siste undersøkelser/i })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Utfordringer" })).toBeTruthy();
-    expect(screen.getByText("Deploy process has no clear owner")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Forum" })).toBeTruthy();
-
-    // The boundary triggers no data fetching of its own.
-    expect(fetchTeamResultsMock).toHaveBeenCalledTimes(1);
-
-    errorSpy.mockRestore();
-  });
-
-  it("isolates a chart render failure (once the module has loaded) to the chart's own section, leaving every sibling section rendered (BR-18)", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
-
-    vi.resetModules();
-    vi.doMock("../../results/components/TrendChart", () => ({
-      TrendChart: () => {
-        throw new Error("simulated render failure");
-      },
-    }));
-    const { TeamDetail: FreshTeamDetail } = await import("./TeamDetail");
-
-    render(<FreshTeamDetail teamId="team-1" forumEnabled={true} />);
-
-    await screen.findByText("Platform");
-    const fallback = await screen.findByText(/trendvisualiseringen kunne ikke lastes/i);
-    expect(fallback.getAttribute("role")).toBe("alert");
-    expect(document.body.textContent).not.toMatch(/simulated render failure/);
-
-    expect(screen.queryByText(teamsCopy.detail.error)).toBeNull();
-    expect(screen.getByText("7 svar")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: /siste undersøkelser/i })).toBeTruthy();
-    expect(fetchTeamResultsMock).toHaveBeenCalledTimes(1);
-
-    errorSpy.mockRestore();
-  });
-});
-
 
 // Regression for BR-15: the zone children RoadmapPlanningScope, TeamSkillNeedsSection and TeamRosterSection
 // previously shared `key={generation}` inside TeamaktivitetZone's children array. The duplicate-prone survey
 // data is kept so the boundary also covers the TrendTable row keys.
-describe("TeamDetail duplicate-key boundary (visual-redesign TASK-007)", () => {
-  beforeEach(() => {
-    fetchCurrentTeamSurveyMock.mockResolvedValue(NO_CURRENT_SURVEY);
-    fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
-    fetchTeamThreadsMock.mockResolvedValue(NO_THREADS);
-    fetchTeamSkillsMock.mockResolvedValue(NO_SKILLS);
-    fetchSkillNeedsMock.mockReturnValue(new Promise(() => {}));
-    fetchSkillContributionMock.mockReturnValue(new Promise(() => {}));
-  });
-
-  afterEach(() => {
-    cleanup();
-    observeIdTokenMock.mockReset();
-    fetchTeamsOverviewMock.mockReset();
-    fetchTeamResultsMock.mockReset();
-  });
-
-  it("renders the team overview with two results that share a survey id, and logs no same-key error", async () => {
-    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
-    fetchTeamsOverviewMock.mockResolvedValue({
-      status: "ok",
-      teams: [{ teamId: "team-1", name: "Demo Team", relationship: "member" }],
-    });
-    const duplicateProne = {
-      status: "ok",
-      teamId: "team-1",
-      results: [...PUBLISHED_RESULTS.results, PUBLISHED_RESULTS.results[0]],
-    };
-    fetchTeamResultsMock.mockResolvedValue(duplicateProne);
-
-    const errors: string[] = [];
-    const spy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
-      errors.push(args.map(String).join(" "));
-    });
-    try {
-      render(<TeamDetail teamId="team-1" forumEnabled={true} />);
-      await waitFor(() => expect(document.querySelectorAll("tbody tr").length).toBeGreaterThan(0));
-    } finally {
-      spy.mockRestore();
-    }
-
-    expect(errors.filter((message) => /same key/i.test(message))).toEqual([]);
-  });
-});
-
 describe("TeamDetail header (visual-redesign TASK-008)", () => {
   beforeEach(() => {
     fetchCurrentTeamSurveyMock.mockResolvedValue(NO_CURRENT_SURVEY);
@@ -2502,7 +1917,7 @@ describe("TeamDetail header (visual-redesign TASK-008)", () => {
     fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
 
     render(<TeamDetail teamId="team-1" forumEnabled={true} />);
-    await waitFor(() => expect(document.querySelectorAll("tbody tr").length).toBeGreaterThan(0));
+    await screen.findByRole("heading", { level: 1 });
 
     const headings = screen.getAllByRole("heading", { level: 1 });
     expect(headings).toHaveLength(1);
@@ -2528,7 +1943,7 @@ describe("TeamDetail tabs and insufficient data (visual-redesign TASK-008)", () 
     fetchTeamResultsMock.mockReset();
   });
 
-  it("offers only the existing team routes as tabs", async () => {
+  it("offers only the approved team routes as tabs (Oversikt, Roadmap, Kompetanseplan, Teamkompetanse, Systemoversikt)", async () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
@@ -2537,35 +1952,21 @@ describe("TeamDetail tabs and insufficient data (visual-redesign TASK-008)", () 
     fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
 
     render(<TeamDetail teamId="team-1" forumEnabled={true} />);
-    await waitFor(() => expect(document.querySelectorAll("tbody tr").length).toBeGreaterThan(0));
+    await screen.findByRole("heading", { level: 1 });
 
     const nav = screen.getByRole("navigation", { name: teamsCopy.nav.label });
     const hrefs = within(nav)
       .getAllByRole("link")
       .map((link) => link.getAttribute("href"));
-    expect(hrefs).toEqual(["/teams/team-1", "/teams/team-1/roadmap"]);
+    expect(hrefs).toEqual([
+      "/teams/team-1",
+      "/teams/team-1/roadmap",
+      "/teams/team-1/competence-plan",
+      "/teams/team-1/competence",
+      "/teams/team-1/systems",
+    ]);
   });
 
-  it("shows insufficient-data text for a suppressed survey and never a standalone zero", async () => {
-    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
-    fetchTeamsOverviewMock.mockResolvedValue({
-      status: "ok",
-      teams: [{ teamId: "team-1", name: "Demo Team", relationship: "member" }],
-    });
-    fetchTeamResultsMock.mockResolvedValue({
-      status: "ok",
-      teamId: "team-1",
-      results: [
-        { surveyId: "survey-1", date: "2026-08-17T00:00:00.000Z", minimumResponses: 5, status: "insufficient" },
-      ],
-    });
-
-    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
-    await waitFor(() => expect(screen.getAllByText("For få svar ennå").length).toBeGreaterThan(0));
-
-    // Scoped to the results section: the open-challenge count in the team summary row is a real count, not a survey value.
-    expect(within(screen.getByRole("region", { name: teamsCopy.detail.resultaterHeading })).queryByText("0")).toBeNull();
-  });
 });
 
 describe("TeamDetail side-by-side composition (visual-redesign TASK-008, decision B)", () => {
@@ -2610,25 +2011,6 @@ describe("TeamDetail side-by-side composition (visual-redesign TASK-008, decisio
     expect(needsColumn.compareDocumentPosition(challengeColumn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("places the team development chart beside the competency needs panel at lg, not beside the summary (TASK-029)", async () => {
-    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
-    fetchTeamsOverviewMock.mockResolvedValue({
-      status: "ok",
-      teams: [{ teamId: "team-1", name: "Demo Team", relationship: "member" }],
-    });
-    fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
-    fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
-
-    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
-
-    const chartHeading = await screen.findByRole("heading", { name: "Trendvisualisering" });
-    const chartColumn = chartHeading.closest("div.min-w-0") as HTMLElement;
-    const needsColumn = chartColumn.previousElementSibling as HTMLElement;
-    expect(chartColumn.parentElement?.className).toContain("lg:grid-cols-2");
-    expect(needsColumn.parentElement).toBe(chartColumn.parentElement);
-    expect(needsColumn.textContent).toMatch(/Kompetansebehov/i);
-    expect(chartColumn.textContent).not.toMatch(/7 svar/);
-  });
 });
 
 describe("team overview heading structure (visual-redesign TASK-019)", () => {
@@ -2650,5 +2032,40 @@ describe("team overview heading structure (visual-redesign TASK-019)", () => {
     await screen.findByRole("heading", { level: 1, name: "Demo Team" });
     expectHeadingStructure(document.body, { ownsPageTitle: true });
     expectNamedControls(document.body);
+  });
+});
+
+describe("TeamDetail Oversikt after the results move (team-experience-redesign BR-5)", () => {
+  beforeEach(() => {
+    fetchCurrentTeamSurveyMock.mockResolvedValue(NO_CURRENT_SURVEY);
+    fetchTeamChallengesMock.mockResolvedValue(NO_CHALLENGES);
+    fetchTeamThreadsMock.mockResolvedValue(NO_THREADS);
+    fetchTeamSkillsMock.mockResolvedValue(NO_SKILLS);
+    fetchSkillNeedsMock.mockReturnValue(new Promise(() => {}));
+    fetchSkillContributionMock.mockReturnValue(new Promise(() => {}));
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("links to the results route and renders no survey history, trend table or chart on Oversikt", async () => {
+    cleanup();
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "member" }],
+    });
+    fetchTeamResultsMock.mockResolvedValue(PUBLISHED_RESULTS);
+
+    render(<TeamDetail teamId="team-1" forumEnabled={true} />);
+    await screen.findByRole("heading", { level: 1 });
+
+    const link = screen.getByRole("link", { name: teamsCopy.results.openLink });
+    expect(link.getAttribute("href")).toBe("/teams/team-1/results");
+    expect(screen.queryByText("7 svar")).toBeNull();
+    expect(screen.queryByText(/minst 5 personer har svart/i)).toBeNull();
+    expect(screen.queryByTestId("trend-chart")).toBeNull();
+    expect(fetchCurrentTeamSurveyMock).not.toHaveBeenCalled();
   });
 });

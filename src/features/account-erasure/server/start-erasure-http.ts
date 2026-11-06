@@ -68,6 +68,7 @@ const OPERATION_STATUS: Record<Exclude<StartErasureError, "unauthenticated" | "e
   recent_auth_required: 403,
   confirmation_mismatch: 400,
   erasure_unavailable: 503,
+  last_superadmin: 409,
 };
 
 export async function startErasureResponse(

@@ -1,44 +1,28 @@
 import "server-only";
 import { type VerifiedIdentity } from "../../auth/server/verify-identity";
-import { normalizeEmail } from "./normalize-email";
+import { readSuperadminActive } from "../../superadmins/server/superadmin-policy";
 
 /**
- * Server-only, deploy-time allow-list of app-admin email addresses, read
- * from `APP_ADMIN_EMAILS` (comma-separated) at call time. Never exposed to
- * client code (docs/features/team-management/SPEC.md — BR-36).
+ * Injectable superadmin lookup. Production reads the Firebase-backed registry (`superadmins/{uid}`) on every call; tests
+ * inject a fake. There is no environment-variable or email allow-list path any more (docs/SECURITY.md, superadmin
+ * section): `APP_ADMIN_EMAILS` is no longer read by this module.
  */
-function getAdminAllowListFromEnv(): readonly string[] {
-  const raw = process.env.APP_ADMIN_EMAILS ?? "";
-
-  return raw
-    .split(",")
-    .map((entry) => normalizeEmail(entry))
-    .filter((entry) => entry.length > 0);
-}
-
 export interface IsAppAdminDeps {
-  allowList?: readonly string[];
+  isSuperadmin?: (uid: string) => Promise<boolean>;
 }
 
 /**
- * Determines app-admin status solely from the caller's already-verified
- * identity (`uid`/`email`/`emailVerified`, established by `verifyIdToken`
- * — including its revocation check — never re-verified here) and the
- * server-only admin allow-list. Requires `emailVerified` in addition to an
- * allow-list match; never trusts any other field on `identity` as
- * authorization evidence (docs/features/team-management/SPEC.md — BR-5,
- * BR-6).
+ * Determines superadmin (app-admin) status from the caller's already-verified identity: the UID must have an active
+ * registry record, and the verified-email requirement is kept (docs/features/team-management/SPEC.md — BR-5, BR-6).
+ * The email address is never an authorization key. Only `uid` and `emailVerified` from `identity` are trusted.
+ *
+ * Async: every caller must `await` it. A registry read failure rejects, so the caller fails closed.
  */
-export function isAppAdmin(
-  identity: VerifiedIdentity,
-  deps: IsAppAdminDeps = {},
-): boolean {
+export async function isAppAdmin(identity: VerifiedIdentity, deps: IsAppAdminDeps = {}): Promise<boolean> {
   if (!identity.emailVerified) {
     return false;
   }
 
-  const allowList = deps.allowList ?? getAdminAllowListFromEnv();
-  return allowList
-    .map((entry) => normalizeEmail(entry))
-    .includes(normalizeEmail(identity.email));
+  const isSuperadmin = deps.isSuperadmin ?? readSuperadminActive;
+  return isSuperadmin(identity.uid);
 }

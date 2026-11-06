@@ -21,6 +21,7 @@ const REPLY_ID = "reply-1";
 const AUTHOR_UID = "author-1";
 const OTHER_MEMBER_UID = "member-2";
 const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const ADMIN_EMAIL = "admin@example.com";
 const NOW = new Date("2026-09-01T00:00:00Z");
 
@@ -107,7 +108,7 @@ function failingForumReplyDocStore(): ForumReplyDocStore {
 function baseDeps(overrides: Partial<DeleteReplyDeps> = {}): DeleteReplyDeps {
   return {
     verifyToken: verifyTokenReturning(memberIdentity()),
-    allowList: [ADMIN_EMAIL],
+    isSuperadmin: isAdminUid,
     docs: fakeForumReplyDocStore(activeReplyRecord()),
     now: NOW,
     ...overrides,
@@ -403,7 +404,7 @@ describe("deleteReply", () => {
 
     const detail = await getThreadWithReplies("token", TEAM_ID, THREAD_ID, {
       verifyToken: verifyTokenReturning(memberIdentity()),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       authCollection,
       threadReader,
       repliesReader,
@@ -439,13 +440,13 @@ describe("deleteReply", () => {
     const [authorResult, adminResult] = await Promise.all([
       deleteReply("token-1", TEAM_ID, THREAD_ID, REPLY_ID, {
         verifyToken: verifyTokenReturning(memberIdentity()),
-        allowList: [ADMIN_EMAIL],
+        isSuperadmin: isAdminUid,
         docs,
         now: new Date("2026-09-01T00:00:00Z"),
       }),
       deleteReply("token-2", TEAM_ID, THREAD_ID, REPLY_ID, {
         verifyToken: verifyTokenReturning(adminIdentity()),
-        allowList: [ADMIN_EMAIL],
+        isSuperadmin: isAdminUid,
         docs,
         now: new Date("2026-09-01T00:00:05Z"),
       }),
@@ -644,7 +645,7 @@ describe("deleteReply", () => {
 
       const deleted = await deleteReply("token", TEAM_ID, THREAD_ID, replyId, {
         verifyToken: verifyTokenReturning(memberIdentity()),
-        allowList: [ADMIN_EMAIL],
+        isSuperadmin: isAdminUid,
         docs: store,
         now: NOW,
       });
@@ -658,7 +659,7 @@ describe("deleteReply", () => {
 
       const detail = await getThreadWithReplies("token", TEAM_ID, THREAD_ID, {
         verifyToken: verifyTokenReturning(memberIdentity()),
-        allowList: [ADMIN_EMAIL],
+        isSuperadmin: isAdminUid,
         authCollection,
         threadReader,
         repliesReader: store,

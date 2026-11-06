@@ -56,7 +56,7 @@ describe("GET /api/teams/[teamId]/assignable-members", () => {
           uid: "user-secret-uid",
           email: "alex@example.com",
           createdAt: "2026-01-01",
-          role: "lead",
+          role: "teamadmin",
           hasMemberRef: true,
           authorTag: "tag-secret",
         },

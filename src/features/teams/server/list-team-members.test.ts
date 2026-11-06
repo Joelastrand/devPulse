@@ -11,6 +11,8 @@ vi.mock("../../profiles/server/get-display-names", () => ({
 }));
 
 const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 
 function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
   return { uid: "admin-1", email: ADMIN_EMAIL, emailVerified: true, ...overrides };
@@ -66,7 +68,7 @@ describe("listTeamMembers", () => {
 
     const result = await listTeamMembers("token", "team-1", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
       getUser,
     });
@@ -91,7 +93,7 @@ describe("listTeamMembers", () => {
 
     const result = await listTeamMembers("token", "team-1", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
       getUser,
     });
@@ -112,7 +114,7 @@ describe("listTeamMembers", () => {
 
     const result = await listTeamMembers("token", "team-1", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
       getUser,
     });
@@ -129,7 +131,7 @@ describe("listTeamMembers", () => {
 
     const result = await listTeamMembers("bad-token", "team-1", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -139,13 +141,13 @@ describe("listTeamMembers", () => {
 
   it("rejects a non-admin caller and attempts no read", async () => {
     const verifyToken = verifyTokenReturning(
-      verifiedIdentity({ email: "dev@example.com" }),
+      verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" }),
     );
     const collection = fakeCollection([]);
 
     const result = await listTeamMembers("token", "team-1", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -161,20 +163,20 @@ describe("listTeamMembers", () => {
 
     const result = await listTeamMembers("token", "team-1", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
     expect(result).toEqual({ ok: false, error: "read_failed" });
   });
 
-  it("never includes the admin allow-list in the returned result", async () => {
-    const allowList = [ADMIN_EMAIL, "other-admin@example.com"];
+  it("never includes superadmin identifiers in the returned result", async () => {
+    const isSuperadmin = isAdminUid;
     const collection = fakeCollection([]);
 
     const result = await listTeamMembers("token", "team-1", {
       verifyToken: verifyTokenReturning(verifiedIdentity()),
-      allowList,
+      isSuperadmin,
       collection,
     });
 
@@ -187,7 +189,7 @@ describe("listTeamMembers", () => {
 
     const result = await listTeamMembers("token", "team-1", {
       verifyToken: verifyTokenReturning(verifiedIdentity()),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
       getUser,
     });
@@ -214,7 +216,7 @@ describe("listTeamMembers", () => {
 
     const resultPromise = listTeamMembers("token", "team-1", {
       verifyToken: verifyTokenReturning(verifiedIdentity()),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
       getUser,
     });
@@ -254,7 +256,7 @@ describe("listTeamMembers", () => {
 
     const result = await listTeamMembers("token", "team-1", {
       verifyToken: verifyTokenReturning(verifiedIdentity()),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
       getUser,
     });
@@ -272,7 +274,7 @@ describe("listTeamMembers", () => {
 describe("listTeamMembers — display name and stored role (additive admin fields)", () => {
   const deps = (collection: TeamMembersCollection, getUser = fakeGetUser({ "user-1": "one@example.com", "user-2": "two@example.com", "user-3": "three@example.com" })) => ({
     verifyToken: verifyTokenReturning(verifiedIdentity()),
-    allowList: [ADMIN_EMAIL],
+    isSuperadmin: isAdminUid,
     collection,
     getUser,
   });
@@ -317,16 +319,16 @@ describe("listTeamMembers — display name and stored role (additive admin field
     });
   });
 
-  it("reports the stored role: lead for role: \"lead\", member for no role — several leads allowed", async () => {
+  it("reports the stored role: teamadmin for role: \"teamadmin\", member for no role — several teamadmins allowed", async () => {
     const collection = fakeCollection([
-      { uid: "user-1", teamId: "team-1", role: "lead" },
+      { uid: "user-1", teamId: "team-1", role: "teamadmin" },
       { uid: "user-2", teamId: "team-1" },
-      { uid: "user-3", teamId: "team-1", role: "lead" },
+      { uid: "user-3", teamId: "team-1", role: "teamadmin" },
     ]);
 
     const result = await listTeamMembers("token", "team-1", deps(collection));
 
-    expect(result.ok && result.members.map((member) => member.role)).toEqual(["lead", "member", "lead"]);
+    expect(result.ok && result.members.map((member) => member.role)).toEqual(["teamadmin", "member", "teamadmin"]);
   });
 
   it.each([
@@ -344,7 +346,7 @@ describe("listTeamMembers — display name and stored role (additive admin field
   });
 
   it("reports the stored role regardless of team status (this list never reads it)", async () => {
-    const collection = fakeCollection([{ uid: "user-1", teamId: "team-1", role: "lead", roleUpdatedBy: "admin-0" }]);
+    const collection = fakeCollection([{ uid: "user-1", teamId: "team-1", role: "teamadmin", roleUpdatedBy: "admin-0" }]);
 
     const result = await listTeamMembers("token", "team-1", deps(collection));
 
@@ -352,14 +354,14 @@ describe("listTeamMembers — display name and stored role (additive admin field
       uid: "user-1",
       email: "one@example.com",
       displayName: null,
-      role: "lead",
+      role: "teamadmin",
       hasMemberRef: false,
     });
   });
 
-  it("still excludes a member whose Auth account is gone, even if they hold a profile and a lead role (existing semantics)", async () => {
+  it("still excludes a member whose Auth account is gone, even if they hold a profile and a teamadmin role (existing semantics)", async () => {
     getDisplayNamesMock.mockResolvedValue(new Map([["user-1", "Anna Berg"]]));
-    const collection = fakeCollection([{ uid: "user-1", teamId: "team-1", role: "lead" }]);
+    const collection = fakeCollection([{ uid: "user-1", teamId: "team-1", role: "teamadmin" }]);
 
     const result = await listTeamMembers("token", "team-1", deps(collection, fakeGetUser({})));
 
@@ -368,8 +370,8 @@ describe("listTeamMembers — display name and stored role (additive admin field
 
   it("does not read profiles for a non-admin caller", async () => {
     const result = await listTeamMembers("token", "team-1", {
-      verifyToken: verifyTokenReturning(verifiedIdentity({ email: "dev@example.com" })),
-      allowList: [ADMIN_EMAIL],
+      verifyToken: verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" })),
+      isSuperadmin: isAdminUid,
       collection: fakeCollection([{ uid: "user-1", teamId: "team-1" }]),
     });
 
@@ -382,7 +384,7 @@ describe("listTeamMembers — hasMemberRef readiness signal (team-skill-planning
   const VALID_REF = "0123456789abcdefghjkmnpqrs";
   const deps = (collection: TeamMembersCollection) => ({
     verifyToken: verifyTokenReturning(verifiedIdentity()),
-    allowList: [ADMIN_EMAIL],
+    isSuperadmin: isAdminUid,
     collection,
     getUser: fakeGetUser({ "user-1": "one@example.com" }),
   });

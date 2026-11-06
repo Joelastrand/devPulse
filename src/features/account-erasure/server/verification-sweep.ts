@@ -46,7 +46,9 @@ export const ROW_OWNING_STEP: Readonly<Record<string, ErasureStep>> = {
   "I-12": "survey_participations",
   "I-13": "forum",
   "I-14": "forum",
+  "I-16": "personal_data",
   "A-1": "actor_audit",
+  "A-16": "actor_audit",
   "A-2": "actor_audit",
   "A-3": "actor_audit",
   "A-4": "actor_audit",
@@ -58,6 +60,9 @@ export const ROW_OWNING_STEP: Readonly<Record<string, ErasureStep>> = {
   "A-10": "actor_audit",
   "A-11": "actor_audit",
   "A-12": "actor_audit",
+  "A-13": "actor_audit",
+  "A-14": "memberships",
+  "A-15": "memberships",
 };
 
 export interface SweepReport {

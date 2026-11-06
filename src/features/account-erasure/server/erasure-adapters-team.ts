@@ -18,8 +18,14 @@ import type { InvitationTransaction, InvitationsErasurePort } from "./invitation
 const MEMBERSHIPS = "teamMemberships";
 const ACCESS_REQUESTS = "teamAccessRequests";
 const ROADMAP_ITEMS = "roadmapItems";
+const TEAM_SYSTEMS = "teamSystems";
 const INVITATIONS = "teamInvitations";
 const PREFIX_END = "";
+
+/** The string entries of a stored ref list. A system matched by the array query always carries an array. */
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+}
 
 function assertUidSegment(uid: string): void {
   if (uid.length === 0 || uid.includes("/")) throw new Error("erasure adapter: invalid uid segment");
@@ -45,6 +51,31 @@ export function createMembershipPort(): MembershipErasurePort {
           },
           clearRoadmapOwnerRef(itemId) {
             tx.update(db.collection(ROADMAP_ITEMS).doc(itemId), { ownerRef: null });
+          },
+          async systemsKnowingMemberRef(teamId, memberRef, limit) {
+            // A-14: transactional, so a system that gains this ref concurrently conflicts with the membership delete.
+            const snapshot = await tx.get(
+              db
+                .collection(TEAM_SYSTEMS)
+                .where("teamId", "==", teamId)
+                .where("knowledgeMemberRefs", "array-contains", memberRef)
+                .limit(limit),
+            );
+            return snapshot.docs.map((doc) => ({ systemId: doc.id, knowledgeMemberRefs: stringList(doc.data()?.knowledgeMemberRefs) }));
+          },
+          setKnowledgeMemberRefs(systemId, knowledgeMemberRefs) {
+            // Writes the filtered list computed by the step. Only this field changes; a retry recomputes from current data.
+            tx.update(db.collection(TEAM_SYSTEMS).doc(systemId), { knowledgeMemberRefs });
+          },
+          async participationIdsOf(teamId, memberRef, limit) {
+            // A-15: transactional, so a participation written concurrently conflicts with the membership delete.
+            const snapshot = await tx.get(
+              db.collection("teamProjectParticipations").where("teamId", "==", teamId).where("memberRef", "==", memberRef).limit(limit),
+            );
+            return snapshot.docs.map((doc) => doc.id);
+          },
+          deleteParticipation(participationId) {
+            tx.delete(db.collection("teamProjectParticipations").doc(participationId));
           },
           deleteMembership(membershipId) {
             tx.delete(db.collection(MEMBERSHIPS).doc(membershipId));

@@ -119,10 +119,11 @@ const { resolveTeamRole } = await import("./resolve-team-role");
 const { listTeamRoster } = await import("./list-team-roster");
 
 const ADMIN_EMAIL = "admin@example.com";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === "admin-1";
 const NOW = new Date("2026-10-01T00:00:00Z");
 const adminDeps = {
   verifyToken: vi.fn().mockResolvedValue({ uid: "admin-1", email: ADMIN_EMAIL, email_verified: true }),
-  allowList: [ADMIN_EMAIL],
+  isSuperadmin: isAdminUid,
   now: NOW,
 };
 
@@ -142,9 +143,9 @@ describe("setTeamMemberRole against the production transaction adapter", () => {
   it("promotes, then demotes by deleting the role field while keeping the membership", async () => {
     store.set("teamMemberships/user-1__team-1", membership("user-1"));
 
-    await setTeamMemberRole("t", "team-1", "user-1", "lead", adminDeps);
+    await setTeamMemberRole("t", "team-1", "user-1", "teamadmin", adminDeps);
     expect(store.get("teamMemberships/user-1__team-1")).toMatchObject({
-      role: "lead",
+      role: "teamadmin",
       roleUpdatedBy: "admin-1",
       roleUpdatedAt: NOW,
     });
@@ -156,34 +157,34 @@ describe("setTeamMemberRole against the production transaction adapter", () => {
   });
 
   it("refuses promotion on a disabled team, writing nothing, but still allows demotion there", async () => {
-    store.set("teamMemberships/user-1__team-1", membership("user-1", { role: "lead" }));
+    store.set("teamMemberships/user-1__team-1", membership("user-1", { role: "teamadmin" }));
     store.set("teams/team-1", { name: "Team One", status: "disabled" });
 
-    const promote = await setTeamMemberRole("t", "team-1", "user-1", "lead", adminDeps);
+    const promote = await setTeamMemberRole("t", "team-1", "user-1", "teamadmin", adminDeps);
     expect(promote).toEqual({ ok: false, error: "team_disabled" });
-    expect(store.get("teamMemberships/user-1__team-1")?.role).toBe("lead");
+    expect(store.get("teamMemberships/user-1__team-1")?.role).toBe("teamadmin");
     expect(store.get("teamMemberships/user-1__team-1")).not.toHaveProperty("roleUpdatedAt");
 
     const demote = await setTeamMemberRole("t", "team-1", "user-1", "member", adminDeps);
-    expect(demote).toEqual({ ok: true, role: "member" });
+    expect(demote).toMatchObject({ ok: true, role: "member" });
     expect(store.get("teamMemberships/user-1__team-1")).not.toHaveProperty("role");
   });
 
   it("never creates a membership document for a non-member", async () => {
-    const result = await setTeamMemberRole("t", "team-1", "stranger", "lead", adminDeps);
+    const result = await setTeamMemberRole("t", "team-1", "stranger", "teamadmin", adminDeps);
 
     expect(result).toEqual({ ok: false, error: "not_a_member" });
     expect([...store.keys()].filter((path) => path.startsWith("teamMemberships/"))).toEqual([]);
   });
 
   it("does not touch any other member's document when one lead is set", async () => {
-    store.set("teamMemberships/user-1__team-1", membership("user-1", { role: "lead" }));
+    store.set("teamMemberships/user-1__team-1", membership("user-1", { role: "teamadmin" }));
     store.set("teamMemberships/user-2__team-1", membership("user-2"));
 
-    await setTeamMemberRole("t", "team-1", "user-2", "lead", adminDeps);
+    await setTeamMemberRole("t", "team-1", "user-2", "teamadmin", adminDeps);
 
-    expect(store.get("teamMemberships/user-1__team-1")).toEqual(membership("user-1", { role: "lead" }));
-    expect(store.get("teamMemberships/user-2__team-1")?.role).toBe("lead");
+    expect(store.get("teamMemberships/user-1__team-1")).toEqual(membership("user-1", { role: "teamadmin" }));
+    expect(store.get("teamMemberships/user-2__team-1")?.role).toBe("teamadmin");
   });
 });
 
@@ -223,7 +224,7 @@ describe("existing membership grant paths never write or inherit a role", () => 
   });
 
   it("a lead who is removed and later re-granted comes back as an ordinary member", async () => {
-    store.set("teamMemberships/user-1__team-1", membership("user-1", { role: "lead", roleUpdatedAt: NOW, roleUpdatedBy: "admin-1" }));
+    store.set("teamMemberships/user-1__team-1", membership("user-1", { role: "teamadmin", roleUpdatedAt: NOW, roleUpdatedBy: "admin-1" }));
 
     const removed = await removeTeamMember("t", "team-1", "user-1", adminDeps);
     expect(removed).toEqual({ ok: true });
@@ -237,7 +238,7 @@ describe("existing membership grant paths never write or inherit a role", () => 
   });
 
   it("an existing lead is left exactly as it was by a later grant attempt (no overwrite, no demotion)", async () => {
-    const lead = membership("user-1", { role: "lead", roleUpdatedAt: NOW, roleUpdatedBy: "admin-1" });
+    const lead = membership("user-1", { role: "teamadmin", roleUpdatedAt: NOW, roleUpdatedBy: "admin-1" });
     store.set("teamMemberships/user-1__team-1", lead);
 
     const outcome = await grantTeamMembership({ uid: "user-1", teamId: "team-1", createdAt: NOW, createdVia: "invitation", grantedBy: "admin-2" });
@@ -307,7 +308,7 @@ describe("memberRef lifecycle (team-skill-planning TASK-001)", () => {
     await grant();
     const ref = store.get("teamMemberships/user-1__team-1")?.memberRef;
 
-    await setTeamMemberRole("t", "team-1", "user-1", "lead", adminDeps);
+    await setTeamMemberRole("t", "team-1", "user-1", "teamadmin", adminDeps);
     expect(store.get("teamMemberships/user-1__team-1")?.memberRef).toBe(ref);
     await setTeamMemberRole("t", "team-1", "user-1", "member", adminDeps);
     expect(store.get("teamMemberships/user-1__team-1")?.memberRef).toBe(ref);
@@ -317,7 +318,7 @@ describe("memberRef lifecycle (team-skill-planning TASK-001)", () => {
     const stranger = { uid: "user-9", email: "x@example.com", emailVerified: true };
     store.set("teamMemberships/user-1__team-1", membership("user-1", { memberRef: "0123456789abcdefghjkmnpqrs" }));
 
-    expect(await authorizeTeamAccess(stranger, "team-1", { allowList: [ADMIN_EMAIL] })).toEqual({ ok: true, access: "denied" });
+    expect(await authorizeTeamAccess(stranger, "team-1", { isSuperadmin: isAdminUid })).toEqual({ ok: true, access: "denied" });
   });
 
   it("the F0 roster still returns only displayName/isLead/isSelf and never the memberRef", async () => {
@@ -325,7 +326,7 @@ describe("memberRef lifecycle (team-skill-planning TASK-001)", () => {
     const ref = store.get("teamMemberships/user-1__team-1")?.memberRef as string;
     const result = await listTeamRoster("t", "team-1", {
       verifyToken: vi.fn().mockResolvedValue({ uid: "user-1", email: "dev@example.com", email_verified: true }),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
     });
 
     expect(result.ok).toBe(true);
@@ -336,11 +337,11 @@ describe("memberRef lifecycle (team-skill-planning TASK-001)", () => {
 
 describe("authorizeTeamAccess is unaffected by the role field", () => {
   const nonAdmin = { uid: "user-1", email: "dev@example.com", emailVerified: true };
-  const deps = { allowList: [ADMIN_EMAIL] };
+  const deps = { isSuperadmin: isAdminUid };
 
   it.each([
     ["no role (every pre-existing membership)", {}],
-    ["role: lead", { role: "lead" }],
+    ["role: lead", { role: "teamadmin" }],
     ["an unknown role value", { role: "superuser" }],
     ["a malformed role value", { role: 42 }],
   ])("a member with %s is exactly \"member\"", async (_label, extra) => {
@@ -350,7 +351,7 @@ describe("authorizeTeamAccess is unaffected by the role field", () => {
   });
 
   it("removing a lead's membership leaves them with no access at all on the very next check", async () => {
-    store.set("teamMemberships/user-1__team-1", membership("user-1", { role: "lead" }));
+    store.set("teamMemberships/user-1__team-1", membership("user-1", { role: "teamadmin" }));
     expect(await authorizeTeamAccess(nonAdmin, "team-1", deps)).toEqual({ ok: true, access: "member" });
 
     await removeTeamMember("t", "team-1", "user-1", adminDeps);
@@ -359,7 +360,7 @@ describe("authorizeTeamAccess is unaffected by the role field", () => {
   });
 
   it("a lead on a disabled team is still just a member — no new rights are granted", async () => {
-    store.set("teamMemberships/user-1__team-1", membership("user-1", { role: "lead" }));
+    store.set("teamMemberships/user-1__team-1", membership("user-1", { role: "teamadmin" }));
     store.set("teams/team-1", { name: "Team One", status: "disabled" });
 
     expect(await authorizeTeamAccess(nonAdmin, "team-1", deps)).toEqual({ ok: true, access: "member" });
@@ -368,35 +369,35 @@ describe("authorizeTeamAccess is unaffected by the role field", () => {
 
 describe("resolveTeamRole against the production Firestore reads", () => {
   const nonAdmin = { uid: "user-1", email: "dev@example.com", emailVerified: true };
-  const deps = { allowList: [ADMIN_EMAIL] };
+  const deps = { isSuperadmin: isAdminUid };
 
   it("resolves lead, member and denied from real documents, while authorizeTeamAccess keeps reporting the lead as member", async () => {
-    store.set("teamMemberships/user-1__team-1", membership("user-1", { role: "lead" }));
+    store.set("teamMemberships/user-1__team-1", membership("user-1", { role: "teamadmin" }));
     store.set("teamMemberships/user-2__team-1", membership("user-2"));
 
-    expect(await resolveTeamRole(nonAdmin, "team-1", deps)).toEqual({ ok: true, role: "lead" });
-    expect(await resolveTeamRole({ ...nonAdmin, uid: "user-2" }, "team-1", deps)).toEqual({ ok: true, role: "member" });
-    expect(await resolveTeamRole({ ...nonAdmin, uid: "user-3" }, "team-1", deps)).toEqual({ ok: true, role: "denied" });
+    expect(await resolveTeamRole(nonAdmin, "team-1", deps)).toMatchObject({ ok: true, role: "teamadmin" });
+    expect(await resolveTeamRole({ ...nonAdmin, uid: "user-2" }, "team-1", deps)).toMatchObject({ ok: true, role: "member" });
+    expect(await resolveTeamRole({ ...nonAdmin, uid: "user-3" }, "team-1", deps)).toMatchObject({ ok: true, role: "denied" });
     expect(await authorizeTeamAccess(nonAdmin, "team-1", deps)).toEqual({ ok: true, access: "member" });
   });
 
-  it("makes a stored lead dormant while the team is disabled and effective again after re-activation", async () => {
-    store.set("teamMemberships/user-1__team-1", membership("user-1", { role: "lead" }));
+  it("keeps a stored teamadmin dormant (no write right) while the team is disabled, effective again after re-activation", async () => {
+    store.set("teamMemberships/user-1__team-1", membership("user-1", { role: "teamadmin" }));
 
     store.set("teams/team-1", { name: "Team One", status: "disabled" });
-    expect(await resolveTeamRole(nonAdmin, "team-1", deps)).toEqual({ ok: true, role: "member" });
-    expect(store.get("teamMemberships/user-1__team-1")?.role).toBe("lead");
+    expect(await resolveTeamRole(nonAdmin, "team-1", deps)).toMatchObject({ ok: true, role: "teamadmin", canAdminister: false });
+    expect(store.get("teamMemberships/user-1__team-1")?.role).toBe("teamadmin");
 
     store.set("teams/team-1", { name: "Team One", status: "active" });
-    expect(await resolveTeamRole(nonAdmin, "team-1", deps)).toEqual({ ok: true, role: "lead" });
+    expect(await resolveTeamRole(nonAdmin, "team-1", deps)).toMatchObject({ ok: true, role: "teamadmin", canAdminister: true });
   });
 
   it("resolves an app admin to admin even when also a lead member", async () => {
-    store.set("teamMemberships/admin-1__team-1", membership("admin-1", { role: "lead" }));
+    store.set("teamMemberships/admin-1__team-1", membership("admin-1", { role: "teamadmin" }));
 
     const result = await resolveTeamRole({ uid: "admin-1", email: ADMIN_EMAIL, emailVerified: true }, "team-1", deps);
 
-    expect(result).toEqual({ ok: true, role: "admin" });
+    expect(result).toMatchObject({ ok: true, role: "admin" });
   });
 });
 
@@ -406,7 +407,7 @@ describe("listTeamRoster against the production Firestore reads", () => {
 
   it("builds the roster from real memberships and profile documents with no Auth lookup and no uid in the output", async () => {
     store.set("teamMemberships/user-1__team-1", membership("user-1", { createdAt: timestamp(NOW) }));
-    store.set("teamMemberships/user-2__team-1", membership("user-2", { role: "lead", roleUpdatedBy: "admin-secret" }));
+    store.set("teamMemberships/user-2__team-1", membership("user-2", { role: "teamadmin", roleUpdatedBy: "admin-secret" }));
     store.set("teamMemberships/user-3__team-2", { ...membership("user-3"), teamId: "team-2" });
     store.set("userProfiles/user-1", { displayName: "Anna Berg", createdAt: NOW, updatedAt: NOW });
     store.set("userProfiles/user-3", { displayName: "Other Team Person", createdAt: NOW, updatedAt: NOW });
@@ -437,7 +438,7 @@ describe("listTeamRoster against the production Firestore reads", () => {
   });
 
   it("does not turn a dormant lead on a disabled team into an effective lead", async () => {
-    store.set("teamMemberships/user-1__team-1", membership("user-1", { role: "lead" }));
+    store.set("teamMemberships/user-1__team-1", membership("user-1", { role: "teamadmin" }));
     store.set("teams/team-1", { name: "Team One", status: "disabled" });
 
     const result = await listTeamRoster("t", "team-1", { verifyToken });

@@ -7,6 +7,7 @@ import { approveAccessRequest } from "./approve-access-request";
 
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const NOW = new Date("2026-09-01T00:00:00Z");
 
 function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
@@ -53,7 +54,7 @@ function fakeCollection(
 
 const baseDeps = {
   verifyToken: verifyTokenReturning(verifiedIdentity()),
-  allowList: [ADMIN_EMAIL],
+  isSuperadmin: isAdminUid,
 };
 
 describe("rejectAccessRequest", () => {
@@ -116,8 +117,8 @@ describe("rejectAccessRequest", () => {
     });
 
     const result = await rejectAccessRequest("token", "user-1", "team-1", {
-      verifyToken: verifyTokenReturning(verifiedIdentity({ email: "dev@example.com" })),
-      allowList: [ADMIN_EMAIL],
+      verifyToken: verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" })),
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -132,7 +133,7 @@ describe("rejectAccessRequest", () => {
 
     const result = await rejectAccessRequest("token", "user-1", "team-1", {
       verifyToken: vi.fn().mockRejectedValue(new Error("bad token")),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 

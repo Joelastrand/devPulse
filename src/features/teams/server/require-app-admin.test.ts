@@ -13,6 +13,7 @@ vi.mock("../../../lib/firebase/admin", () => ({
 }));
 
 const ADMIN_EMAIL = "admin@example.com";
+const superadmin = async (uid: string) => uid === "admin-1";
 
 function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
   return { uid: "admin-1", email: ADMIN_EMAIL, emailVerified: true, ...overrides };
@@ -32,7 +33,7 @@ describe("requireAppAdmin", () => {
 
     const result = await requireAppAdmin("token", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
     });
 
     expect(result).toEqual({ ok: true, identity: verifiedIdentity() });
@@ -43,7 +44,7 @@ describe("requireAppAdmin", () => {
 
     const result = await requireAppAdmin("bad-token", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
     });
 
     expect(result).toEqual({ ok: false, error: "unauthenticated" });
@@ -51,12 +52,12 @@ describe("requireAppAdmin", () => {
 
   it("rejects a verified but non-admin caller", async () => {
     const verifyToken = verifyTokenReturning(
-      verifiedIdentity({ email: "dev@example.com" }),
+      verifiedIdentity({ uid: "dev-1", email: "dev@example.com" }),
     );
 
     const result = await requireAppAdmin("token", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
     });
 
     expect(result).toEqual({ ok: false, error: "forbidden" });
@@ -69,7 +70,7 @@ describe("requireAppAdmin", () => {
 
     const result = await requireAppAdmin("token", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
     });
 
     expect(result).toEqual({ ok: false, error: "forbidden" });
@@ -78,23 +79,23 @@ describe("requireAppAdmin", () => {
   it("checks token revocation by default when no verifyToken override is supplied", async () => {
     verifyIdTokenSpy.mockClear();
 
-    await requireAppAdmin("token", { allowList: [ADMIN_EMAIL] });
+    await requireAppAdmin("token", { isSuperadmin: superadmin });
 
     expect(verifyIdTokenSpy).toHaveBeenCalledWith("token", true);
   });
 
   it("never includes the admin allow-list in the returned result, success or failure", async () => {
-    const allowList = [ADMIN_EMAIL, "other-admin@example.com"];
+    const isSuperadmin = superadmin;
 
     const okResult = await requireAppAdmin("token", {
       verifyToken: verifyTokenReturning(verifiedIdentity()),
-      allowList,
+      isSuperadmin,
     });
     const forbiddenResult = await requireAppAdmin("token", {
       verifyToken: verifyTokenReturning(
-        verifiedIdentity({ email: "dev@example.com" }),
+        verifiedIdentity({ uid: "dev-1", email: "dev@example.com" }),
       ),
-      allowList,
+      isSuperadmin,
     });
 
     expect(JSON.stringify(okResult)).not.toContain("other-admin@example.com");
@@ -110,11 +111,11 @@ describe("requireAppAdmin", () => {
 
     await requireAppAdmin("token", {
       verifyToken: verifyTokenReturning(verifiedIdentity()),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
     });
     await requireAppAdmin("bad-token", {
       verifyToken: vi.fn().mockRejectedValue(new Error("bad token")),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: superadmin,
     });
 
     expect(logSpy).not.toHaveBeenCalled();

@@ -122,7 +122,7 @@ export type StartTeamSkillTrackingResult =
 export interface StartTeamSkillTrackingDeps {
   now?: Date;
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: IsAppAdminDeps["allowList"];
+  isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   treeReader?: SkillTreeReader;
   teamStatusReader?: TeamStatusReader;
   progress?: SkillProgressStore;
@@ -156,7 +156,7 @@ export async function startTeamSkillTracking(
 ): Promise<StartTeamSkillTrackingResult> {
   const admin = await requireAppAdmin(idToken, {
     verifyToken: deps.verifyToken,
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
   });
   if (!admin.ok) {
     return { ok: false, error: admin.error };

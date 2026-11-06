@@ -19,6 +19,7 @@ import type { RawSkillTreeRead, RawSkillTreeReader } from "./skill-tree-seam-typ
 
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const OWNER = "uid-owner";
 const NOW = new Date("2026-10-03T12:00:00Z");
 const CREATED_AT = new Date("2026-10-01T10:00:00Z");
@@ -81,7 +82,7 @@ describe("role create — count-then-create (BR-7)", () => {
   function createDeps(store: RoleStore): CreateRoleDeps {
     return {
       verifyToken: verifyAsAdmin(),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       store,
       treeReader: treeReader({ api: VALID_TREE }),
       now: () => NOW,
@@ -130,7 +131,7 @@ describe("role update and archive — single-document last write wins", () => {
   function archiveDeps(store: RoleStore): SetRoleArchivedDeps {
     return {
       verifyToken: verifyAsAdmin(),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       store,
       treeReader: treeReader({ api: VALID_TREE }),
       now: () => NOW,
@@ -193,7 +194,7 @@ describe("target selection — transactional (PG-7)", () => {
     expect(await setOwnRoleTarget(OWNER, "role-1", { targets, now: () => NOW })).toEqual({ ok: true });
     await setRoleArchived("token", "role-1", true, {
       verifyToken: verifyAsAdmin(),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       store,
       treeReader: treeReader({ api: VALID_TREE }),
       now: () => NOW,

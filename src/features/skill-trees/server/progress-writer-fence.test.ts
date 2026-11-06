@@ -53,12 +53,13 @@ vi.mock("../../../lib/firebase/admin", () => ({
 }));
 
 const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const ADMIN_EMAIL = "admin@example.com";
 const TEAM = "team-1";
 const TREE = "tree-1";
 const PROGRESS = `skillProgress/${skillProgressDocId(TEAM, TREE)}`;
 const verifyToken = vi.fn().mockResolvedValue({ uid: ADMIN_UID, email: ADMIN_EMAIL, email_verified: true });
-const allowList = [ADMIN_EMAIL];
+const isSuperadmin = isAdminUid;
 const treeReader = { get: async () => ({ exists: true, data: () => tree }) };
 const tree = {
   name: "Container adoption",
@@ -84,7 +85,7 @@ function raiseErasure(): void {
   db.docs.set(`accountErasures/${ADMIN_UID}`, { status: "in_progress", step: "forum" });
 }
 
-const deps = { verifyToken, allowList, treeReader };
+const deps = { verifyToken, isSuperadmin, treeReader };
 
 beforeEach(() => {
   db.docs.clear();
@@ -96,7 +97,7 @@ describe("team skill-progress writers are refused while the admin's erasure reco
     db.docs.set(`teams/${TEAM}`, { status: "active" });
     raiseErasure();
 
-    expect(await startTeamSkillTracking("t", TEAM, TREE, { verifyToken, allowList, treeReader })).toEqual({
+    expect(await startTeamSkillTracking("t", TEAM, TREE, { verifyToken, isSuperadmin, treeReader })).toEqual({
       ok: false,
       error: "erasure_in_progress",
     });
@@ -107,7 +108,7 @@ describe("team skill-progress writers are refused while the admin's erasure reco
     seedProgress();
     raiseErasure();
 
-    expect(await stopTeamSkillTracking("t", TEAM, TREE, { verifyToken, allowList })).toEqual({
+    expect(await stopTeamSkillTracking("t", TEAM, TREE, { verifyToken, isSuperadmin: isAdminUid })).toEqual({
       ok: false,
       error: "erasure_in_progress",
     });

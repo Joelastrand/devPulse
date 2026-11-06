@@ -6,6 +6,7 @@ import { createSkillTree } from "./create-skill-tree";
 
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const NOW = new Date("2026-09-01T00:00:00Z");
 
 function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
@@ -34,7 +35,7 @@ function fakeCollection(): SkillTreesCollection & { writes: SkillTreeRecord[] } 
 function baseDeps(overrides: Partial<CreateSkillTreeDeps> = {}): CreateSkillTreeDeps {
   return {
     verifyToken: verifyTokenReturning(verifiedIdentity()),
-    allowList: [ADMIN_EMAIL],
+    isSuperadmin: isAdminUid,
     collection: fakeCollection(),
     now: NOW,
     ...overrides,
@@ -87,7 +88,7 @@ describe("createSkillTree", () => {
 
   it("rejects a non-admin caller and attempts no write", async () => {
     const collection = fakeCollection();
-    const verifyToken = verifyTokenReturning(verifiedIdentity({ email: "dev@example.com" }));
+    const verifyToken = verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" }));
 
     const result = await createSkillTree("token", "Container adoption", TWO_LABELS, baseDeps({ collection, verifyToken }));
 

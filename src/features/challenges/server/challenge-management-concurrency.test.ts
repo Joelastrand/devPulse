@@ -65,13 +65,13 @@ describe("concurrent challenge management", () => {
     const [result1, result2] = await Promise.all([
       resolveChallenge("token-1", TEAM_ID, CHALLENGE_ID, {
         verifyToken: verifyTokenFor(admin1),
-        allowList: [admin1.email, admin2.email],
+        isSuperadmin: async (uid: string) => [admin1.uid, admin2.uid].includes(uid),
         docs: store,
         now: new Date("2026-09-01T00:00:00Z"),
       }),
       resolveChallenge("token-2", TEAM_ID, CHALLENGE_ID, {
         verifyToken: verifyTokenFor(admin2),
-        allowList: [admin1.email, admin2.email],
+        isSuperadmin: async (uid: string) => [admin1.uid, admin2.uid].includes(uid),
         docs: store,
         now: new Date("2026-09-01T00:00:05Z"),
       }),
@@ -124,13 +124,13 @@ describe("concurrent challenge management", () => {
     const [resolveResult, archiveResult] = await Promise.all([
       resolveChallenge("token-1", TEAM_ID, CHALLENGE_ID, {
         verifyToken: verifyTokenFor(admin1),
-        allowList: [admin1.email, admin2.email],
+        isSuperadmin: async (uid: string) => [admin1.uid, admin2.uid].includes(uid),
         docs: resolveStore,
         now: new Date("2026-09-01T00:00:00Z"),
       }),
       archiveChallenge("token-2", TEAM_ID, CHALLENGE_ID, {
         verifyToken: verifyTokenFor(admin2),
-        allowList: [admin1.email, admin2.email],
+        isSuperadmin: async (uid: string) => [admin1.uid, admin2.uid].includes(uid),
         docs: archiveStore,
         now: new Date("2026-09-01T00:00:05Z"),
       }),

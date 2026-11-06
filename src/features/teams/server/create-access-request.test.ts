@@ -69,7 +69,7 @@ function fakeRequests(
   };
 }
 
-const baseDeps = { verifyToken: verifyTokenReturning(identity()) };
+const baseDeps = { verifyToken: verifyTokenReturning(identity()), isSuperadmin: async () => false };
 
 describe("createAccessRequest", () => {
   it("creates a pending request for a verified non-member (BR-23)", async () => {
@@ -115,8 +115,8 @@ describe("createAccessRequest", () => {
     const requests = fakeRequests();
 
     const result = await createAccessRequest("token", "team-1", {
-      verifyToken: verifyTokenReturning(identity({ email: ADMIN_EMAIL })),
-      allowList: [ADMIN_EMAIL],
+      verifyToken: verifyTokenReturning(identity({ uid: "admin-1", email: ADMIN_EMAIL })),
+      isSuperadmin: async (uid: string) => uid === "admin-1",
       authorizeCollection: authCollection,
       teamsCollection: fakeTeams({ "team-1": "active" }),
       collection: requests,

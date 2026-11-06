@@ -4,6 +4,8 @@ import type { TeamRecord, TeamsCollection } from "./create-team";
 import { createTeam } from "./create-team";
 
 const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const NOW = new Date("2026-09-01T00:00:00Z");
 
 function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
@@ -36,14 +38,14 @@ describe("createTeam", () => {
 
     const result = await createTeam("token", "Platform", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
       now: NOW,
     });
 
     expect(result).toEqual({ ok: true, teamId: "generated-1" });
     expect(collection.writes).toEqual([
-      { name: "Platform", status: "active", createdAt: NOW, createdBy: "admin-1" },
+      { name: "Platform", status: "active", visibility: "private", createdAt: NOW, createdBy: "admin-1" },
     ]);
   });
 
@@ -53,7 +55,7 @@ describe("createTeam", () => {
 
     const result = await createTeam("token", "Some Team Name", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
       now: NOW,
     });
@@ -70,7 +72,7 @@ describe("createTeam", () => {
 
     const result = await createTeam("bad-token", "Platform", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -81,12 +83,12 @@ describe("createTeam", () => {
   it("rejects a non-admin caller and attempts no write", async () => {
     const collection = fakeCollection();
     const verifyToken = verifyTokenReturning(
-      verifiedIdentity({ email: "dev@example.com" }),
+      verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" }),
     );
 
     const result = await createTeam("token", "Platform", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -102,7 +104,7 @@ describe("createTeam", () => {
 
     const result = await createTeam("token", "Platform", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -116,12 +118,12 @@ describe("createTeam", () => {
 
     const blank = await createTeam("token", "   ", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
     const missing = await createTeam("token", undefined, {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
@@ -136,7 +138,7 @@ describe("createTeam", () => {
 
     await createTeam("token", "  Platform  ", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
       now: NOW,
     });
@@ -152,28 +154,28 @@ describe("createTeam", () => {
 
     const result = await createTeam("token", "Platform", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection,
     });
 
     expect(result).toEqual({ ok: false, error: "persistence_failed" });
   });
 
-  it("never includes the admin allow-list in the returned result, success or failure", async () => {
+  it("never includes superadmin identifiers in the returned result, success or failure", async () => {
     const verifyToken = verifyTokenReturning(verifiedIdentity());
-    const allowList = [ADMIN_EMAIL, "other-admin@example.com"];
+    const isSuperadmin = isAdminUid;
 
     const okResult = await createTeam("token", "Platform", {
       verifyToken,
-      allowList,
+      isSuperadmin,
       collection: fakeCollection(),
       now: NOW,
     });
     const forbiddenResult = await createTeam("token", "Platform", {
       verifyToken: verifyTokenReturning(
-        verifiedIdentity({ email: "dev@example.com" }),
+        verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" }),
       ),
-      allowList,
+      isSuperadmin,
       collection: fakeCollection(),
     });
 
@@ -191,7 +193,7 @@ describe("createTeam", () => {
     const verifyToken = verifyTokenReturning(verifiedIdentity());
     await createTeam("token", "Platform", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection: fakeCollection(),
       now: NOW,
     });
@@ -201,7 +203,7 @@ describe("createTeam", () => {
     };
     await createTeam("token", "Platform", {
       verifyToken,
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
       collection: failingCollection,
     });
 

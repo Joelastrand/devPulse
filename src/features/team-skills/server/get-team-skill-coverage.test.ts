@@ -33,8 +33,8 @@ const CONSENT_SENTINEL = new Date("2031-05-05T05:05:05.000Z");
 type Caller = "member" | "lead" | "leadAdmin" | "nonMemberAdmin" | "unrelated";
 const CALLERS: Record<Caller, { uid: string; email: string; role?: string }> = {
   member: { uid: "u-member", email: "member@example.com", role: "member" },
-  lead: { uid: "u-lead", email: "lead@example.com", role: "lead" },
-  leadAdmin: { uid: "u-ladmin", email: ADMIN_EMAIL, role: "lead" },
+  lead: { uid: "u-lead", email: "lead@example.com", role: "teamadmin" },
+  leadAdmin: { uid: "u-ladmin", email: ADMIN_EMAIL, role: "teamadmin" },
   nonMemberAdmin: { uid: "u-nadmin", email: ADMIN_EMAIL },
   unrelated: { uid: "u-other", email: "other@example.com" },
 };
@@ -244,7 +244,7 @@ describe("eligible uid set handed to the reader", () => {
       { id: "wrong-id", data: { uid: "u-wrongid", teamId: TEAM, ...consent() } },
       { id: membershipDocId("", TEAM), data: { uid: "", teamId: TEAM, ...consent() } },
       { id: "x", data: null },
-      { id: membershipDocId("u-ladmin", TEAM), data: { uid: "u-ladmin", teamId: TEAM, role: "lead" } },
+      { id: membershipDocId("u-ladmin", TEAM), data: { uid: "u-ladmin", teamId: TEAM, role: "teamadmin" } },
     ];
     expect(await readerCalls(base({ memberships }))).toEqual([[["u-ok1", "u-ok2"], ["t1"]]]);
   });

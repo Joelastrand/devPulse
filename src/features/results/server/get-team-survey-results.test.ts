@@ -13,6 +13,8 @@ import { getTeamSurveyResults } from "./get-team-survey-results";
 
 const NOW = new Date("2026-09-05T12:00:00.000Z");
 const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const MEMBER_UID = "member-1";
 const TEAM_A = "team-a";
 const TEAM_B = "team-b";
@@ -136,7 +138,7 @@ function fakeCollections(
 function baseDeps(overrides: Partial<GetTeamSurveyResultsDeps> = {}): GetTeamSurveyResultsDeps {
   return {
     verifyToken: verifyTokenReturning(memberIdentity()),
-    allowList: [ADMIN_EMAIL],
+    isSuperadmin: isAdminUid,
     authCollection: fakeAuthCollection({
       teamStatus: { [TEAM_A]: "active" },
       memberships: { [`${MEMBER_UID}__${TEAM_A}`]: { uid: MEMBER_UID, teamId: TEAM_A } },

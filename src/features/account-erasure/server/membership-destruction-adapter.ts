@@ -18,6 +18,12 @@ import { createParticipantBindingDiscovery, parseOwnedConversationPath } from ".
 const MEMBERSHIPS = "teamMemberships";
 const ROADMAP_ITEMS = "roadmapItems";
 const CONVERSATIONS = "conversations";
+const TEAM_SYSTEMS = "teamSystems";
+
+/** The string entries of a stored ref list. A system matched by the array query always carries an array. */
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+}
 
 function membershipAdapterPort(): MembershipDestructionPort {
   const db = getFirestoreDb();
@@ -65,6 +71,30 @@ function membershipAdapterPort(): MembershipDestructionPort {
               db.collectionGroup(CONVERSATIONS).where("participantMemberRef", "==", memberRef).select().limit(limit),
             );
             return snapshot.size;
+          },
+          async systemsKnowingMemberRef(teamId, memberRef, limit) {
+            // A-14: transactional, so a system that gains this ref concurrently conflicts with the membership delete.
+            const snapshot = await tx.get(
+              db
+                .collection(TEAM_SYSTEMS)
+                .where("teamId", "==", teamId)
+                .where("knowledgeMemberRefs", "array-contains", memberRef)
+                .limit(limit),
+            );
+            return snapshot.docs.map((doc) => ({ systemId: doc.id, knowledgeMemberRefs: stringList(doc.data()?.knowledgeMemberRefs) }));
+          },
+          setKnowledgeMemberRefs(systemId, knowledgeMemberRefs) {
+            tx.update(db.collection(TEAM_SYSTEMS).doc(systemId), { knowledgeMemberRefs });
+          },
+          async participationIdsOf(teamId, memberRef, limit) {
+            // A-15: transactional, so a participation written concurrently conflicts with the membership delete.
+            const snapshot = await tx.get(
+              db.collection("teamProjectParticipations").where("teamId", "==", teamId).where("memberRef", "==", memberRef).limit(limit),
+            );
+            return snapshot.docs.map((doc) => doc.id);
+          },
+          deleteParticipation(participationId) {
+            tx.delete(db.collection("teamProjectParticipations").doc(participationId));
           },
           deleteMembership(membershipId) {
             tx.delete(db.collection(MEMBERSHIPS).doc(membershipId));

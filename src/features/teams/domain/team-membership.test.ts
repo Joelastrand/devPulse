@@ -100,8 +100,8 @@ describe("membershipRoleOf", () => {
     expect(membershipRoleOf({ uid: "user-1", teamId: "team-1" })).toBe("member");
   });
 
-  it('returns "lead" only for exactly role: "lead"', () => {
-    expect(membershipRoleOf({ uid: "user-1", teamId: "team-1", role: "lead" })).toBe("lead");
+  it('returns "lead" only for exactly role: "teamadmin"', () => {
+    expect(membershipRoleOf({ uid: "user-1", teamId: "team-1", role: "teamadmin" })).toBe("teamadmin");
   });
 
   it.each([
@@ -133,7 +133,7 @@ describe("membershipRoleOf", () => {
 
   it("does not change isValidMembershipFor: a membership with any role value is still a valid grant", () => {
     const expected = { uid: "user-1", teamId: "team-1" };
-    expect(isValidMembershipFor({ ...expected, role: "lead" }, expected)).toBe(true);
+    expect(isValidMembershipFor({ ...expected, role: "teamadmin" }, expected)).toBe(true);
     expect(isValidMembershipFor({ ...expected, role: "garbage" }, expected)).toBe(true);
   });
 });

@@ -24,7 +24,7 @@ beforeEach(() => {
 
 describe("membership adapter with the membership step", () => {
   it("nulls the roadmap ownerRef before deleting the membership, and leaves other members and teams alone", async () => {
-    db.docs.set(`teamMemberships/${UID}__${TEAM}`, { uid: UID, teamId: TEAM, memberRef: MEMBER_REF, role: "lead" });
+    db.docs.set(`teamMemberships/${UID}__${TEAM}`, { uid: UID, teamId: TEAM, memberRef: MEMBER_REF, role: "teamadmin" });
     db.docs.set(`teamMemberships/${OTHER}__${TEAM}`, { uid: OTHER, teamId: TEAM, memberRef: "other-ref" });
     db.docs.set(`roadmapItems/${TEAM}__tree-1`, { teamId: TEAM, ownerRef: MEMBER_REF, targetNodeId: "n" });
     db.docs.set(`roadmapItems/other-team__tree-1`, { teamId: "other-team", ownerRef: MEMBER_REF });

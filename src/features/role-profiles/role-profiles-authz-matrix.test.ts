@@ -21,6 +21,7 @@ import type { RawSkillTreeRead, RawSkillTreeReader } from "./server/skill-tree-s
  */
 
 const ADMIN_EMAIL = "admin@example.com";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === "admin-1";
 const NOW = new Date("2026-10-03T12:00:00Z");
 const CREATED_AT = new Date("2026-10-01T10:00:00Z");
 
@@ -84,7 +85,7 @@ function world() {
     create: vi.spyOn(roles, "create"),
     update: vi.spyOn(roles, "update"),
   };
-  const adminDeps = { verifyToken, allowList: [ADMIN_EMAIL], store: roles, treeReader: treeReader(), now: () => NOW };
+  const adminDeps = { verifyToken, isSuperadmin: isAdminUid, store: roles, treeReader: treeReader(), now: () => NOW };
   return { roles, targets, writes, adminDeps };
 }
 

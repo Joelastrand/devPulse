@@ -148,7 +148,7 @@ export function getDefaultRoadmapReadStore(): RoadmapReadStore {
 
 export interface ListRoadmapItemsDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
-  allowList?: AuthorizeTeamAccessDeps["allowList"];
+  isSuperadmin?: AuthorizeTeamAccessDeps["isSuperadmin"];
   /** Seam for `authorizeTeamAccess`'s own reads. */
   collection?: AuthorizeTeamAccessDeps["collection"];
   store?: RoadmapReadStore;
@@ -209,7 +209,7 @@ export async function listRoadmapItems(
   const callerUid = verified.identity.uid;
 
   const authorized = await authorizeTeamAccess(verified.identity, teamId, {
-    allowList: deps.allowList,
+    isSuperadmin: deps.isSuperadmin,
     collection: deps.collection,
   });
   if (!authorized.ok) {

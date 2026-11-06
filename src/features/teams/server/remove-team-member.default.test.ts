@@ -14,13 +14,14 @@ import { ErasureWriteRefused } from "../../auth/server/erasure-write-fence";
 import { removeTeamMember } from "./remove-team-member";
 
 const ADMIN_EMAIL = "admin@example.com";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === "admin-1";
 const verifyToken = vi.fn().mockResolvedValue({ uid: "admin-1", email: ADMIN_EMAIL, email_verified: true });
 
 describe("removeTeamMember: production default", () => {
   it("destroys the membership of (uid, teamId) through the membership-destruction boundary, not a plain delete", async () => {
     destroy.mockClear();
 
-    const result = await removeTeamMember("token", "team-1", "member-1", { verifyToken, allowList: [ADMIN_EMAIL] });
+    const result = await removeTeamMember("token", "team-1", "member-1", { verifyToken, isSuperadmin: isAdminUid });
 
     expect(result).toEqual({ ok: true });
     // The fence subject is the member being removed (the target), not the admin who asked.
@@ -33,7 +34,7 @@ describe("removeTeamMember: production default", () => {
 
     const result = await removeTeamMember("token", "team-1", "member-1", {
       verifyToken: vi.fn().mockResolvedValue({ uid: "someone", email: "x@example.com", email_verified: true }),
-      allowList: [ADMIN_EMAIL],
+      isSuperadmin: isAdminUid,
     });
 
     expect(result).toEqual({ ok: false, error: "forbidden" });
@@ -43,7 +44,7 @@ describe("removeTeamMember: production default", () => {
   it("refuses with erasure_in_progress when the removed member's erasure fence refuses the destruction", async () => {
     destroy.mockRejectedValueOnce(new ErasureWriteRefused());
 
-    const result = await removeTeamMember("token", "team-1", "member-1", { verifyToken, allowList: [ADMIN_EMAIL] });
+    const result = await removeTeamMember("token", "team-1", "member-1", { verifyToken, isSuperadmin: isAdminUid });
 
     expect(result).toEqual({ ok: false, error: "erasure_in_progress" });
   });
@@ -51,7 +52,7 @@ describe("removeTeamMember: production default", () => {
   it("reports a failed destruction as persistence_failed, without the raw error", async () => {
     destroy.mockRejectedValueOnce(new Error("binding_inconsistent for owner-secret"));
 
-    const result = await removeTeamMember("token", "team-1", "member-1", { verifyToken, allowList: [ADMIN_EMAIL] });
+    const result = await removeTeamMember("token", "team-1", "member-1", { verifyToken, isSuperadmin: isAdminUid });
 
     expect(result).toEqual({ ok: false, error: "persistence_failed" });
     expect(JSON.stringify(result)).not.toContain("owner-secret");

@@ -74,7 +74,7 @@ function accessCollection(): AuthorizeTeamAccessCollection {
 function readDeps(overrides: Partial<GetThreadWithRepliesDeps> = {}): GetThreadWithRepliesDeps {
   return {
     verifyToken: verifyAs(MEMBER_UID),
-    allowList: [],
+    isSuperadmin: async () => false,
     authCollection: accessCollection(),
     threadReader: threadReader(placeholder()),
     repliesReader: repliesReader([]),

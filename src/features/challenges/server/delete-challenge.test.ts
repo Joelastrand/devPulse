@@ -6,6 +6,7 @@ import { deleteChallenge } from "./delete-challenge";
 
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_UID = "admin-1";
+const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const TEAM_ID = "team-42";
 const CHALLENGE_ID = "challenge-1";
 
@@ -53,7 +54,7 @@ function fakeChallengeDocStore(data: Record<string, unknown> | undefined): FakeC
 function baseDeps(overrides: Partial<DeleteChallengeDeps> = {}): DeleteChallengeDeps {
   return {
     verifyToken: verifyTokenReturning(verifiedIdentity()),
-    allowList: [ADMIN_EMAIL],
+    isSuperadmin: isAdminUid,
     docs: fakeChallengeDocStore(challengeData()),
     ...overrides,
   };
@@ -130,7 +131,7 @@ describe("deleteChallenge", () => {
 
   it("rejects a non-admin caller and reads nothing", async () => {
     const docs = fakeChallengeDocStore(challengeData());
-    const verifyToken = verifyTokenReturning(verifiedIdentity({ email: "dev@example.com" }));
+    const verifyToken = verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" }));
 
     const result = await deleteChallenge("token", TEAM_ID, CHALLENGE_ID, baseDeps({ docs, verifyToken }));
 
