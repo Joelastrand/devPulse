@@ -505,7 +505,7 @@ belongs in v1. Demo role data may be considered later as a separate demo-refresh
   is a separate explicit step, as for D1.
 - `firestore.indexes.json`: unchanged (AD-7).
 - No environment variable, dependency or runtime configuration change. Admin authorization reuses
-  `APP_ADMIN_EMAILS` and `requireAppAdmin`.
+  the superadmin registry and `requireAppAdmin`.
 - Static guard: a new `role-profiles-scope-guard.test.ts` that pins the collection allow-list
   (`roleDefinitions`, `userDevelopment/{uid}/roleTarget`), importer allow-lists (the new comparison reader of
   `skillProfiles` only), and forbidden concepts (no `teamRole`/`memberRef` reuse, no counts/percentages in

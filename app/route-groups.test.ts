@@ -15,6 +15,7 @@ const EXPECTED_URLS = [
   "/",
   "/admin/roles",
   "/admin/skills",
+  "/admin/superadmins",
   "/admin/teams",
   "/admin/teams/[teamId]",
   "/me/conversations",
@@ -35,6 +36,7 @@ const EXPECTED_URLS = [
   "/teams/[teamId]/forum/[threadId]",
   "/teams/[teamId]/results",
   "/teams/[teamId]/roadmap",
+  "/teams/[teamId]/settings",
   "/teams/[teamId]/systems",
 ];
 

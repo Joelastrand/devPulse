@@ -28,6 +28,8 @@ export const teamsCopy = {
     resultsUnavailable:
       "Noe gikk galt under lasting av teamets resultater. Prøv igjen senere.",
     fallbackName: "Team",
+    /** Header action on the overview: opens the team settings page (Teaminnstillinger). */
+    editTeam: "Rediger team",
     /** Identity count under the team name (TASK-008, reference 18). Only a count already loaded on Oversikt is shown. */
     competenceAreas: (count: number) => `${count} ${count === 1 ? "kompetanseområde" : "kompetanseområder"}`,
     /**
@@ -109,7 +111,7 @@ export const teamsCopy = {
  *
  * `forbidden` is deliberately generic on both screens — it must never
  * confirm or deny whether the caller's email is on the server-only
- * `APP_ADMIN_EMAILS` allow-list (docs/features/team-management/SPEC.md —
+ * superadmin registry (docs/features/team-management/SPEC.md —
  * BR-15/BR-16), so localizing it must not make it any more specific than
  * the English wording it replaces.
  */

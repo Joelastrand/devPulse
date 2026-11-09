@@ -56,3 +56,20 @@ export function buildOversiktNextSteps(input: {
   }
   return steps.slice(0, OVERSIKT_NEXT_STEPS_LIMIT);
 }
+
+/** A list read's total and whether the server cut the list short. */
+export interface HeaderCountRead {
+  count: number;
+  truncated: boolean;
+}
+
+/**
+ * The header count to show for a list read, or `null` when no honest total exists. A truncated list would understate the
+ * team total, so it is omitted rather than shown as a number. A failed or absent read is also `null`.
+ */
+export function completeHeaderCount(read: HeaderCountRead | null): number | null {
+  if (read === null || read.truncated) {
+    return null;
+  }
+  return read.count;
+}

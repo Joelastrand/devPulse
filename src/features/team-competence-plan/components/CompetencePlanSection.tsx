@@ -8,13 +8,18 @@ import { EmptyState } from "../../../components/ui/EmptyState";
 import { LoadingState } from "../../../components/ui/LoadingState";
 import { Select } from "../../../components/ui/Select";
 import { SELF_ASSESSED_LEVEL_COPY } from "../../skill-profiles/copy";
-import { PRIORITY_LABEL, MILESTONE_STATUS_LABEL, competencePlanCopy } from "../copy";
-import { planProgress } from "../domain/competence-plan";
+import { PLAN_CARD_STATUS_LABEL, PRIORITY_LABEL, MILESTONE_STATUS_LABEL, competencePlanCopy } from "../copy";
+import { planProgress, type MilestoneStatus } from "../domain/competence-plan";
+import { formatPlanDate, planCardStatus } from "../domain/plan-presentation";
 import { useCompetencePlans } from "../client/use-competence-plans";
 import type { ClientCompetenceArea, ClientCompetencePlan, CompetencePlanInput, CompetencePlanWriteResult } from "../client/competence-plan-gateway";
 import { CompetencePlanEditor } from "./CompetencePlanEditor";
+import { CompetencePlanOverview } from "./CompetencePlanOverview";
 import { roadmapCopy } from "../../roadmap/copy";
 import type { RoadmapItemView } from "../../roadmap/server/list-roadmap-items";
+
+/** Checklist glyph per milestone status. The status is also spelled out in text (screen-reader and badge), never colour alone. */
+const CHECKLIST_GLYPH: Readonly<Record<MilestoneStatus, string>> = { planned: "", in_progress: "◐", completed: "✓" };
 
 export interface CompetencePlanSectionProps {
   teamId: string;
@@ -71,12 +76,16 @@ export function CompetencePlanSection({ teamId }: CompetencePlanSectionProps) {
 
       {data.truncated ? <Alert variant="info">{competencePlanCopy.truncated}</Alert> : null}
 
+      {data.plans.length > 0 ? <CompetencePlanOverview plans={data.plans} nameOf={areaName} /> : null}
+
       {visiblePlans.length === 0 ? (
         <EmptyState>
           <span className="block font-medium text-text-primary">{competencePlanCopy.emptyTitle}</span>
           {data.canEdit ? competencePlanCopy.emptyHint : null}
         </EmptyState>
       ) : (
+        <div className="flex flex-col gap-3">
+        <h3 className="text-base font-semibold text-text-primary">{competencePlanCopy.details}</h3>
         <ul className="flex flex-col gap-3" aria-label={competencePlanCopy.details}>
           {visiblePlans.map((plan) => {
             const name = areaName(plan.treeId);
@@ -107,6 +116,7 @@ export function CompetencePlanSection({ teamId }: CompetencePlanSectionProps) {
             );
           })}
         </ul>
+        </div>
       )}
 
       <LegacyItems items={data.legacyItems} failed={data.legacyFailed} />
@@ -157,11 +167,12 @@ function PlanSummary({
           <div className="flex flex-wrap gap-2">
             <Badge>{`${competencePlanCopy.priorityLabel}: ${PRIORITY_LABEL[plan.priority]}`}</Badge>
             <Badge>{`${competencePlanCopy.targetStageLabel}: ${SELF_ASSESSED_LEVEL_COPY[plan.targetStage].name}`}</Badge>
+            <Badge>{`${competencePlanCopy.cardStatusHeading}: ${PLAN_CARD_STATUS_LABEL[planCardStatus(plan.milestones)]}`}</Badge>
             {plan.archived ? <Badge>{competencePlanCopy.archivedNotice}</Badge> : null}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="tertiary" size="sm" aria-expanded={expanded} onClick={onToggle}>
+          <Button variant="tertiary" size="sm" aria-expanded={expanded} aria-controls={expanded ? `plan-milestones-${plan.treeId}` : undefined} onClick={onToggle}>
             {expanded ? competencePlanCopy.hideDetails : competencePlanCopy.showDetails}
           </Button>
           {canEdit ? (
@@ -189,19 +200,28 @@ function PlanSummary({
 
       {expanded ? (
         plan.milestones.length === 0 ? (
-          <p className="text-sm text-text-secondary">{competencePlanCopy.milestonesEmpty}</p>
+          <p id={`plan-milestones-${plan.treeId}`} className="text-sm text-text-secondary">{competencePlanCopy.milestonesEmpty}</p>
         ) : (
-          <ol className="flex flex-col gap-2">
-            {plan.milestones.map((milestone) => (
-              <li key={milestone.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                <span className="text-text-primary">{milestone.title}</span>
-                <span className="flex gap-2 text-text-secondary">
-                  {milestone.targetDate ? <span>{milestone.targetDate}</span> : null}
-                  <Badge>{MILESTONE_STATUS_LABEL[milestone.status]}</Badge>
-                </span>
-              </li>
-            ))}
-          </ol>
+          <div id={`plan-milestones-${plan.treeId}`} className="flex flex-col gap-2">
+            <h4 className="text-sm font-semibold text-text-primary">{competencePlanCopy.checklistHeading}</h4>
+            <ul aria-label={competencePlanCopy.checklistHeading} className="flex flex-col gap-2">
+              {plan.milestones.map((milestone) => (
+                <li key={milestone.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span aria-hidden="true" className={"flex size-5 shrink-0 items-center justify-center rounded-full border text-xs font-semibold " + (milestone.status === "completed" ? "border-success-text bg-success-text text-surface" : "border-border-strong text-text-secondary")}>
+                      {CHECKLIST_GLYPH[milestone.status]}
+                    </span>
+                    <span className="text-text-primary">{milestone.title}</span>
+                    <span className="sr-only">{`(${MILESTONE_STATUS_LABEL[milestone.status]})`}</span>
+                  </span>
+                  <span className="flex gap-2 text-text-secondary">
+                    {formatPlanDate(milestone.targetDate) ? <span>{formatPlanDate(milestone.targetDate)}</span> : null}
+                    <Badge>{MILESTONE_STATUS_LABEL[milestone.status]}</Badge>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
         )
       ) : null}
     </div>

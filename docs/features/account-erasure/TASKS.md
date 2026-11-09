@@ -1550,7 +1550,7 @@ These SPEC files.
 
 **Outcome**
 `docs/features/account-erasure/OPERATIONS.md` (feature-scoped; if a repo-level runbook is preferred, the path is changed under the same task and recorded). It covers:
-1. APP_ADMIN_EMAILS: remove an erased admin's email before or with erasure (operator action; no product code).
+1. Superadmin registry: verify the erased account's registry record is absent and the control count is exact (operator read-only check; no product code). Superseded 2026-11-06 from the former APP_ADMIN_EMAILS step.
 2. Firestore TTL policy on `accountErasures.expireAt` (operator action).
 3. Deploy AE-IDX-1 before the first erasure; verify AE-IDX-2.
 4. Auth permissions: service account can call `deleteUser` per environment.

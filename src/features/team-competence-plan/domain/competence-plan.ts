@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { isSelfAssessedLevel, type SelfAssessedLevel } from "../../skill-profiles/domain/self-assessed-level";
 import { isWellFormedTreeId } from "../../skill-profiles/domain/skill-profile";
 import { isRoadmapPriority, type RoadmapPriority } from "../../roadmap/domain/roadmap-item";
@@ -233,13 +232,16 @@ function parseMilestoneInput(raw: unknown, issues: PlanInputIssue[]): MilestoneI
 }
 
 /**
- * Builds the persisted milestone list. Existing ids are kept; a milestone without an id gets a new one. An id that does
- * not belong to the stored plan is refused, so a client cannot attach invented identifiers.
+ * Builds the persisted milestone list. Existing ids are kept; a milestone without an id gets a new one from `newId`. An id
+ * that does not belong to the stored plan is refused, so a client cannot attach invented identifiers.
+ *
+ * `newId` is required: this module is client-reachable and must not import Node-only modules such as `node:crypto`. The
+ * server caller supplies the generator.
  */
 export function resolveMilestones(
   input: readonly MilestoneInput[],
   existing: readonly PlanMilestone[],
-  newId: () => string = randomUUID,
+  newId: () => string,
 ): { ok: true; milestones: PlanMilestone[] } | { ok: false } {
   const known = new Set(existing.map((m) => m.id));
   const milestones: PlanMilestone[] = [];

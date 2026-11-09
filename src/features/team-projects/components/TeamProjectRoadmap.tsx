@@ -11,37 +11,50 @@ import { TeamPageHeader } from "../../teams/components/TeamPageHeader";
 import { teamsCopy } from "../../teams/copy";
 import { useTeamProjectRoadmap } from "../client/use-team-project-roadmap";
 import {
+  writeProjectParticipation,
   writeTeamProject,
   type ClientTeamProject,
+  type ParticipationCreateInput,
+  type ParticipationUpdateInput,
+  type ParticipationWriteAction,
   type ProjectWriteAction,
   type ProjectWriteInput,
   type ProjectWriteResult,
 } from "../client/team-projects-gateway";
 import { teamProjectsCopy } from "../copy";
-import { formatPlanDateNb, type ParticipationInput } from "../domain/project-roadmap-view";
+import { filterProjectsByStatus, formatPlanDateNb, type ParticipationInput, type ProjectStatusFilter } from "../domain/project-roadmap-view";
+import { PROJECT_EFFECTIVE_STATUSES } from "../domain/team-project";
 import { buildTimelineWindow, TIMELINE_WINDOW_MONTHS, type TimelineWindowMonths } from "../domain/timeline-geometry";
 import { planningToday } from "../../roadmap/domain/roadmap-dates";
 import type { ProjectParticipationView } from "../server/write-project-participation";
+import { ParticipationForm, type ParticipationFormSubmit } from "./ParticipationForm";
 import { ParticipationPanel } from "./ParticipationPanel";
 import { ProjectForm } from "./ProjectForm";
 import { ProjectGantt } from "./ProjectGantt";
 
 type EditState = { mode: "create" } | { mode: "edit"; project: ClientTeamProject } | null;
 
+/** The participation management panel: planning a new assignment, or editing one that already exists. */
+type ParticipationEditState = { mode: "create" } | { mode: "edit"; participation: ProjectParticipationView } | null;
+
 /**
  * `/teams/[teamId]/roadmap` (TASK-005, reference 19). Project plan with a 3- or 6-month Gantt, project create, edit,
- * archive and restore for team leads, and the planned participation of members. Every number and bar comes from the
- * project and participation APIs; nothing is estimated or invented. Lead-only controls are hidden for members, and the
- * server enforces the same rule on every write.
+ * archive and restore for team leads, and the planned participation of members. Team leads also plan, edit and remove
+ * participation. Every number and bar comes from the project and participation APIs; nothing is estimated or invented.
+ * Lead-only controls are hidden for members, and the server enforces the same rule on every write.
  */
 export function TeamProjectRoadmap({ teamId }: { teamId: string }) {
-  const { auth, data, reload } = useTeamProjectRoadmap(teamId);
+  const { auth, data, reload, refreshParticipations } = useTeamProjectRoadmap(teamId);
   const [months, setMonths] = useState<TimelineWindowMonths>(6);
   const [showArchived, setShowArchived] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<ProjectStatusFilter>("all");
   const [editing, setEditing] = useState<EditState>(null);
   const [busyProjectId, setBusyProjectId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [participationEdit, setParticipationEdit] = useState<ParticipationEditState>(null);
+  const [participationBusy, setParticipationBusy] = useState(false);
+  const [participationError, setParticipationError] = useState<string | null>(null);
   // Fixed for the lifetime of this view; the planning calendar date is the anchor for the window and the today marker.
   const [today] = useState(() => planningToday(new Date()));
   const timelineWindow = buildTimelineWindow(today, months);
@@ -84,6 +97,51 @@ export function TeamProjectRoadmap({ teamId }: { teamId: string }) {
     }
   }
 
+  /**
+   * Creates, updates or removes one participation, then re-reads only the participation timeline. `projectId` is the
+   * route project: the target for create, the record's current project for update and remove. The page stays loaded,
+   * so every affected bar, lane and legend entry updates from the persisted state without a full reload.
+   */
+  async function runParticipationWrite(
+    action: ParticipationWriteAction,
+    projectId: string,
+    participationId: string | null,
+    input: ParticipationCreateInput | ParticipationUpdateInput | null,
+  ) {
+    setParticipationBusy(true);
+    setParticipationError(null);
+    const result = await writeProjectParticipation(token, teamId, projectId, action, participationId, input);
+    setParticipationBusy(false);
+
+    if (result.status === "ok") {
+      setParticipationEdit(null);
+      await refreshParticipations();
+      return;
+    }
+    setParticipationError(
+      result.status === "invalid_input" ? teamProjectsCopy.participationIssues.generic : participationErrorMessage(result.error),
+    );
+  }
+
+  function handleParticipationSubmit(input: ParticipationFormSubmit) {
+    if (participationEdit?.mode === "edit") {
+      const current = participationEdit.participation;
+      // The route carries the record's current project; the body carries the full assignment after the save.
+      void runParticipationWrite("update", current.projectId, current.participationId, {
+        memberRef: input.memberRef,
+        projectId: input.projectId,
+        startDate: input.startDate,
+        endDate: input.endDate,
+      });
+      return;
+    }
+    void runParticipationWrite("create", input.projectId, null, {
+      memberRef: input.memberRef,
+      startDate: input.startDate,
+      endDate: input.endDate,
+    });
+  }
+
   function renderBody() {
     if (data.phase === "loading") return <LoadingState label={teamProjectsCopy.loading} />;
 
@@ -104,6 +162,7 @@ export function TeamProjectRoadmap({ teamId }: { teamId: string }) {
 
     const activeProjects = data.projects.filter((project) => !project.archived);
     const archivedProjects = data.projects.filter((project) => project.archived);
+    const filteredProjects = filterProjectsByStatus(activeProjects, statusFilter);
 
     return (
       <div className="flex flex-col gap-6">
@@ -136,18 +195,38 @@ export function TeamProjectRoadmap({ teamId }: { teamId: string }) {
             {data.canEdit ? ` ${teamProjectsCopy.empty.projectsLead}` : ""}
           </EmptyState>
         ) : (
-          <ProjectGantt
-            window={timelineWindow}
-            today={today}
-            projects={activeProjects}
-            canEdit={data.canEdit}
-            busyProjectId={busyProjectId}
-            onEdit={(project) => {
-              setFormError(null);
-              setEditing({ mode: "edit", project });
-            }}
-            onArchive={(project) => void runWrite("archive", project.projectId, null)}
-          />
+          <div className="flex flex-col gap-4">
+            <div role="group" aria-label={teamProjectsCopy.filter.label} className="flex flex-wrap gap-2">
+              {(["all", ...PROJECT_EFFECTIVE_STATUSES] as const).map((value) => (
+                <Button
+                  key={value}
+                  type="button"
+                  variant={statusFilter === value ? "primary" : "tertiary"}
+                  size="sm"
+                  aria-pressed={statusFilter === value}
+                  onClick={() => setStatusFilter(value)}
+                >
+                  {value === "all" ? teamProjectsCopy.filter.all : teamProjectsCopy.status[value]}
+                </Button>
+              ))}
+            </div>
+            {filteredProjects.length === 0 ? (
+              <EmptyState>{teamProjectsCopy.empty.filtered}</EmptyState>
+            ) : (
+              <ProjectGantt
+                window={timelineWindow}
+                today={today}
+                projects={filteredProjects}
+                canEdit={data.canEdit}
+                busyProjectId={busyProjectId}
+                onEdit={(project) => {
+                  setFormError(null);
+                  setEditing({ mode: "edit", project });
+                }}
+                onArchive={(project) => void runWrite("archive", project.projectId, null)}
+              />
+            )}
+          </div>
         )}
 
         {showArchived ? (
@@ -239,8 +318,52 @@ export function TeamProjectRoadmap({ teamId }: { teamId: string }) {
       </Section>
 
       {data.phase === "loaded" ? (
-        <Section title={teamProjectsCopy.section.participation} description={teamProjectsCopy.section.participationDescription}>
-          <div className="rounded-surface border border-border-subtle bg-surface p-4 shadow-card">
+        <Section
+          title={teamProjectsCopy.section.participation}
+          description={teamProjectsCopy.section.participationDescription}
+          action={
+            data.canEdit && participationEdit === null ? (
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  setParticipationError(null);
+                  setParticipationEdit({ mode: "create" });
+                }}
+              >
+                {teamProjectsCopy.actions.planParticipation}
+              </Button>
+            ) : null
+          }
+        >
+          <div className="flex flex-col gap-4 rounded-surface border border-border-subtle bg-surface p-4 shadow-card">
+            {data.canEdit && participationEdit !== null ? (
+              <ParticipationForm
+                key={participationEdit.mode === "edit" ? participationEdit.participation.participationId : "create"}
+                assignment={participationEdit.mode === "edit" ? participationEdit.participation : null}
+                currentLabel={
+                  participationEdit.mode === "edit"
+                    ? currentLabelFor(participationEdit.participation, data.projects, data.members)
+                    : null
+                }
+                members={data.members}
+                projects={data.projects.filter((project) => !project.archived)}
+                busy={participationBusy}
+                serverError={participationError}
+                onSubmit={handleParticipationSubmit}
+                onRemove={() => {
+                  if (participationEdit.mode === "edit") {
+                    const { participation } = participationEdit;
+                    void runParticipationWrite("remove", participation.projectId, participation.participationId, null);
+                  }
+                }}
+                onCancel={() => {
+                  setParticipationEdit(null);
+                  setParticipationError(null);
+                }}
+              />
+            ) : null}
             {data.participationsFailed ? (
               <Alert variant="error">{teamProjectsCopy.errors.loadParticipation}</Alert>
             ) : (
@@ -250,6 +373,13 @@ export function TeamProjectRoadmap({ teamId }: { teamId: string }) {
                 participations={participations}
                 members={data.members}
                 membersFailed={data.membersFailed}
+                canEdit={data.canEdit}
+                onEdit={(participationId) => {
+                  const participation = data.participations.find((item) => item.participationId === participationId);
+                  if (!participation) return;
+                  setParticipationError(null);
+                  setParticipationEdit({ mode: "edit", participation });
+                }}
               />
             )}
           </div>
@@ -269,6 +399,17 @@ function toParticipationInputs(projects: ClientTeamProject[], participations: Pr
   });
 }
 
+/** Names of the assignment being edited, shown in the form so the person knows which record it changes. */
+function currentLabelFor(
+  participation: ProjectParticipationView,
+  projects: ClientTeamProject[],
+  members: { memberRef: string; displayName: string | null }[],
+): { member: string; project: string } {
+  const member = members.find((item) => item.memberRef === participation.memberRef)?.displayName ?? teamProjectsCopy.unnamedMember;
+  const project = projects.find((item) => item.projectId === participation.projectId)?.title ?? "";
+  return { member, project };
+}
+
 function writeErrorMessage(status: Exclude<ProjectWriteResult["status"], "ok">): string {
   switch (status) {
     case "invalid_input":
@@ -281,5 +422,30 @@ function writeErrorMessage(status: Exclude<ProjectWriteResult["status"], "ok">):
       return teamProjectsCopy.errors.writeNotFound;
     default:
       return teamProjectsCopy.errors.writeFailed;
+  }
+}
+
+/** Maps a public participation error code to Norwegian copy. Unknown codes fall back to the generic write failure. */
+function participationErrorMessage(code: string): string {
+  const errors = teamProjectsCopy.participationErrors;
+  switch (code) {
+    case "forbidden":
+      return errors.forbidden;
+    case "not_found":
+      return errors.notFound;
+    case "invalid_member":
+      return errors.invalidMember;
+    case "project_archived":
+      return errors.projectArchived;
+    case "participation_archived":
+      return errors.participationArchived;
+    case "team_disabled":
+      return errors.teamDisabled;
+    case "limit_reached":
+      return errors.limitReached;
+    case "conflict":
+      return errors.conflict;
+    default:
+      return errors.writeFailed;
   }
 }

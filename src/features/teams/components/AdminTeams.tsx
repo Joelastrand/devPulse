@@ -50,7 +50,7 @@ function createErrorMessage(error: string): string {
  * server session) and every admin operation (`listTeams`, `createTeam`,
  * `setTeamStatus`) is re-authorized server-side on every call via the
  * existing, unchanged TASK-001 `requireAppAdmin` boundary — this component
- * never decides admin status itself, and `APP_ADMIN_EMAILS` never reaches
+ * never decides admin status itself, and the superadmin registry never reaches
  * the client in any form.
  *
  * The shared hook's generation guard invalidates the initial list load, the
@@ -205,7 +205,7 @@ export function AdminTeams() {
 
   if (result.status === "forbidden") {
     // Deliberately generic — never confirms or denies whether the caller's
-    // email is on the server-only `APP_ADMIN_EMAILS` allow-list.
+    // caller is an active superadmin in the registry.
     return <Alert variant="error">{adminCopy.teams.forbidden}</Alert>;
   }
 

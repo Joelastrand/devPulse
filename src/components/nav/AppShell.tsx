@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Building2,GraduationCap, House, Menu, MessagesSquare, Target, UserCog, Users } from "lucide-react";
+import { Building2,GraduationCap, House, Menu, MessagesSquare, ShieldCheck, Target, UserCog, Users } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { signOut } from "../../features/auth/client/auth-client";
@@ -220,6 +220,7 @@ function navGroupsFor(state: HeaderState, teamName: string | null): NavGroup[] {
         items: [
           { href: "/admin/teams", label: navCopy.adminTeams, icon: Building2 },
           { href: "/admin/roles", label: navCopy.roles, icon: UserCog },
+          { href: "/admin/superadmins", label: navCopy.superadmins, icon: ShieldCheck },
         ],
       });
     }

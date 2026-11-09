@@ -1,4 +1,5 @@
 import { PageShell } from "../../../../../src/components/ui/PageShell";
+import { TeamCompetenceNeedsSection } from "../../../../../src/features/teams/components/TeamSubpageSections";
 import { TeamPageHeader } from "../../../../../src/features/teams/components/TeamPageHeader";
 import { CompetencePlanSection } from "../../../../../src/features/team-competence-plan/components/CompetencePlanSection";
 
@@ -18,6 +19,9 @@ export default async function TeamCompetencePlanPage({
       <TeamPageHeader teamId={teamId} />
       <div className="mt-6">
         <CompetencePlanSection teamId={teamId} />
+      </div>
+      <div className="mt-10">
+        <TeamCompetenceNeedsSection teamId={teamId} />
       </div>
     </PageShell>
   );

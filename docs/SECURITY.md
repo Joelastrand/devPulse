@@ -204,6 +204,16 @@ a genuine `teamadmin` of an active team (TA-SI-4). Participation and coverage re
     participation). The coverage endpoint accepts no query-time inputs; the
     only cut-points are the persisted needs (`requiredLevel` 2–4,
     `requiredCoverage` 1–20; level 1 is excluded).
+    *Numeric automatic team profile (owner decision 2026-11-08):* a separate
+    threshold `AUTOMATIC_TEAM_LEVEL_MIN_CONTRIBUTORS = 3`
+    (`src/features/team-skills/domain/team-level.ts`) applies to the rounded
+    arithmetic mean per competence area. It is served only by
+    `GET /api/teams/[teamId]/skill-levels` through a strict DTO allow-list: no
+    identity, individual rating, contributor count, sum or `requiredCoverage`.
+    There is no additional team-size floor. A three-person aggregate is **not
+    anonymous**: inference about an individual rating is possible and is an
+    accepted product risk. The categorical coverage view keeps k = 5 until its
+    retirement is approved.
 35. Nothing derived from personal assessments is persisted or cached: no
     aggregate, coverage/gap score, matrix snapshot, contribution record,
     history or trend. Every coverage request recomputes from the canonical
@@ -535,12 +545,12 @@ prefix, so the numbered invariants above are not renumbered. They do not weaken 
 
 Source: `docs/features/teamadmin-and-team-visibility/SPEC.md`. These invariants supersede the stored team `lead` as
 the team editing authority (invariants 22, 23 and 33 are amended accordingly; their residual-risk statements still apply
-to the data they describe). The superadmin is the existing app-admin allow-list (`isAppAdmin`); no client-supplied role
-is ever trusted.
+to the data they describe). The superadmin is the Firestore-backed registry (`superadmins/{uid}`, section SR-SI below), not
+any environment variable; no client-supplied role is ever trusted.
 
 - **TA-SI-1 Server-side role.** Superadmin, teamadmin and member are derived per request on the server from the verified
-  identity, the `APP_ADMIN_EMAILS` allow-list and the `teamMemberships` document of the same (uid, teamId). No request
-  field decides a role.
+  identity, the active `superadmins/{uid}` registry record (read on every request, SR-SI-1) and the `teamMemberships` document
+  of the same (uid, teamId). No request field decides a role.
 - **TA-SI-2 Only a superadmin assigns teamadmin.** `teamMemberships.role` accepts only `teamadmin` or `member`, is written
   only by `setTeamMemberRole` behind `requireAppAdmin`, and is never client-supplied. A teamadmin cannot promote themselves
   or another person, and cannot administer another team.
@@ -562,6 +572,52 @@ is ever trusted.
   bypassed. Any future public coverage must still apply invariants 32–35.
 - **TA-SI-8 No actor uid for visibility.** A visibility change stores `visibility` and `visibilityUpdatedAt` only, so it adds
   no person linkage that account erasure would need to clear (AE-SI-7).
+
+## Superadmin registry (SR-SI, 2026-11-06)
+
+Source: `docs/features/superadmin-registry/VERIFICATION.md` and `docs/features/superadmin-registry/BOOTSTRAP.md`. The registry is
+the single authority for global administration. Its implementation status and its production activation status are separate
+facts; see "Status" at the end of this section.
+
+- **SR-SI-1 Registry is the authority, read per request.** `superadmins/{uid}` (`active: true`) decides superadmin status. It is
+  read with the Admin SDK on every privileged request. It is never cached and never derived from a token claim, cookie,
+  client flag, environment variable or e-mail address. A read failure fails closed (`auth_unavailable`).
+- **SR-SI-2 `APP_ADMIN_EMAILS` is not an authority.** No code path reads it. Its presence in an environment changes nothing.
+  Removing it from deployments is a separate, owner-approved operator step.
+- **SR-SI-3 Only an active superadmin grants or revokes.** Each grant or revoke re-verifies the caller's registry record
+  inside the write transaction. A revoked superadmin is refused on its next request.
+- **SR-SI-4 Targets come from Firebase Auth, by e-mail.** A grant resolves the e-mail through Firebase Auth. The account must
+  exist, have a verified e-mail and be enabled. No Auth user is created. A client-supplied UID is never accepted as a grant
+  target or as authorization evidence; a revoke names a UID but acts only on an existing active record.
+- **SR-SI-5 Last superadmin is protected.** A revoke that would leave zero active superadmins is refused (`last_superadmin`,
+  HTTP 409). The count lives in `superadminRegistry/control` and is read and written in the same transaction as every
+  change. Two concurrent revocations conflict on that document, so one retries against the updated count.
+- **SR-SI-6 Duplicate grants are idempotent.** Granting an active superadmin again succeeds with no write.
+- **SR-SI-7 Client access is denied.** `firestore.rules` denies all client reads and writes to `superadmins` and
+  `superadminRegistry`. Only the Admin SDK on the server touches them.
+- **SR-SI-8 Erasure start is atomic with the revoke.** Starting an erasure for an active superadmin revokes the privilege and
+  creates the erasure fence in one Firestore transaction (`account-erasure/server/erasure-start-atomic.ts`). A failed fence
+  leaves the privilege in place. The last active superadmin cannot start an erasure (`last_superadmin`). No recovery path
+  restores a privilege silently; any re-grant is an explicit grant by another superadmin.
+- **SR-SI-9 Bootstrap is explicit and one-time.** `scripts/bootstrap-superadmin.ts` is run by hand. It is a dry run unless
+  `--apply --confirm <project-id>` is given, refuses any project other than the configured one, refuses when another active
+  superadmin exists, and never runs at startup. The exact command is in `docs/features/superadmin-registry/BOOTSTRAP.md`.
+- **SR-SI-10 Privilege boundary (owner decision, approved).** A superadmin may perform globally authorized team administration
+  and manage team skill needs without holding a team membership or the legacy lead role. These privileges do **not** override
+  the privacy of personal self-assessments, private role direction or explicit sharing consent (invariants 31–36 and SI-4).
+- **SR-SI-11 Audit fields.** Grant and revoke record `grantedByUid`, `revokedByUid`, `grantedAt`, `revokedAt` and `updatedAt`
+  on the registry record. UID-typed fields hold a UID or null only; the owner bootstrap grant writes `grantedByUid: null`. No e-mail address is stored in the registry.
+
+**Status (2026-11-06).**
+- *Implemented in the repository:* registry domain and operations, `GET/POST /api/admin/superadmins`,
+  `DELETE /api/admin/superadmins/[uid]`, the `/admin/superadmins` page, the erasure atomic start, and the bootstrap script.
+  Verified by unit, route and in-memory transaction tests.
+- *Verified on the Firestore emulator (review pass):* registry grant and revoke, concurrent revocations, the atomic erasure start,
+  the fenced grant, and client-SDK denial of both registry collections (14 tests, see VERIFICATION.md).
+- *Not verified:* an authenticated browser run, the erasure fence race (D-EMU, owner-gated), and any
+  real Firebase project.
+- *Not activated:* no production or shared Firebase environment has been bootstrapped, and `APP_ADMIN_EMAILS` has not been
+  removed from any deployment. Production activation requires the owner's explicit approval (see BOOTSTRAP.md).
 
 Known, accepted limitation: a demoted teamadmin loses write access on their next request (TA-SI-1), but any client-side
 state already rendered continues until the next read. Team-admin management of ordinary membership and access requests

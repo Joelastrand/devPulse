@@ -1,4 +1,5 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { authRefusalFor, type AuthRefusal } from "../../auth/server/auth-refusal";
@@ -240,7 +241,7 @@ export async function upsertCompetencePlan(
   if (!verified.ok) return { ok: false, error: authRefusalFor(verified) };
   if (!isWellFormedTreeId(treeId)) return { ok: false, error: "invalid_input" };
   const now = (deps.now ?? (() => new Date()))();
-  const newId = deps.newId;
+  const newId = deps.newId ?? randomUUID;
   const store = deps.writeStore ?? getDefaultWriteStore();
 
   const input = validatePlanInput(body);

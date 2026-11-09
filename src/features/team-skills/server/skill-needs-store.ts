@@ -2,7 +2,7 @@ import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { membershipDocId } from "../../teams/domain/team-membership";
 import { isValidSkillNeed, type SkillNeedRecord } from "../domain/skill-need";
-import type { GenuineMembershipReads } from "./genuine-team-membership";
+import type { GenuineMembershipReads } from "../../teams/domain/genuine-membership";
 
 const SKILL_NEEDS_COLLECTION = "teamSkillNeeds";
 

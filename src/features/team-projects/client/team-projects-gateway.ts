@@ -88,7 +88,7 @@ function parseProject(value: unknown): ClientTeamProject | null {
   };
 }
 
-function parseParticipation(value: unknown): ProjectParticipationView | null {
+export function parseParticipation(value: unknown): ProjectParticipationView | null {
   if (!isRecord(value)) return null;
   if (
     !isNonEmptyString(value.participationId) ||
@@ -236,5 +236,73 @@ export async function writeTeamProject(
     return { status: writeFailureStatus(response.status) };
   } catch {
     return { status: "write_failed" };
+  }
+}
+
+/** Create: the project comes from the route, so the body carries the member and dates only (SPEC — BR-8). */
+export interface ParticipationCreateInput {
+  memberRef: string;
+  startDate: string;
+  endDate: string;
+}
+
+/**
+ * Update: the full assignment as it should be after the save. `projectId` is the target project; the route carries
+ * the record's current project, which the server checks against the stored record.
+ */
+export interface ParticipationUpdateInput {
+  memberRef: string;
+  projectId: string;
+  startDate: string;
+  endDate: string;
+}
+
+export type ParticipationWriteAction = "create" | "update" | "remove";
+
+/** `error` carries the server's public code (e.g. `forbidden`, `invalid_member`), never raw error text. */
+export type ParticipationWriteResult =
+  | { status: "ok"; participation: ProjectParticipationView }
+  | { status: "invalid_input"; issues: string[] }
+  | { status: "error"; error: string };
+
+/**
+ * Create, update or remove (soft archive) one member's participation in one project (TASK-004 API). Remove sends no
+ * body. The server is the authorization boundary; the caller only decides which controls are shown.
+ */
+export async function writeProjectParticipation(
+  idToken: string,
+  teamId: string,
+  projectId: string,
+  action: ParticipationWriteAction,
+  participationId: string | null,
+  input: ParticipationCreateInput | ParticipationUpdateInput | null,
+): Promise<ParticipationWriteResult> {
+  const base = `/api/teams/${encodeURIComponent(teamId)}/projects/${encodeURIComponent(projectId)}/participations`;
+  const itemUrl = `${base}/${encodeURIComponent(participationId ?? "")}`;
+  const method = action === "create" ? "POST" : action === "update" ? "PATCH" : "DELETE";
+  const url = action === "create" ? base : itemUrl;
+  const hasBody = action !== "remove" && input !== null;
+
+  try {
+    const response = await fetch(url, {
+      method,
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+        ...(hasBody ? { "Content-Type": "application/json" } : {}),
+      },
+      ...(hasBody ? { body: JSON.stringify(input) } : {}),
+    });
+    const body = await readJson(response);
+    if (response.ok) {
+      const participation = isRecord(body) ? parseParticipation(body.participation) : null;
+      return participation ? { status: "ok", participation } : { status: "error", error: "persistence_failed" };
+    }
+    if (response.status === 400 && isRecord(body) && body.error === "invalid_input" && Array.isArray(body.issues)) {
+      return { status: "invalid_input", issues: body.issues.filter((issue): issue is string => typeof issue === "string") };
+    }
+    const code = isRecord(body) && typeof body.error === "string" ? body.error : "write_failed";
+    return { status: "error", error: code };
+  } catch {
+    return { status: "error", error: "write_failed" };
   }
 }

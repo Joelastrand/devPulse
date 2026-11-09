@@ -986,8 +986,8 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
   }
 
   if (result.status === "forbidden") {
-    // Deliberately generic — never confirms or denies whether the caller's
-    // email is on the server-only `APP_ADMIN_EMAILS` allow-list.
+    // Deliberately generic — never confirms or denies whether the caller is
+    // an active superadmin in the registry.
     return <Alert variant="error">{adminCopy.detail.forbidden}</Alert>;
   }
 

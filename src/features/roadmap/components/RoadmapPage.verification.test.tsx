@@ -195,7 +195,7 @@ describe("TASK-012 — mid-session permission loss", () => {
     await user.click(within(form).getByRole("button", { name: "Lagre" }));
     expect(await screen.findByText("Du har ikke tilgang til denne roadmapen.")).toBeTruthy();
     expect(queryMutationControls()).toEqual([]);
-  });
+  }, 20_000);
 });
 
 describe("TASK-012 — skills pending hardening", () => {

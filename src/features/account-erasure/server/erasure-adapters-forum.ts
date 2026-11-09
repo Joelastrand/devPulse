@@ -1,4 +1,5 @@
 import "server-only";
+import type { DocumentData } from "firebase-admin/firestore";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import type { ForumErasurePort, ForumRaw, ForumTransaction } from "./forum-erasure";
 
@@ -10,6 +11,23 @@ import type { ForumErasurePort, ForumRaw, ForumTransaction } from "./forum-erasu
 
 const THREADS = "forumThreads";
 const REPLIES = "forumReplies";
+
+/**
+ * Converts Firestore `Timestamp` fields to `Date` at the Admin SDK boundary. The forum validators accept only `Date` values
+ * (`forum-reply.ts`, `isValidDate`), so a raw Timestamp would make every stored document unreadable to the erasure step.
+ */
+function fromFirestoreData(data: DocumentData | undefined): unknown {
+  if (data === undefined) return undefined;
+  const converted: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    converted[key] = isTimestampLike(value) ? value.toDate() : value;
+  }
+  return converted;
+}
+
+function isTimestampLike(value: unknown): value is { toDate(): Date } {
+  return typeof value === "object" && value !== null && typeof (value as { toDate?: unknown }).toDate === "function";
+}
 
 function assertUidSegment(uid: string): void {
   if (uid.length === 0 || uid.includes("/")) throw new Error("erasure adapter: invalid uid segment");
@@ -23,11 +41,11 @@ export function createForumPort(): ForumErasurePort {
         work({
           async getThread(threadId) {
             const snapshot = await tx.get(db.collection(THREADS).doc(threadId));
-            return snapshot.exists ? snapshot.data() : undefined;
+            return snapshot.exists ? fromFirestoreData(snapshot.data()) : undefined;
           },
           async getThreadReplies(threadId): Promise<ForumRaw[]> {
             const snapshot = await tx.get(db.collection(REPLIES).where("threadId", "==", threadId));
-            return snapshot.docs.map((doc) => ({ id: doc.id, data: doc.data() }));
+            return snapshot.docs.map((doc) => ({ id: doc.id, data: fromFirestoreData(doc.data()) }));
           },
           setThread(threadId, data) {
             tx.set(db.collection(THREADS).doc(threadId), data);
@@ -37,7 +55,7 @@ export function createForumPort(): ForumErasurePort {
           },
           async getReply(replyId) {
             const snapshot = await tx.get(db.collection(REPLIES).doc(replyId));
-            return snapshot.exists ? snapshot.data() : undefined;
+            return snapshot.exists ? fromFirestoreData(snapshot.data()) : undefined;
           },
           setReply(replyId, data) {
             tx.set(db.collection(REPLIES).doc(replyId), data);

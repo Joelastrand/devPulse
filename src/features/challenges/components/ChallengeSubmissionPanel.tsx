@@ -12,6 +12,8 @@ export interface ChallengeSubmissionPanelProps {
   teamId: string;
   /** Invoked after a successful submission so the caller can refresh the challenge list through the existing server contract — this component never fabricates a challenge DTO of its own. */
   onSubmitted: () => void;
+  /** Closes the surrounding dialog. The panel owns no dialog chrome itself; omit when rendered standalone. */
+  onClose?: () => void;
 }
 
 type SubmissionPhase =
@@ -57,7 +59,7 @@ function isValidLength(rawText: string): boolean {
  * keyboard/screen-reader users get a clear, immediate confirmation rather
  * than focus being left on a now-unmounted textarea.
  */
-export function ChallengeSubmissionPanel({ idToken, teamId, onSubmitted }: ChallengeSubmissionPanelProps) {
+export function ChallengeSubmissionPanel({ idToken, teamId, onSubmitted, onClose }: ChallengeSubmissionPanelProps) {
   const [text, setText] = useState("");
   const [phase, setPhase] = useState<SubmissionPhase>("idle");
   const successRef = useRef<HTMLDivElement>(null);
@@ -102,12 +104,14 @@ export function ChallengeSubmissionPanel({ idToken, teamId, onSubmitted }: Chall
   if (phase === "success") {
     return (
       <div className="flex flex-col gap-3">
-        <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
-          {challengesCopy.submission.heading}
-        </h3>
         <div ref={successRef} tabIndex={-1}>
           <Alert variant="success">{challengesCopy.submission.success}</Alert>
         </div>
+        {onClose && (
+          <Button type="button" variant="secondary" size="sm" className="w-fit" onClick={onClose}>
+            {challengesCopy.submission.close}
+          </Button>
+        )}
       </div>
     );
   }
@@ -116,9 +120,6 @@ export function ChallengeSubmissionPanel({ idToken, teamId, onSubmitted }: Chall
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3" noValidate>
-      <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
-        {challengesCopy.submission.heading}
-      </h3>
       <p id="challenge-text-description" className="text-sm text-zinc-600 dark:text-zinc-400">
         {challengesCopy.submission.explanation} {challengesCopy.submission.identityWarning}
       </p>
@@ -153,9 +154,16 @@ export function ChallengeSubmissionPanel({ idToken, teamId, onSubmitted }: Chall
       )}
       {phase === "error" && <Alert variant="error">{challengesCopy.submission.genericError}</Alert>}
 
-      <Button type="submit" pending={isSubmitting} className="w-fit">
-        {isSubmitting ? challengesCopy.submission.submitting : challengesCopy.submission.submit}
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" pending={isSubmitting}>
+          {isSubmitting ? challengesCopy.submission.submitting : challengesCopy.submission.submit}
+        </Button>
+        {onClose && (
+          <Button type="button" variant="secondary" disabled={isSubmitting} onClick={onClose}>
+            {challengesCopy.submission.cancel}
+          </Button>
+        )}
+      </div>
     </form>
   );
 }

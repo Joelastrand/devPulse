@@ -8,6 +8,7 @@ import {
 } from "firebase-admin/app";
 import { getAuth, type Auth } from "firebase-admin/auth";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
+import { assertAdminEmulatorSafe } from "./emulator-config";
 
 /**
  * Centralized, server-only Firebase Admin SDK initialization. Credentials
@@ -20,6 +21,8 @@ function getAdminApp(): App {
     return existing;
   }
 
+  // Fail closed: emulator hosts (read by the SDK from the environment) must be local and must use a demo- project.
+  assertAdminEmulatorSafe(process.env);
   return initializeApp(buildAppOptions());
 }
 

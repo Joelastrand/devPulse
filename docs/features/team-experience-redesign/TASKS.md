@@ -4,7 +4,7 @@ Specification: [SPEC.md](./SPEC.md)
 Verification record: [VERIFICATION.md](./VERIFICATION.md)
 
 ## Status
-Ready: 3 (TASK-012, TASK-013, TASK-014)  In Progress: 4 (TASK-001, TASK-005, TASK-008, TASK-009)  Done: 7 (TASK-002, TASK-003, TASK-004, TASK-006, TASK-007, TASK-010, TASK-011)
+Ready: 3 (TASK-012, TASK-013, TASK-014)  In Progress: 5 (TASK-001, TASK-005, TASK-006, TASK-008, TASK-009)  Done: 6 (TASK-002, TASK-003, TASK-004, TASK-007, TASK-010, TASK-011)
 
 Pass 4 (code evidence in VERIFICATION.md, "Pass 4 evidence"): TASK-009 code complete with browser/visual check `not_verified`. TASK-012 erasure inventory audit complete: every new user-linked record is registered or allow-listed, with no guard changes; emulator run `not_verified`. TASK-013 compatibility evidence recorded from existing regression tests. TASK-014 gates green on this pass (typecheck, lint, full test, build all exit 0); browser checks and independent review are `not_verified`. Statuses above are not changed by this pass: final acceptance still needs the owner's review of the `not_verified` items.
 
@@ -169,7 +169,7 @@ Participation is planning data. It must not feed skill, coverage or performance 
 
 ### TASK-005 — Roadmap UI: 3/6-month Gantt, participation, mobile cards
 
-**Status:** In Progress — implementation and focused tests done (see VERIFICATION.md, "TASK-005 evidence"). NOT Done: browser screenshots against reference 19, responsive overflow, keyboard check and independent review are not verified (blocked: no approved browser fixture data).
+**Status:** In Progress — implementation and focused tests done (see VERIFICATION.md, "TASK-005 evidence" and "Pass 6"). Pass 6 added a status filter (Alle / Planlagt / Pågår / Fullført) with a filtered empty state. Pass 7 groups the plan by effective status with collapsible, keyboard-operable group headers (desktop timeline and mobile cards share one collapsed state; all groups start expanded). Pass 8 (VERIFICATION.md, "Pass 8"): the projects API 500 that blocked this page is fixed (stored project documents have no `projectId` field; the read now takes it from the document id, with regression tests). An authenticated read-only browser review at 320–1440 px is clean: no horizontal overflow, no axe violations at 320/1440, no console errors, Gantt toggle, status filter and group toggles work. NOT Done: reference 19 is matched only in structure (header counts, per-project colours and participation bars differ); bar geometry for 3 vs 6 months is not measured per bar; independent review and owner acceptance are not done.
 **Covers:** BR-10, BR-11, BR-12, BR-27
 **Depends on:** TASK-002, TASK-003, TASK-004
 
@@ -201,7 +201,7 @@ No additional considerations.
 
 ### TASK-006 — Kompetanseplan: team competence development plans
 
-**Status:** Done — domain (`src/features/team-competence-plan/domain/`), lead-only gateway (`server/competence-plans.ts`), API routes (`app/api/teams/[teamId]/competence-plans`), deny-only rule, erasure allow-list entry, the read-only legacy roadmap block and the page. Focused tests: 39 Kompetanseplan tests (domain, gateway, component), 7 route tests, erasure inventory guards 84/84; typecheck and lint pass. **Not verified:** browser and visual comparison to reference 20; independent review; emulator run. See VERIFICATION.md, "TASK-006 evidence". Decisions OD-3, OD-4, OD-5 in SPEC.md.
+**Status:** In Progress (pass 9, 2026-11-07). Pass 9 added the milestone goals checklist (expanded "Vis steg": status glyph plus status text, no new data model), verified keyboard Enter expansion, focus outline, 3-month toggle via Space, and 5 Demoteam plans at 320 and 1440 px in the authenticated browser (25/25 captures after readiness, 0 console errors, 0 failed requests, 0 px overflow). Pass 9 also fixed two tablet defects found at 768 and 1024 px: the timeline now needs `lg` (was `sm`) and the two-column overview needs `xl` (was `lg`). **The 768 and 1024 fixes are not yet re-verified** because the authenticated teams read returned a server-side error in the last capture attempts (VERIFICATION.md, "Pass 9 evidence"). Not Done until that re-check passes. Previously (pass 8) reverted from Done: the reference-20 layout is only partly matched (no goals checklist, no team-needs component beyond priority ranking, mobile not yet reviewed), and the authenticated browser check was run only at 1440 px. Pass 8 added the timeline overview and next-steps/needs panels, with Norwegian dates and card statuses. Evidence: VERIFICATION.md, "Pass 8 evidence". Earlier domain/gateway/route work: `src/features/team-competence-plan/domain/`, lead-only gateway (`server/competence-plans.ts`), API routes (`app/api/teams/[teamId]/competence-plans`), deny-only rule, erasure allow-list entry, the read-only legacy roadmap block and the page. Focused tests: 39 Kompetanseplan tests (domain, gateway, component), 7 route tests, erasure inventory guards 84/84; typecheck and lint pass. **Not verified:** browser and visual comparison to reference 20; independent review; emulator run. See VERIFICATION.md, "TASK-006 evidence". Decisions OD-3, OD-4, OD-5 in SPEC.md.
 **Covers:** BR-15, BR-16, BR-17
 **Depends on:** TASK-007
 
@@ -261,7 +261,7 @@ Catalog only. No read of individual ratings (REQ §6.1).
 
 ### TASK-008 — Team Oversikt redesign with concise summaries
 
-**Status:** In Progress. Code acceptance for the results route and the Oversikt cut is implemented (`/teams/[teamId]/results`, see VERIFICATION.md, "TASK-008 evidence"): survey history, trend chart and summary blocks moved off Oversikt, four KPI cards, `Neste steg`, and a link to results. Focused tests pass (teams feature and results route), typecheck exit 0, eslint on the teams files exit 0. Pass 3 adds the competence-area count under the team name (already-loaded data). Team description and member/system counts are not shown (no data source on Oversikt without an extra read). Still open: browser and visual comparison to reference 18, keyboard/responsive checks, and independent review. TASK-009, TASK-012, TASK-013 and TASK-014 were not started in this pass; see VERIFICATION.md "Pass 3 evidence".
+**Status:** In Progress (pass 9, 2026-11-07). Pass 9 adds the compact project list on Oversikt (`TeamOversiktProjects.tsx`): it reuses the projects read the summary already makes (no new request), shows up to five active and planned projects (archived and completed excluded), with status badges, dates and a link to Roadmap, and loading, forbidden, unavailable and empty states. KPI cards, Neste steg and Utfordringer are unchanged. The competence panel is omitted (Oversikt loads no categorical coverage). Tests: 8 new (`TeamOversiktProjects.test.tsx`), teams feature 64 files/1057 passing, full suite 588 files/9986 passing. Authenticated 1440 and 320 px inspected. **Not Done:** 360, 768 and 1024 px Oversikt not yet inspected (the last capture attempts hit a teams-read server error, see VERIFICATION.md "Pass 9 evidence"). Earlier state: code acceptance for the results route and the Oversikt cut is implemented (`/teams/[teamId]/results`, see VERIFICATION.md, "TASK-008 evidence"): survey history, trend chart and summary blocks moved off Oversikt, four KPI cards, `Neste steg`, and a link to results. Focused tests pass (teams feature and results route), typecheck exit 0, eslint on the teams files exit 0. Pass 3 adds the competence-area count under the team name (already-loaded data). Team description and member/system counts are not shown (no data source on Oversikt without an extra read). Pass 5: header now shows a complete system count (`TeamHeaderMetrics`, from the existing systems read, omitted when truncated or unavailable) beside the competence-area count. The member count is deliberately omitted: the only member roster read is the collapsed roster section, which must not load on Oversikt (TeamDetail test contract). This is a justified deviation from reference 18. Team description is not shown (not in the loaded team read). Still open: browser and visual comparison to reference 18, keyboard/responsive checks, and independent review. TASK-009, TASK-012, TASK-013 and TASK-014 were not started in this pass; see VERIFICATION.md "Pass 3 evidence".
 **Covers:** BR-1, BR-2, BR-3, BR-4, BR-5
 **Depends on:** TASK-001
 
@@ -468,3 +468,96 @@ SPEC, TASKS and VERIFICATION synchronized.
 - [ ] All quality gates have recorded exit codes
 - [ ] Each requirement maps to a verification status
 - [ ] No result is marked `passed` without a run
+
+---
+
+## Implementation slice: Kompetanseprofil radar, settings shell (2026-11-07)
+
+**Status: partially implemented. The redesign is NOT complete.** No task status in this file was changed. TASK-006 and
+TASK-008 remain `In Progress` pending their browser checks. Amendment A and Amendment B are drafts (`AMENDMENT-A-DRAFT.md`,
+`AMENDMENT-B-DRAFT.md`) and are not approved. Nothing here activates k = 3 or default-on sharing.
+
+**Implemented (under the current approved contract; no k, consent, notice, rule or SECURITY change):**
+
+- IMP-R1 Reusable radar component `KompetanseprofilRadar` (`src/features/team-competence-profile/components/`). Recharts
+  (the existing dependency). Team polygon solid and green (`--chart-1`), target polygon dashed (`--text-secondary`). `null`
+  is never drawn as zero. Visible text table carries the same values. Norwegian labels in `copy.ts`. Pure model
+  `domain/radar-model.ts` accepts three to eight axes; invalid input fails closed.
+- IMP-R2 Pure collaborative composition `domain/collaborative-profile.ts`. Uses only active competence areas and the
+  team's need targets. Takes no member-data input. Never fabricates a value. Profile-mode vocabulary (`automatic` default).
+- IMP-S1 Route `app/(app)/teams/[teamId]/settings/page.tsx` (server entry point, shared team header) and the read-only
+  mode section `TeamSettingsCompetenceProfile`. Automatic is shown as the checked default; collaborative is disabled with the
+  reason. No request is sent and there is no save control. The section reads and changes no member's sharing preference.
+- IMP-T1 `app/route-groups.test.ts`: the registry of page URLs now includes `/teams/[teamId]/settings`. This is a deliberate
+  registry update for a new page, not a weakened assertion.
+
+**Blocked (not implemented). Reason and gate:**
+
+- BLK-1 Collaborative team-level values (`teamLevel` on `teamCompetenceAreas`), their write endpoint and their read endpoint.
+  Gates G0 (Amendment A approved), G1 (security review), G3 (UI-UX amendment), G4 (Norwegian review). Not recorded.
+- BLK-2 Mode persistence (`teamProfileSettings`) and mode writes, including the next-boundary timing rule. Same gates.
+- BLK-3 Automatic numeric radar on Teamkompetanse: APPROVED as product direction (owner R-1, 2026-11-07). Activation is blocked by G1, G2, G3, G4, G5 and the invariant 35 and 36 amendments (Amendment A §A.14). The panel stays an honest unavailable state until then.
+- BLK-4 Publication architecture, per-need change booleans, the self-assessment (K3-8) transaction and edit-once-per-period
+  (Amendment A §A.3, §A.5). Gate G1; the boundary publisher is a new production path.
+- BLK-5 k = 3, notice version bump, A3 replacement and the k = 3 tests. Gates G0 to G7. k = 5 remains in force; the
+  team-skills suite passes unchanged.
+- BLK-6 Default-on contribution, rejoin record (R-A) and the default-state change. Amendment B, gates B-G0 to B-G8. Blocked on
+  lawful basis L1, DPIA L2 and rejoin record L3.
+- BLK-7 Relabel of the member control to «Del mine ferdighetsvurderinger med teamprofilen» on Mine ferdigheter. Needs notice
+  wording approval (G4, L4). The existing control «Del kompetanse med teamet» is unchanged.
+- BLK-8 Teamadmin-only gating of `/teams/[teamId]/settings`. The page currently loads no data and writes nothing; it is
+  visible to any member, with the control disabled. Server-side role gating belongs with BLK-2.
+
+**Acceptance checks for this slice (automated only):** see VERIFICATION.md "Pass 11 evidence (2026-11-07)".
+**Not yet verified:** responsive layout at 320, 360, 768, 1024 and 1440 px; light and dark mode; the Recharts stroke values
+that reference CSS variables (confirm in a browser before wiring the radar anywhere); axe. These are deferred.
+
+## Implementation slice: on-demand numeric aggregation, preparatory (2026-11-07, Pass 14)
+
+**Status: preparatory code and tests implemented; numeric output is NOT active.** No task status in this file was changed.
+Evidence: VERIFICATION.md, "Pass 14 evidence".
+
+**Implemented (not routed, no contract change):**
+
+- `deriveTeamLevel` (`src/features/team-skills/domain/team-level.ts`): exhaustive arithmetic tests, k=2/3 boundaries, invalid input.
+- Internal numeric operation `createGetTeamSkillLevels` in `src/features/team-skills/server/get-team-skill-coverage.ts`
+  (the approved coverage module): same authorization, eligibility and fail-closed reads as coverage. Not imported by any
+  route. Its runtime export is approved in `approvedRuntime` (owner approval 2026-11-07, Pass 15; see VERIFICATION.md, Pass 15).
+- Pure radar mapping `buildAutomaticAxes` (`src/features/team-competence-profile/domain/automatic-profile.ts`): maps numeric
+  team-level rows to `RadarAxisInput` (missing values stay `null`). Not connected to any route (Pass 15).
+- Collaborative validation and authorization (`team-skills/domain/collaborative-level-input.ts`,
+  `team-skills/server/decide-collaborative-level-write.ts`). No persistence and no route.
+- Consolidation: the separate numeric reader and the cross-feature collaborative modules were removed to preserve the
+  existing personal-data and cross-feature boundaries (VERIFICATION.md, Pass 14).
+- BR-4 amended in `individual-skill-self-assessment/SPEC.md`: team-level mean exception, k=3 gated, no zero for missing values.
+
+**Blocked, and what unblocks each (replaces BLK-1 to BLK-5 wording where they changed):**
+
+- **BLK-4 (publication architecture, change flags, K3-8 transaction, epochs): WITHDRAWN.** Superseded by on-demand
+  aggregation (AMENDMENT-A-DRAFT.md §A.00). No publisher, no flag, no epoch will be built.
+- **BLK-1 (collaborative team-level storage, write endpoint, read endpoint):** implemented 2026-11-08 as the separate
+  `teamCollaborativeLevels` collection (not `teamCompetenceAreas.teamLevel`), with the teamadmin write route and the team read
+  route (`profile-settings/levels/[treeId]`), a deny-only rule, and a client panel. Still open: G3 (UI-UX) and G4 (Norwegian
+  copy) reviews, which are not recorded as done. Browser check and independent review: `not_verified`. See VERIFICATION.md,
+  "Collaborative profile slice evidence".
+- **BLK-2 (mode persistence `teamProfileSettings`, mode write route):** implemented 2026-11-08 (teamadmin-only PUT, member
+  GET, deny-only rule in `firestore.rules`, Settings control). Next-boundary timing is withdrawn with the publication design.
+  Same open G3/G4 reviews as BLK-1.
+- **BLK-3 (numeric radar on Teamkompetanse):** blocked on the activation gates below.
+- **BLK-5 (k = 3 activation):** blocked on the activation gates below. Code tasks remaining: switch the threshold constant,
+  point the coverage response at the numeric path, remove `requiredCoverage` from member DTOs (K3-7), replace test A3 and
+  record `R-k3-A3` (G7).
+
+**Minimum outstanding approvals to activate numeric k=3 aggregation:**
+
+1. G1 independent security review of the on-demand design: invariants 34–36 as rewritten in AMENDMENT-A-DRAFT.md §A.00.
+2. G2 privacy and legal review of the three-contributor disclosure and the residual statement. Owner approval does not replace this.
+3. G5 notice version bump and transition, owner plus legal (L4). The bump lapses all current participation.
+4. G4 Norwegian copy review and G3 UI-UX amendment recording the radar exception and `recharts`.
+5. SECURITY.md amendment of invariants 34, 35, 36 and the residual, applied only after items 1 and 2.
+6. Reviewed scope-guard allow-list entries for the internal numeric path and the collaborative decision module.
+7. A separate, approved Firestore rules step for `teamProfileSettings` (deny-only).
+8. G7 decision record retiring old test A3.
+
+**Not started and not implied by this slice:** collaborative mode persistence and routes, default-on sharing (Amendment B),
+radar wiring into a live page, browser verification.

@@ -219,7 +219,7 @@ async function readExistingRecord(tx: ErasureTransaction, uid: string): Promise<
  * Converts Firestore Timestamp fields to Dates. Anything else is left as it is, so the strict parser sees the real
  * shape and an unexpected key still makes the record malformed.
  */
-function toRawErasureData(data: unknown): unknown {
+export function toRawErasureData(data: unknown): unknown {
   if (typeof data !== "object" || data === null) return data;
   const record = data as Record<string, unknown>;
   const converted: Record<string, unknown> = { ...record };

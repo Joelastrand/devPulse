@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { listTeamProjects, TEAM_PROJECTS_MAX, type ListTeamProjectsDeps } from "./list-team-projects";
+import { listTeamProjects, mapTeamProjectDocs, TEAM_PROJECTS_MAX, type ListTeamProjectsDeps } from "./list-team-projects";
 
 vi.mock("../../../lib/firebase/admin", () => ({
   getAdminAuth: () => {
@@ -106,6 +106,23 @@ describe("listTeamProjects", () => {
   it("shows a completed project as completed even when its start date has passed", async () => {
     const result = await listTeamProjects("t", "team-1", {}, deps({ role: "member", projects: [stored("p1", { lifecycleStatus: "completed" })] }));
     expect(result).toMatchObject({ ok: true, projects: [{ effectiveStatus: "completed" }] });
+  });
+
+  it("reads a stored project whose only identifier is its document id", async () => {
+    // Regression: stored project documents carry no projectId field. Before the fix every row lost its id and the whole
+    // read failed closed (HTTP 500 on the team Oversikt and Roadmap pages).
+    const fields: Record<string, unknown> = { ...stored("p1") };
+    delete fields.projectId;
+    const rows = mapTeamProjectDocs([{ id: "p1", data: () => fields }]);
+    const result = await listTeamProjects("t", "team-1", {}, deps({ role: "member", projects: rows }));
+    expect(result).toMatchObject({ ok: true, projects: [{ projectId: "p1", title: "Prosjekt p1" }] });
+  });
+
+  it("takes the project id from the document id, not from a stored field", async () => {
+    const fields: Record<string, unknown> = { ...stored("stored-id") };
+    const rows = mapTeamProjectDocs([{ id: "doc-id", data: () => fields }]);
+    const result = await listTeamProjects("t", "team-1", {}, deps({ role: "member", projects: rows }));
+    expect(result).toMatchObject({ ok: true, projects: [{ projectId: "doc-id" }] });
   });
 
   it("fails closed when a stored record is malformed, rather than dropping or coercing it", async () => {

@@ -49,7 +49,14 @@ const APPROVED_COLLECTION_REFERENCES = [
   "src/features/skill-profiles/server/skill-profile-store.ts",
 ];
 /** Approved by the task for the deny-rule config pin (TASK-006); allowed but not required to exist yet. */
-const APPROVED_WHEN_PRESENT_COLLECTION_REFERENCES = ["src/lib/firebase/firestore-deployment-config.test.ts"];
+/**
+ * Team competence gateway test (file-exact): names the collection only inside a negative assertion string that the
+ * gateway source does not mention `skillProfiles`. It imports and reads nothing from the collection.
+ */
+const APPROVED_WHEN_PRESENT_COLLECTION_REFERENCES = [
+  "src/lib/firebase/firestore-deployment-config.test.ts",
+  "src/features/team-competence-profile/server/collaborative-profile.test.ts",
+];
 /**
  * Account erasure (erasure-only persistence metadata, file-exact): the inventory registry names `skillProfiles` (I-1) for
  * the erasure sweep, and its test pins that row. It grants C1 no read, write or shape access; no directory is exempt.
@@ -303,7 +310,8 @@ function coverageModuleViolations(files: SourceFile[]): string[] {
   const code = stripComments(file.text);
   const problems: string[] = [];
   if (reExportTargets(file).length > 0 || /\bexport\s*(?:type\s*)?(?:\*|\{[^}]*\})\s*from\b/.test(code)) problems.push(`${file.path}: export … from`);
-  const approvedRuntime = new Set(["getTeamSkillCoverage", "createGetTeamSkillCoverage"]);
+  // `getTeamSkillLevels` is the production binding of the approved numeric factory (owner decision 2026-11-08).
+  const approvedRuntime = new Set(["getTeamSkillCoverage", "createGetTeamSkillCoverage", "createGetTeamSkillLevels", "getTeamSkillLevels"]);
   for (const match of code.matchAll(/^export\s+(?:declare\s+)?(?:async\s+)?(?:function|const|let|var|class|enum)\s+([\w$]+)/gm)) {
     if (!approvedRuntime.has(match[1])) problems.push(`${file.path}: unapproved export ${match[1]}`);
   }

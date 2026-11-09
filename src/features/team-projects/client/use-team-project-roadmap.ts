@@ -29,10 +29,24 @@ export type RoadmapData =
 
 type AuthState = { phase: "loading" } | { phase: "signed_out" } | { phase: "signed_in"; token: string };
 
+/** Participations of every active project, read through the TASK-004 API. A failed read is reported, never hidden. */
+async function loadParticipations(token: string, teamId: string, projects: ClientTeamProject[]) {
+  const active = projects.filter((project) => !project.archived);
+  const results = await Promise.all(active.map((project) => fetchProjectParticipations(token, teamId, project.projectId)));
+  return {
+    participations: results.flatMap((item) => (item.status === "ok" ? item.participations : [])),
+    participationsFailed: results.some((item) => item.status !== "ok"),
+    truncated: results.some((item) => item.status === "ok" && item.truncated),
+  };
+}
+
 /**
  * Loads the project roadmap for `teamId` (TASK-005). Project and member reads are independent: a failed member read
  * only drops names. Participations are read per active project through the TASK-004 API; a failed participation read
  * is reported separately and never hides the project list. Responses from a superseded load are dropped.
+ *
+ * `refreshParticipations` re-reads only the participation timeline after a write, so the loaded page stays on screen
+ * and an open management form is not unmounted.
  */
 export function useTeamProjectRoadmap(teamId: string) {
   const [auth, setAuth] = useState<AuthState>({ phase: "loading" });
@@ -63,20 +77,16 @@ export function useTeamProjectRoadmap(teamId: string) {
       if (projectsResult.status !== "ok") {
         return { phase: "error", reason: projectsResult.status === "forbidden" ? "forbidden" : "read_failed" };
       }
-      const active = projectsResult.projects.filter((project) => !project.archived);
-      const participationResults = await Promise.all(
-        active.map((project) => fetchProjectParticipations(token, teamId, project.projectId)),
-      );
-      const participations = participationResults.flatMap((item) => (item.status === "ok" ? item.participations : []));
+      const participations = await loadParticipations(token, teamId, projectsResult.projects);
       return {
         phase: "loaded",
         canEdit: projectsResult.canEdit,
-        truncated: projectsResult.truncated || participationResults.some((item) => item.status === "ok" && item.truncated),
+        truncated: projectsResult.truncated || participations.truncated,
         projects: projectsResult.projects,
         members: membersResult.status === "ok" ? membersResult.members : [],
         membersFailed: membersResult.status !== "ok",
-        participations,
-        participationsFailed: participationResults.some((item) => item.status !== "ok"),
+        participations: participations.participations,
+        participationsFailed: participations.participationsFailed,
       };
     }
 
@@ -91,9 +101,28 @@ export function useTeamProjectRoadmap(teamId: string) {
   const data: RoadmapData =
     requestKey !== null && result?.requestKey === requestKey ? result.data : { phase: "loading" };
 
+  /** Re-reads the participations of the loaded projects in place. Ignored unless the page is loaded for this request. */
+  async function refreshParticipations(): Promise<void> {
+    if (token === null || requestKey === null || data.phase !== "loaded") return;
+    const next = await loadParticipations(token, teamId, data.projects);
+    setResult((previous) => {
+      if (previous === null || previous.requestKey !== requestKey || previous.data.phase !== "loaded") return previous;
+      return {
+        requestKey,
+        data: {
+          ...previous.data,
+          participations: next.participations,
+          participationsFailed: next.participationsFailed,
+          truncated: previous.data.truncated || next.truncated,
+        },
+      };
+    });
+  }
+
   return {
     auth,
     data,
     reload: () => setReloadKey((key) => key + 1),
+    refreshParticipations,
   };
 }

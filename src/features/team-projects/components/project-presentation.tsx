@@ -5,11 +5,17 @@ import { Button } from "../../../components/ui/Button";
 import { teamProjectsCopy } from "../copy";
 import type { ClientTeamProject } from "../client/team-projects-gateway";
 
-/** Bar and dot colours cycle per project so neighbouring rows differ. Colour never carries the status alone. */
+/**
+ * Bar and dot colours cycle per project from the six chart tokens. Colour never carries the status or the project name
+ * alone: every bar and legend entry also names the project in text.
+ */
 export const PROJECT_TONE_CLASSES = [
-  { bar: "bg-primary", dot: "bg-primary" },
-  { bar: "bg-accent", dot: "bg-accent" },
-  { bar: "bg-text-secondary", dot: "bg-text-secondary" },
+  { bar: "bg-chart-1", dot: "bg-chart-1" },
+  { bar: "bg-chart-2", dot: "bg-chart-2" },
+  { bar: "bg-chart-3", dot: "bg-chart-3" },
+  { bar: "bg-chart-4", dot: "bg-chart-4" },
+  { bar: "bg-chart-5", dot: "bg-chart-5" },
+  { bar: "bg-chart-6", dot: "bg-chart-6" },
 ] as const;
 
 /** Stable tone index from the opaque project id (not from display order, so sorting never recolours a project). */

@@ -29,7 +29,11 @@ export const MEMBER_PARTICIPATIONS_MAX = 200;
 
 /** Allow-listed write keys. `projectId` comes from the route; `memberRef` is fixed after creation (remove and recreate to change it). */
 const CREATE_KEYS = ["memberRef", "startDate", "endDate", "note"] as const;
-const UPDATE_KEYS = ["startDate", "endDate", "note"] as const;
+/**
+ * Update may reassign the record to another member or project of the same team. The record keeps its
+ * `participationId`, so the change is an in-place transactional update: no delete-then-create, no second record.
+ */
+const UPDATE_KEYS = ["memberRef", "projectId", "startDate", "endDate", "note"] as const;
 
 /** Allow-listed response shape. No uid, no e-mail, no timestamps, no utilization or capacity values. */
 export interface ProjectParticipationView {
@@ -198,11 +202,13 @@ export function toParticipationView(record: TeamProjectParticipation, overlapsOt
 }
 
 /**
- * Creates, updates or removes (archives) one project participation record (SPEC — BR-8, BR-12, BR-13). `teamId` and
- * `projectId` come from the route only. Writes require a `lead` membership of the caller on an `active` team, re-read
- * inside the transaction. The member must hold a current membership of the same team; a removed member is refused as
- * `invalid_member`. Archived projects accept no new or changed participation. Removal is a soft archive and is allowed
- * on an archived project so that cleanup stays possible. No actor uid is stored.
+ * Creates, updates or removes (archives) one project participation record (SPEC — BR-8, BR-12, BR-13). `teamId` comes
+ * from the route. On create, `projectId` comes from the route. On update, the route `projectId` must be the record's
+ * current project (otherwise `not_found`), and the body may reassign the record to another member or project of the same
+ * team. Writes require a `lead` membership of the caller on an `active` team, re-read inside the transaction. The
+ * member must hold a current membership of the same team; a removed member is refused as `invalid_member`. Archived
+ * projects accept no new or changed participation. Removal is a soft archive and is allowed on an archived project so
+ * that cleanup stays possible. No actor uid is stored.
  */
 export async function writeProjectParticipation(
   idToken: string,
@@ -261,8 +267,8 @@ export async function writeProjectParticipation(
           action === "create"
             ? { projectId, ...patch }
             : {
-                projectId,
-                memberRef: existing?.memberRef,
+                projectId: "projectId" in patch ? patch.projectId : existing?.projectId,
+                memberRef: "memberRef" in patch ? patch.memberRef : existing?.memberRef,
                 startDate: "startDate" in patch ? patch.startDate : existing?.startDate,
                 endDate: "endDate" in patch ? patch.endDate : existing?.endDate,
                 note: "note" in patch ? patch.note : existing?.note,
@@ -274,23 +280,30 @@ export async function writeProjectParticipation(
 
       if (action === "update" && existing?.archived) return fail("participation_archived");
 
+      // The target project is the one in the merged result: the route project for create, the current or a reassigned
+      // project for update. Both must belong to this team and be active.
       if (action !== "remove") {
-        const rawProject = await tx.getProject(projectId);
+        if (fields === null) return fail("persistence_failed");
+        const rawProject = await tx.getProject(fields.projectId);
         if (rawProject === undefined || (isPlainObject(rawProject) && rawProject.teamId !== teamId)) return fail("not_found");
-        const project = parseStoredTeamProject(rawProject, projectId, teamId);
+        const project = parseStoredTeamProject(rawProject, fields.projectId, teamId);
         if (project === null) return fail("persistence_failed");
         if (project.archived) return fail("project_archived");
       }
 
       const memberRef = fields?.memberRef ?? existing?.memberRef;
       if (!isMemberRef(memberRef)) return fail("persistence_failed");
+      const previousMemberRef = existing !== null && existing.memberRef !== memberRef ? existing.memberRef : null;
 
       // The member must be a current member of this team. Removal of a participation does not need one, but the
       // membership is still touched when it exists, so a concurrent erasure of that member conflicts with this write.
-      const memberships = await tx.listMembershipsByRefs(teamId, [memberRef]);
+      // On reassignment the previous member's membership is read too, so it can be touched as well.
+      const memberships = await tx.listMembershipsByRefs(teamId, previousMemberRef === null ? [memberRef] : [memberRef, previousMemberRef]);
       const memberRecord = resolveMemberRef(memberships, teamId, memberRef);
       const memberUid = memberRecord === null ? null : extractMemberUid(memberRecord);
       if (action !== "remove" && (memberRecord === null || memberUid === null)) return fail("invalid_member");
+      const previousRecord = previousMemberRef === null ? null : resolveMemberRef(memberships, teamId, previousMemberRef);
+      const previousUid = previousRecord === null ? null : extractMemberUid(previousRecord);
 
       const others = await tx.listParticipationsOfMember(teamId, memberRef, MEMBER_PARTICIPATIONS_MAX + 1);
       if (others.length > MEMBER_PARTICIPATIONS_MAX) return fail("limit_reached");
@@ -325,6 +338,7 @@ export async function writeProjectParticipation(
         tx.setParticipation(targetId, toStored(teamId, fields, false));
       }
       tx.touchMembership(memberUid, teamId, fields.memberRef);
+      if (previousUid !== null && previousMemberRef !== null) tx.touchMembership(previousUid, teamId, previousMemberRef);
       return { ok: true, participation: toParticipationView(record, overlapsOther) };
     });
   } catch (error) {

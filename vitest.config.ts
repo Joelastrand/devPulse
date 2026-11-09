@@ -15,6 +15,7 @@ export default defineConfig({
     include: [
       "src/**/*.{test,spec}.{ts,tsx}",
       "app/**/*.{test,spec}.{ts,tsx}",
+      "scripts/**/*.test.ts",
     ],
     alias: {
       // Next.js resolves "server-only" to a throwing stub unless its

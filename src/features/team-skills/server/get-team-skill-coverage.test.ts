@@ -8,6 +8,8 @@ import {
 import { skillNeedDocId, type SkillNeedRecord } from "../domain/skill-need";
 import {
   createGetTeamSkillCoverage,
+  createGetTeamSkillLevels,
+  type GetTeamSkillLevelsDeps,
   type GetTeamSkillCoverageDeps,
   type GetTeamSkillCoverageResult,
   type ReadSkillLevels,
@@ -351,5 +353,256 @@ describe("response shape", () => {
       base({ needs: [need("t1"), need("t2")], trees: { t1: validTree("Zulu"), t2: validTree("Alpha") } }),
     ).call();
     expect(result.ok && result.rows.map((r) => r.areaName)).toEqual(["Alpha", "Zulu"]);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Internal numeric team level (Amendment A, on-demand). Same boundary as coverage: this file is the approved test sibling.
+// ---------------------------------------------------------------------------------------------------------------------
+
+const numTree = (name: string) => ({
+  name,
+  nodes: [
+    { nodeId: "node-0", label: "A", order: 0 },
+    { nodeId: "node-1", label: "B", order: 1 },
+  ],
+  createdAt: WHEN,
+  createdBy: "admin",
+});
+const numNeed = (treeId: string, requiredLevel: 2 | 3 | 4 = 3) => {
+  const data: SkillNeedRecord = { teamId: TEAM, treeId, requiredLevel, requiredCoverage: 2, createdAt: WHEN, updatedAt: WHEN };
+  return { id: skillNeedDocId(TEAM, treeId), data: data as unknown };
+};
+const numContributing = (uid: string, extra: Record<string, unknown> = {}) => membership(uid, extra);
+const numNotContributing = (uid: string) => ({
+  id: membershipDocId(uid, TEAM),
+  data: { uid, teamId: TEAM, role: "member", memberRef: `ref-${uid}` } as unknown,
+});
+
+interface NumFixture {
+  signedIn?: boolean;
+  member?: boolean;
+  teamStatus?: unknown;
+  needs?: Array<{ id: string; data: unknown }>;
+  trees?: Record<string, unknown>;
+  memberships?: Array<{ id: string; data: unknown }>;
+  /** Personal levels per uid and tree; returned only for the uids the reader is asked for. */
+  levelsByUid?: Record<string, Record<string, number>>;
+  failNeeds?: boolean;
+  failScan?: boolean;
+  failTree?: boolean;
+  failLevels?: boolean;
+  throwLevels?: boolean;
+  minContributors?: number;
+}
+
+function buildNumeric(f: NumFixture) {
+  const reads = {
+    async getTeamStatus() {
+      return "teamStatus" in f ? f.teamStatus : "active";
+    },
+    async getMembership(uid: string, teamId: string) {
+      return (f.member ?? true) ? { uid, teamId, role: "member" } : undefined;
+    },
+  };
+  const needsReader: SkillNeedsReader = {
+    async listByTeam(_teamId, limit) {
+      if (f.failNeeds) throw new Error("boom");
+      return (f.needs ?? []).slice(0, limit);
+    },
+  };
+  const catalogReader: SkillNeedCatalogReader = {
+    async listOrderedByCreatedAt() {
+      throw new Error("catalog list must not be used");
+    },
+    async getSkillTree(treeId) {
+      if (f.failTree) throw new Error("boom");
+      return f.trees?.[treeId];
+    },
+  };
+  const contributionStore = {
+    async listMembershipsForCoverage(_teamId: string, limit: number) {
+      if (f.failScan) throw new Error("boom");
+      return (f.memberships ?? []).slice(0, limit);
+    },
+  } as unknown as SkillContributionStore;
+  const readLevels = vi.fn<ReadSkillLevels>(async (uids, treeIds) => {
+    if (f.throwLevels) throw new Error("boom");
+    if (f.failLevels) return { ok: false };
+    const levelsByTree = new Map(treeIds.map((treeId) => [treeId, [] as number[]]));
+    for (const uid of uids) {
+      for (const treeId of treeIds) {
+        const level = f.levelsByUid?.[uid]?.[treeId];
+        if (level !== undefined) levelsByTree.get(treeId)?.push(level);
+      }
+    }
+    return { ok: true, levelsByTree };
+  });
+  const deps: GetTeamSkillLevelsDeps = {
+    readLevels,
+    verifyToken: vi.fn(async () => {
+      if (f.signedIn === false) throw new Error("bad token");
+      return { uid: "u-member", email: "member@example.com", email_verified: true } as never;
+    }),
+    reads,
+    needsStore: getDefaultSkillNeedsStore(needsReader),
+    catalogReader,
+    contributionStore,
+    ...(f.minContributors === undefined ? {} : { minContributors: f.minContributors }),
+  };
+  return { call: () => createGetTeamSkillLevels(deps)("token", TEAM), readLevels };
+}
+
+/** Five contributors; levels 1,3,3,3,4 → sum 14, n 5 → 2.8 → 3. */
+const NUM_FIVE = ["a", "b", "c", "d", "e"];
+const numBase = (over: NumFixture = {}): NumFixture => ({
+  needs: [numNeed("t1")],
+  trees: { t1: numTree("Alpha") },
+  memberships: NUM_FIVE.map((s) => numContributing(`u-${s}`)),
+  levelsByUid: { "u-a": { t1: 1 }, "u-b": { t1: 3 }, "u-c": { t1: 3 }, "u-d": { t1: 3 }, "u-e": { t1: 4 } },
+  ...over,
+});
+
+describe("numeric team level: authorization", () => {
+  it("refuses a signed-out caller without reading any level", async () => {
+    const { call, readLevels } = buildNumeric(numBase({ signedIn: false }));
+    expect((await call()).ok).toBe(false);
+    expect(readLevels).not.toHaveBeenCalled();
+  });
+
+  it("refuses a non-member as forbidden", async () => {
+    expect(await buildNumeric(numBase({ member: false })).call()).toEqual({ ok: false, error: "forbidden" });
+  });
+
+  it("refuses a member of a disabled team as team_disabled", async () => {
+    expect(await buildNumeric(numBase({ teamStatus: "disabled" })).call()).toEqual({ ok: false, error: "team_disabled" });
+  });
+});
+
+describe("numeric team level: eligible contributors", () => {
+  it("evaluates the rounded mean of the five eligible contributors", async () => {
+    expect(await buildNumeric(numBase()).call()).toMatchObject({
+      ok: true,
+      availability: "available",
+      rows: [{ state: "value", level: 3 }],
+    });
+  });
+
+  it("never passes a non-contributor's level into the derivation", async () => {
+    const f = numBase({
+      memberships: [
+        ...NUM_FIVE.slice(0, 3).map((s) => numContributing(`u-${s}`)),
+        numNotContributing("u-x"),
+        numNotContributing("u-y"),
+      ],
+      levelsByUid: { "u-a": { t1: 4 }, "u-b": { t1: 4 }, "u-c": { t1: 4 }, "u-x": { t1: 1 }, "u-y": { t1: 1 } },
+      minContributors: 3,
+    });
+    expect(await buildNumeric(f).call()).toMatchObject({ ok: true, rows: [{ state: "value", level: 4 }] });
+  });
+
+  it("excludes a membership whose notice version is stale", async () => {
+    // Four at 4 plus one stale at 1: counting the stale member gives 3.4 → 3, so 4 proves exclusion.
+    const f = numBase({
+      memberships: [
+        ...NUM_FIVE.slice(0, 4).map((s) => numContributing(`u-${s}`)),
+        numContributing("u-stale", { skillContribution: { noticeVersion: 0, consentedAt: WHEN } }),
+      ],
+      levelsByUid: { "u-a": { t1: 4 }, "u-b": { t1: 4 }, "u-c": { t1: 4 }, "u-d": { t1: 4 }, "u-stale": { t1: 1 } },
+      minContributors: 3,
+    });
+    expect(await buildNumeric(f).call()).toMatchObject({ ok: true, rows: [{ state: "value", level: 4 }] });
+  });
+
+  it("reflects an opt-out on the next read, with no cached value", async () => {
+    const f = numBase({
+      memberships: ["a", "b", "c"].map((s) => numContributing(`u-${s}`)),
+      levelsByUid: { "u-a": { t1: 4 }, "u-b": { t1: 4 }, "u-c": { t1: 1 } },
+      minContributors: 3,
+    });
+    expect(await buildNumeric(f).call()).toMatchObject({ ok: true, rows: [{ state: "value", level: 3 }] });
+    const afterOptOut = await buildNumeric({
+      ...f,
+      memberships: [numContributing("u-a"), numContributing("u-b"), numNotContributing("u-c")],
+    }).call();
+    expect(afterOptOut).toMatchObject({ ok: true, rows: [{ state: "insufficient_data" }] });
+  });
+});
+
+describe("numeric team level: threshold", () => {
+  it("uses the owner-approved default k = 3: three contributors give a value with no caller threshold", async () => {
+    // Levels 1, 3, 3 → mean 2.33 → 2.
+    const f = numBase({ memberships: ["a", "b", "c"].map((s) => numContributing(`u-${s}`)) });
+    expect(await buildNumeric(f).call()).toMatchObject({ ok: true, rows: [{ state: "value", level: 2 }] });
+  });
+
+  it("returns insufficient_data for two contributors under the default k = 3", async () => {
+    const f = numBase({ memberships: ["a", "b"].map((s) => numContributing(`u-${s}`)) });
+    expect(await buildNumeric(f).call()).toMatchObject({ ok: true, rows: [{ state: "insufficient_data" }] });
+  });
+
+  it("evaluates three contributors when the threshold is three", async () => {
+    // Levels 1, 3, 3 → mean 2.33 → 2.
+    const f = numBase({ memberships: ["a", "b", "c"].map((s) => numContributing(`u-${s}`)), minContributors: 3 });
+    expect(await buildNumeric(f).call()).toMatchObject({ ok: true, rows: [{ state: "value", level: 2 }] });
+  });
+
+  it("returns insufficient_data, never zero, for an area with no contributor", async () => {
+    expect(await buildNumeric(numBase({ levelsByUid: {}, minContributors: 3 })).call()).toMatchObject({
+      ok: true,
+      rows: [{ state: "insufficient_data" }],
+    });
+  });
+});
+
+describe("numeric team level: response shape", () => {
+  it("returns only allow-listed keys per row, with no count, identity or coverage field", async () => {
+    const result = await buildNumeric(numBase()).call();
+    if (!result.ok || result.availability !== "available") throw new Error("expected available");
+    for (const row of result.rows) {
+      expect(Object.keys(row).sort()).toEqual(["areaName", "level", "state", "targetLevel", "treeId"]);
+    }
+    expect(JSON.stringify(result)).not.toMatch(/u-[a-e]|requiredCoverage|ref-|memberRef|contributor/);
+  });
+
+  it("omits the level key on an insufficient_data row", async () => {
+    const result = await buildNumeric(numBase({ memberships: ["a", "b"].map((s) => numContributing(`u-${s}`)) })).call();
+    if (!result.ok || result.availability !== "available") throw new Error("expected available");
+    expect(Object.keys(result.rows[0] ?? {})).not.toContain("level");
+  });
+
+  it("returns an area_unavailable row with a null name and no level", async () => {
+    expect(await buildNumeric(numBase({ trees: {} })).call()).toMatchObject({
+      ok: true,
+      rows: [{ state: "area_unavailable", areaName: null, treeId: "t1" }],
+    });
+  });
+
+  it("returns incomplete with no rows when the cohort exceeds the scan bound", async () => {
+    const many = Array.from({ length: TEAM_SKILL_COHORT_SCAN_MAX + 1 }, (_, i) => numContributing(`u-${i}`));
+    expect(await buildNumeric(numBase({ memberships: many })).call()).toEqual({
+      ok: true,
+      availability: "incomplete",
+      rows: [],
+    });
+  });
+});
+
+describe("numeric team level: read failures", () => {
+  it.each([
+    ["needs", { failNeeds: true }],
+    ["membership scan", { failScan: true }],
+    ["catalog tree", { failTree: true }],
+    ["level read not ok", { failLevels: true }],
+    ["level read throws", { throwLevels: true }],
+  ] as const)("returns read_failed with no rows when the %s read fails", async (_label, over) => {
+    expect(await buildNumeric(numBase(over)).call()).toEqual({ ok: false, error: "read_failed" });
+  });
+
+  it("returns read_failed, never zero, when a stored level is malformed", async () => {
+    const f = numBase({
+      levelsByUid: { "u-a": { t1: 0 }, "u-b": { t1: 3 }, "u-c": { t1: 3 }, "u-d": { t1: 3 }, "u-e": { t1: 4 } },
+    });
+    expect(await buildNumeric(f).call()).toEqual({ ok: false, error: "read_failed" });
   });
 });

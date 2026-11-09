@@ -4,10 +4,10 @@ import { authRefusalFor, type AuthRefusal } from "../../auth/server/auth-refusal
 import { isRecentAuth } from "../../auth/server/recent-auth";
 import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import { normalizeEmail } from "../../teams/domain/normalize-email";
-import { revokeSuperadminForErasureStart, type RevokeForErasureStartResult } from "../../superadmins/server/superadmin-erasure";
 import { RECENT_AUTH_WINDOW_SECONDS } from "../domain/erasure-constants";
 import type { ErasureStep } from "../domain/erasure-state";
-import { createErasureInTransaction, readErasureRecord } from "./erasure-store";
+import { readErasureRecord } from "./erasure-store";
+import { getDefaultErasureStartPort, startErasureAtomically, type ErasureStartPort } from "./erasure-start-atomic";
 import { runErasure, type RunBudget, type StepHandler } from "./erasure-runner";
 import { runAuthDeletion, type AuthDeletionPort } from "./auth-deletion";
 import type { ErasureStorePort } from "./erasure-store-types";
@@ -72,10 +72,10 @@ export interface StartErasureDeps {
   readonly verifyToken?: VerifyIdTokenDeps["verifyToken"];
   readonly readFence?: VerifyIdTokenDeps["readFence"];
   /**
-   * Owner decision (Option A): the start revokes this uid's superadmin privilege before the fence exists, and refuses the
-   * last active superadmin. Defaults to the production registry; tests inject a fake.
+   * Owner decision (Option A): the start creates the fence and revokes this uid's superadmin privilege in ONE transaction,
+   * and refuses the last active superadmin. Defaults to the production Firestore transaction; tests inject the fake store.
    */
-  readonly revokeSuperadminForErasure?: (uid: string) => Promise<RevokeForErasureStartResult>;
+  readonly startPort?: ErasureStartPort;
 }
 
 export interface StartErasureInput {
@@ -138,12 +138,11 @@ export async function startOrResumeErasure(
   const request = toErasureRequest(uid, email, emailVerified);
   if (request === undefined) return UNAVAILABLE;
 
-  const revoke = await (deps.revokeSuperadminForErasure ?? ((id: string) => revokeSuperadminForErasureStart(id)))(uid);
-  if (!revoke.ok) return revoke.error === "last_superadmin" ? { ok: false, error: "last_superadmin" } : UNAVAILABLE;
-
-  const created = await createErasureInTransaction(deps.port, uid, deps.now());
-  if (!created.ok) return UNAVAILABLE;
-  if (created.value.record.status === "completed") return { ok: true, state: { status: "completed" } };
+  // Fence and superadmin revoke commit together or not at all (erasure-start-atomic.ts), so a failed fence never leaves
+  // the person demoted.
+  const started = await startErasureAtomically(deps.startPort ?? getDefaultErasureStartPort(), uid, deps.now());
+  if (!started.ok) return started.error === "last_superadmin" ? { ok: false, error: "last_superadmin" } : UNAVAILABLE;
+  if (started.record.status === "completed") return { ok: true, state: { status: "completed" } };
 
   return runAndReport(deps, request);
 }

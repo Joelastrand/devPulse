@@ -56,6 +56,16 @@ describe("TeamCompetenceCoverage (TASK-011, categorical team coverage)", () => {
     expect(fetchCoverageMock).toHaveBeenCalledWith("token-for-test", "team-1");
   });
 
+  it("makes the horizontally scrollable table a named, keyboard-focusable region", async () => {
+    fetchCoverageMock.mockResolvedValue({ status: "available", rows: [row("t1", "Testing", "covered")] });
+
+    render(<TeamCompetenceCoverage teamId="team-1" />);
+
+    const region = await screen.findByRole("region", { name: "Dekning per kompetanseområde" });
+    expect(region.getAttribute("tabindex")).toBe("0");
+    expect(within(region).getByRole("table")).toBeTruthy();
+  });
+
   it("renders no counts, averages, scores or percentages inside the coverage table", async () => {
     fetchCoverageMock.mockResolvedValue({ status: "available", rows: [row("t1", "Testing", "covered")] });
 

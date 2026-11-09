@@ -4,7 +4,7 @@ import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { runFencedTransaction } from "../../auth/server/erasure-write-fence";
 import { membershipDocId } from "../../teams/domain/team-membership";
 import { SKILL_CONTRIBUTION_FIELD, type SkillContributionRecord } from "../domain/skill-contribution";
-import type { GenuineMembershipReads } from "./genuine-team-membership";
+import type { GenuineMembershipReads } from "../../teams/domain/genuine-membership";
 
 const TEAMS_COLLECTION = "teams";
 const MEMBERSHIPS_COLLECTION = "teamMemberships";

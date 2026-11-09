@@ -7,7 +7,10 @@ import {
   readJsonBody,
 } from "../../../../../../../../src/features/team-projects/server/http";
 
-/** Participation update: dates and note only (SPEC — BR-8). Lead of an active team only. */
+/**
+ * Participation update (SPEC — BR-8). The path `projectId` is the record's current project. The body may reassign the
+ * record to another member or project of the same team, plus dates and note. Lead of an active team only.
+ */
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ teamId: string; projectId: string; participationId: string }> },

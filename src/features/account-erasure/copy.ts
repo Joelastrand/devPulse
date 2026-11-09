@@ -34,6 +34,7 @@ export const erasureCopy = {
     confirmationMismatch: "E-postadressen stemmer ikke med kontoen din.",
     unavailable: "Slettingen kunne ikke fullføres akkurat nå. Prøv igjen senere.",
     unauthenticated: "Du må være innlogget for å slette kontoen.",
+    lastSuperadmin: "Du er den eneste aktive superadministratoren, så kontoen kan ikke slettes ennå. Utnevn en annen superadministrator først, og prøv igjen.",
     generic: "Noe gikk galt. Prøv igjen.",
   },
 } as const;

@@ -26,7 +26,7 @@ deployment log, with the command output or screenshot reference. No row is compl
 
 | # | Item | Owner role | Evidence (operator fills in) |
 | --- | --- | --- | --- |
-| 1 | APP_ADMIN_EMAILS: remove an erased admin's address before or with the erasure | Platform operator | |
+| 1 | Superadmin registry: confirm the erased account's `superadmins/{uid}` record is absent after erasure, and that no `superadminRegistry/control` count is off by one | Platform operator | |
 | 2 | Firestore TTL policy on `accountErasures.expireAt` | Platform operator | |
 | 3 | Deploy `AE-IDX-1` before the first erasure; verify `AE-IDX-2` | Platform operator | |
 | 4 | Admin SDK service account can call `deleteUser` in each environment | Platform operator | |
@@ -38,12 +38,17 @@ deployment log, with the command output or screenshot reference. No row is compl
 | 10 | Demo CLI refusal (BR-20) verified before any demo against a real presenter | Demo owner | |
 | 11 | Manual Firestore Emulator race proof (D-EMU), recorded in VERIFICATION.md | Operator (local emulator) | |
 
-## 1. APP_ADMIN_EMAILS
+## 1. Superadmin registry (replaces the former APP_ADMIN_EMAILS step)
 
-Erasure cannot edit the allow-list, and the app cannot enforce its removal. This section covers E-4 (SPEC "Operational requirements (BR-21, D5, D9)"). After erasure the old uid cannot verify, so it is
-not an admin. A new sign-up with the same verified address would become an admin again while the address is still in
-`APP_ADMIN_EMAILS`. Before or with the erasure of an admin, remove that address from the allow-list. This is an operator
-action, not a product-code guarantee. Evidence: the configuration change record and the date.
+Superseded 2026-11-06. The application no longer reads `APP_ADMIN_EMAILS`, so removing an address from an env allow-list does
+not change admin status. Admin status is the Firestore record `superadmins/{uid}`.
+
+- Starting an erasure for an active superadmin revokes that record and creates the erasure fence in one transaction. The
+  last active superadmin cannot start an erasure (`last_superadmin`, HTTP 409). Nothing is changed in that case.
+- The erasure step removes the erased account's own registry record and keeps `superadminRegistry/control.activeCount` exact.
+- Operator check after an admin erasure: the `superadmins/{uid}` document for that uid is absent, and the control count
+  equals the number of `active: true` records. Evidence: a read-only console check, with the date.
+- Not claimed: a fresh sign-up cannot become superadmin without an explicit grant by an active superadmin.
 
 ## 2. Firestore TTL on `accountErasures.expireAt`
 

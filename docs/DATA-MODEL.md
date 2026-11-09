@@ -39,6 +39,7 @@ See `docs/SECURITY.md` for the invariants these concepts must respect.
 | DevelopmentConversation | Implemented (Firestore-backed, `docs/features/development-conversations/SPEC.md`, Feature D2, 2026-10-21) | One development conversation: `userDevelopment/{ownerUid}/conversations/{conversationId}`, an owner-subtree document and the only authority for content and participant state. Plain keys are exactly `teamId`, `participantUid`, `participantMemberRef`, `participantState`, `participantInvitedAt`, `participantAcceptedAt`, `plannedFor`, `status`, `completedAt`, `createdAt`, `updatedAt`, `ciphertext`, `iv`, `authTag`, `keyVersion`, `keyCheck`. Free text (`title`, `ownerNotes`, `nextSteps`, `participantNotes`, goal snapshots) lives only inside the encrypted payload. No goal id is stored. | Yes (owner-attributed; the participant binding is stored as a reference, never as free text) | Yes — application-layer AES-256-GCM on the server, not end-to-end (`docs/SECURITY.md` invariants 55–72) | No |
 | ConversationParticipation | Implemented (participant locator, `docs/features/development-conversations/SPEC.md`, Feature D2, 2026-10-21) | Participant-side index: `userDevelopment/{participantUid}/conversationParticipations/{conversationId}` with exactly `{ ownerUid, invitedAt }`. It holds no content and grants nothing alone; access requires the owner document's binding and the access check (`docs/SECURITY.md` invariants 55–72). | Yes (locator) | No | No |
 
+| SuperadminRecord | Implemented (Firestore-backed, `docs/features/superadmin-registry/VERIFICATION.md`, `docs/features/superadmin-registry/BOOTSTRAP.md`) | Authoritative global-admin registry: `superadmins/{uid}` (`uid`, `active`, `grantedAt`, `grantedByUid`, `revokedAt`, `revokedByUid`, `updatedAt`). Admin SDK only; client access denied (`firestore.rules`). No e-mail address stored. `superadminRegistry/control.activeCount` is the serialization point for the last-superadmin rule. |
 ## Notes
 
 - `SurveyResponse` and `SurveyParticipation` are intentionally separate
@@ -185,3 +186,16 @@ Source: `docs/features/teamadmin-and-team-visibility/SPEC.md`; security rules in
 - `teamMemberships/{uid}__{teamId}.role` — now `"teamadmin"` (only value written) or absent (member). Legacy `"lead"`
   documents are read as member and are not migrated. Written only by a superadmin through `setTeamMemberRole`.
 - Public projection (not stored): `{teamId, name}` for an active, public team only.
+
+## Superadmin registry (superadmin-registry, 2026-11-06)
+
+Source: `docs/SECURITY.md` (SR-SI-1…11); `docs/features/superadmin-registry/BOOTSTRAP.md`. Supersedes the former
+`APP_ADMIN_EMAILS` environment allow-list, which no code path reads any longer.
+
+- `superadmins/{uid}` — one record per Firebase Auth UID. `active` is the authority; a revoked record is kept (`active: false`) so
+  the revocation stays auditable and the id stays stable. Written only by the Admin SDK (grant, revoke, erasure cleanup, bootstrap).
+- `superadminRegistry/control` — `activeCount` (number of `active: true` records) and `updatedAt`. Every grant and revoke reads
+  and writes it in the same transaction, so concurrent revocations conflict on this document. A missing document means zero.
+- No e-mail address is stored in either document. Targets are resolved through Firebase Auth at grant time only.
+- Erasure: the start revokes an active superadmin in the same transaction as the erasure fence; the erasure step deletes the
+  record and keeps `activeCount` exact (`docs/features/account-erasure/SPEC.md`).

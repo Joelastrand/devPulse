@@ -438,7 +438,7 @@ export function formatDemoDryRunReport(input: DemoDryRunReportInput): string[] {
       : "Writes planned: 0 (aborted: conflict)",
     "Deletes: 0",
     "Warning: the demo team and demo skill trees are visible to every signed-in user and every admin of the target project.",
-    "Reminder: to demo admin surfaces the presenter must be an app admin via APP_ADMIN_EMAILS (external prerequisite, not changed by this tool).",
+    "Reminder: to demo admin surfaces the presenter must be an active superadmin in the Firestore registry (superadmins/{uid}; external prerequisite, not changed by this tool).",
     "Gate: the coordinator must approve this exact project id before `--write`; `--confirm` is only a typo guard.",
   );
   return lines;

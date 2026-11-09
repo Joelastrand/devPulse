@@ -109,6 +109,8 @@ function interpret(response: ErasureApiResponse): Interpreted {
       return { kind: "error", error: "unavailable" };
     case "unauthenticated":
       return { kind: "error", error: "unauthenticated" };
+    case "last_superadmin":
+      return { kind: "error", error: "lastSuperadmin" };
     default:
       return { kind: "error", error: "generic" };
   }

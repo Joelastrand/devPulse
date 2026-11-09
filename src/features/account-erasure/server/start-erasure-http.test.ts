@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { createFakeErasureStore } from "./erasure-store-fake";
+import { createFakeErasureStore, type FakeErasureStore } from "./erasure-store-fake";
 import {
   bearerTokenFrom,
   isBodyTooLarge,
@@ -17,9 +17,10 @@ const NOW_SECONDS = 1_800_000_000;
 const EMAIL = "dev@example.com";
 const UID = "uid-a";
 
-function deps(overrides: Partial<StartErasureDeps> & Pick<StartErasureDeps, "port">): StartErasureDeps {
+function deps(overrides: Partial<StartErasureDeps> & { port: FakeErasureStore }): StartErasureDeps {
   return {
     handlers: {},
+    startPort: overrides.port,
     clockMs: () => 0,
     now: () => new Date(NOW_SECONDS * 1000),
     nowSeconds: () => NOW_SECONDS,
@@ -31,7 +32,6 @@ function deps(overrides: Partial<StartErasureDeps> & Pick<StartErasureDeps, "por
       auth_time: NOW_SECONDS - 10,
     }),
     readFence: async () => ({ kind: "none" as const }),
-    revokeSuperadminForErasure: async () => ({ ok: true as const }),
     ...overrides,
   };
 }

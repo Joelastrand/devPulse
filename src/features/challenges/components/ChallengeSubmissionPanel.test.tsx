@@ -22,10 +22,10 @@ describe("ChallengeSubmissionPanel", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders a heading, the anonymity explanation, and the identity warning", () => {
+  it("renders the anonymity explanation and the identity warning, without a heading of its own", () => {
     render(<ChallengeSubmissionPanel idToken="token-1" teamId="team-1" onSubmitted={() => {}} />);
 
-    expect(screen.getByRole("heading", { name: "Meld en utfordring" })).toBeTruthy();
+    expect(screen.queryByRole("heading")).toBeNull();
     expect(screen.getByText(/anonym/i)).toBeTruthy();
     expect(screen.getByText(/ikke inkluder navn/i)).toBeTruthy();
   });

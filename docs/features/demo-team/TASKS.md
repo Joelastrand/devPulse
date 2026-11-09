@@ -257,7 +257,7 @@ report. Zero writes, no Admin SDK import.
   not prove key match with stored ciphertext.
 - Online: `getUser(uid)` existence only; result discarded; email never read
   into output; no admin-membership inference; static reminder that the
-  presenter must be an app admin via `APP_ADMIN_EMAILS` (external
+  presenter must be an active superadmin in the registry (external
   prerequisite, not mutated).
 - Classification per SPEC compatibility criteria (real validators); actor
   values only where the SPEC says (`createdBy`/`grantedBy`), never
@@ -382,7 +382,7 @@ coordinator-directed act and is **not** part of this task.
   execution gate (offline → online dry-run reports exact project id →
   coordinator approves that id → write), what is/isn't written (no Forum, no
   deletes), `ENCRYPTION_KEY` must match the target app (local round-trip does
-  not prove it), presenter must pre-exist and be in `APP_ADMIN_EMAILS` for
+  not prove it), presenter must pre-exist and be an active superadmin for
   admin surfaces (not mutated), visibility caveat, Node ≥ 24 if native runtime
   was kept, preflight-to-commit race.
 - BR-by-BR audit, dependency/diff audit, security review of guardrails

@@ -33,8 +33,8 @@ flowchart TD
 - **Current model, implemented (`docs/features/team-management/SPEC.md`)**:
   a Firestore-backed, Firebase-**uid**-keyed `teamMemberships` collection
   supporting zero/one/many teams per user, and a global app-admin role
-  determined server-side from a server-only email allow-list
-  (`APP_ADMIN_EMAILS`) matched against a Firebase-**verified**,
+  determined server-side from the Firestore superadmin registry
+  (`superadmins/{uid}`, read per request) for a Firebase-**verified**,
   revocation-checked identity — never a client-supplied role. The single
   authorization boundary every protected team-scoped operation must go
   through is `authorizeTeamAccess(identity, teamId)`
@@ -76,7 +76,7 @@ flowchart TD
   `isAppAdmin` exactly as above and returns only the caller's own
   `{isAdmin: boolean}` (no Firestore read), so the UI can show/hide the
   Admin navigation link from server-derived state only — the UI never
-  evaluates `APP_ADMIN_EMAILS` or any allow-list itself.
+  evaluates the superadmin registry or any allow-list itself.
 
 ## Member identity and team roles (decided, implemented)
 
@@ -660,7 +660,8 @@ Boundaries:
 - **Erasure contract.** `POST /api/me/erasure` is the only erasure route. The runner executes ordered steps, is resumable, and hands
   off to Auth deletion as the last step. Verification advances only at zero residuals. Production enablement is set in code
   (`PRODUCTION_HANDLERS_READY`) and still depends on the TASK-045 operator gate in `OPERATIONS.md`: the TTL policy, index deployment,
-  `APP_ADMIN_EMAILS`, and the platform-log and provider-backup limitations.
+  the superadmin registry bootstrap and cutover (`docs/features/superadmin-registry/BOOTSTRAP.md`), and the platform-log and
+  provider-backup limitations.
 - **Known limits, not claimed as erased.** Provider logs and provider backups (E-1, E-2). Client-side caches in the erased person's
   browser (E-3). Historical invitations addressed to an e-mail that cannot be linked to the person (BR-13).
 

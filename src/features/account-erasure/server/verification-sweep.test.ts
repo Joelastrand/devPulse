@@ -3,7 +3,7 @@ import type { ErasureStep } from "../domain/erasure-state";
 import { createFakeErasureStore } from "./erasure-store-fake";
 import { ErasureStepFailure, runErasure, type BatchResult, type RunBudget } from "./erasure-runner";
 import { createErasureInTransaction, readErasureRecord } from "./erasure-store";
-import { INVENTORY_ROWS, sweepQueriesForRow, inventorySweeps, type InventorySweep } from "./inventory";
+import { INVENTORY_ROWS, sweepQueriesForRow, type InventorySweep } from "./inventory";
 import {
   ROW_OWNING_STEP,
   createVerifyHandler,
@@ -30,10 +30,6 @@ function countsFor(residuals: Record<string, number>): SweepCounter & { calls: s
       return residuals[sweep.rowId] ?? 0;
     },
   };
-}
-
-function nonDeferredSweepsOf(rowId: string): InventorySweep[] {
-  return inventorySweeps().filter((sweep) => sweep.rowId === rowId && sweep.query.kind !== "perMembership");
 }
 
 /** Owners written from the SPEC "Steps" table (SPEC lines for forum, memberships, conversations_owned, participant_bindings, locators, personal_data, survey_participations, actor_audit). Not derived from ROW_OWNING_STEP. */
@@ -74,15 +70,26 @@ describe("verification sweep owning steps (TASK-012)", () => {
 });
 
 describe("verification sweep result (TASK-012)", () => {
-  it("passes with zero matches and reports the per-membership rows as deferred to TASK-016", async () => {
-    const report = await runVerificationSweep(countsFor({}), BINDING);
+  it("passes with zero matches, including the per-membership rows", async () => {
+    const counter = countsFor({});
+    const report = await runVerificationSweep(counter, BINDING);
 
     expect(report.complete).toBe(true);
     expect(report.residualsByStep).toEqual({});
-    expect(report.deferredRowIds).toEqual(expect.arrayContaining(["A-5", "I-9"]));
+    expect(counter.calls).toEqual(expect.arrayContaining(["A-5", "I-9", "I-7", "A-14", "A-15"]));
   });
 
-  it.each(Object.keys(ROW_OWNING_STEP).filter((rowId) => nonDeferredSweepsOf(rowId).length > 0))(
+  it.each(["A-5", "I-9", "I-7", "A-14", "A-15"])(
+    "does not complete while a per-membership residual remains in row %s",
+    async (rowId) => {
+      const report = await runVerificationSweep(countsFor({ [rowId]: 1 }), BINDING);
+
+      expect(report.complete).toBe(false);
+      expect(report.residualsByStep[ROW_OWNING_STEP[rowId]]).toBeGreaterThanOrEqual(1);
+    },
+  );
+
+  it.each(Object.keys(ROW_OWNING_STEP))(
     "routes a single remaining match in row %s back to its owning step",
     async (rowId) => {
       const report = await runVerificationSweep(countsFor({ [rowId]: 1 }), BINDING);
@@ -100,7 +107,7 @@ describe("verification sweep result (TASK-012)", () => {
     expect(serialized).not.toContain(UID);
     expect(serialized).not.toContain(EMAIL);
     expect(serialized).not.toContain("example.test");
-    expect(Object.keys(report).sort()).toEqual(["complete", "deferredRowIds", "residualsByStep"]);
+    expect(Object.keys(report).sort()).toEqual(["complete", "residualsByStep"]);
   });
 
   it("fails closed as unexpected when the e-mail-bound invitation sweep has no normalized e-mail", async () => {

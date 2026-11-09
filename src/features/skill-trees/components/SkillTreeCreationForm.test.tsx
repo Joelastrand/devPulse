@@ -44,7 +44,8 @@ describe("SkillTreeCreationForm", () => {
     expect(screen.getByLabelText("Stadium 20")).toBeTruthy();
     expect(screen.queryByLabelText("Stadium 21")).toBeNull();
     expect(screen.getByRole("button", { name: /legg til stadium/i }).hasAttribute("disabled")).toBe(true);
-  });
+    // 18 re-renders: allow headroom under parallel-worker load so a timeout cannot leak clicks into the next test.
+  }, 20_000);
 
   it("removes a stage row via its remove button, never going below the 2-node boundary", async () => {
     const user = userEvent.setup();

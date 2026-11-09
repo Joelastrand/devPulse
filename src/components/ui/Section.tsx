@@ -29,7 +29,7 @@ export function Section({ title, description, icon, action, children }: SectionP
             <p className="mt-1 text-body-secondary text-text-secondary">{description}</p>
           ) : null}
         </div>
-        {action ? <div className="shrink-0">{action}</div> : null}
+        {action ? <div className="max-w-full">{action}</div> : null}
       </div>
       {children}
     </section>

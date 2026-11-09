@@ -136,6 +136,7 @@ describe("runErasureFlow", () => {
     [400, { error: "confirmation_mismatch" }, "confirmationMismatch"],
     [503, { error: "erasure_unavailable" }, "unavailable"],
     [401, { error: "unauthenticated" }, "unauthenticated"],
+    [409, { error: "last_superadmin" }, "lastSuperadmin"],
     [500, { error: "something internal" }, "generic"],
     [200, { status: "unexpected" }, "generic"],
   ])("maps status %i to the fixed copy key %s without reading any other field", async (status, body, key) => {

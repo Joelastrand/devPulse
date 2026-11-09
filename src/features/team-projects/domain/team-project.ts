@@ -13,7 +13,8 @@ export const PROJECT_LIFECYCLE_STATUSES = ["planned", "completed"] as const;
 export type ProjectLifecycleStatus = (typeof PROJECT_LIFECYCLE_STATUSES)[number];
 
 /** Displayed status: `active` (`Pågår`) is derived from the start date for non-terminal projects. */
-export type ProjectEffectiveStatus = "planned" | "active" | "completed";
+export const PROJECT_EFFECTIVE_STATUSES = ["planned", "active", "completed"] as const;
+export type ProjectEffectiveStatus = (typeof PROJECT_EFFECTIVE_STATUSES)[number];
 
 export const PROJECT_PRIORITIES = ROADMAP_PRIORITIES;
 export type ProjectPriority = RoadmapPriority;

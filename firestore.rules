@@ -206,6 +206,19 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // teamProfileSettings holds one team's competence-profile mode (automatic | collaborative), keyed by teamId. Team-level
+    // state only: no uid, no member data. Server-only via the Admin SDK (src/features/team-competence-profile/server/);
+    // deny-only for the client SDK, regardless of authentication state.
+    match /teamProfileSettings/{document=**} {
+      allow read, write: if false;
+    }
+
+    // teamCollaborativeLevels holds one teamadmin-entered integer 1–4 per team and competence area (document id
+    // teamId__treeId). These values are independent of member self-assessments and carry no uid. Server-only; deny-only.
+    match /teamCollaborativeLevels/{document=**} {
+      allow read, write: if false;
+    }
+
     // userProfiles holds one self-set display name per Firebase uid
     // (document id = uid; displayName, createdAt, updatedAt — no e-mail or
     // other identity field). It is personal data, read/written only by the

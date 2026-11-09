@@ -126,11 +126,11 @@ invention; Phase 10; Performance Phase B.
     acting admin's uid, never passed to `getUser`, never used in an
     authorization decision. `getUser` is called only on membership/access-
     request **`uid`** keys.
-13. **App-admin access** is decided from `APP_ADMIN_EMAILS` (comma-separated,
-    read at call time) against the signed-in user's verified email. It is
-    deployment configuration, not data.
+13. **App-admin access** is decided from the Firestore superadmin registry
+    (`superadmins/{uid}`, read per request; amended 2026-11-06 from the former
+    `APP_ADMIN_EMAILS` allow-list). The demo seed never writes it.
 14. **Env**: `.env.local.example` documents Admin credentials,
-    `ENCRYPTION_KEY`, `APP_ADMIN_EMAILS`, `FEATURE_FORUM_ENABLED`. This
+    `ENCRYPTION_KEY`, `FEATURE_FORUM_ENABLED` (`APP_ADMIN_EMAILS` is obsolete and commented out since 2026-11-06). This
     feature adds **no** variable. `FEATURE_FORUM_ENABLED` is irrelevant.
 
 ## Target-project safety model
@@ -173,9 +173,9 @@ doc (which makes member surfaces — `canReportProgress`, challenge submission,
 authenticated-survey submission — demonstrable). **The presenter must also be
 an app admin to demo admin surfaces** (challenge resolve/archive, survey
 open/close, skill-tree admin). That depends on the presenter's verified email
-being in `APP_ADMIN_EMAILS` (finding 13). The seed **does not infer or check
+being an active superadmin in the registry (finding 13; amended 2026-11-06). The seed **does not infer or check
 this from the uid**, does not read the presenter's email, and does not edit
-`APP_ADMIN_EMAILS` or any application environment; it prints a static
+the superadmin registry or any application environment; it prints a static
 reminder that this is an external runtime/demo prerequisite. No fake members
 or uids are created; the member list shows exactly one member.
 
@@ -516,7 +516,7 @@ and real `computeSurveyAggregate` with a throwaway in-memory key via
 On implementation: `docs/DEVELOPMENT.md` gains a "Demo Team seed" section
 (invocation, modes, execution gate, what is written, no deletes, Node ≥ 24 if
 kept, `ENCRYPTION_KEY` must match the target app, visibility caveat,
-presenter/`APP_ADMIN_EMAILS` prerequisite). Not expected: `DATA-MODEL.md` (no
+presenter/superadmin registry prerequisite). Not expected: `DATA-MODEL.md` (no
 schema/ownership field), `.env.local.example` (no new variable),
 `ROADMAP.md` (tooling). The command was proposed until TASK-005 landed and is
 now documented.
@@ -644,7 +644,7 @@ now documented.
 - BR-33. Ordinary tests run entirely without Firebase, network or a real key.
 - BR-34. `docs/DEVELOPMENT.md` documents the tool only once it exists
   (command marked proposed until then), including the execution gate and the
-  presenter/`APP_ADMIN_EMAILS` prerequisite.
+  presenter/superadmin registry prerequisite.
 
 ## Edge cases and failure behavior
 - `demo-team` exists disabled ⇒ CONFLICT, abort (no re-enable).

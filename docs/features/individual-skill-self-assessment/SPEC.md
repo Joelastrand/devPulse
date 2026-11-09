@@ -236,7 +236,7 @@ modified by this specification work.
 | # | Question | Decision |
 |---|---|---|
 | D1 | Skill catalog / definition source | A skill area = an existing org-wide `SkillTree`: **`treeId` = stable skill-area identity; tree `name` = displayed skill-area name** (explicitly treated as the shared name). **Every valid tree can be assessed through the owner API when its `treeId` is known** (the target is validated directly, BR-12); only valid trees inside the bounded catalog window are *listed* in the C1 UI (BR-11). Stages/`nodes`, `skillProgress` and roadmap state are **not** reused. No separate skill-definition concept in C1. Trade-offs recorded in "SkillTree catalog trade-offs". |
-| D2 | Proficiency scale; reuse nodes? | **Separate fixed four-level personal scale, ordinal, integers `1–4`; tree nodes not reused.** Canonical meaning is defined in BR-4, independent of UI labels. Absence = unassessed. |
+| D2 | Proficiency scale; reuse nodes? | **Separate fixed four-level personal scale, ordinal, integers `1–4`; tree nodes not reused.** Canonical meaning is defined in BR-4, independent of UI labels. Absence = unassessed. *Amended 2026-11-07:* individual levels are never averaged or modified. The owner approved one rounded arithmetic mean per team and competence area for the automatic Teamkompetanse radar, with k = 3 once activated (BR-4, team-level exception). |
 | D3 | Persistence shape | **One document per person**: `skillProfiles/{uid}` with a `levels` map `treeId → 1..4`. One `get` to read; C2 may later batch-`getAll` profiles; no per-skill fan-out, query or index; size bounded by the number of valid trees, with no C1 cap (BR-6). |
 | D4 | Global vs per team | **Global per person.** No `teamId`, membership or team reference is stored. |
 | D5 | Visible skill areas | **All valid trees inside the bounded catalog window (BR-11) are listed**, nothing derived from the person's teams (avoids reading memberships/`skillProgress` and leaking team planning state). |
@@ -283,9 +283,22 @@ modified by this specification work.
   stage labels, `createdBy`, or timestamps. `listSkillTrees` (admin) is unchanged and
   keeps its authorization.
 - **BR-4 (canonical scale).** Levels are exactly the integers `1,2,3,4`, **ordinal**
-  (ordered categories, not measurements): no averaging, summing, weighting or other
-  arithmetic across skills or people is meaningful or permitted. The persisted value is
-  the integer; its **canonical meaning is the one below, independent of any UI label**.
+  (ordered categories, not measurements). The persisted value is the integer; its
+  **canonical meaning is the one below, independent of any UI label**.
+  - **Individual levels are never averaged, summed, weighted or otherwise modified.** A
+    person's stored level is always exactly what they entered. No arithmetic across
+    skills is permitted, and no individual level is ever shown as an aggregate.
+  - **Team-level exception (owner decision, 2026-11-07, Amendment A).** The automatic
+    Teamkompetanse radar may derive **one rounded arithmetic mean per competence area**
+    from the eligible members' valid levels: `floor((2·sum + n) / (2·n))`, integer
+    arithmetic, exact half up, always 1–4. This is a team-level visualization, not an
+    individual assessment, and it is never presented as one. It applies only to the
+    authorized team aggregate and does not change any individual-level rule above.
+  - **Threshold.** The minimum is `k = 3` eligible contributors per area, with no
+    team-size floor. This takes effect only when the separately gated security change is
+    activated. Until then the enforced threshold stays `k = 5`.
+  - **No zero for missing values.** A missing, unassessed or suppressed value is never
+    represented as `0` or as a level. It is shown as unavailable.
 
   | Level | Canonical meaning (domain definition) |
   |---|---|

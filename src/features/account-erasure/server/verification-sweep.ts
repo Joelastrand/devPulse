@@ -9,11 +9,12 @@ import { inventorySweeps, type InventorySweep } from "./inventory";
  * Forward-only: a residual keeps the persisted step at `verify_data`. The verify handler re-runs the owning step's
  * idempotent cleanup and reports `more`. It reports `done`, and the runner advances, only when the sweep is clean.
  *
- * `complete` covers the uid and e-mail sweeps. Per-membership `memberRef` rows (A-5, I-7, I-9 memberRef) are listed in
- * `deferredRowIds` and are not counted here. This is the owner-approved BR-17(1) option (a), decision 2026-11-02: these rows
- * are discharged at the membership-destruction boundary (ordinary removal) and by the transactional coordination of roadmap
- * and membership writes, not by this sweep (SPEC "Decision log: BR-17(1) membership-instance rows"). The production verify
- * handler is wired to the runner (production-erasure-handlers.ts).
+ * `complete` covers every row with a sweep, including the per-membership `memberRef` rows (A-5, A-14, A-15, I-7 and I-9
+ * memberRef). Owner decision (2026-11-08) supersedes the BR-17(1) deferral of 2026-11-02: erasure must not report completion
+ * while in-scope personal data remains. A per-membership count resolves the person's memberships by uid, so it can find
+ * residuals only while those memberships still exist. After the membership step, the completion guarantee rests on that
+ * step deleting a membership only once its roadmap, knowledge and participation references are cleared in the same
+ * transaction (`membership-erasure.ts`). The production verify handler is wired to the runner (production-erasure-handlers.ts).
  */
 
 export interface SweepBinding {
@@ -68,8 +69,6 @@ export const ROW_OWNING_STEP: Readonly<Record<string, ErasureStep>> = {
 export interface SweepReport {
   /** Residual match counts for steps that still own matches. Empty when the uid and e-mail sweeps are clean. */
   readonly residualsByStep: Partial<Record<ErasureStep, number>>;
-  /** Rows checked per membership in TASK-016, not here. */
-  readonly deferredRowIds: readonly string[];
   readonly complete: boolean;
 }
 
@@ -80,13 +79,8 @@ function needsEmail(sweep: InventorySweep): boolean {
 
 export async function runVerificationSweep(counter: SweepCounter, binding: SweepBinding): Promise<SweepReport> {
   const residualsByStep: Partial<Record<ErasureStep, number>> = {};
-  const deferred = new Set<string>();
 
   for (const sweep of inventorySweeps()) {
-    if (sweep.query.kind === "perMembership") {
-      deferred.add(sweep.rowId);
-      continue;
-    }
     // Fail closed: an e-mail-bound row cannot be verified without the normalized e-mail, so it is never reported clean.
     if (needsEmail(sweep) && binding.normalizedEmail === undefined) throw new ErasureStepFailure("unexpected");
 
@@ -100,7 +94,6 @@ export async function runVerificationSweep(counter: SweepCounter, binding: Sweep
 
   return {
     residualsByStep,
-    deferredRowIds: [...deferred],
     complete: Object.keys(residualsByStep).length === 0,
   };
 }

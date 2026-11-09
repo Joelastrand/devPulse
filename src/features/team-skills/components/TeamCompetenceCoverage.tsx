@@ -11,7 +11,8 @@ import { SKILL_COVERAGE_MIN_CONTRIBUTORS } from "../domain/skill-coverage-policy
 /**
  * Teamkompetanse (TASK-011, SPEC BR-25–BR-27, SECURITY invariants 32–35). Renders only the categorical state of each
  * persisted team need from the existing coverage gateway. It shows no counts, averages, numeric scores, radar
- * coordinates or trends, and no individual data. The radar and trend panels stay disabled (SPEC D2).
+ * coordinates or trends, and no individual data. The radar is approved (SPEC R-1) but has no approved team-value source yet,
+ * so its panel is an unavailable state with no values. The trend panel stays disabled (SPEC D2).
  */
 
 /** REQ labels for the categorical states the server returns. There is no backing state for a partial cover. */
@@ -92,7 +93,7 @@ function CoverageBody({ result, onRetry }: { result: FetchSkillCoverageResult; o
       return <p className="text-text-secondary">Teamet har ingen kompetansebehov ennå.</p>;
     }
     return (
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" role="region" aria-label="Dekning per kompetanseområde" tabIndex={0}>
         <table className="min-w-full text-left text-sm">
           <caption className="sr-only">Dekning per kompetanseområde</caption>
           <thead>
@@ -152,7 +153,10 @@ function CoverageBody({ result, onRetry }: { result: FetchSkillCoverageResult; o
 function DisabledPanels() {
   return (
     <div className="grid gap-3 sm:grid-cols-2">
-      <DisabledPanel title="Radar">Radarvisningen er ikke tilgjengelig. Den viser ikke enkeltpersoner eller team-gjennomsnitt.</DisabledPanel>
+      <DisabledPanel title="Radar">
+        Radarvisningen er ikke tilgjengelig ennå. Teamets nivåer kan ikke hentes fra en godkjent datakilde, så ingen verdier vises.
+        Enkeltpersoner og team-gjennomsnitt vises aldri.
+      </DisabledPanel>
       <DisabledPanel title="Utvikling over tid">Utvikling over tid vises ikke, fordi teamet ikke har en godkjent trend-visning.</DisabledPanel>
     </div>
   );

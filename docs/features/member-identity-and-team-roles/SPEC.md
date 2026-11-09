@@ -350,8 +350,8 @@ Feature-specific implications of `docs/SECURITY.md`:
 - **Former members** lose roster access immediately (BR-12) — but names they
   already saw remain with them (unavoidable, accepted).
 - **Lead is not an admin.** Lead grants nothing (BR-28). App-admin rights
-  are unchanged, still derived only from `APP_ADMIN_EMAILS` + verified
-  e-mail (`docs/ARCHITECTURE.md`). A lead being able to escalate by editing
+  are unchanged, still derived only from the superadmin registry + verified
+  e-mail (`docs/ARCHITECTURE.md`; amended 2026-11-06). A lead being able to escalate by editing
   their own membership is impossible: no client write path exists, rules
   deny all client access.
 - **Impersonation.** Free-text, non-unique names can imitate a colleague.

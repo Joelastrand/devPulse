@@ -91,8 +91,8 @@ export function AdminSkills() {
   }
 
   if (result.status === "forbidden") {
-    // Deliberately generic — never confirms or denies whether the caller's
-    // email is on the server-only `APP_ADMIN_EMAILS` allow-list.
+    // Deliberately generic — never confirms or denies whether the caller is
+    // an active superadmin in the registry.
     return <Alert variant="error">{adminSkillsCopy.forbidden}</Alert>;
   }
 

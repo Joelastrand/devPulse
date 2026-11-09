@@ -79,7 +79,12 @@ const DEFAULT_WORLD: World = {
     membership("uid-member", "team-1", REF_A),
     membership("uid-lead-2", "team-2", "mnpqrstvwxyz0123456789abcd", "teamadmin"),
   ],
-  projects: { "proj-1": storedProject(), "proj-archived": storedProject({ archived: true, archivedAt: new Date("2026-05-20T09:00:00Z") }), "proj-other": storedProject({ teamId: "team-2" }) },
+  projects: {
+    "proj-1": storedProject(),
+    "proj-2": storedProject({ title: "Observerbarhet" }),
+    "proj-archived": storedProject({ archived: true, archivedAt: new Date("2026-05-20T09:00:00Z") }),
+    "proj-other": storedProject({ teamId: "team-2" }),
+  },
   participations: {},
 };
 
@@ -87,7 +92,11 @@ function world(extra: World = {}): World {
   return { ...DEFAULT_WORLD, ...extra };
 }
 
-function build(w: World, callerUid = "uid-lead", options: { verifyFails?: boolean; newId?: string; fenceRefuses?: boolean } = {}) {
+function build(
+  w: World,
+  callerUid = "uid-lead",
+  options: { verifyFails?: boolean; newId?: string; fenceRefuses?: boolean; failWrite?: boolean } = {},
+) {
   const writes: Writes = { created: [], set: [], touched: [] };
   const participations = { ...(w.participations ?? {}) };
   const tx: WriteProjectParticipationTx = {
@@ -119,6 +128,8 @@ function build(w: World, callerUid = "uid-lead", options: { verifyFails?: boolea
       participations[id] = data;
     },
     setParticipation(id, data) {
+      // A failing write throws before anything is recorded, as a failed Firestore commit would.
+      if (options.failWrite) throw new Error("simulated commit failure");
       writes.set.push({ id, data });
       participations[id] = data;
     },
@@ -327,7 +338,7 @@ describe("writeProjectParticipation — overlap is informational only", () => {
 describe("writeProjectParticipation — update and remove", () => {
   const existing = { "part-1": storedParticipation({ note: "Første fase" }) };
 
-  it("updates dates and note, keeping the member and project fixed", async () => {
+  it("updates dates and note in place, keeping the member and project when they are not sent", async () => {
     const { deps, writes } = build(world({ participations: existing }));
     const result = await writeProjectParticipation("token", "team-1", "proj-1", "update", "part-1", { endDate: "2026-07-15" }, deps);
 
@@ -345,9 +356,9 @@ describe("writeProjectParticipation — update and remove", () => {
     expect(writes.set).toHaveLength(0);
   });
 
-  it("rejects a memberRef in the update envelope", async () => {
+  it("rejects an unknown key in the update envelope", async () => {
     const { deps } = build(world({ participations: existing }));
-    expect(await writeProjectParticipation("token", "team-1", "proj-1", "update", "part-1", { memberRef: REF_B }, deps)).toEqual({
+    expect(await writeProjectParticipation("token", "team-1", "proj-1", "update", "part-1", { utilization: 80 }, deps)).toEqual({
       ok: false,
       error: "invalid_request",
     });
@@ -429,6 +440,185 @@ describe("writeProjectParticipation — update and remove", () => {
   it("refuses a plain member to remove a participation", async () => {
     const { deps, writes } = build(world({ participations: existing }), "uid-member");
     expect(await writeProjectParticipation("token", "team-1", "proj-1", "remove", "part-1", undefined, deps)).toEqual({ ok: false, error: "forbidden" });
+    expect(writes.set).toHaveLength(0);
+  });
+});
+
+/** A valid-format member reference with no membership in any team (a removed member). */
+const REF_REMOVED = "abcdefghjkmnpqrstvwxyz0123";
+
+describe("writeProjectParticipation — reassignment of member and project (update)", () => {
+  const existing = { "part-1": storedParticipation({ note: "Første fase" }) };
+
+  it("moves an assignment to another member of the same team, keeping the record identity", async () => {
+    const { deps, writes } = build(world({ participations: existing }));
+    const result = await writeProjectParticipation("token", "team-1", "proj-1", "update", "part-1", { memberRef: REF_B }, deps);
+
+    expect(result).toMatchObject({ ok: true, participation: { participationId: "part-1", memberRef: REF_B, projectId: "proj-1" } });
+    expect(writes.set).toHaveLength(1);
+    expect(writes.set[0]).toMatchObject({ id: "part-1", data: { memberRef: REF_B, projectId: "proj-1", note: "Første fase" } });
+    expect(writes.created).toHaveLength(0);
+  });
+
+  it("moves an assignment to another active project of the same team", async () => {
+    const { deps, writes } = build(world({ participations: existing }));
+    const result = await writeProjectParticipation("token", "team-1", "proj-1", "update", "part-1", { projectId: "proj-2" }, deps);
+
+    expect(result).toMatchObject({ ok: true, participation: { participationId: "part-1", projectId: "proj-2", memberRef: REF_A } });
+    expect(writes.set[0]).toMatchObject({ id: "part-1", data: { projectId: "proj-2", memberRef: REF_A } });
+  });
+
+  it("changes member, project and dates together in one write", async () => {
+    const { deps, writes } = build(world({ participations: existing }));
+    const result = await writeProjectParticipation(
+      "token",
+      "team-1",
+      "proj-1",
+      "update",
+      "part-1",
+      { memberRef: REF_B, projectId: "proj-2", startDate: "2026-07-01", endDate: "2026-07-10" },
+      deps,
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      participation: { participationId: "part-1", memberRef: REF_B, projectId: "proj-2", startDate: "2026-07-01", endDate: "2026-07-10" },
+    });
+    expect(writes.set).toHaveLength(1);
+  });
+
+  it("touches both the previous and the new member's membership, so a concurrent erasure of either conflicts", async () => {
+    const { deps, writes } = build(world({ participations: existing }));
+    await writeProjectParticipation("token", "team-1", "proj-1", "update", "part-1", { memberRef: REF_B }, deps);
+
+    expect(writes.touched).toEqual(
+      expect.arrayContaining([
+        { uid: "uid-lead", teamId: "team-1", memberRef: REF_B },
+        { uid: "uid-member", teamId: "team-1", memberRef: REF_A },
+      ]),
+    );
+  });
+
+  it("refuses a reassignment to a member of another team as invalid_member, with no write", async () => {
+    const { deps, writes } = build(world({ participations: existing }));
+    expect(await writeProjectParticipation("token", "team-1", "proj-1", "update", "part-1", { memberRef: REF_OUTSIDER }, deps)).toEqual({
+      ok: false,
+      error: "invalid_member",
+    });
+    expect(writes.set).toHaveLength(0);
+    expect(writes.touched).toHaveLength(0);
+  });
+
+  it("refuses a reassignment to a removed member (no current membership) as invalid_member", async () => {
+    const { deps, writes } = build(world({ participations: existing }));
+    expect(await writeProjectParticipation("token", "team-1", "proj-1", "update", "part-1", { memberRef: REF_REMOVED }, deps)).toEqual({
+      ok: false,
+      error: "invalid_member",
+    });
+    expect(writes.set).toHaveLength(0);
+  });
+
+  it("refuses a reassignment to a project of another team as not_found, with no write", async () => {
+    const { deps, writes } = build(world({ participations: existing }));
+    expect(await writeProjectParticipation("token", "team-1", "proj-1", "update", "part-1", { projectId: "proj-other" }, deps)).toEqual({
+      ok: false,
+      error: "not_found",
+    });
+    expect(writes.set).toHaveLength(0);
+  });
+
+  it("refuses a reassignment to an unknown project as not_found", async () => {
+    const { deps, writes } = build(world({ participations: existing }));
+    expect(await writeProjectParticipation("token", "team-1", "proj-1", "update", "part-1", { projectId: "proj-missing" }, deps)).toEqual({
+      ok: false,
+      error: "not_found",
+    });
+    expect(writes.set).toHaveLength(0);
+  });
+
+  it("refuses a reassignment to an archived project as project_archived", async () => {
+    const { deps, writes } = build(world({ participations: existing }));
+    expect(await writeProjectParticipation("token", "team-1", "proj-1", "update", "part-1", { projectId: "proj-archived" }, deps)).toEqual({
+      ok: false,
+      error: "project_archived",
+    });
+    expect(writes.set).toHaveLength(0);
+  });
+
+  it("rejects an invalid date range on reassignment and writes nothing", async () => {
+    const { deps, writes } = build(world({ participations: existing }));
+    expect(
+      await writeProjectParticipation("token", "team-1", "proj-1", "update", "part-1", { memberRef: REF_B, endDate: "2026-05-01" }, deps),
+    ).toEqual({ ok: false, error: "invalid_input", issues: ["end_before_start"] });
+    expect(writes.set).toHaveLength(0);
+  });
+
+  it("rejects a malformed member reference on reassignment as invalid_input, with no write", async () => {
+    const { deps, writes } = build(world({ participations: existing }));
+    expect(await writeProjectParticipation("token", "team-1", "proj-1", "update", "part-1", { memberRef: "not-a-ref" }, deps)).toEqual({
+      ok: false,
+      error: "invalid_input",
+      issues: ["member_ref_invalid"],
+    });
+    expect(writes.set).toHaveLength(0);
+  });
+
+  it("flags an overlap with the new member's other assignment and still writes the reassignment", async () => {
+    const { deps, writes } = build(
+      world({
+        participations: {
+          "part-1": storedParticipation({ note: "Første fase" }),
+          "part-b": storedParticipation({ memberRef: REF_B, projectId: "proj-2", startDate: "2026-06-15", endDate: "2026-07-15" }),
+        },
+      }),
+    );
+    const result = await writeProjectParticipation("token", "team-1", "proj-1", "update", "part-1", { memberRef: REF_B }, deps);
+
+    expect(result).toMatchObject({ ok: true, participation: { participationId: "part-1", memberRef: REF_B, overlapsOther: true } });
+    expect(writes.set).toHaveLength(1);
+  });
+
+  it("does not flag the record's own previous member as an overlap after reassignment", async () => {
+    const { deps } = build(world({ participations: existing }));
+    expect(await writeProjectParticipation("token", "team-1", "proj-1", "update", "part-1", { memberRef: REF_B }, deps)).toMatchObject({
+      ok: true,
+      participation: { overlapsOther: false },
+    });
+  });
+
+  it("refuses a plain member to reassign an assignment", async () => {
+    const { deps, writes } = build(world({ participations: existing }), "uid-member");
+    expect(await writeProjectParticipation("token", "team-1", "proj-1", "update", "part-1", { memberRef: REF_B }, deps)).toEqual({
+      ok: false,
+      error: "forbidden",
+    });
+    expect(writes.set).toHaveLength(0);
+  });
+
+  it("refuses to reassign an archived participation", async () => {
+    const { deps, writes } = build(world({ participations: { "part-1": storedParticipation({ archived: true }) } }));
+    expect(await writeProjectParticipation("token", "team-1", "proj-1", "update", "part-1", { projectId: "proj-2" }, deps)).toEqual({
+      ok: false,
+      error: "participation_archived",
+    });
+    expect(writes.set).toHaveLength(0);
+  });
+
+  it("refuses a reassignment whose route project is not the record's current project", async () => {
+    const { deps, writes } = build(world({ participations: existing }));
+    expect(await writeProjectParticipation("token", "team-1", "proj-2", "update", "part-1", { memberRef: REF_B }, deps)).toEqual({
+      ok: false,
+      error: "not_found",
+    });
+    expect(writes.set).toHaveLength(0);
+  });
+
+  it("reports a failed commit as persistence_failed and leaves no recorded write", async () => {
+    const { deps, writes } = build(world({ participations: existing }), "uid-lead", { failWrite: true });
+    expect(await writeProjectParticipation("token", "team-1", "proj-1", "update", "part-1", { memberRef: REF_B, projectId: "proj-2" }, deps)).toEqual({
+      ok: false,
+      error: "persistence_failed",
+    });
     expect(writes.set).toHaveLength(0);
   });
 });

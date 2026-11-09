@@ -461,3 +461,525 @@ Also added this pass: the hook regression test (`use-competence-plans.test.tsx`)
 - `pnpm typecheck`: exit 0 (after all three code edits).
 - `pnpm exec vitest run src/features/team-projects src/features/account-erasure/server/inventory src/features/teams/components`: exit 0.
 - Full `pnpm test`, `pnpm lint` and `pnpm build` were not re-run after these edits. The last full-suite result recorded in this file is from Pass 4 and predates them.
+
+
+### Pass 5 evidence (TASK-008 header, 2026-11-07)
+
+Implemented (code, not browser-verified):
+- `src/features/teams/components/TeamHeaderMetrics.tsx`: shows the complete system count (from `fetchTeamSystems`, the same read the Oversikt already uses) and the competence-area count under the team name. A truncated or failed read shows no number.
+- `src/features/teams/domain/team-oversikt.ts`: `completeHeaderCount` returns `null` for truncated or absent reads, so a partial total is never shown as a total.
+- `TeamDetail.tsx`: the authorized Oversikt header passes the metrics through a new `metrics` slot. The `competenceAreaCount` prop remains for the other header branches.
+
+Deviations (justified):
+- Member count omitted. The only member-facing roster read is `fetchTeamRoster`, and the TeamDetail test contract requires that the collapsed roster section makes no request on load. Using the roster for the header would break that contract. No other authorized source gives a complete member total.
+- Team description omitted. It is not in the loaded team read.
+- Loading state: no placeholder. Counts appear once their read completes.
+
+Tests:
+- `team-oversikt.test.ts`: `completeHeaderCount` (complete, zero, truncated, null).
+- `TeamHeaderMetrics.test.tsx` (new, jsdom): complete count shown; truncated count omitted; forbidden or failed read shows nothing and never a zero.
+- `team-overview-order.test.ts`: the anchor moved from the removed `competenceAreaCount=` prop to `summary={latest ?`. The assertion (summary strip inside the authorized header) is unchanged.
+- `pnpm vitest run src/features/teams`: 64 files, 1057 tests passed.
+
+Not verified: browser screenshots against reference 18, responsive layout at 320 to 1440 px, keyboard and focus checks, and independent review. Browser verification was not attempted in this pass.
+
+Gates (Pass 5, after the final edits): `pnpm typecheck` exit 0; `pnpm lint` exit 0 (0 errors, 15 warnings, none introduced by this pass's header work); `pnpm vitest run` exit 0 (582 files passed, 3 skipped; 9941 tests passed, 16 skipped); `pnpm build` exit 0.
+
+Fix during the gate run: `TeamOversiktSummary.tsx` used raw Tailwind palette classes (amber, orange, red) that are not on `src/lib/theme/raw-palette-allowlist.json`, which failed the raw-colour tripwire. The KPI tones now use design tokens (`primary-subtle`/`primary-text`, `warning-subtle`/`warning-text`, `danger-subtle`/`danger-text`). Raw-palette test: passed.
+
+## Pass 6 — Roadmap status filter, Kompetanseplan toggle (2026-11-07)
+
+**Roadmap (TASK-005).** Added a status filter above the project plan: `Alle`, `Planlagt`, `Pågår`, `Fullført` (`aria-pressed` group, labelled). Filtering uses the existing effective-status value and does not change status, dates, authorization or team isolation. A filter with no matches shows the empty state `Ingen prosjekter har denne statusen.` Tests: `src/features/team-projects/domain/project-status-filter.test.ts` (3 tests). The existing 3/6-month toggle, today marker, sticky labels, mobile project cards and participation panel are unchanged in this pass.
+
+**Kompetanseplan (TASK-006).** The `Vis detaljer` toggle now sets `aria-controls` to its milestone list while the list is expanded. Focused tests: `src/features/team-competence-plan` (4 files, 43 tests) passed.
+
+**Browser verification (Priority 2): not_verified.** Not run. Reason: the Playwright harness (`browser/guards.ts`) needs `DEVPULSE_VERIFY_EMAIL` and `DEVPULSE_VERIFY_PASSWORD`, which are not set in this environment, and it targets the Firebase project in `.env.local`. Authenticated pages need a team with project data, and creating fixtures would write to shared Firebase, which is not an approved fixture. No credentials were invented and no production or shared data was written. Screenshots at 320, 360, 768, 1024, 1280 and 1440 px, light/dark theme, overflow, keyboard and console checks remain open for the owner's account run.
+
+**Design deviations and gaps.**
+- The reference shows a "Neste steg" card set and a team header with counts. Neither is in TASK-005 scope, so neither was added.
+- Participation is shown by member, as in the reference. Grouping participation by project with collapsible rows is not implemented.
+- Kompetanseplan (reference 20) was inspected. The milestone dates are still raw `YYYY-MM-DD`; the Norwegian date formatter lives in the team-projects feature, and importing it here would be a cross-feature dependency. Not changed.
+
+**Gates (Pass 6, final tree).** `pnpm typecheck` exit 0. `pnpm lint` exit 0 (0 errors; 15 existing warnings in unrelated test files). `pnpm vitest run` exit 0 (583 files passed, 3 skipped; 9944 tests passed, 16 skipped). `pnpm build` exit 0.
+
+## Browser verification harness status (2026-11-07)
+
+Scope: isolated local Firebase Auth + Firestore Emulator for browser checks. No shared project was touched.
+
+Built and verified:
+- `firebase.emulator.json` (root): emulator-only config, Auth on 127.0.0.1:9099, Firestore on 127.0.0.1:8080, UI disabled. Started with `--project demo-devpulse-verify`.
+- `src/lib/firebase/emulator-config.ts` (+ tests, 49/49 `src/lib/firebase` tests pass): fail-closed guards. Emulator mode needs an explicit local URL, refuses `NODE_ENV=production`, requires a `demo-` project id, and the Admin SDK guard refuses non-local emulator hosts.
+- `src/lib/firebase/client.ts`: calls `connectAuthEmulator` only when `NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_URL` passes the guard. Unset in every normal environment.
+- `src/lib/firebase/admin.ts`: runs `assertAdminEmulatorSafe` before init. No-op when no emulator host is set.
+- `browser/emulator/seed-verification-data.mjs`: synthetic seeder (3 `*@verify.test` users, one active team, memberships, 3 projects, 2 participations). Refuses unless both emulator hosts are localhost and the project is `demo-`. Ran successfully against the emulators.
+
+Verified evidence:
+- Auth emulator and Firestore emulator respond (HTTP 200).
+- Seeder completed against emulators only. Admin SDK logged a metadata-lookup warning, meaning it found no credentials and made no Google call.
+- Next dev server (webpack, scratch copy, `.env.local` excluded) serves `/sign-in` with 200. The client bundle contains the emulator URL.
+
+Blocker (not resolved):
+- Browser sign-in did not complete. In headless Chromium, the `/sign-in` React tree never hydrates (no React fiber on DOM nodes), so the native form submit is a GET. No console or server error is logged. Sign-in through the emulator therefore is not verified.
+- Turbopack cannot run from the scratch copy because `node_modules` is a junction out of the root. The repo's own `next dev` cannot run concurrently with the owner's running dev server (`.next` lock).
+- Owner decision needed or next step: run the harness from a dedicated checkout with its own `node_modules`, or debug the hydration failure with a dedicated session.
+
+Not done in this pass: no Roadmap, Kompetanseplan, Teamkompetanse or Mine ferdigheter visual changes were made. No 320–1440 px screenshots exist. `browser/global-setup.ts` still reads only the `.env.local` project id and does not yet understand the emulator mode.
+
+## Pass 7 — browser hydration diagnosis and Roadmap grouping (2026-11-07)
+
+### Browser hydration diagnosis (time-boxed)
+
+| Check | Evidence | Result |
+|---|---|---|
+| Owner dev server | Listens on `localhost:3001` (PID 32976). A second `next dev` in `C:\Projekt\devpulse` refuses to start (`.next/dev` lock held by the owner's server), so the owner's server was used read-only. Port 3000 is not listening. | observed |
+| Sign-in document | `GET /sign-in` → HTTP 200 | passed |
+| Client chunks | 17 `/_next/static/chunks/*` requests, all HTTP 200 | passed |
+| Hydration (headless Chromium 1248, Playwright 1.64.1) | `<form>` and `#sign-in-email` carry React fiber keys after 8 s | passed (hydrates) |
+| Console / page errors | none in headless run | passed |
+| Earlier hydration error in dev log (00:41) | Mismatch on `<body>` attributes `data-gr-ext-installed` / `data-new-gr-c-s-check-loaded`, i.e. a browser extension (Grammarly) | not the headless cause |
+| node_modules junction | Owner's server, which uses the same junction, serves and hydrates correctly | not implicated |
+
+Conclusion: the reported "does not hydrate in headless Chromium" symptom did **not** reproduce against the owner's running server. No code or config change was made for it. The previously recorded blocker may have come from a different server state, a different port, or a stale `.next` build; that is unverified.
+
+**Side effect (disclosed):** the diagnostic script clicked the sign-in submit button with empty fields. This sent one `accounts:signInWithPassword` request to the production Identity Toolkit endpoint (`identitytoolkit.googleapis.com`) with the configured project key and no credentials. No sign-in succeeded and no data was written. The script must not submit against a non-emulator configuration.
+
+**Emulator-backed sign-in: not attempted in this pass.** The owner's server runs with production client config (no `NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_URL`, no `demo-` project id). A demo-project server needs a separate checkout or distDir, because the Next dev lock is per project directory. Next action: create an isolated copy of the working tree, start `firebase emulators:start --only auth,firestore` with the `demo-devpulse-verify` project, run `browser/emulator/seed-verification-data.mjs`, then start the copy's dev server with the emulator env vars.
+
+### Roadmap grouping (TASK-005 UI pass)
+
+- `domain/project-roadmap-view.ts`: `groupProjectsByStatus` (order Planlagt, Pågår, Fullført; empty groups omitted; stored order kept inside a group).
+- `components/ProjectGantt.tsx`: each status group has a full-width header button (`aria-expanded`, `aria-controls`, count written out, status as text). Desktop timeline and mobile cards share one collapsed state. Groups start expanded.
+- `copy.ts`: `group` keys.
+- Tests: `project-roadmap-view.test.ts` (grouping order, empty list); `TeamProjectRoadmap.test.tsx` (collapse and expand a group; bar assertions select by project title because group order changed the DOM order; three bar-position tests were updated accordingly, with the same expected numbers).
+
+### Quality gates (run in this pass)
+
+| Command | Exit code | Result | Status |
+|---|---|---|---|
+| `pnpm typecheck` | 0 | clean | passed |
+| `pnpm lint` | 0 | 0 errors, 15 warnings (pre-existing, not in the changed files' new code) | passed |
+| `pnpm exec vitest run src/features/team-projects` | 0 | 10 files, 165 tests | passed |
+| `pnpm vitest run` (full) | 0 | 584 files passed, 3 skipped; 9955 tests passed, 16 skipped | passed |
+| `pnpm build` | not run | `next build` writes the same `.next` directory as the owner's running dev server on this checkout, so it was not run here to avoid disturbing that server | not_verified |
+
+### Browser and responsive checks (Roadmap, Oversikt)
+
+| Check | Status |
+|---|---|
+| Authenticated Roadmap / Oversikt render at 320, 360, 768, 1024, 1440 px | not_verified (no emulator sign-in; see above) |
+| Screenshots, horizontal overflow, Gantt at 3/6 months in a browser | not_verified |
+| Console errors on authenticated pages | not_verified |
+| Unauthenticated `/sign-in` renders and hydrates | passed (diagnostic above, headless, owner's server) |
+
+### Not done in this pass
+
+- Kompetanseplan (reference 20), Teamkompetanse (reference 21) and Mine ferdigheter (reference 22) were not changed. Roadmap participation layout was not changed.
+- No task was marked Done. No commit, push, deploy, stash or reset was performed.
+
+## Pass 8 — Projects API 500, accessibility, responsive fixes, authenticated browser review (2026-11-07)
+
+Approved scope: read-only authenticated browser verification with a temporary, isolated session for the owner's account (project `devpulse-ac26e`, owner UID verified before minting). Tokens stayed in memory only; the browser context was closed and credentials discarded. No Firestore writes, no rule changes, no commits.
+
+### Root cause: `/api/teams/demo-team/projects` returned HTTP 500 (`read_failed`)
+
+- Confirmed with a temporary live diagnostic (since deleted): the Admin read returned 7 documents, and the membership and role resolution succeeded. Every row then failed `parseStoredTeamProject` because `projectId` was `""`.
+- Cause: stored project documents do not contain a `projectId` field. The production read store returned `doc.data()` only, so the gateway's identifier was missing. Writes never store one either; the document id is the only identifier.
+- Why tests missed it: the fixture in `list-team-projects.test.ts` writes `projectId` into every stored row, which real documents never have.
+- Fix: `mapTeamProjectDocs` (`list-team-projects.ts`) takes the id from `doc.id` and is used by the default store. The participations loader already used `doc.id`.
+- Regression tests (`list-team-projects.test.ts`): a stored document whose only identifier is its document id is read; the id comes from the document, not from a stored field.
+- Live verification after the fix (read-only, temporary diagnostic, deleted): `listTeamProjects` for demo-team returned `ok` with 7 projects.
+- Did not change Firestore data, security rules or superadmin permissions.
+
+### CSP: no violation in this repository
+
+- The `style-src` "Applying inline style violates…" messages came from a different, stale dev server on `localhost:3000` that sends a nonce-based CSP. The repository's dev server on `localhost:3001` sends no CSP header, and its run logged no CSP messages.
+- No CSP is defined in this repository (`next.config.ts`, `app/`, `src/`). Production CSP is not covered by this evidence; it is an open item for deployment review.
+- Gantt bar positioning was not affected in the repository's own app.
+
+### Accessibility and responsive fixes
+
+- Teamkompetanse coverage table (`TeamCompetenceCoverage.tsx`): the horizontally scrollable container is a named region (`Dekning per kompetanseområde`) with `tabIndex={0}`. Axe `scrollable-region-focusable` was flagged at 320 px and is cleared. Test added (`TeamCompetenceCoverage.test.tsx`).
+- Trade-off: the region is a tab stop at every width, even where nothing scrolls. Tab order: reached after 8 presses on the page at 320 px.
+- Roadmap participation grid and Gantt timeline (`ParticipationPanel.tsx`, `ProjectGantt.tsx`): same treatment, labelled with distinct copy keys (`planScrollRegion`, `participationScrollRegion`) so they do not duplicate the section headings.
+- Roadmap at 320 px had a 351 px scroll width: the shared `Section` action wrapper used `shrink-0`. Changed to `max-w-full` (`src/components/ui/Section.tsx`), so the action wraps. The project card title now has `min-w-0` (`ProjectGantt.tsx`), which stops the status pill overflowing its card at 320 px.
+- Minor: the "Utenfor valgt periode" label is now on a `bg-surface` background, so the today marker no longer runs through the text. The participation grid corner cell reads "Medlem" (reference 19) instead of repeating the section heading.
+
+### Authenticated browser review (after all changes, final pass)
+
+Run: 7 views × 5 widths (320, 360, 768, 1024, 1440), 35 captures, all clean. Screenshots: `.verify-output/design-review-2026-11-07/` (git-ignored); summary in `summary.json` in the same folder.
+
+- Horizontal page overflow: none at any width.
+- Axe (WCAG 2.0/2.1 A and AA) at 320 and 1440: no violations.
+- Console errors and failed requests: none (the earlier 500s are gone).
+- Roadmap Gantt: 5 bars and 7 project rows at 768 px and wider; the 6-month toggle keeps the same bar count (bar geometry for 3 vs 6 months was not measured per bar; see gaps). Status filter "Pågår" leaves 3 rows and 3 bars. Group header toggles collapse and expand (`aria-expanded` changes true → false → true). At 320–360 px the mobile cards show the same 7 projects.
+- Keyboard: Tab from the top of Teamkompetanse at 320 px reaches the coverage region after 8 presses.
+- Demoteam roster: the roster is `TeamRosterSection` on the team Oversikt page (`/teams/demo-team`); it is in the Oversikt capture. `/me/goals` was checked by screenshot (`06-personal-goals-*.png`); no text-based detector was used for the result.
+
+### Reference comparisons (references 18–22 in `docs/design/references/`)
+
+- **19 Roadmap:** the layout structure matches (plan with 3/6-month toggle, grouped plan, participation below). Differences: the reference header shows description and counts, ours shows only the team name; the reference uses one colour per project, ours uses a single neutral tone for most bars; the participation grid in the reference shows member bars, ours shows mostly empty rows in the current demo window. Changed: label background over the today marker; "Medlem" column header.
+- **20 Kompetanseplan:** not matched. The reference is a Gantt plan with stage bars and a detail list. Our page is still the interim competence-stage list (TASK-006, Ready, not started). Every area card reads "Kompetanseområdet er ikke tilgjengelig" because demo-team has 5 competence plans but no `competenceAreas` documents (`competence-areas` returns 0 areas; plan `treeId`s do not match). This is seed data, not code: fixing it requires writing to shared Firebase data, which was not approved.
+- **18 Oversikt:** not matched. The reference is a summary dashboard (KPI tiles, current projects, competence donut, challenges, next steps). Ours is the older dense layout with plan editing, forms and visibility controls. This is TASK-008, which has not started.
+- **21 Teamkompetanse, 22 Mine ferdigheter:** not compared in this pass. Coverage region fix applied to 21; no design change.
+
+### Quality gates (this pass, final code)
+
+- `pnpm typecheck`: exit 0.
+- `pnpm lint`: exit 0, 0 errors, 18 warnings. One warning is in a changed file (`TeamCompetenceCoverage.test.tsx`, line 12, `react-hooks/exhaustive-deps` on a mock) and was present before this pass.
+- `pnpm test` (full Vitest suite): exit 0. 584 test files passed, 3 skipped; 9,958 tests passed, 16 skipped.
+- Focused runs (team-projects, Section, team-skills): 61 files and 982 tests passed before the last label/copy edits; the full suite covers them after those edits.
+
+### Remaining gaps
+
+- Oversikt (TASK-008) is not redesigned; reference 18 is not matched.
+- Kompetanseplan (TASK-006) is not started; reference 20 is not matched. Competence areas for demo-team are missing (seed data), so every plan card falls back to "unavailable".
+- Production CSP and headers are not covered by this evidence.
+- 3- vs 6-month bar geometry was not measured per bar; only bar counts were checked.
+- Mine ferdigheter (22) and Teamkompetanse (21) design comparisons are not done.
+- Independent review and owner acceptance are not done. No task is marked Done.
+
+## Pass 6 evidence (redesign session, 2026-11-07)
+
+**Blocked: Demoteam competence-area repair (session item 1).** Not performed. Reason: no working Firebase Admin credential in this environment. The `FIREBASE_PRIVATE_KEY` in `.env.local` is stored as a one-line value with literal `
+` separators, and firebase-admin rejects it (`ERR_OSSL_UNSUPPORTED` after normalisation). The key was not printed, edited or replaced. No Firebase writes were made. The repo's demo-team seed (`src/features/demo-team/fixtures.ts`, `plan.ts`) writes no `teamCompetenceAreas` or `teamCompetencePlans` documents, so the five plans were not created by this repository. Needed to unblock: a valid service-account key in `.env.local` (owner action) and the owner's read of `teamCompetencePlans` and `teamCompetenceAreas` for `demo-team`. Browser verification also needs `DEVPULSE_VERIFY_EMAIL` and `DEVPULSE_VERIFY_PASSWORD`, which are unset here.
+
+**TASK-006 (Kompetanseplan), code change only.** Added a derived card status (`Ikke startet` / `Pågår` / `Fullført` / `Ingen steg ennå`) from milestone counts (`src/features/team-competence-plan/domain/plan-presentation.ts`), and Norwegian milestone dates (`15. jan. 2027`) instead of raw ISO strings. Tests: `plan-presentation.test.ts` (7 tests); feature folder 5 files / 50 tests pass. Not done: the reference-20 layout (timeline with 3/6-month switch, goals side panel, team-needs ranking, detail cards with action rows), and any browser or screenshot check. TASK-006 stays as it was, not Done.
+
+**TASK-008 (Oversikt).** No change in this pass. The earlier KPI cards and Neste steg are present; the browser comparison with reference 18 was not run (no authenticated session).
+
+**Gates (this pass):** `pnpm typecheck` exit 0. `pnpm lint` exit 0 (0 errors; 18 warnings repo-wide, none in files changed here). `pnpm exec vitest run src/features/team-competence-plan` 5 files, 50 tests passed.
+
+## Pass 7 evidence (recovery and implementation, 2026-11-07)
+
+**Correction to Pass 6.** The "malformed key" finding was wrong. The key in `.env.local` is valid. My earlier normaliser was faulty. The Demoteam seed's own loader (`scripts/seed-demoteam.mjs`: `FIREBASE_PRIVATE_KEY.split("\n").join("
+").trim()`) produces a PEM that `crypto.createPrivateKey` accepts, and the Admin SDK connects with it. The key was not printed or changed.
+
+**Competence-area repair: performed (approved scope).** Root cause: the five seeded plans (`teamCompetencePlans/demo-team__<treeId>`) reference five existing `skillTrees` docs, but `teamCompetenceAreas` had **zero** documents, so every plan resolved to "Kompetanseområdet er ikke tilgjengelig". Repair: five create-only writes, `teamCompetenceAreas/demo-team__{treeId}` with `status: "active"`, `sortOrder` 0–4 and the six persisted keys, for `demoteam-typescript-frontend`, `demoteam-appsec`, `demoteam-test-automation`, `demoteam-cloud-platform`, `demoteam-system-architecture`. A dry run preceded the write. Rerun: all five report "exists, left unchanged". Read-back: shape, types and doc-id match on all five. This was checked against the persisted shape in `competence-area.ts`, not by running the app's own parser. Nothing else was written: no plans, skill trees, consent, assessments, permissions or superadmin records.
+
+**Browser authentication: not recovered in this pass.** The repository has no custom-token verification script. Searches for `createCustomToken`, `signInWithCustomToken` and the owner UID found only the seed scripts. The previous session's method is therefore not in the repo. No token was minted, printed or stored. The browser flow (localhost:3001, Playwright) was not run, so there are no browser-verified results for this pass.
+
+**TASK-006 Kompetanseplan, code changes:**
+- `domain/plan-presentation.ts`: derived card status (Ikke startet / Pågår / Fullført / Ingen steg ennå) and Norwegian date labels.
+- `domain/plan-timeline.ts`: 3- or 6-month window (passed in, never read from the clock), bars spanning each plan's dated steps, clipped to the window, markers per step, and the next open steps (earliest first, archived excluded).
+- `components/CompetencePlanOverview.tsx`: timeline card with a 3/6-month toggle (`aria-pressed`), month columns, status-plus-count bar labels, mobile notice, "Neste steg" and "Teamets behov" (ranked by priority) side cards. Uses only plan data: no member data, averages or invented metrics.
+- `CompetencePlanSection.tsx`: overview placed above the card list, which now has a visible "Detaljer og tiltak" heading. Milestone dates are Norwegian.
+- Tests: `plan-presentation.test.ts` (7), `plan-timeline.test.ts` (8), `CompetencePlanOverview.test.tsx` (5), and the existing section test queries scoped to the details list.
+- Not done: the reference-20 visual match (layout fidelity, spacing, the goals checklist, dark theme) and any browser or screenshot check at 320–1440 px. TASK-006 status is unchanged.
+
+**TASK-008 Oversikt:** no change in this pass; the existing KPI cards and Neste steg remain. Reference-18 comparison is still open.
+
+**Gates (this pass):**
+- `pnpm typecheck`: exit 0.
+- `pnpm lint`: exit 0 (0 errors; 3 warnings in the repo, none in files changed here).
+- `pnpm test`: exit 0. 587 test files passed, 3 skipped; 9,978 tests passed, 16 skipped.
+- `pnpm build`: not run. It would touch the same `.next` directory as the owner's dev server on 3001.
+
+**Still open:** browser authentication (the previous custom-token method must be re-located or re-approved), browser and screenshot checks for references 18–22, and the Teamkompetanse and Mine ferdigheter visual work.
+
+## Pass 8 evidence (2026-11-07): Oversikt, parser check, authenticated capture
+
+**Competence-area parser check (real gateways, read-only).** A temporary vitest file (deleted after the run) called the real `listCompetenceAreas` and `listCompetencePlans` with the app's own Firestore read path and a stubbed token verifier for the approved owner UID. Result: 5 areas, all `active` and named. 5 plans, each resolving to an active named area: `demoteam-appsec` 4 steps, `demoteam-cloud-platform` 2, `demoteam-system-architecture` 2, `demoteam-test-automation` 3, `demoteam-typescript-frontend` 3. The root cause of the "ikke tilgjengelig" state was the empty `teamCompetenceAreas` collection, and the repair is in Pass 7.
+
+**Authenticated visual capture (approved custom-token scope).** A temporary helper outside the repo (`scratchpad/visual/run.cjs`) checked project, UID and email with the Admin SDK, minted an in-memory custom token, and signed in through the Firebase web SDK in an isolated Playwright context on localhost:3001. The token was not printed, persisted or put in a URL, and the context was closed afterwards. No Firebase writes, no admin actions.
+- Captures: 5 pages x 5 widths (320, 360, 768, 1024, 1440), full-page PNGs in `scratchpad/visual/shots/`: `01-oversikt`, `02-roadmap`, `03-kompetanseplan`, `04-teamkompetanse`, `05-mine-ferdigheter`.
+- Horizontal overflow: 0 px on every captured page and width.
+- Console errors: 0. Failed requests (status 400 or above): 0.
+- Viewed directly: Oversikt at 1440 and Kompetanseplan at 1440. The 320–1024 captures and the Roadmap, Teamkompetanse and Mine ferdigheter captures were not yet compared visually.
+
+**Oversikt (TASK-008), code change.** The KPI row and "Neste steg" sit as before. "Utfordringer" (open challenges and the submission form) moved into the same two-column row beside Neste steg, above the activity zone. Reference 18 places the challenges panel there. The layout contract tests were updated to match (`TeamDetail.test.tsx`, `team-overview-order.test.ts`); this amends the earlier "decision B" placement, which put challenges beside competency needs. Tests: `src/features/teams`, 64 files / 1,057 tests passed.
+- Reference 18 gaps still open: "Aktuelle prosjekter" and "Teamets kompetanse (aggregert)" donut panels are not shown (no extra reads were added, so no fabricated data). The team header shows system and area counts; the member count and description are not shown (documented deviation). Mobile and tablet were not yet reviewed visually.
+
+**Kompetanseplan (TASK-006), code change.** The timeline card no longer stretches to the side column's height (`self-start`). Visual check at 1440 with the five real plans: month columns, bars, progress labels and step markers render, and the Neste steg and Teamets behov panels show Norwegian dates and priorities.
+- Gaps against reference 20: no "Mål for kompetanseutvikling" goals checklist (no goal data exists in the plan model); the bar label uses plan status, not a per-step timeline; mobile (320–768) layout not yet reviewed visually. TASK-006 is therefore In Progress.
+
+**Gates (this pass):**
+- `pnpm typecheck`: exit 0.
+- `pnpm lint`: exit 0 (0 errors; 18 warnings, none in changed files).
+- `pnpm test`: exit 0. 587 files passed, 3 skipped; 9,978 tests passed, 16 skipped.
+- `pnpm build`: not run. It would touch `.next`, which the owner's dev server on 3001 is using.
+
+**Remaining gaps:** mobile and tablet review of Oversikt and Kompetanseplan; visual comparison of Roadmap (19), Teamkompetanse (21) and Mine ferdigheter (22); the goals checklist and aggregate panels of references 18 and 20; an isolated `pnpm build` run.
+
+## Pass 9 evidence (2026-11-07): acceptance review, references 18–22
+
+**Capture.** Authenticated custom-token flow, isolated context, read-only: 5 pages x 5 widths (320, 360, 768, 1024, 1440). 25 full-page PNGs in `scratchpad/visual/shots/`. Results: 0 console errors, 0 failed requests (400+), 0 px horizontal overflow on all 25 captures, sign-in gate not shown.
+
+**Changes in this pass.**
+- Oversikt KPI cards: two columns from 360 px (previously one column, which made the landing page about 8,700 px tall at 360).
+- Kompetanseplan timeline card: `self-start` (no stretch to the side column).
+- Team projects Gantt (Roadmap): label column `w-56` → `w-64`, status badge and Rediger/Arkiver on one wrapping line. Team-projects tests: 10 files / 167 tests passed.
+
+**Reference comparison.**
+- **18 Oversikt:** matches the structure (KPI row; Neste steg and Utfordringer side by side). Differs: "Aktuelle prosjekter" and "Teamets kompetanse (aggregert)" panels not shown. Project data is loaded only inside the KPI summary as counts; turning it into a list is possible without new reads, but it is not implemented. The aggregate panel needs D2 (averages). Header shows system and area counts, no member count or description (documented deviation).
+- **19 Roadmap:** geometry verified at 1440 px (today line at 7 nov, bars at the correct months, 3/6 toggle). Differs: the real page keeps per-row Rediger/Arkiver (required functionality) and a Gantt per member below the plan; the reference is more compact. Row density was improved; no legend.
+- **20 Kompetanseplan:** structure matches (timeline with 3/6 toggle, status labels, priority ranking, next steps). Intentional difference: the "Mål for kompetanseutvikling" goals checklist is not shown. The plan model has no goals; milestones are steps, not goals. Using them as goals would be a new data model, so this needs a product decision.
+- **21 Teamkompetanse:** intentional difference. The reference shows numeric averages, a radar chart, an averaged level bar chart and a trend line. These are forbidden by the current privacy rules and are blocked by D2 (radar, averages, trends) and D1. The real page shows categorical coverage per area with the k-anonymity threshold text. Correct for the privacy model; no averages are shown.
+- **22 Mine ferdigheter:** intentional difference for the same reasons (averages, radar, trend, sharing toggle, role-direction panel). The real page keeps private self-assessments with the consent text. Skill cards remain a single long column (11 cards at 1440). Not changed in this pass.
+
+**Acceptance decisions (TASKS status).**
+- **TASK-006:** stays In Progress. Functional criteria met with real data (five plans render, dates and statuses correct, 3/6 switch works, 360 px mobile readable). Not done: keyboard navigation was not exercised in the browser; mobile captures at 320, 768, 1024 were not reviewed visually. The goals checklist is a documented intentional difference pending a product decision.
+- **TASK-008:** stays In Progress. Open: project list and aggregate panel (aggregate needs D2), 768/1024 review.
+
+**Gates (this pass):**
+- `pnpm typecheck`: exit 0.
+- `pnpm lint`: exit 0 (0 errors; 18 warnings, none in changed files).
+- `pnpm test`: exit 0. 587 files passed, 3 skipped; 9,978 tests passed, 16 skipped.
+- `pnpm build`: not run (would touch `.next` used by the running dev server).
+
+**Product decisions needed:** D1 (default sharing), D2 (averages, radar, trends), and a decision on whether goals come from an existing source.
+
+## Pass 9 evidence (2026-11-07)
+
+**Changed files (this pass):** `src/features/team-competence-plan/components/CompetencePlanSection.tsx` (milestone goals checklist),
+`src/features/team-competence-plan/copy.ts` (`checklistHeading`), `src/features/team-competence-plan/components/CompetencePlanOverview.tsx`
+(timeline breakpoint `sm`→`lg`, two-column split `lg`→`xl`), `src/features/teams/components/TeamOversiktProjects.tsx` (new compact
+project list), `src/features/teams/components/TeamOversiktProjects.test.tsx` (new, 8 tests), `src/features/teams/components/TeamOversiktSummary.tsx`
+(reuses the existing projects read; renders the list), and the TASKS.md status lines for TASK-006 and TASK-008.
+
+**Quality gates (run in this pass):**
+- `pnpm typecheck`: exit 0 (after the final code change set, before the 1024 px breakpoint edit; the breakpoint edit is CSS-only).
+- `pnpm lint`: exit 0, 0 errors, 18 warnings (pre-existing; none introduced by this pass's files were checked individually).
+- `pnpm test`: exit 0, 588 files passed, 3 skipped; 9986 tests passed, 16 skipped.
+- `src/features/team-competence-plan`: 7 files, 63 tests passed after every change, including the breakpoint edits.
+
+**Authenticated browser check (read-only, isolated context, localhost:3001, custom-token sign-in, token never printed or stored):**
+- Readiness-gated capture: 25 of 25 screenshots taken after the page showed content and no loading text, 0 console errors, 0 failed requests, 0 px horizontal overflow (run before the 1024 px breakpoint edit).
+- Kompetanseplan keyboard (1440 px): Enter on "Vis steg" expanded the plan (checklist list count 0 → 1); focus outline style `solid`; checklist rows show glyph plus status text, e.g. "✓ … (Fullført)", "◐ … (Pågår)", "… (Planlagt)"; Space on "3 måneder" set `aria-pressed=true` and rendered 5 timeline rows.
+- Visually inspected after readiness: Kompetanseplan 1440 and 320 px; Oversikt 1440 and 320 px (project list present, KPI cards, Neste steg, Utfordringer and roster section preserved); Oversikt 768 px and Kompetanseplan 768 px.
+- Defects found and fixed in this pass: (1) Kompetanseplan at 768 px: the 6-column timeline was too narrow (month headers wrapped, bar labels cut). Fixed by moving the timeline to `lg`. (2) Kompetanseplan at 1024 px: the two-column layout left the timeline about 350 px wide, so month labels overlapped. Fixed by moving the two-column split to `xl`.
+
+**Not verified / open (blocks Done for TASK-006 and TASK-008):**
+- Re-capture after fixes (1) and (2) is pending: the last two capture attempts failed. The sign-in succeeded, but the `/teams` list returned "Noe gikk galt under lasting av team" (a server-side error on the authorized teams read). The API responds normally to unauthenticated requests (401 in about 0.02 s), so the error is inside the authorized read. Its cause could not be determined from here (no server log access in this session). Re-run `run.cjs` once the teams read works, then inspect 768 and 1024 px for Kompetanseplan, and 360, 768 and 1024 px for Oversikt.
+- Teamkompetanse (reference 21) and Mine ferdigheter (reference 22) were captured in the earlier run but not visually inspected in this pass.
+- Roadmap timeline geometry (reference 19) was not re-checked in this pass.
+- Mobile keyboard flow for the checklist (320 px) was not exercised; only the desktop keyboard path was.
+
+**D1 Option B:** unchanged. The proposal remains `D1-OPTION-B-PROPOSAL.md`. No consent records, notice versions, Firebase rules, shared Firebase data or superadmin permissions were modified.
+
+## Pass 10 evidence: authenticated teams-read diagnosis (2026-11-07)
+
+**Failing requests (read-only diagnostic, status only):** `GET /api/me` → 503 `{"error":"auth_unavailable"}`; `GET /api/teams` → 503
+`{"status":"auth_unavailable"}`. The `/teams` page shows "Noe gikk galt under lasting av team" as a result.
+
+**Path:** `src/features/auth/server/verify-identity.ts`. A fence read that throws maps to `auth_unavailable` (fail closed, D-AUTHFAIL).
+The 401 path is excluded: the custom-token session has no email claim, so it would return `invalid_token`, not 503.
+
+**Root cause (verified):** the Admin SDK reads of `accountErasures/{owner uid}` and of `teamMemberships` (by uid) both fail with
+`code=8 RESOURCE_EXHAUSTED: Quota exceeded` on the configured Firebase project. Admin Auth lookup succeeds, so the credential is valid.
+The probe was re-run and still fails. The application behaves as designed (fails closed); no application defect was found.
+
+**Contributing factor:** this session's repeated authenticated capture runs (roughly 25 page loads each, plus retries and diagnostics)
+very likely consumed the project's daily Firestore read quota. This is an inference, not verified from usage data.
+
+**Not done:** no quota change, no shared-data write, no rules change, no emulator switch. Those need the owner's decision.
+Resume the authenticated checks after the quota resets (Firestore quotas reset daily). Then run `diag2.cjs` (status check), then the
+readiness-gated capture, then the 360/768/1024 px Oversikt and 768/1024 px Kompetanseplan inspections.
+
+**Status:** TASK-006 and TASK-008 remain In Progress. Their open items are the post-fix tablet checks and the 360 px Oversikt check.
+
+**Quota status check (final acceptance attempt, 2026-11-07):** one read-only status check. Firestore still returns `RESOURCE_EXHAUSTED: Quota exceeded` for both the fence read and the membership query. Authenticated browser checks were not run. TASK-006 and TASK-008 remain In Progress.
+
+## Pass 11 evidence (2026-11-07): Kompetanseprofil radar, collaborative composition, settings shell
+
+Scope: implementation slice listed in TASKS.md (IMP-R1, IMP-R2, IMP-S1, IMP-T1). Not a completion record; TASK-006 and
+TASK-008 remain In Progress.
+
+**Commands and results (automated, no Firebase calls):**
+
+- `node_modules/.bin/vitest run src/features/team-competence-profile app/route-groups.test.ts src/features/team-skills`
+  → 33 files, **725 passed**, 4 expected-to-fail (the team-skills regression cases A1–A4, unchanged).
+  - New feature folder: 4 test files, 46 tests (radar domain model, collaborative composition, radar component, settings
+    section).
+- `node_modules/.bin/tsc --noEmit` → **0 errors** (after two fixes: a redundant status comparison in the radar component,
+  and a comparison against a type that cannot be `0` in a domain test; the test now asserts the exact value list).
+- `node_modules/.bin/eslint` on the new feature folder, the settings route and `app/route-groups.test.ts` → **no findings**.
+
+**Fixes made during verification (recorded for traceability):**
+- Component tests needed `// @vitest-environment jsdom` and explicit `cleanup`, matching the existing component tests.
+- The route registry test failed on the new page URL; the expected list was updated (IMP-T1).
+
+**What these checks show:**
+- Radar: 3, 4 and 5 axes render one point per axis; partial and missing values never become zero; target-only axes keep
+  their target; the table and summary match the chart data; invalid input shows an error and no chart; no average,
+  contributor count or decimal wording appears; no string names anonymity.
+- Collaborative composition: archived and inactive areas are excluded, their needs are ignored, unset values stay null, and
+  stored invalid values pass through so the radar model rejects them.
+- Settings section: automatic is the checked default; collaborative is disabled with the reason; no fetch is made; no save
+  control exists.
+- k = 5: the team-skills suite passes unchanged, so the current contract's behaviour is verified as unchanged.
+
+**Not verified in this pass (explicitly deferred):**
+- Browser checks at 320, 360, 768, 1024 and 1440 px; light and dark mode; axe. No browser was run.
+- The Recharts stroke values use CSS variables (`var(--chart-1)`, `var(--text-secondary)`) on SVG attributes. Confirm in a
+  browser before any radar is wired into a page.
+- Teamadmin-only gating of the settings page (see BLK-8).
+
+**Not done (blocked):** the list in TASKS.md, BLK-1 to BLK-8.
+
+## Pass 12 evidence (2026-11-07): radar offline verification and rendering fixes
+
+Scope: IMP-R1 radar component, verified offline. TASK-006 and TASK-008 remain In Progress. The radar is **not mounted** on any page (BR-26 and D2 still in force; see SPEC "Owner decisions (2026-11-07)", R-1 pending).
+
+**Defects found and fixed (actual rendering defects):**
+1. Missing values were drawn at the chart centre. Recharts 3.10.1 maps a nullish value to radius 0 (`lib/polar/Radar.js`, `radius = isNullish(pointValue) ? 0 : …`), so `connectNulls` cannot create a gap. Fix: `GapAwareRadarShape` in `KompetanseprofilRadar.tsx` draws a closed polygon only when every axis has a value; with a gap it draws open polylines per run (no closing edge across a gap) and a dot for a lone value.
+2. Angle labels were clipped at 320 px (left and right labels outside the SVG). Fix: `outerRadius` 72% → 60%.
+
+**Automated checks (no Firebase calls):**
+- `vitest run src/features/team-competence-profile` → 5 files, 51 tests pass (includes the new `radar-gaps.test.ts`, 5 run-splitting cases).
+- `tsc --noEmit` → 0 errors (after replacing a `null` return with `<g />` to satisfy the Recharts shape type).
+- `eslint` on the changed component and the new test → no findings.
+
+**Offline browser checks (isolated Vite bundle of the component with synthetic fixtures, in the scratchpad; Playwright Chromium; not in the repo):**
+- Axis counts 3, 4, 5 and 8: label count, table row count and axis count all equal (40 of 40 matrix cells pass: 4 axis counts × 2 themes × 5 widths).
+- Widths 320, 360, 768, 1024 and 1440 px: no horizontal page overflow; no angle label outside the SVG (0 clipped at every width after fix 2).
+- Missing values: no vertex at the centre (0 hits in all cells); the `Ikke satt` cell count matches the fixtures.
+- Team polygon stroke resolves to `rgb(11,107,99)` in light and `rgb(95,195,181)` in dark (`--chart-1`). Target stroke resolves to `rgb(80,97,107)` in light and `rgb(181,197,193)` in dark (`--text-secondary`). The target is dashed `4px, 3px` in every cell.
+- Network: the only host requested is the local bundle server. No Firebase or Google host was contacted.
+- Console: no errors or warnings.
+- Screenshots: light at 320 px reviewed visually before the fix (clipped side labels were seen). After the fix, label clipping was re-measured with bounding boxes at all five widths (0 clipped); no new screenshot was reviewed after the fix.
+
+**Not verified:** axe (not run in this pass); keyboard focus inside the table scroll region at 320 px; a real page in the app shell (the radar is not mounted anywhere).
+
+## Pass 13 evidence (2026-11-07): radar approval, Teamkompetanse unavailable state, accessibility
+
+Scope: owner approvals R-1 to R-4 recorded in SPEC.md ("Owner decisions (2026-11-07)", approved product direction). Security changes for k = 3 remain pending formal review and are **not applied**: `SKILL_COVERAGE_MIN_CONTRIBUTORS` = 5, SECURITY invariant 34 and the notice version are unchanged.
+
+**Integration decision:** the radar is not mounted with values. No approved data source yields numeric team levels to Teamkompetanse (the page reads categorical coverage only; invariant 35). Showing the radar with target-only data would state that team levels are "not set" for every area, which is not true, so the Teamkompetanse "Radar" panel shows an honest unavailable state with no values (`TeamCompetenceCoverage.tsx`, DisabledPanels). The trend panel stays disabled (D2).
+
+**Defect fixed (accessibility):** Recharts' default accessibility layer added a focusable `<svg role="application">` with no accessible name, which was a separate tab stop. Fix: `accessibilityLayer={false}` on `RadarChart`. The visible table is the text alternative. Keyboard check after fix: one tab stop, the table region (`role="region"`, named), in both themes.
+
+**Automated checks:**
+- `vitest run src/features/team-skills src/features/team-competence-profile app/route-groups.test.ts` → 34 files, 730 passed, 4 expected-fail (the team-skills regression cases A1–A4, unchanged).
+- `tsc --noEmit` → 0 errors.
+
+**Offline browser checks (isolated harness, synthetic fixtures, no Firebase, only the local host requested, no console errors):**
+- axe-core 4.14.0 on each axis case (3, 4, 5, 8) × light/dark × 320, 360, 768, 1024, 1440 px → 40 cells, **0 violations**. Page-level rules (`landmark-one-main`, `page-has-heading-one`) are excluded because the harness page has no `<main>` or `<h1>`. Those rules belong to the real app shell, which was not run offline.
+- Keyboard: one tab stop per radar, focus outline visible (`2px solid`) in both themes.
+- Matrix from Pass 12 re-run after the change: 40 of 40 cells pass (axis and row counts, no centre vertex, no overflow). Angle labels: 0 clipped at every width.
+
+**Not verified:** the real Teamkompetanse page in the app shell (needs signed-in Firebase data; not run, quota rule); the real `<main>`/`<h1>` landmarks; native-speaker review of the new Norwegian unavailable-state copy (G4).
+
+## Pass 14 evidence (2026-11-07): on-demand numeric aggregation, collaborative validation, BR-4
+
+Scope: preparatory and internal work only. Nothing numeric is exposed by any route, k is still 5, no persistence was added,
+and no Firebase call was made.
+
+**Code (new unless noted)**
+- `src/features/team-skills/domain/team-level.ts`: `deriveTeamLevel(levels, minContributors)`. Integer
+  `floor((2·sum + n) / (2·n))`. Returns a level or `insufficient_data`. Throws on malformed levels or a threshold below 3.
+- `src/features/team-skills/server/get-team-skill-coverage.ts`: internal numeric operation `createGetTeamSkillLevels`
+  (not routed), in the approved coverage module. Same authorization, eligibility (`eligibleUids`) and fail-closed reads as
+  coverage. Output keys are `treeId`, `areaName`, `targetLevel`, `state`, `level` only. Its runtime export is outside the
+  C1 guard's approved set (see "Not verified").
+- `src/features/team-skills/domain/collaborative-level-input.ts`: accepts an integer 1–4 or explicit `null`.
+- `src/features/team-skills/server/decide-collaborative-level-write.ts`: teamadmin or superadmin of an active team,
+  authorization before validation. No persistence.
+- Removed during consolidation, to keep existing boundaries: the separate numeric reader
+  `server/get-team-competence-levels.ts` (a second personal-data reader, which the C1/C2 guards forbid) and the
+  `team-competence-profile` collaborative modules (a cross-feature import into C2 server code, which the C2 guard forbids).
+  Their logic now lives in the files above.
+- Unchanged in substance: `radar-model.ts` (`isTeamLevel` stays private).
+- Docs: `individual-skill-self-assessment/SPEC.md` BR-4 and D2 amended (team-level mean exception, k=3 gated, no zero);
+  `AMENDMENT-A-DRAFT.md` §A.00 (on-demand design); `G1-PRE-REVIEW-REPORT.md` superseding note.
+
+**Tests (this pass, all passing)**
+- `team-level.test.ts`: 31. Exhaustive comparison with an independent reference for all sequences of 3–5 levels; order
+  independence; rounding cases; k=2/3 boundaries; k=5 pinned; invalid input throws.
+- Numeric operation tests, appended to `src/features/team-skills/server/get-team-skill-coverage.test.ts`: 20 tests.
+  Authorization (signed out, non-member, disabled team); eligibility (non-contributors and stale notice version excluded);
+  opt-out visible on the next read; threshold; response shape allow-list; incomplete cohort; read failures return
+  `read_failed` with no partial rows, including a malformed stored level.
+- `src/features/team-skills/server/decide-collaborative-level-write.test.ts`: 23. Teamadmin and superadmin accepted;
+  member, non-member and disabled team refused; invalid values rejected; read failure reported.
+- Focused run after consolidation: the team-skills, team-competence-profile and skill-profiles suites, 57 files, 1,241
+  tests passing and 1 failing (the C1 export check below).
+
+**Gates (this pass)**
+- `pnpm typecheck`: exit 0.
+- `eslint` on all changed and new files: exit 0.
+- Full `pnpm test` (earlier in this pass, before the BR-4 doc edit): 10,100 passing. 14 failing, all in scope guards (see
+  below). No behavioural test failed.
+
+**Not verified**
+- One C1 guard assertion fails by design: `skill-profiles-scope-guard.test.ts` ("passes on the real tree: store, batch
+  module, identifiers, re-exports and client boundary") reports `unapproved export createGetTeamSkillLevels` in
+  `get-team-skill-coverage.ts`. The guard's approved runtime exports are `getTeamSkillCoverage` and
+  `createGetTeamSkillCoverage` only. Concrete reason the factory stays exported: its tests inject fakes, and reaching the
+  numeric operation through `createGetTeamSkillCoverage` would need a derivation switch that widens the active
+  operation's result type. Proposed smallest reviewer-approved exception: add `createGetTeamSkillLevels` to
+  `approvedRuntime` in `skill-profiles-scope-guard.test.ts`. Status: `blocked on reviewer`.
+- No browser, responsive, dark-mode or axe check of any numeric UI (none exists yet).
+- No emulator or Firestore run.
+- The stale module comment in `self-assessed-level.ts` ("nothing may average") is unchanged and should be aligned with BR-4.
+
+## Pass 15 evidence (2026-11-07): C1 export approval, pure radar mapping
+
+Scope: the owner approved adding `createGetTeamSkillLevels` to the C1 `approvedRuntime` set. The approval covers the internal
+factory export only. It does not authorize numeric API publication, k = 3 activation or any route. k stays 5.
+
+**C1 guard verification (before the allow-list edit)**
+- `createGetTeamSkillLevels` is defined in `src/features/team-skills/server/get-team-skill-coverage.ts` (the approved module).
+- It reads personal levels only through `deps.readLevels`, which is the `readSkillLevelsBatch` adapter in production.
+- Consumers: its own test file only (`get-team-skill-coverage.test.ts`). No `app/` route or other module imports it.
+- The categorical operation `getTeamSkillCoverage` / `createGetTeamSkillCoverage` and its response contract are unchanged.
+
+**Code (new)**
+- `src/features/skill-profiles/skill-profiles-scope-guard.test.ts`: `approvedRuntime` gains exactly `createGetTeamSkillLevels`.
+  No other allow-list or check changed.
+- `src/features/team-competence-profile/domain/automatic-profile.ts`: `buildAutomaticAxes(rows)`. Value rows give the integer
+  team level; `insufficient_data` and `area_unavailable` give `teamLevel: null`; `area_unavailable` is labelled
+  «Område ikke tilgjengelig». Targets are passed through (null stays null). Row order is kept. A non-integer or out-of-range
+  level is passed through unchanged, so `buildRadarModel` returns `invalid` (no coercion).
+- `src/features/team-competence-profile/domain/automatic-profile.test.ts`: synthetic fixtures; mapping, null-not-zero, label,
+  field allow-list, order, invalid levels, and radar results for 3, 4, 5 and 8 axes with missing values, plus too-few,
+  too-many and empty.
+
+**Gates (run in this pass, actual results)**
+- C1 scope guard plus `team-competence-profile/domain`: 4 files, 71 tests passed.
+- `pnpm typecheck`: exit 0.
+- `pnpm lint`: exit 0, 0 errors, 18 warnings; none in the files changed in this pass.
+- Affected suites (`team-skills`, `team-competence-profile`, `skill-profiles`): 58 files, 1255 tests passed, 4 expected fail.
+- Full `pnpm test`: 597 files passed, 3 skipped; 10126 tests passed, 4 expected fail, 16 skipped. 0 failures. The 14 scope-guard
+  failures recorded in Pass 14 are resolved by the approved export.
+
+**Not done (by design)**
+- No route, no GET endpoint, no numeric API publication, no k = 3 change, no SECURITY.md, notice, consent, Firebase rules or
+  shared-data change. No Firebase call. No browser, responsive or axe check (no numeric UI is wired).
+
+**Next activation boundary (minimum, after approvals)**
+1. G1 independent security review and G2 privacy/legal review of the on-demand design (AMENDMENT-A-DRAFT.md §A.00, §A.14).
+2. SECURITY.md invariants 34–36 amended after items 1–2.
+3. G5 notice bump and transition (owner plus legal), G4 Norwegian copy review, G3 UI-UX amendment.
+4. A reviewed route (approved GET endpoint) that calls `createGetTeamSkillLevels` and a DTO allow-list test. The route
+   needs its own guard entry in `APPROVED_ROUTE_FILES`, and the endpoint stays inactive until step 1–3 are recorded.
+5. Wire `buildAutomaticAxes` into the existing `KompetanseprofilRadar` on Teamkompetanse, then browser, responsive and axe checks.
+6. Switch the threshold to k = 3 (G7 decision record retiring old test A3), then rerun the full gates.
+
+Collaborative persistence (BLK-1, BLK-2) remains a separate track and is not changed by this pass.
+
+## Collaborative profile slice evidence (2026-11-08, implementation turn)
+
+Scope: the collaborative (Felles) Teamkompetanse workflow, BLK-1 and BLK-2 in TASKS.md. Owner direction (2026-11-08):
+implement now; gates are recorded per activation, not as a reason to withhold local work.
+
+- Server (already in the working tree before this turn): `src/features/team-competence-profile/server/collaborative-profile.ts`,
+  routes `app/api/teams/[teamId]/profile-settings` (GET any genuine member; PUT mode teamadmin only) and
+  `.../profile-settings/levels/[treeId]` (PUT level 1–4 or `null`, teamadmin only, active areas only), deny-only rules for
+  `teamProfileSettings` and `teamCollaborativeLevels`.
+- Client added this turn: `client/collaborative-gateway.ts` (thin fetch wrappers, field-by-field parsing, fail-safe to
+  `read_failed`), `client/use-collaborative-team-data.ts`, `components/ProfileModeControl.tsx`,
+  `components/TeamSettingsCompetenceProfile.tsx` (live, was read-only), `components/CollaborativeCompetenceProfile.tsx`
+  (Teamkompetanse panel: automatic path or collaborative radar), `components/CollaborativeLevelEditor.tsx`,
+  `components/CompetenceAreaManager.tsx` (status change; add a catalog area). Copy in `copy.ts` (Norwegian).
+- Pages: `app/(app)/teams/[teamId]/competence/page.tsx` renders the panel; `settings/page.tsx` renders the live mode control.
+- Member sharing controls, Teamoversikt and remaining redesign work: not part of this slice.
+
+Gate status for this slice (recorded, not claimed as complete):
+- G3 (UI-UX amendment) and G4 (Norwegian copy review): NOT done. The Norwegian strings are authored but not reviewed.
+- G1, G2, G5 apply to numeric automatic publication only. The collaborative path reads no member data; it is not gated
+  by them for local implementation. Production activation of the collaborative mode is a separate release decision.
+- Browser and visual checks of the new controls: not run in this turn (`not_verified`).
+- Independent review of this slice: not run (`not_verified`).
+
+Checks run in this turn: `pnpm typecheck` exit 0; focused Vitest over `src/features/team-competence-profile` and the competence
+route test: 12 files, 142 tests passed; `eslint` on the touched files: 0 errors (one pre-existing warning in an untouched test).

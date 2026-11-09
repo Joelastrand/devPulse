@@ -10,12 +10,21 @@ vi.mock("../../../../src/features/teams/components/TeamPageHeader", () => ({
   TeamPageHeader: headerMock,
 }));
 
+vi.mock("../../../../src/features/team-competence-profile/components/CollaborativeCompetenceProfile", () => ({
+  CollaborativeCompetenceProfile: ({ teamId }: { teamId: string }) => <div data-testid="team-competence-profile" data-team={teamId} />,
+}));
+
 vi.mock("../../../../src/features/team-skills/components/TeamCompetenceCoverage", () => ({
   TeamCompetenceCoverage: ({ teamId }: { teamId: string }) => <div data-testid="team-competence-coverage" data-team={teamId} />,
 }));
 
 vi.mock("../../../../src/features/team-competence-plan/components/CompetencePlanSection", () => ({
   CompetencePlanSection: ({ teamId }: { teamId: string }) => <div data-testid="competence-plan-section" data-team={teamId} />,
+}));
+
+vi.mock("../../../../src/features/teams/components/TeamSubpageSections", () => ({
+  TeamSkillTrackingSection: ({ teamId }: { teamId: string }) => <div data-testid="team-skill-tracking" data-team={teamId} />,
+  TeamCompetenceNeedsSection: ({ teamId }: { teamId: string }) => <div data-testid="team-competence-needs" data-team={teamId} />,
 }));
 
 const { default: CompetencePlanPage } = await import("./competence-plan/page");

@@ -35,9 +35,11 @@ raw individual survey responses.
 - A Firestore-backed `teamMemberships` collection keyed by Firebase `uid`
   (never email), supporting many memberships per user and many members per
   team.
-- A global app-admin role, established via a server-only email allow-list
-  (env config) checked against the caller's Firebase-**verified** email —
-  no custom claims, no "first user becomes admin," no client-supplied role.
+- A global app-admin (superadmin) role, held in the Firestore superadmin
+  registry (`superadmins/{uid}`, read per request; see docs/SECURITY.md SR-SI).
+  Superseded 2026-11-06: the earlier server-only `APP_ADMIN_EMAILS` allow-list
+  is no longer read. No custom claims, no "first user becomes admin," no
+  client-supplied role.
 - Server-side authorization helpers distinguishing authenticated,
   app-admin, team-member, and non-member, used by every new protected
   route (`src/features/teams/server/`).
@@ -188,13 +190,15 @@ raw individual survey responses.
   present and passes revocation-checked verification (`verifyIdToken`,
   reused unchanged from Phase 2 — `checkRevoked: true`), (b) the decoded
   token carries an `email`, (c) that email is Firebase-**verified**
-  (`emailVerified === true`), and (d) the normalized (trimmed, lowercased)
-  email matches an entry in the server-only `APP_ADMIN_EMAILS` allow-list
-  — never from any client-supplied role, header, claim, or request body
-  field.
-- **BR-6**: An account whose email is on the admin allow-list but is not
-  yet Firebase-verified, or whose token fails revocation-checked
-  verification, is not treated as an app admin.
+  (`emailVerified === true`), and (d) the caller's UID has an active record
+  in the Firestore superadmin registry (`superadmins/{uid}`), read on every
+  request (SR-SI-1). The email is never the authorization key, and nothing
+  client-supplied (role, header, claim, body field) decides it.
+  *Amended 2026-11-06: (d) replaces the original `APP_ADMIN_EMAILS` e-mail
+  match. The original allow-list is no longer read.*
+- **BR-6**: An account with an active registry record whose email is not yet
+  Firebase-verified, or whose token fails revocation-checked verification, is
+  not treated as an app admin.
 
 **Membership and authorization**
 - **BR-7**: A user may hold zero, one, or many `teamMemberships`
@@ -326,7 +330,7 @@ raw individual survey responses.
   `teamAccessRequests` is readable or writable via the Firebase client SDK
   under any authentication state; all reads/writes happen server-side via
   the Firebase Admin SDK, exactly like every existing collection.
-- **BR-36**: The `APP_ADMIN_EMAILS` allow-list's contents are never sent
+- **BR-36**: The superadmin registry's contents (UIDs and grant metadata) are never sent
   to the client in any form (API response, page markup, client bundle, or
   `NEXT_PUBLIC_*` config) — a caller can only ever learn their **own**
   resulting `isAdmin` boolean, never the list itself or any other
@@ -535,10 +539,12 @@ raw individual survey responses.
   how `Dashboard.tsx` already does client-side auth-state observation —
   not a Next.js server-side `redirect()`, since no server-rendered request
   carries proof of identity.
-- **App-admin bootstrap**: a new server-only env var, e.g.
-  `APP_ADMIN_EMAILS` (comma-separated, normalized/lowercased at read
-  time), analogous to the existing `TEAM_ASSIGNMENTS` static-config
-  pattern already in this codebase. Rejected alternatives: Firebase custom
+- **App-admin bootstrap** (superseded 2026-11-06): the first superadmin is
+  written once by `scripts/bootstrap-superadmin.ts` into the Firestore
+  registry (see docs/features/superadmin-registry/BOOTSTRAP.md). The earlier
+  proposal, a server-only env var `APP_ADMIN_EMAILS`, is no longer read.
+  Original rationale: an analogue of the `TEAM_ASSIGNMENTS` static-config
+  pattern. Rejected alternatives: Firebase custom
   claims (adds a claim-management/propagation step for no benefit here,
   since Firestore rules stay fully deny-all regardless of any claim — see
   next point); a one-time bootstrap script (more moving parts than an env
@@ -677,7 +683,7 @@ required a change beyond what's already reflected in the relevant section.
 | Security: direct Firestore client-SDK access remains denied for all 4 new collections | BR-35 |
 
 ## Acceptance criteria
-- [ ] An app admin (per the server-only allow-list, verified email) can
+- [ ] An app admin (an active superadmin registry record, verified email) can
       create a team, which appears as `active` and is immediately eligible
       as a public-survey destination and on `/teams`.
 - [ ] A non-admin authenticated user cannot create, disable, or re-enable
@@ -714,7 +720,7 @@ required a change beyond what's already reflected in the relevant section.
 - [ ] A direct Firebase client-SDK read or write attempt against `teams`,
       `teamMemberships`, `teamInvitations`, or `teamAccessRequests` is
       denied under every authentication state.
-- [ ] The `APP_ADMIN_EMAILS` allow-list never appears in any client-served
+- [ ] The superadmin registry never appears in any client-served
       response, page markup, or client bundle — only a caller's own
       `isAdmin` boolean is ever observable client-side.
 - [ ] A caller whose Firebase session has been revoked (e.g. password

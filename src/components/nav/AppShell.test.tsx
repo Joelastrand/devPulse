@@ -170,6 +170,7 @@ describe("AppShell", () => {
       "Samtaler",
       "Team",
       "Roller",
+      "Superadministratorer",
       "Min profil",
       "Slett kontoen din",
     ]);
@@ -186,7 +187,7 @@ describe("AppShell", () => {
     expect(roller.getAttribute("href")).toBe("/admin/roles");
     const administrasjon = screen.getByText("Administrasjon").closest("div");
     const adminLinks = Array.from(administrasjon?.querySelectorAll("a") ?? []).map((a) => a.getAttribute("href"));
-    expect(adminLinks).toEqual(["/admin/teams", "/admin/roles"]);
+    expect(adminLinks).toEqual(["/admin/teams", "/admin/roles", "/admin/superadmins"]);
   });
 
   it("never lists Roller or the Administrasjon heading for a non-admin, even with Team in the workspace", async () => {
@@ -309,7 +310,7 @@ describe("AppShell", () => {
 
     const adminLink = await screen.findByRole("link", { name: /^roller$/i });
     expect(adminLink.getAttribute("href")).toBe("/admin/roles");
-    expect(navLinkNames()).toHaveLength(SIGNED_IN_LINK_NAMES.length + 2);
+    expect(navLinkNames()).toHaveLength(SIGNED_IN_LINK_NAMES.length + 3);
   });
 
   it("never shows Admin when the own-admin-status read fails (fails closed, not open)", async () => {

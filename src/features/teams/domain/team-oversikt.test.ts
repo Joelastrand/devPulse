@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildOversiktNextSteps,
+  completeHeaderCount,
   countActiveProjects,
   countPriorityPlans,
   OVERSIKT_NEXT_STEPS_LIMIT,
@@ -50,5 +51,23 @@ describe("buildOversiktNextSteps (TASK-008, BR-3, BR-4)", () => {
 
   it("never invents a step from an unavailable read (null)", () => {
     expect(buildOversiktNextSteps({ systemsNeedingAttention: null, priorityPlans: null, activeProjects: null })).toEqual([]);
+  });
+});
+
+describe("completeHeaderCount", () => {
+  it("returns the count for a complete read", () => {
+    expect(completeHeaderCount({ count: 12, truncated: false })).toBe(12);
+  });
+
+  it("returns a zero for a complete empty read, never null", () => {
+    expect(completeHeaderCount({ count: 0, truncated: false })).toBe(0);
+  });
+
+  it("omits a truncated count instead of understating the total", () => {
+    expect(completeHeaderCount({ count: 50, truncated: true })).toBeNull();
+  });
+
+  it("returns null when the read failed or is absent", () => {
+    expect(completeHeaderCount(null)).toBeNull();
   });
 });

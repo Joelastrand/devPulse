@@ -155,7 +155,13 @@ describe("resolveMilestones", () => {
   });
 
   it("refuses an id that does not belong to the stored plan", () => {
-    const result = resolveMilestones([{ id: ID_B, title: "Ukjent", targetDate: null, status: "planned" }], [milestone({ id: ID_A })]);
+    const result = resolveMilestones(
+      [{ id: ID_B, title: "Ukjent", targetDate: null, status: "planned" }],
+      [milestone({ id: ID_A })],
+      () => {
+        throw new Error("no new id may be generated for an unknown client id");
+      },
+    );
     expect(result).toEqual({ ok: false });
   });
 });

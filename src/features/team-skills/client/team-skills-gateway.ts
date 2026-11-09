@@ -1,4 +1,5 @@
 import { isRequiredCoverage, isRequiredLevel, type RequiredLevel } from "../domain/skill-need";
+import { parseTeamSkillLevelsDto, type TeamSkillLevelDto } from "../domain/team-skill-levels-dto";
 
 /**
  * Browser gateway for the team skill needs (docs/features/team-skill-needs-and-matrix/
@@ -427,4 +428,29 @@ export async function withdrawSkillContribution(
   deps: SkillContributionDeps = {},
 ): Promise<SkillContributionWriteResult> {
   return (deps.gateway ?? getDefaultContributionGateway()).withdrawSkillContribution(idToken, teamId);
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * The automatic numeric team profile (owner-approved k = 3): `GET /api/teams/[teamId]/skill-levels`. The body is parsed
+ * by the strict DTO, so an unexpected key or value makes the whole response a `read_failed`, never a partial profile.
+ * ---------------------------------------------------------------------------------------------- */
+
+export type FetchTeamSkillLevelsResult =
+  | { status: "ok"; availability: "available" | "incomplete"; rows: readonly TeamSkillLevelDto[] }
+  | { status: "unauthenticated" | "forbidden" | "team_disabled" | "read_failed" };
+
+export async function fetchTeamSkillLevels(idToken: string, teamId: string): Promise<FetchTeamSkillLevelsResult> {
+  try {
+    const response = await fetch(`/api/teams/${encodeURIComponent(teamId)}/skill-levels`, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
+    if (response.status === 401) return { status: "unauthenticated" };
+    if (response.status === 403) return { status: "forbidden" };
+    if (response.status === 409) return { status: "team_disabled" };
+    if (!response.ok) return { status: "read_failed" };
+    const parsed = parseTeamSkillLevelsDto(await readJson(response));
+    return parsed === undefined ? { status: "read_failed" } : { status: "ok", ...parsed };
+  } catch {
+    return { status: "read_failed" };
+  }
 }

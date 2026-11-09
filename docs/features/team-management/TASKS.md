@@ -2,6 +2,12 @@
 
 Specification: [SPEC.md](./SPEC.md)
 
+> **Amendment (2026-11-06, superadmin registry).** Any task or acceptance item below that names `APP_ADMIN_EMAILS`, or
+> an env allow-list as the source of app-admin status, describes the superseded design. The Firestore superadmin registry
+> (`superadmins/{uid}`) is the authority (`docs/SECURITY.md`, SR-SI). Those items are kept as history, not as current
+> requirements. The registry, the `/admin/superadmins` management page and the owner bootstrap are tracked in
+> `docs/features/superadmin-registry/TASKS.md`. Production activation is not performed; see that file's status.
+
 ## Status
 Ready: 0  In Progress: 0  Done: 11
 

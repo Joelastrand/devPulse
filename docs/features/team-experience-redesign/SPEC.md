@@ -66,7 +66,7 @@ Requirement IDs `BR-n` are stable. The REQ section is noted for traceability.
 **Roadmap (projects)**
 - BR-6: A team can create, edit, archive and restore projects. Required fields are title, start date, end date and status. End date must not be before start date (REQ §4.2).
 - BR-7: A project may link to a team product. The product must belong to the same team (REQ §4.2).
-- BR-8: Project participation records link a same-team member and a same-team project with a date interval. Overlapping intervals are shown informationally only (REQ §4.2).
+- BR-8: Project participation records link a same-team member and a same-team project with a date interval. Overlapping intervals are shown informationally only (REQ §4.2). A team lead may reassign an existing record to another active same-team member or project, and change its dates, in one atomic update that keeps the record's identity: no delete-then-create, no second record. The member and project must each belong to the team and be current (a removed member or an archived project is refused).
 - BR-9: Effective status uses the existing resolver: a non-terminal project whose start date is today or earlier shows `Pågår`. A completed project stays completed. A target date alone does not imply completion (REQ §4.4).
 - BR-10: The Gantt has 3-month and 6-month views, month headers, a today marker, bars positioned from real start and end dates, and text labels for status, dates and priority (REQ §4.3).
 - BR-11: On mobile (below 768 px), a Gantt is replaced by accessible project cards with date ranges (REQ §4.3).
@@ -92,7 +92,7 @@ Requirement IDs `BR-n` are stable. The REQ section is noted for traceability.
 
 **Teamkompetanse**
 - BR-25: Teamkompetanse shows categorical per-area coverage (`Dekket`, `Delvis dekket`, `Behov for utvikling`, `Ikke nok grunnlag`) for team areas that have enough eligible contributors. Areas below the threshold show `Ikke nok grunnlag` (REQ §8.2).
-- BR-26: No per-member data, contributor counts, averages, radar coordinates or trends are shown. These require decision D2 (blocked).
+- BR-26: No per-member data, contributor counts or trends are shown. Automatic mode shows one numeric aggregated team level per competence area (the rounded arithmetic mean of eligible members' valid levels, three contributors minimum; owner decisions R-1 and R-2, 2026-11-07), only where the publication under invariant 35 permits it. Missing or suppressed values are unavailable, never zero. Averages across areas, per-member values and trends remain not shown. The numeric publication needs security and privacy review before activation (Amendment A §A.14).
 - BR-27: Every chart has a text alternative and an equivalent data table (REQ §8.1, §11).
 
 **Compatibility and erasure**
@@ -137,7 +137,7 @@ The feature touches team authorization, personal skill assessments, sharing pref
 | ID | Question | Status | Recommended default |
 |---|---|---|---|
 | **D1** | **Default-on sharing.** Owner wants sharing ON for new eligible participation (REQ §7.2). SECURITY invariant 32 says participation is opt-in, and the C2 notice version lapses existing participation if changed. | **RESOLVED** — owner decision: keep explicit opt-in, default OFF, as required by SECURITY invariant 32. No default-ON rollout. | Keep opt-in (default OFF). The control is shown OFF until the user explicitly turns it on. Existing users with no record are not opted in (D3). |
-| **D2** | **Radar, numeric averages and trends in Teamkompetanse.** REQ §8.2 requires separate approval for numeric averages and radar coordinates. Invariant 35 forbids persisted aggregates and history. | **RESOLVED** — owner decision: categorical coverage only, per SECURITY invariant 35. No team radar coordinates, numeric averages or historical trends. | Categorical coverage only (C2 model). No radar, no averages, no trend. The radar and trend panels are rendered as disabled, explained empty states. |
+| **D2** | **Radar, numeric averages and trends in Teamkompetanse.** Invariant 35 forbids persisted aggregates and history, except as amended by Amendment A. | **PARTLY SUPERSEDED (owner, 2026-11-07).** Radar approved, and a numeric team level per area in automatic mode approved as product direction (R-1). Averages across areas and trends **not approved**. The invariant 35 change is pending security and privacy review. | One numeric team level per area, only where publication is permitted. No averages, no trend. The trend panel stays disabled. |
 | D8 | **Product association for projects (owner decision).** No Product entity exists or is approved. Projects must work without one. | **RESOLVED** — product association is optional and unsupported until an approved Product domain exists. No Product collection, placeholder records or fake product IDs. Writes do not accept `productId`; a stored non-null `productId` fails the read closed. BR-7 is deferred, not tested as satisfied. | Deferred. Revisit only on a concrete security or data-integrity conflict. |
 | D3 | Existing users with no sharing preference: do not infer consent. | Resolved by REQ §9.3 | Treated as not sharing until an explicit choice. |
 | D4 | Competence catalog scope: global, team, or both. | Open, non-blocking | Reuse the admin-defined skill-tree catalog as global area IDs; team scope is a per-team active/archived assignment. |
@@ -162,7 +162,7 @@ The feature touches team authorization, personal skill assessments, sharing pref
 - [ ] Gantt bars match project dates in 3-month and 6-month views (BR-10).
 - [ ] Project create, edit and archive are authorized and validated (BR-6–BR-8).
 - [ ] Participation is visible only as planning intervals (BR-13).
-- [ ] Teamkompetanse shows only categorical coverage with k=5 (BR-25, BR-26).
+- [ ] Teamkompetanse shows only approved values at the k in force: categorical coverage at k=5 until the R-2 security change is applied (BR-25, BR-26).
 - [ ] Sharing defaults follow the resolved D1 decision (BR-24).
 - [ ] Turning sharing off removes the contribution from the next team read (BR-22).
 - [ ] Account erasure covers every new user-linked record (BR-29).
@@ -181,6 +181,19 @@ Recorded from the owner's instruction to resume TASK-006 and TASK-009. Where an 
 | OD-4 | Target stage uses the four existing self-assessment levels (`SELF_ASSESSED_LEVELS`, labels from `SELF_ASSESSED_LEVEL_COPY`). A target stage is a planned goal, never an observed level and never copied from a member's self-assessment. | BR-15; TASK-006 |
 | OD-5 | `teamCompetencePlans` stores no uid, actor, memberRef or member assessment. It is classified as non-person-owned and allow-listed with a reason in `inventory-allow-list.ts`, like `teamCompetenceAreas`. Client rules deny all access. | Erasure inventory; TASK-006 |
 | OD-6 | `/me/skills` sharing control is "Del kompetanse med teamet", one per member team. It uses the existing C2 record `teamMemberships.skillContribution` through the owner-only endpoint. It is OFF by default, opt-in, revocable, and lapses on a notice-version bump (SECURITY invariants 32, 36). No second preference store. | BR-21–BR-24; TASK-009 (control), TASK-010 remaining dialog work |
+
+## Owner decisions (2026-11-07): radar and k = 3 — approved product direction
+
+Status: **approved product direction (owner, 2026-11-07).** These are product requirements. They do not change the enforceable security contract: SECURITY.md invariants 32–36 and the code constant `SKILL_COVERAGE_MIN_CONTRIBUTORS` = 5 stay in force until the formal security, privacy and legal approvals listed per row are recorded and the change is applied. Nothing below activates k = 3, default-on sharing or collaborative persistence.
+
+| ID | Owner decision | Effect on this SPEC | Status |
+|---|---|---|---|
+| R-1 | **Approved product direction (numeric, 2026-11-07).** Teamkompetanse uses a radar chart. Automatic mode shows a green polygon of one aggregated team level per area and a neutral dashed target polygon. Missing or suppressed values are unavailable, never zero. | Supersedes D2 and BR-26 for the radar visualization. Averages across areas and trends stay out. | Product approved. Activation blocked until security review (G1), privacy and legal review (G2), notice (G5), UI-UX (G3) and copy (G4) are recorded, and invariants 35 and 36 are amended. See Amendment A §A.14. |
+| R-2 | **Approved product direction.** Automatic aggregation supports a minimum of **3** eligible contributors per area: 3 or more permits automatic aggregation when the approved publication safeguards allow it; 1–2 gives `insufficient_data`. No team-size floor; a team of exactly 3 participating members must be supported. | Supersedes the k = 5 product requirement. Does **not** yet change SECURITY invariant 34 or the constant. Three contributors do not provide anonymity. | **Security change pending.** Required before activation: G0 and G1 (security review), G2 (legal/privacy), G5 (notice version bump), G7 (retire old A3), then the §A.10 activation step. **Not activated.** |
+| R-3 | **Approved product direction.** The teamadmin chooses automatic or collaborative assessment mode. Automatic is the intended default. | Adds the mode control. Collaborative values are teamadmin-entered. | Product: approved. Persistence of mode and values pending G1, G3 (UI-UX), G4 (Norwegian copy). |
+| R-4 | **Approved product direction.** Each member controls sharing of their own private self-assessments. | Default-on sharing is **not** part of this approval. The opt-in, default-OFF contract (invariant 32) stays in force. | Amendment B, default-on and rejoin preservation: separate legal/privacy review (L1–L3). **Not activated.** |
+
+Security-contract changes **still require formal review and are not applied**: SECURITY invariant 34 (k = 3 wording and residual statement), invariants 32 and 35 where affected, the notice text and notice version, and the `SKILL_COVERAGE_MIN_CONTRIBUTORS` constant. Notice versions, active consent rules and Firebase rules are unchanged.
 
 ## Open questions
 Resolved:

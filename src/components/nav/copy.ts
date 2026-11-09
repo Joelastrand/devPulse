@@ -19,6 +19,7 @@ export const navCopy = {
   account: "Konto",
   adminTeams: "Team",
   roles: "Roller",
+  superadmins: "Superadministratorer",
   administration: "Administrasjon",
   deleteAccount: "Slett kontoen din",
   signOut: "Logg ut",

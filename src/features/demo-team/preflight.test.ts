@@ -542,7 +542,7 @@ describe("dry-run report (BR-4, BR-28, BR-31)", () => {
     expect(text).toContain("  create teams/demo-team");
     expect(text).toContain("Deletes: 0");
     expect(text).toContain("visible to every signed-in user and every admin");
-    expect(text).toContain("APP_ADMIN_EMAILS");
+    expect(text).toContain("superadmins/{uid}");
     expect(text).toContain("coordinator must approve this exact project id before `--write`");
     expect(text).toContain("does not prove the key matches ciphertext already stored");
   });

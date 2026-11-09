@@ -87,7 +87,7 @@ describe("CompetencePlanSection", () => {
   it("shows plan progress as completed milestones out of the total, with the target stage label", () => {
     hook.data = loaded();
     render(<CompetencePlanSection teamId="team-1" />);
-    const card = screen.getByRole("listitem");
+    const card = within(screen.getByRole("list", { name: "Detaljer og tiltak" })).getByRole("listitem");
     expect(within(card).getByRole("heading", { name: "Testautomatisering" }));
     expect(within(card).getByText("1 av 2 steg"));
     expect(within(card).getByText("Målnivå: Kan selvstendig"));
@@ -99,9 +99,10 @@ describe("CompetencePlanSection", () => {
     hook.data = loaded();
     render(<CompetencePlanSection teamId="team-1" />);
     await userEvent.click(screen.getByRole("button", { name: "Vis steg" }));
-    expect(screen.getByText("Ende-til-ende-tester"));
-    expect(screen.getByText("Pågår"));
-    expect(screen.getByText("Fullført"));
+    const details = screen.getByRole("list", { name: "Detaljer og tiltak" });
+    expect(within(details).getByText("Ende-til-ende-tester"));
+    expect(within(details).getByText("Pågår"));
+    expect(within(details).getByText("Fullført"));
   });
 
   it("gives a lead an edit action and a picker for assigned areas without a plan", async () => {

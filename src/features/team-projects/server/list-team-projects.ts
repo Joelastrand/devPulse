@@ -48,9 +48,20 @@ export function getDefaultTeamProjectReadStore(): TeamProjectReadStore {
         .where("teamId", "==", teamId)
         .limit(limit)
         .get();
-      return snapshot.docs.map((doc) => mapProjectTimestamps(doc.data()));
+      return mapTeamProjectDocs(snapshot.docs);
     },
   };
+}
+
+/**
+ * Stored project documents do not carry their own `projectId`: the document id is the only identifier. The id is taken
+ * from `doc.id` here, after the stored fields are spread, so the gateway's identity never depends on a stored field.
+ * Without it every row fails `parseStoredTeamProject` and the whole read fails closed.
+ */
+export function mapTeamProjectDocs(
+  docs: ReadonlyArray<{ id: string; data(): Record<string, unknown> }>,
+): Record<string, unknown>[] {
+  return docs.map((doc) => ({ ...mapProjectTimestamps(doc.data()), projectId: doc.id }));
 }
 
 function mapProjectTimestamps(data: Record<string, unknown>): Record<string, unknown> {

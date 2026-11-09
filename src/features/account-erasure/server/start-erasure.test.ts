@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { createFakeErasureStore } from "./erasure-store-fake";
+import { createFakeErasureStore, type FakeErasureStore } from "./erasure-store-fake";
 import { ErasureStepFailure, type StepHandler } from "./erasure-runner";
 import { startOrResumeErasure, type StartErasureDeps } from "./start-erasure";
 import { ERASURE_STEPS, type ErasureStep } from "../domain/erasure-state";
@@ -39,14 +39,15 @@ function recordingHandlers(calls: ErasureStep[], overrides: Partial<Record<Erasu
   return handlers;
 }
 
-function depsWith(overrides: Partial<StartErasureDeps> & Pick<StartErasureDeps, "port">): StartErasureDeps {
+/** The fake store is both the erasure port and the atomic start port, so the fence and the superadmin writes share one draft. */
+function depsWith(overrides: Partial<StartErasureDeps> & { port: FakeErasureStore }): StartErasureDeps {
   return {
     handlers: {},
     clockMs: () => 0,
     now: () => new Date(NOW_SECONDS * 1000),
     nowSeconds: () => NOW_SECONDS,
     ready: true,
-    revokeSuperadminForErasure: async () => ({ ok: true as const }),
+    startPort: overrides.port,
     ...overrides,
   };
 }
@@ -358,50 +359,56 @@ describe("startOrResumeErasure (TASK-013 operation)", () => {
 describe("startOrResumeErasure and the superadmin privilege (owner decision, Option A)", () => {
   it("refuses to start for the last active superadmin with last_superadmin, creating no fence and running no step", async () => {
     const store = createFakeErasureStore();
+    store.seedSuperadmin(UID, true);
+    store.seedControl(1);
     const calls: ErasureStep[] = [];
     const deps = depsWith({
       port: store,
       handlers: recordingHandlers(calls),
       verifyToken: tokenFor(FRESH_AUTH),
       readFence: noRecordFence,
-      revokeSuperadminForErasure: async () => ({ ok: false as const, error: "last_superadmin" as const }),
     });
 
     const result = await startOrResumeErasure("token", { confirmation: EMAIL }, deps);
 
     expect(result).toEqual({ ok: false, error: "last_superadmin" });
     expect(store.documents.size).toBe(0);
+    expect(store.superadmins.get(UID)).toMatchObject({ active: true });
+    expect(store.control).toEqual({ activeCount: 1 });
     expect(calls).toEqual([]);
   });
 
-  it("revokes the superadmin privilege before the erasure fence is created", async () => {
+  it("revokes the superadmin and creates the fence in one transaction when another superadmin remains", async () => {
     const store = createFakeErasureStore();
-    const order: string[] = [];
+    store.seedSuperadmin(UID, true);
+    store.seedSuperadmin("other-uid", true);
+    store.seedControl(2);
     const deps = depsWith({
       port: store,
-      handlers: {},
+      handlers: recordingHandlers([]),
       verifyToken: tokenFor(FRESH_AUTH),
       readFence: noRecordFence,
-      revokeSuperadminForErasure: async () => {
-        order.push(store.documents.size === 0 ? "revoke:no-fence-yet" : "revoke:fence-exists");
-        return { ok: true as const };
-      },
     });
 
-    await startOrResumeErasure("token", { confirmation: EMAIL }, deps);
+    const result = await startOrResumeErasure("token", { confirmation: EMAIL }, deps);
 
-    expect(order).toEqual(["revoke:no-fence-yet"]);
-    expect(store.documents.has(UID)).toBe(true);
+    expect(result).toEqual({ ok: true, state: { status: "in_progress", step: "auth_delete" } });
+    expect(store.documents.get(UID)).toMatchObject({ status: "in_progress" });
+    expect(store.superadmins.get(UID)).toMatchObject({ active: false, revokedByUid: UID });
+    expect(store.control).toEqual({ activeCount: 1, updatedAt: expect.any(Date) });
   });
 
-  it("stays resumable (erasure_unavailable) and creates no fence when the revoke cannot be decided", async () => {
+  it("keeps the superadmin privilege when the fence cannot be written, and creates no fence (no half-applied start)", async () => {
     const store = createFakeErasureStore();
+    store.seedSuperadmin(UID, true);
+    store.seedSuperadmin("other-uid", true);
+    store.seedControl(2);
+    store.failNextFenceCreate();
     const deps = depsWith({
       port: store,
       handlers: {},
       verifyToken: tokenFor(FRESH_AUTH),
       readFence: noRecordFence,
-      revokeSuperadminForErasure: async () => ({ ok: false as const, error: "unavailable" as const }),
     });
 
     expect(await startOrResumeErasure("token", { confirmation: EMAIL }, deps)).toEqual({
@@ -409,5 +416,43 @@ describe("startOrResumeErasure and the superadmin privilege (owner decision, Opt
       error: "erasure_unavailable",
     });
     expect(store.documents.size).toBe(0);
+    expect(store.superadmins.get(UID)).toMatchObject({ active: true });
+    expect(store.control).toEqual({ activeCount: 2 });
+  });
+
+  it("starts without touching the registry when the account is not a superadmin", async () => {
+    const store = createFakeErasureStore();
+    store.seedSuperadmin("other-uid", true);
+    store.seedControl(1);
+    const deps = depsWith({
+      port: store,
+      handlers: {},
+      verifyToken: tokenFor(FRESH_AUTH),
+      readFence: noRecordFence,
+    });
+
+    await startOrResumeErasure("token", { confirmation: EMAIL }, deps);
+
+    expect(store.documents.has(UID)).toBe(true);
+    expect(store.control).toEqual({ activeCount: 1 });
+  });
+
+  it("stays resumable (erasure_unavailable) and writes nothing when the registry count is malformed", async () => {
+    const store = createFakeErasureStore();
+    store.seedSuperadmin(UID, true);
+    store.seedControl(-1);
+    const deps = depsWith({
+      port: store,
+      handlers: {},
+      verifyToken: tokenFor(FRESH_AUTH),
+      readFence: noRecordFence,
+    });
+
+    expect(await startOrResumeErasure("token", { confirmation: EMAIL }, deps)).toEqual({
+      ok: false,
+      error: "erasure_unavailable",
+    });
+    expect(store.documents.size).toBe(0);
+    expect(store.superadmins.get(UID)).toMatchObject({ active: true });
   });
 });

@@ -16,7 +16,10 @@
  */
 export const challengesCopy = {
   submission: {
-    heading: "Meld en utfordring",
+    heading: "Meld inn utfordring",
+    openButton: "Meld inn utfordring",
+    cancel: "Avbryt",
+    close: "Lukk",
     explanation:
       "Del noe som gjør arbeidet vanskeligere, skaper friksjon, eller bør bli bedre. Innsendingen er anonym — vi lagrer ikke hvem som sendte den inn.",
     identityWarning: "Ikke inkluder navn eller annen informasjon som kan identifisere deg eller andre.",

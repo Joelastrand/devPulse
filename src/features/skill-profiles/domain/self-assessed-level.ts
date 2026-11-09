@@ -2,9 +2,13 @@
  * Canonical personal self-assessment scale (SPEC BR-4).
  *
  * Levels are ORDINAL categories, not measurements: the numbers only order the
- * levels. Nothing may average, sum, weight, normalise or otherwise do
- * arithmetic over levels, across skills or people. Absence of a level means
- * "not assessed"; there is no level 0.
+ * levels. An individual's level is never averaged, summed, weighted, normalised
+ * or otherwise modified, and no individual level is shown as an aggregate.
+ * The one exception is the authorized team-level aggregate (SPEC BR-4,
+ * Amendment A): a rounded arithmetic mean of eligible members' levels per
+ * competence area. That operation lives in team-skills, is not a property of
+ * an individual assessment, and must never be presented as one. Absence of a
+ * level means "not assessed"; there is no level 0.
  *
  * This module owns the canonical meaning of each level. Norwegian labels and
  * descriptions are UI copy and live separately in the feature's `copy.ts`;

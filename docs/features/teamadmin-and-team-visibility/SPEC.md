@@ -13,13 +13,15 @@ capability of `docs/features/team-skill-needs-and-matrix/SPEC.md` (invariant 33)
 
 | Role | Source of truth | Grants |
 | --- | --- | --- |
-| Superadmin | `APP_ADMIN_EMAILS` allow-list (existing `isAppAdmin`, verified email only) | Global admin: `/admin/teams`, create/disable teams, assign/revoke teamadmin, change visibility, teamadmin actions in any team |
+| Superadmin | Firestore registry `superadmins/{uid}` with an active record (`isAppAdmin`, verified email only; SR-SI in docs/SECURITY.md) | Global admin: `/admin/teams`, create/disable teams, assign/revoke teamadmin, change visibility, teamadmin actions in any team |
 | Teamadmin | `teamMemberships/{uid}__{teamId}.role === "teamadmin"`, written only by a superadmin | Team-scoped writes (below) and team visibility, on an `active` team only |
 | Member | Any other genuine membership | Private team pages, authorized team-shared reads, own competence profile and consent, own roadmap/planning as today |
 | Anonymous | No token | Public read of a `public`, `active` team's name only |
 
-- Superadmin assignment stays with the existing trusted mechanism (the env allow-list). No persisted
-  superadmin field exists and none is accepted from a client.
+- Superadmin assignment is made only by an active superadmin, through `/admin/superadmins` (add an existing verified Auth
+  user; revoke another superadmin after confirmation). The first superadmin is created once by the owner bootstrap
+  (`docs/features/superadmin-registry/BOOTSTRAP.md`). The registry is never accepted from a client. (Amended 2026-11-06;
+  the original env allow-list is no longer read.)
 - A teamadmin cannot assign or revoke teamadmin, promote themselves, or administer another team.
 - Superadmin status never widens personal data: personal self-assessments (`skillProfiles`), goals,
   role targets and development conversations keep their owner-only rules (invariants 31, 37–40,

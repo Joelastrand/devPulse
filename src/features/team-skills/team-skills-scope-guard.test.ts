@@ -58,14 +58,20 @@ const C2_ROUTE_IMPORTS: Record<string, string[]> = {
   "app/api/teams/[teamId]/skill-coverage/route.ts": ["get-team-skill-coverage"],
   "app/api/teams/[teamId]/skill-needs/[treeId]/route.ts": ["delete-skill-need", "upsert-skill-need"],
   "app/api/teams/[teamId]/skill-needs/route.ts": ["list-skill-needs"],
+  "app/api/teams/[teamId]/skill-levels/route.ts": ["get-team-skill-coverage"],
 };
 const C2_ROUTE_METHODS: Record<string, string[]> = {
   "app/api/teams/[teamId]/skill-contribution/route.ts": ["DELETE", "GET", "PUT"],
   "app/api/teams/[teamId]/skill-coverage/route.ts": ["GET"],
+  "app/api/teams/[teamId]/skill-levels/route.ts": ["GET"],
   "app/api/teams/[teamId]/skill-needs/[treeId]/route.ts": ["DELETE", "PUT"],
   "app/api/teams/[teamId]/skill-needs/route.ts": ["GET"],
 };
-const C2_ROUTE_PATH = /^app\/api\/teams\/\[teamId\]\/skill-(?:needs|contribution|coverage)\//;
+const C2_ROUTE_PATH = /^app\/api\/teams\/\[teamId\]\/skill-(?:needs|contribution|coverage|levels)\//;
+/** Pure domain modules a route may import: only the strict DTO of the numeric profile (owner decision 2026-11-08). */
+const C2_ROUTE_DOMAIN_IMPORTS: Record<string, string[]> = {
+  "app/api/teams/[teamId]/skill-levels/route.ts": ["src/features/team-skills/domain/team-skill-levels-dto"],
+};
 const COVERAGE_ROUTE = "app/api/teams/[teamId]/skill-coverage/route.ts";
 
 /** Exact production importers of the two persistence modules (tests inside `team-skills/` are not listed). */
@@ -470,7 +476,11 @@ function routeViolations(files: SourceFile[]): string[] {
   for (const route of routes.filter((r) => expected.includes(r.path))) {
     const { resolved, bare } = specifiers(route);
     // TASK-009: the pure auth refusal mapping (one file, no verifier) for protected status mapping.
-    const allowed = [...C2_ROUTE_IMPORTS[route.path].map((name) => `${C2_DIR}server/${name}`), "src/features/auth/server/auth-refusal"];
+    const allowed = [
+      ...C2_ROUTE_IMPORTS[route.path].map((name) => `${C2_DIR}server/${name}`),
+      ...(C2_ROUTE_DOMAIN_IMPORTS[route.path] ?? []),
+      "src/features/auth/server/auth-refusal",
+    ];
     for (const t of resolved) if (!allowed.includes(t)) out.push(`${route.path}: imports ${t}`);
     for (const b of bare) if (b !== "next/server") out.push(`${route.path}: imports ${b}`);
     if (exportedMethods(route.text).join() !== C2_ROUTE_METHODS[route.path].join()) out.push(`${route.path}: method surface changed`);

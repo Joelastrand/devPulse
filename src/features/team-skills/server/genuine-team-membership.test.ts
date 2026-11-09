@@ -10,8 +10,8 @@ import {
   requireTeamAdministrator,
   requireGenuineMember,
   resolveGenuineTeamMembership,
-  type GenuineMembershipReads,
 } from "./genuine-team-membership";
+import type { GenuineMembershipReads } from "../../teams/domain/genuine-membership";
 
 const TEAM = "team-1";
 const OTHER_TEAM = "team-2";

@@ -7,6 +7,24 @@ import {
   type ParticipationInput,
 } from "./project-roadmap-view";
 import { buildTimelineWindow } from "./timeline-geometry";
+import { groupProjectsByStatus } from "./project-roadmap-view";
+
+describe("groupProjectsByStatus", () => {
+  it("orders groups planned, active, completed, omits empty groups and keeps stored order inside a group", () => {
+    const groups = groupProjectsByStatus([
+      { projectId: "c", effectiveStatus: "completed" as const },
+      { projectId: "a1", effectiveStatus: "active" as const },
+      { projectId: "p1", effectiveStatus: "planned" as const },
+      { projectId: "a2", effectiveStatus: "active" as const },
+    ]);
+    expect(groups.map((group) => group.status)).toEqual(["planned", "active", "completed"]);
+    expect(groups[1].projects.map((project) => project.projectId)).toEqual(["a1", "a2"]);
+  });
+
+  it("returns no groups for an empty list", () => {
+    expect(groupProjectsByStatus([])).toEqual([]);
+  });
+});
 
 const SIX_MONTHS_FROM_NOV_2026 = buildTimelineWindow("2026-11-06", 6); // 2026-11-01 .. 2027-04-30, 181 days
 const THREE_MONTHS_FROM_NOV_2026 = buildTimelineWindow("2026-11-06", 3); // 2026-11-01 .. 2027-01-31, 92 days
@@ -113,7 +131,7 @@ describe("buildMemberParticipationRows", () => {
     );
 
     expect(row?.bars[0]?.overlapsOther).toBe(true);
-    expect(Object.keys(row ?? {})).toEqual(["memberRef", "displayName", "bars"]);
+    expect(Object.keys(row ?? {})).toEqual(["memberRef", "displayName", "bars", "laneCount"]);
   });
 });
 

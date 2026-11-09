@@ -76,9 +76,12 @@ Out of scope: see "Explicit non-goals".
   (`createUserWithEmailAndPassword`). The app never supplies a uid; Firebase
   generates it.
 - App-admin status is derived from the verified identity: `isAppAdmin` requires
-  `emailVerified` and an entry in `APP_ADMIN_EMAILS` matching the verified
-  email (`src/features/teams/domain/app-admin.ts`). An Auth identity that cannot
-  verify therefore cannot be admin.
+  `emailVerified` and an active record in the Firestore superadmin registry
+  (`superadmins/{uid}`, `src/features/teams/domain/app-admin.ts`). An Auth identity that cannot
+  verify therefore cannot be admin. (Amended 2026-11-06: the former `APP_ADMIN_EMAILS` match is no longer read.)
+- **Superadmin start rule (2026-11-06).** Starting an erasure for an active superadmin revokes that privilege in the same
+  Firestore transaction that creates the erasure fence (`erasure-start-atomic.ts`). A failed fence leaves the privilege in
+  place. The last active superadmin is refused with `last_superadmin` (HTTP 409), and no fence is created.
 - No account-deletion code, scheduled job, worker, or cron exists in the
   repository. Any erasure must be driven by requests.
 - Team invitations resolve on a read path (`get-teams-overview.ts` calls
@@ -285,7 +288,7 @@ These are not stored, so they are not erased. They disappear with their sources.
 | E-1 | Hosting, Firebase, and platform logs that may contain uid or email | EXTERNAL | Not controlled by this repository. Not claimed as erased. Operational limitation (see Platform logs). |
 | E-2 | Provider backups and retention of Firestore and Auth | EXTERNAL | Governed by the provider. Not claimed as erased. Operational limitation. |
 | E-3 | Browser state of the erased person's client | EXTERNAL | The client signs out on completion (BR-18). Local caches are not claimed as erased. |
-| E-4 | `APP_ADMIN_EMAILS` deployment configuration | EXTERNAL | Outside the data mutation (D5). See Operational requirements. |
+| E-4 | Superadmin registry verification after erasure (`superadmins/{uid}`, control count) | EXTERNAL | Operator read-only check. See OPERATIONS.md section 1. |
 
 ## Actor × operation matrix
 
@@ -727,7 +730,7 @@ missing or malformed index does not hide a binding.
 - Readers must tolerate a null actor field. Each affected domain validator must accept
   null for that field (implementation task requirement; no validator may accept a uid
   shape that could not be the erased-actor marker).
-- Admin erasure is not blocked by `APP_ADMIN_EMAILS` membership (D5). See Operational
+- Admin erasure is not blocked by superadmin registry membership (D5; the start revokes the privilege atomically, see the superadmin start rule). See Operational
   requirements for the allow-list consequence.
 
 ## Invitations and email (BR-13)
@@ -818,7 +821,10 @@ Erasure is complete only when:
    A-13, with I-15 excluded), with one narrow exception: the four membership-instance rows
    A-5 (`roadmapItems.ownerRef`), A-14 (`teamSystems.knowledgeMemberRefs`, added 2026-11-05), I-7
    `participantMemberRef`, and I-9 `memberRef` are not re-queried after membership destruction. They are discharged by the transactional cleanup
-   invariant in "Decision log: BR-17(1) membership-instance rows (approved 2026-11-02)". Every
+   invariant in "Decision log: BR-17(1) membership-instance rows (approved 2026-11-02)". **Superseded 2026-11-08:** these rows
+   are no longer excluded from the verification sweep. The per-membership counts run while the person's memberships still
+   exist, and any match routes back to its owning step. The membership step deletes a membership only after its A-5, A-14 and
+   A-15 references are cleared in the same transaction (see "Decision log: BR-17 completion guarantee (2026-11-08)"). Every
    other inventory row, including every uid-, e-mail-, collection-group- and actor-addressable row,
    still requires zero matches at `final_sweep`;
 2. the Auth user is confirmed absent (deleted or `user-not-found`);
@@ -907,12 +913,10 @@ overridden **only** by account erasure, as recorded in BR-9. The following must 
 
 ## Operational requirements (BR-21, D5, D9)
 
-1. **APP_ADMIN_EMAILS.** Erasure cannot edit the allow-list. The app cannot enforce its
-   removal. After erasure, the old uid cannot verify, so it is not admin. A **new**
-   sign-up with the same verified email would become admin again while the address is
-   still in `APP_ADMIN_EMAILS`. The operator must remove the address from the allow-list
-   before or with erasure of an admin. This is an operational requirement, not a
-   product-code guarantee.
+1. **Superadmin registry (superseded 2026-11-06).** The former `APP_ADMIN_EMAILS` allow-list is not read by the
+   application any longer, so this operator step no longer applies to admin status. Admin status is the registry record
+   `superadmins/{uid}`. Erasure removes an erased superadmin's record (`superadmin-record-erasure`), and a **new** sign-up
+   can never become superadmin without an explicit grant by an active superadmin.
 2. **Firestore TTL.** Configure a TTL policy on `accountErasures.expireAt` in the
    Firebase project. The field is written only on completion.
 3. **Indexes.** Deploy `AE-IDX-1` before the first erasure. Verify `AE-IDX-2`.
@@ -1104,6 +1108,27 @@ overridden **only** by account erasure, as recorded in BR-9. The following must 
 - **Rationale.** Erasure removes person-linked state. It does not create new historical metadata whose only purpose is to remember that an erased person once held the participant role. Inferring the erased identity from other records to improve the presentation is also out of scope.
 - **Supersedes** the TASK-020 blocked decision options (a) and (b). Option (c) was chosen.
 
+
+## Decision log: BR-17 completion guarantee (2026-11-08)
+
+**Owner decision.** The completion guarantee takes precedence over the 2026-11-02 BR-17(1) deferral wherever the
+membership-instance `memberRef` rows contain personal data that must be erased. Erasure must not report completion while
+in-scope personal data remains. Records needed to preserve other people's data or referential integrity are not deleted
+indiscriminately: A-5 and I-7 are detached (`ownerRef` and the binding fields are cleared), A-14 removes only the erased
+`memberRef` from a system's knowledge list, and A-15 participations are deleted.
+
+**Enforced by:**
+
+- `verification-sweep.ts` no longer defers the per-membership rows. It counts them and routes any match to the owning step, so
+  `complete` is false while such a row remains. The `deferredRowIds` report field is removed.
+- `membership-erasure.ts` deletes a membership only in the transaction that found its roadmap, knowledge and participation
+  references already cleared. Its emulator suite is `membership-erasure.emulator.test.ts`.
+- The forum adapter (`erasure-adapters-forum.ts`) converts stored Firestore timestamps to `Date` before validation. Without
+  this, the forum step could not read a stored reply and erasure could not complete. Covered by the D-EMU suite.
+
+**Residual limit.** After the membership is deleted, a uid-addressed sweep cannot rediscover a `memberRef`-keyed row, because
+the link from uid to `memberRef` no longer exists. That is why the guarantee rests on the transactional invariant above rather
+than on a post-deletion query. Retaining the `memberRef` mapping after deletion was rejected in the 2026-11-02 decision.
 
 ## Decision log: BR-17(1) membership-instance rows (approved 2026-11-02)
 
