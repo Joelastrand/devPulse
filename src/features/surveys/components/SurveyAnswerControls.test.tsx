@@ -3,6 +3,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SurveyResponseForm } from "./SurveyResponseForm";
+import { getBuiltInTemplate } from "../domain/templates";
+
+const TEAM_PULSE = getBuiltInTemplate("team-pulse").questions;
 
 async function answerAndGo(user: ReturnType<typeof userEvent.setup>, value: number, questionId: string) {
   await user.click(screen.getByLabelText(String(value), { selector: `#${questionId}-${value}` }));
@@ -16,7 +19,7 @@ describe("survey answer controls (TASK-022)", () => {
   });
 
   it("gives each of the five answer controls a 44 px minimum target on mobile", () => {
-    const { container } = render(<SurveyResponseForm surveyId="survey-1" idToken={null} />);
+    const { container } = render(<SurveyResponseForm surveyId="survey-1" idToken={null} questions={TEAM_PULSE} />);
 
     const labels = Array.from(container.querySelectorAll("fieldset label"));
     expect(labels).toHaveLength(5);
@@ -28,7 +31,7 @@ describe("survey answer controls (TASK-022)", () => {
 
   it("marks the selected answer with a border and text, not colour alone", async () => {
     const user = userEvent.setup();
-    const { container } = render(<SurveyResponseForm surveyId="survey-1" idToken={null} />);
+    const { container } = render(<SurveyResponseForm surveyId="survey-1" idToken={null} questions={TEAM_PULSE} />);
 
     await user.click(screen.getByLabelText("4", { selector: "#flow-4" }));
 
@@ -41,7 +44,7 @@ describe("survey answer controls (TASK-022)", () => {
 
   it("moves through the radio group with the arrow keys", async () => {
     const user = userEvent.setup();
-    render(<SurveyResponseForm surveyId="survey-1" idToken={null} />);
+    render(<SurveyResponseForm surveyId="survey-1" idToken={null} questions={TEAM_PULSE} />);
 
     const first = screen.getByLabelText("1", { selector: "#flow-1" }) as HTMLInputElement;
     first.focus();
@@ -55,7 +58,7 @@ describe("survey answer controls (TASK-022)", () => {
 
   it("lists the three answers as text on the review step, with the submit action", async () => {
     const user = userEvent.setup();
-    render(<SurveyResponseForm surveyId="survey-1" idToken={null} />);
+    render(<SurveyResponseForm surveyId="survey-1" idToken={null} questions={TEAM_PULSE} />);
 
     await answerAndGo(user, 4, "flow");
     await answerAndGo(user, 2, "stress");
@@ -68,11 +71,11 @@ describe("survey answer controls (TASK-022)", () => {
     expect(screen.getByRole("button", { name: /send inn/i })).toBeTruthy();
   });
 
-  it("submits exactly the ordered payload [flow, stress, fun] after review", async () => {
+  it("submits exactly the answers keyed by question id after review", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 201 }));
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
-    render(<SurveyResponseForm surveyId="survey-1" idToken={null} />);
+    render(<SurveyResponseForm surveyId="survey-1" idToken={null} questions={TEAM_PULSE} />);
 
     await answerAndGo(user, 4, "flow");
     await answerAndGo(user, 2, "stress");
@@ -81,7 +84,7 @@ describe("survey answer controls (TASK-022)", () => {
 
     await screen.findByRole("status");
     const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
-    expect(body).toEqual({ answers: [4, 2, 5] });
+    expect(body).toEqual({ answers: { flow: 4, stress: 2, fun: 5 } });
   });
 });
 
@@ -94,7 +97,7 @@ describe("survey completion state (TASK-023)", () => {
   it("replaces the stepper with the existing success copy after a successful submission", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 201 })));
     const user = userEvent.setup();
-    render(<SurveyResponseForm surveyId="survey-1" idToken={null} />);
+    render(<SurveyResponseForm surveyId="survey-1" idToken={null} questions={TEAM_PULSE} />);
 
     await answerAndGo(user, 4, "flow");
     await answerAndGo(user, 2, "stress");

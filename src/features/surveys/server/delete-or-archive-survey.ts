@@ -30,7 +30,7 @@ export interface SurveyDocStore {
 }
 
 /** Writer-only: the delete and the archive stamp are fenced on `accountErasures/{actorUid}` in the same transaction (TASK-034, W-17). */
-function getDefaultSurveyDocStore(actorUid: string): SurveyDocStore {
+export function getDefaultSurveyDocStore(actorUid: string): SurveyDocStore {
   return {
     async get(surveyId) {
       const snapshot = await getFirestoreDb().collection(SURVEYS_COLLECTION).doc(surveyId).get();
@@ -61,7 +61,7 @@ export interface SurveyResponsesExistenceReader {
   hasAnyResponses(surveyId: string): Promise<boolean>;
 }
 
-function getDefaultResponsesExistenceReader(): SurveyResponsesExistenceReader {
+export function getDefaultResponsesExistenceReader(): SurveyResponsesExistenceReader {
   return {
     async hasAnyResponses(surveyId) {
       const snapshot = await getFirestoreDb()

@@ -7,6 +7,9 @@ import type {
   TeamStatusReader,
 } from "./create-survey";
 import { createSurvey } from "./create-survey";
+import { getBuiltInTemplate } from "../domain/templates";
+
+const TEAM_PULSE_QUESTIONS = getBuiltInTemplate("team-pulse").questions;
 
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_UID = "admin-1";
@@ -75,6 +78,8 @@ describe("createSurvey", () => {
         teamId: TEAM_ID,
         accessMode: "public",
         minimumResponses: 5,
+        questions: TEAM_PULSE_QUESTIONS,
+        questionSetVersion: 2,
         createdAt: NOW,
         createdBy: ADMIN_UID,
       },
@@ -104,6 +109,8 @@ describe("createSurvey", () => {
       accessMode: "authenticated",
       minimumResponses: 10,
       title: "Q3 pulse",
+      questions: TEAM_PULSE_QUESTIONS,
+      questionSetVersion: 2,
       startAt: new Date("2026-10-01T00:00:00.000Z"),
       endAt: new Date("2026-10-15T00:00:00.000Z"),
       createdAt: NOW,

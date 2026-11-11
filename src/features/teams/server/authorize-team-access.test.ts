@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type { AuthorizeTeamAccessCollection } from "./authorize-team-access";
-import { authorizeTeamAccess } from "./authorize-team-access";
+import { authorizeTeamAccess, authorizeTeamMembership } from "./authorize-team-access";
 
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_UID = "admin-1";
@@ -15,6 +15,10 @@ function identity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
 
 function adminIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
   return identity({ uid: ADMIN_UID, email: ADMIN_EMAIL, ...overrides });
+}
+
+function validMembership(uid: string, teamId: string): Record<string, unknown> {
+  return { uid, teamId };
 }
 
 interface FakeState {
@@ -284,5 +288,55 @@ describe("authorizeTeamAccess", () => {
 
     expect(JSON.stringify(result)).not.toContain("service account");
     expect(JSON.stringify(result)).not.toContain("permission-denied");
+  });
+});
+
+describe("authorizeTeamMembership", () => {
+  it("reports membership for an app admin who is also a team member", async () => {
+    const collection = fakeCollection({
+      teamStatus: { "team-1": "active" },
+      memberships: { [`${ADMIN_UID}__team-1`]: validMembership(ADMIN_UID, "team-1") },
+    });
+
+    const result = await authorizeTeamMembership(adminIdentity(), "team-1", { collection });
+
+    expect(result).toEqual({ ok: true, isMember: true });
+  });
+
+  it("reports no membership for an app admin who is not a team member", async () => {
+    const collection = fakeCollection({
+      teamStatus: { "team-1": "active" },
+      memberships: {},
+    });
+
+    const result = await authorizeTeamMembership(adminIdentity(), "team-1", { collection });
+
+    expect(result).toEqual({ ok: true, isMember: false });
+  });
+
+  it("reports no membership for a member of a team with an invalid status", async () => {
+    const collection = fakeCollection({
+      teamStatus: { "team-1": "bogus" },
+      memberships: { [`${MEMBER_UID}__team-1`]: validMembership(MEMBER_UID, "team-1") },
+    });
+
+    const result = await authorizeTeamMembership(identity(), "team-1", { collection });
+
+    expect(result).toEqual({ ok: true, isMember: false });
+  });
+
+  it("returns read_failed when the membership read throws", async () => {
+    const collection = {
+      async getTeamStatus() {
+        return "active";
+      },
+      async getMembership() {
+        throw new Error("firestore down");
+      },
+    };
+
+    const result = await authorizeTeamMembership(identity(), "team-1", { collection });
+
+    expect(result).toEqual({ ok: false, error: "read_failed" });
   });
 });

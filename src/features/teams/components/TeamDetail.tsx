@@ -239,6 +239,12 @@ export function TeamDetail({ teamId }: { teamId: string }) {
               >
                 {teamsCopy.results.openLink}
               </Link>
+              <Link
+                href={`/teams/${encodeURIComponent(teamId)}/surveys`}
+                className="text-label font-medium text-text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              >
+                {teamsCopy.results.surveysLink}
+              </Link>
               <Link href={`/teams/${encodeURIComponent(teamId)}/settings`} className={buttonClassName({ variant: "secondary", size: "sm" })}>
                 {teamsCopy.detail.editTeam}
               </Link>

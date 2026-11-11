@@ -1,4 +1,10 @@
-import { isValidMinimumResponses, isValidSurveyAccessMode, type SurveyAccessMode } from "./survey";
+import { isValidMinimumResponses, isValidSurveyAccessMode, MAX_DESCRIPTION_LENGTH, type SurveyAccessMode } from "./survey";
+import {
+  validateQuestionDefinitions,
+  type QuestionValidationError,
+  type SurveyQuestion,
+} from "./question-definitions";
+import { getBuiltInTemplate, isBuiltInTemplateId } from "./templates";
 
 /**
  * The validated shape of a survey-creation request body (docs/features/
@@ -18,6 +24,9 @@ export interface CreateSurveyInput {
   accessMode: SurveyAccessMode;
   minimumResponses: number;
   title?: string;
+  description?: string;
+  /** Always resolved: validated explicit questions, a copied built-in template, or the Team Pulse default. */
+  questions: SurveyQuestion[];
   startAt?: Date;
   endAt?: Date;
 }
@@ -33,7 +42,10 @@ export type ValidateCreateSurveyInputResult =
         | "invalid_title"
         | "invalid_start_at"
         | "invalid_end_at"
-        | "invalid_date_range";
+        | "invalid_date_range"
+        | "invalid_description"
+        | "invalid_template"
+        | QuestionValidationError;
     };
 
 /**
@@ -59,10 +71,8 @@ export function validateCreateSurveyInput(
     return { ok: false, error: "invalid_input" };
   }
 
-  const { accessMode, minimumResponses, title, startAt, endAt } = input as Record<
-    string,
-    unknown
-  >;
+  const { accessMode, minimumResponses, title, description, startAt, endAt, templateId, questions } =
+    input as Record<string, unknown>;
 
   if (!isValidSurveyAccessMode(accessMode)) {
     return { ok: false, error: "invalid_access_mode" };
@@ -74,6 +84,15 @@ export function validateCreateSurveyInput(
 
   if (title !== undefined && typeof title !== "string") {
     return { ok: false, error: "invalid_title" };
+  }
+
+  if (description !== undefined && !isValidDescription(description)) {
+    return { ok: false, error: "invalid_description" };
+  }
+
+  const resolved = resolveQuestionInput({ templateId, questions });
+  if (!resolved.ok) {
+    return resolved;
   }
 
   let parsedStartAt: Date | undefined;
@@ -108,6 +127,10 @@ export function validateCreateSurveyInput(
       accessMode,
       minimumResponses,
       ...(title !== undefined ? { title } : {}),
+      ...(typeof description === "string" && description.trim() !== ""
+        ? { description: description.trim() }
+        : {}),
+      questions: resolved.questions,
       ...(parsedStartAt !== undefined ? { startAt: parsedStartAt } : {}),
       ...(parsedEndAt !== undefined ? { endAt: parsedEndAt } : {}),
     },
@@ -126,4 +149,43 @@ function toValidDate(value: unknown): Date | null {
   }
 
   return null;
+}
+
+function isValidDescription(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length <= MAX_DESCRIPTION_LENGTH;
+}
+
+/**
+ * Resolves the question set for a new survey from untrusted input. Exactly one
+ * source may be given: a built-in template id (copied, never referenced), or
+ * an explicit question array. Neither means the Team Pulse default, so an
+ * older client that sends no question fields still gets a valid survey.
+ */
+export function resolveQuestionInput(input: {
+  templateId: unknown;
+  questions: unknown;
+}):
+  | { ok: true; questions: SurveyQuestion[] }
+  | { ok: false; error: QuestionValidationError | "invalid_template" } {
+  const { templateId, questions } = input;
+
+  if (templateId !== undefined && questions !== undefined) {
+    return { ok: false, error: "invalid_questions" };
+  }
+
+  if (templateId !== undefined) {
+    if (!isBuiltInTemplateId(templateId)) {
+      return { ok: false, error: "invalid_template" };
+    }
+    return { ok: true, questions: getBuiltInTemplate(templateId).questions };
+  }
+
+  if (questions !== undefined) {
+    const validated = validateQuestionDefinitions(questions);
+    return validated.ok
+      ? { ok: true, questions: validated.questions }
+      : { ok: false, error: validated.error };
+  }
+
+  return { ok: true, questions: getBuiltInTemplate("team-pulse").questions };
 }

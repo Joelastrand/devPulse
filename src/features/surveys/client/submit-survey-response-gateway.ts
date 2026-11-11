@@ -31,10 +31,14 @@ const KNOWN_ERROR_STATUSES = new Set([
  * `PulseSurveyForm`'s own inline `fetch` usage, extracted here so
  * `SurveyResponseForm` never talks to `fetch` directly).
  */
+/** Answers keyed by question id: a number for a rating, an option id, option ids for multiple choice, or text. */
+/** A legacy Team Pulse array `[flow, stress, fun]`, or answers keyed by question id. */
+export type SurveyAnswerPayload = Record<string, number | string | string[]> | number[];
+
 export interface SubmitSurveyResponseGateway {
   submitSurveyResponse(
     surveyId: string,
-    answers: number[],
+    answers: SurveyAnswerPayload,
     idToken: string | undefined,
   ): Promise<SubmitSurveyResponseFetchResult>;
 }
@@ -85,7 +89,7 @@ export interface SubmitSurveyResponseDeps {
  */
 export async function submitSurveyResponse(
   surveyId: string,
-  answers: number[],
+  answers: SurveyAnswerPayload,
   idToken: string | undefined,
   deps: SubmitSurveyResponseDeps = {},
 ): Promise<SubmitSurveyResponseFetchResult> {

@@ -1,3 +1,5 @@
+import { getBuiltInTemplate } from "../domain/templates";
+const TEAM_PULSE_QUESTIONS = getBuiltInTemplate("team-pulse").questions;
 import { describe, expect, it, vi } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type {
@@ -93,7 +95,7 @@ describe("resolveSurveyForParticipation", () => {
       expect(result).toEqual({
         ok: true,
         status: "answerable",
-        survey: { surveyId: SURVEY_ID, teamName: "Team Rocket" },
+        survey: { surveyId: SURVEY_ID, teamName: "Team Rocket", questions: TEAM_PULSE_QUESTIONS },
       });
     });
 
@@ -118,7 +120,7 @@ describe("resolveSurveyForParticipation", () => {
       expect(result).toEqual({
         ok: true,
         status: "answerable",
-        survey: { surveyId: SURVEY_ID, teamName: "Team Rocket" },
+        survey: { surveyId: SURVEY_ID, teamName: "Team Rocket", questions: TEAM_PULSE_QUESTIONS },
       });
     });
 
@@ -130,7 +132,7 @@ describe("resolveSurveyForParticipation", () => {
       expect(result).toEqual({ ok: true, status: "not_found" });
     });
 
-    it("returns a minimal DTO with only surveyId/title/teamName", async () => {
+    it("returns only the safe survey view fields, with no identity or response data", async () => {
       const collections = fakeCollections({
         surveys: {
           [SURVEY_ID]: surveyDoc({
@@ -147,7 +149,7 @@ describe("resolveSurveyForParticipation", () => {
 
       expect(result.ok).toBe(true);
       if (result.ok && result.status === "answerable") {
-        expect(Object.keys(result.survey).sort()).toEqual(["surveyId", "teamName", "title"]);
+        expect(Object.keys(result.survey).sort()).toEqual(["questions", "surveyId", "teamName", "title"]);
         expect(result.survey.title).toBe("Q3 pulse");
       } else {
         throw new Error("expected answerable outcome");
@@ -185,7 +187,7 @@ describe("resolveSurveyForParticipation", () => {
       expect(result).toEqual({
         ok: true,
         status: "answerable",
-        survey: { surveyId: SURVEY_ID, teamName: "Team Rocket" },
+        survey: { surveyId: SURVEY_ID, teamName: "Team Rocket", questions: TEAM_PULSE_QUESTIONS },
       });
       expect(collections.calls.membership).toBe(0);
     });

@@ -85,6 +85,7 @@ export function SurveyParticipationView({ surveyId }: { surveyId: string }) {
 
   const { survey } = result;
   const title = survey.title ?? surveysCopy.page.fallbackTitle;
+  const description = survey.description;
 
   if (result.status === "scheduled") {
     return (
@@ -105,13 +106,22 @@ export function SurveyParticipationView({ surveyId }: { surveyId: string }) {
   }
 
   if (!started) {
-    return <SurveyIntro title={title} teamName={survey.teamName} onStart={() => setStarted(true)} />;
+    return (
+      <div className="flex flex-col gap-4">
+        <SurveyIntro title={title} teamName={survey.teamName} onStart={() => setStarted(true)} />
+        {description ? <p className="text-text-secondary">{description}</p> : null}
+      </div>
+    );
   }
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title={title} description={survey.teamName} />
-      <SurveyResponseForm surveyId={surveyId} idToken={token} />
+      {survey.questions && survey.questions.length > 0 ? (
+        <SurveyResponseForm surveyId={surveyId} idToken={token} questions={survey.questions} />
+      ) : (
+        <Alert variant="error">{surveysCopy.page.readFailed}</Alert>
+      )}
     </div>
   );
 }

@@ -24,6 +24,7 @@ import {
   type FetchCurrentTeamSurveyResult,
 } from "../../surveys/client/current-team-survey-gateway";
 import { surveysCopy } from "../../surveys/copy";
+import { TeamSurveyResultsSection } from "../../surveys/components/TeamSurveyResultsSection";
 import { teamsCopy } from "../copy";
 
 /**
@@ -162,6 +163,7 @@ export function TeamResultsView({ teamId }: { teamId: string }) {
           <LazyTrendChart results={state.results} />
         </TrendChartBoundary>
       )}
+      <TeamSurveyResultsSection teamId={teamId} />
     </div>
   );
 }

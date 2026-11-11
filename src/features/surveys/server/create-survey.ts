@@ -8,7 +8,8 @@ import {
   validateCreateSurveyInput,
   type ValidateCreateSurveyInputResult,
 } from "../domain/create-survey-input";
-import type { SurveyAccessMode } from "../domain/survey";
+import { CONFIGURABLE_QUESTION_SET_VERSION, type SurveyAccessMode } from "../domain/survey";
+import type { SurveyQuestion } from "../domain/question-definitions";
 import { type AuthRefusal } from "../../auth/server/auth-refusal";
 import { writeRefusalFor, runFencedTransaction } from "../../auth/server/erasure-write-fence";
 const SURVEYS_COLLECTION = "surveys";
@@ -18,6 +19,9 @@ const TEAMS_COLLECTION = "teams";
 export interface SurveyRecord {
   teamId: string;
   title?: string;
+  description?: string;
+  questions: SurveyQuestion[];
+  questionSetVersion: typeof CONFIGURABLE_QUESTION_SET_VERSION;
   accessMode: SurveyAccessMode;
   minimumResponses: number;
   startAt?: Date;
@@ -166,12 +170,15 @@ export async function createSurvey(
     return { ok: false, error: "team_disabled" };
   }
 
-  const { accessMode, minimumResponses, title, startAt, endAt } = validated.data;
+  const { accessMode, minimumResponses, title, description, questions, startAt, endAt } = validated.data;
   const record: SurveyRecord = {
     teamId,
     accessMode,
     minimumResponses,
+    questions,
+    questionSetVersion: CONFIGURABLE_QUESTION_SET_VERSION,
     ...(title !== undefined ? { title } : {}),
+    ...(description !== undefined ? { description } : {}),
     ...(startAt !== undefined ? { startAt } : {}),
     ...(endAt !== undefined ? { endAt } : {}),
     createdAt: deps.now ?? new Date(),

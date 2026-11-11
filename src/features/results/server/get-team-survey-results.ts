@@ -7,6 +7,7 @@ import {
 } from "../../teams/server/authorize-team-access";
 import {
   effectiveLifecycle,
+  isLegacySurvey,
   isValidSurvey,
   type Survey,
 } from "../../surveys/domain/survey";
@@ -279,6 +280,12 @@ export async function getTeamSurveyResults(
     }
 
     if (effectiveLifecycle(survey, now) !== "closed") {
+      continue;
+    }
+    // Configurable surveys (team-survey-builder) report per question through
+    // their own results operation. Their payloads never enter this fixed
+    // Flow/Stress/Fun trend, so incompatible question sets are never combined.
+    if (!isLegacySurvey(survey)) {
       continue;
     }
 

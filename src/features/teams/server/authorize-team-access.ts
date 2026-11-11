@@ -121,3 +121,45 @@ export async function authorizeTeamAccess(
 
   return { ok: true, access: isMember ? "member" : "denied" };
 }
+
+export type TeamMembershipResult =
+  | { ok: true; isMember: boolean }
+  | { ok: false; error: "read_failed" };
+
+/**
+ * Membership only, independent of app-admin status (SECURITY invariant 17).
+ * `authorizeTeamAccess` answers `"admin"` before it looks at membership, so an
+ * app admin who is also a team member can't be distinguished there. Operations
+ * that gate on being a team member (for example, free-text results) call this
+ * instead. Uses the same team-status and membership reads, and the same
+ * fail-closed rules, as `authorizeTeamAccess`.
+ */
+export async function authorizeTeamMembership(
+  identity: VerifiedIdentity,
+  teamId: string,
+  deps: Pick<AuthorizeTeamAccessDeps, "collection"> = {},
+): Promise<TeamMembershipResult> {
+  const collection = deps.collection ?? getDefaultCollection();
+
+  let rawStatus: unknown;
+  try {
+    rawStatus = await collection.getTeamStatus(teamId);
+  } catch {
+    return { ok: false, error: "read_failed" };
+  }
+  if (!isValidTeamStatus(rawStatus)) {
+    return { ok: true, isMember: false };
+  }
+
+  let rawMembership: unknown;
+  try {
+    rawMembership = await collection.getMembership(identity.uid, teamId);
+  } catch {
+    return { ok: false, error: "read_failed" };
+  }
+
+  return {
+    ok: true,
+    isMember: isValidMembershipFor(rawMembership, { uid: identity.uid, teamId }),
+  };
+}

@@ -5,10 +5,15 @@
  * exactly (never `accessMode`, `createdBy`, `archivedAt`, or any
  * `teamSurveyState`-shaped field).
  */
+
+import { validateQuestionDefinitions, type SurveyQuestion } from "../domain/question-definitions";
 export interface SurveyParticipationSummary {
   surveyId: string;
   title?: string;
   teamName?: string;
+  description?: string;
+  /** Present only for an answerable survey. */
+  questions?: SurveyQuestion[];
 }
 
 /**
@@ -49,7 +54,16 @@ function isSurveyParticipationFetchResult(value: unknown): value is SurveyPartic
     return true;
   }
 
-  return STATUSES_WITH_SURVEY.has(status) && "survey" in value;
+  if (!STATUSES_WITH_SURVEY.has(status) || !("survey" in value)) {
+    return false;
+  }
+  // An answerable survey must carry a question set that validates, so the form
+  // never renders an unverified definition.
+  if (status === "answerable") {
+    const survey = (value as { survey: { questions?: unknown } }).survey;
+    return validateQuestionDefinitions(survey.questions).ok;
+  }
+  return true;
 }
 
 /**

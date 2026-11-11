@@ -10,6 +10,13 @@
  * partially rendering untrusted data.
  */
 
+import {
+  QUESTION_VALIDATION_ERRORS,
+  validateQuestionDefinitions,
+  type QuestionValidationError,
+  type SurveyQuestion,
+} from "../domain/question-definitions";
+
 export type SurveyAccessMode = "public" | "authenticated";
 export type SurveyLifecycle = "scheduled" | "open" | "closed";
 
@@ -17,6 +24,9 @@ export type SurveyLifecycle = "scheduled" | "open" | "closed";
 export interface AdminSurveyEntry {
   surveyId: string;
   title?: string;
+  description?: string;
+  questions?: SurveyQuestion[];
+  questionSetVersion?: number;
   accessMode: SurveyAccessMode;
   minimumResponses: number;
   lifecycle: SurveyLifecycle;
@@ -51,6 +61,11 @@ function isOptionalString(value: unknown): value is string | undefined {
   return value === undefined || typeof value === "string";
 }
 
+/** Absent for legacy surveys; otherwise must validate as a question set (server-side rules, re-checked here). */
+function isOptionalQuestions(value: unknown): value is SurveyQuestion[] | undefined {
+  return value === undefined || validateQuestionDefinitions(value).ok;
+}
+
 async function parseJson(response: Response): Promise<unknown> {
   try {
     return await response.json();
@@ -67,6 +82,8 @@ function isAdminSurveyEntry(value: unknown): value is AdminSurveyEntry {
   return (
     isNonEmptyString(record.surveyId) &&
     isOptionalString(record.title) &&
+    isOptionalString(record.description) &&
+    isOptionalQuestions(record.questions) &&
     typeof record.accessMode === "string" &&
     ACCESS_MODES.has(record.accessMode as SurveyAccessMode) &&
     isValidMinimumResponses(record.minimumResponses) &&
@@ -139,6 +156,9 @@ export interface CreateAdminSurveyInput {
   accessMode: SurveyAccessMode;
   minimumResponses: number;
   title?: string;
+  description?: string;
+  templateId?: string;
+  questions?: SurveyQuestion[];
   startAt?: string;
   endAt?: string;
 }
@@ -157,6 +177,9 @@ export type CreateAdminSurveyResult =
         | "invalid_start_at"
         | "invalid_end_at"
         | "invalid_date_range"
+        | "invalid_description"
+        | "invalid_template"
+        | QuestionValidationError
         | "team_not_found"
         | "team_disabled"
         | "persistence_failed"
@@ -173,6 +196,9 @@ const KNOWN_CREATE_ERRORS = new Set([
   "invalid_start_at",
   "invalid_end_at",
   "invalid_date_range",
+  "invalid_description",
+  "invalid_template",
+  ...QUESTION_VALIDATION_ERRORS,
   "team_not_found",
   "team_disabled",
   "persistence_failed",

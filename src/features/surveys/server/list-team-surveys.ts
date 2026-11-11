@@ -4,12 +4,14 @@ import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../../teams/domain/app-admin";
 import { requireAppAdmin } from "../../teams/server/require-app-admin";
 import {
+  CONFIGURABLE_QUESTION_SET_VERSION,
   effectiveLifecycle,
   isValidSurvey,
   type Survey,
   type SurveyAccessMode,
   type SurveyLifecycle,
 } from "../domain/survey";
+import type { SurveyQuestion } from "../domain/question-definitions";
 import { type AuthRefusal } from "../../auth/server/auth-refusal";
 const SURVEYS_COLLECTION = "surveys";
 
@@ -32,6 +34,10 @@ const SURVEYS_COLLECTION = "surveys";
 export interface AdminSurveyListEntry {
   surveyId: string;
   title?: string;
+  description?: string;
+  /** Absent for legacy surveys (the fixed Team Pulse set). */
+  questions?: SurveyQuestion[];
+  questionSetVersion?: typeof CONFIGURABLE_QUESTION_SET_VERSION;
   accessMode: SurveyAccessMode;
   minimumResponses: number;
   lifecycle: SurveyLifecycle;
@@ -113,6 +119,9 @@ function toListEntry(survey: Survey, now: Date): AdminSurveyListEntry {
   return {
     surveyId: survey.surveyId,
     ...(survey.title !== undefined ? { title: survey.title } : {}),
+    ...(survey.description !== undefined ? { description: survey.description } : {}),
+    ...(survey.questions !== undefined ? { questions: survey.questions } : {}),
+    ...(survey.questionSetVersion !== undefined ? { questionSetVersion: survey.questionSetVersion } : {}),
     accessMode: survey.accessMode,
     minimumResponses: survey.minimumResponses,
     lifecycle: effectiveLifecycle(survey, now),

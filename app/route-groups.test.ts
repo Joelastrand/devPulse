@@ -37,6 +37,7 @@ const EXPECTED_URLS = [
   "/teams/[teamId]/results",
   "/teams/[teamId]/roadmap",
   "/teams/[teamId]/settings",
+  "/teams/[teamId]/surveys",
   "/teams/[teamId]/systems",
 ];
 

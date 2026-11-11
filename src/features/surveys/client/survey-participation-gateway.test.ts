@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { getBuiltInTemplate } from "../domain/templates";
 import { fetchSurveyParticipation } from "./survey-participation-gateway";
 
 describe("fetchSurveyParticipation", () => {
@@ -55,7 +56,13 @@ describe("fetchSurveyParticipation", () => {
 
   it("returns the parsed result, including the safe survey summary, for every known status that carries one", async () => {
     for (const status of ["scheduled", "closed", "answerable"]) {
-      const survey = { surveyId: "survey-1", title: "Uke 36", teamName: "Platform" };
+      const survey = {
+        surveyId: "survey-1",
+        title: "Uke 36",
+        teamName: "Platform",
+        // An answerable survey must carry a valid question set (fail-closed client parse).
+        ...(status === "answerable" ? { questions: getBuiltInTemplate("team-pulse").questions } : {}),
+      };
       const fetchMock = vi
         .fn()
         .mockResolvedValue(new Response(JSON.stringify({ status, survey }), { status: 200 }));

@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { getBuiltInTemplate } from "../domain/templates";
+const TEAM_PULSE = getBuiltInTemplate("team-pulse").questions;
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { expectHeadingStructure, expectNamedControls } from "../../../components/ui/heading-structure";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
@@ -79,7 +82,7 @@ describe("SurveyParticipationView", () => {
     observeIdTokenMock.mockImplementation(subscribingWith(null));
     fetchSurveyParticipationMock.mockResolvedValue({
       status: "answerable",
-      survey: { surveyId: "survey-1" },
+      survey: { surveyId: "survey-1" , questions: TEAM_PULSE },
     });
 
     render(<SurveyParticipationView surveyId="survey-1" />);
@@ -154,7 +157,7 @@ describe("SurveyParticipationView", () => {
     observeIdTokenMock.mockImplementation(subscribingWith(null));
     fetchSurveyParticipationMock.mockResolvedValue({
       status: "answerable",
-      survey: { surveyId: "survey-1" },
+      survey: { surveyId: "survey-1" , questions: TEAM_PULSE },
     });
 
     render(<SurveyParticipationView surveyId="survey-1" />);
@@ -166,7 +169,7 @@ describe("SurveyParticipationView", () => {
     observeIdTokenMock.mockImplementation(subscribingWith(null));
     fetchSurveyParticipationMock.mockResolvedValue({
       status: "answerable",
-      survey: { surveyId: "survey-1", title: "Uke 36", teamName: "Platform" },
+      survey: { surveyId: "survey-1", title: "Uke 36", teamName: "Platform" , questions: TEAM_PULSE },
     });
 
     render(<SurveyParticipationView surveyId="survey-1" />);
@@ -229,7 +232,7 @@ describe("SurveyParticipationView auth/route races", () => {
     observer.emit(null);
     await waitFor(() => expect(fetchSurveyParticipationMock).toHaveBeenCalledTimes(2));
 
-    calls.resolve(0, { status: "answerable", survey: { surveyId: "survey-1", title: "Stale" } });
+    calls.resolve(0, { status: "answerable", survey: { surveyId: "survey-1", title: "Stale" , questions: TEAM_PULSE } });
     await flushMicrotasks();
 
     expect(screen.queryByText("Stale")).toBeNull();
@@ -247,7 +250,7 @@ describe("SurveyParticipationView auth/route races", () => {
     unmount();
 
     expect(() =>
-      calls.resolve(0, { status: "answerable", survey: { surveyId: "survey-1" } }),
+      calls.resolve(0, { status: "answerable", survey: { surveyId: "survey-1" , questions: TEAM_PULSE } }),
     ).not.toThrow();
     await flushMicrotasks();
 
@@ -265,14 +268,14 @@ describe("SurveyParticipationView auth/route races", () => {
             resolveSurveyA = resolve;
           }),
       )
-      .mockResolvedValue({ status: "answerable", survey: { surveyId: "survey-b", title: "Survey B" } });
+      .mockResolvedValue({ status: "answerable", survey: { surveyId: "survey-b", title: "Survey B" , questions: TEAM_PULSE } });
 
     const { rerender } = render(<SurveyParticipationView surveyId="survey-a" />);
     rerender(<SurveyParticipationView surveyId="survey-b" />);
 
     await screen.findByRole("heading", { name: "Survey B" });
 
-    resolveSurveyA({ status: "answerable", survey: { surveyId: "survey-a", title: "Survey A" } });
+    resolveSurveyA({ status: "answerable", survey: { surveyId: "survey-a", title: "Survey A" , questions: TEAM_PULSE } });
     await flushMicrotasks();
 
     expect(screen.queryByText("Survey A")).toBeNull();
@@ -285,7 +288,7 @@ describe("survey heading structure (visual-redesign TASK-019)", () => {
     observeIdTokenMock.mockImplementation(subscribingWith(null));
     fetchSurveyParticipationMock.mockResolvedValue({
       status: "answerable",
-      survey: { surveyId: "survey-1", title: "Pulsmåling", teamName: "Demo Team" },
+      survey: { surveyId: "survey-1", title: "Pulsmåling", teamName: "Demo Team" , questions: TEAM_PULSE },
     });
 
     render(<SurveyParticipationView surveyId="survey-1" />);

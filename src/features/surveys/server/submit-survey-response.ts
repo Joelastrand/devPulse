@@ -4,7 +4,7 @@ import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { type VerifiedIdentity, verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import { isValidTeamStatus } from "../../teams/domain/team";
 import { isValidMembershipFor, membershipDocId } from "../../teams/domain/team-membership";
-import { validateSurveyAnswers, type SurveyAnswers } from "../domain/answers";
+import { encodeResponsePayload } from "../domain/response-payload";
 import { participationDocId, type SurveyParticipationRecord } from "../domain/survey-participation";
 import { effectiveLifecycle, isValidSurvey, type Survey } from "../domain/survey";
 import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
@@ -178,7 +178,7 @@ async function decideAndApplySubmission(
   tx: SubmitSurveyResponseTransaction,
   params: {
     surveyId: string;
-    answers: SurveyAnswers;
+    rawAnswers: unknown;
     identity: VerifiedIdentity | null;
     /** Set when a presented token was refused by the erasure fence or Auth (TASK-009); `null` otherwise. */
     identityRefusal: AuthRefusal | null;
@@ -186,7 +186,7 @@ async function decideAndApplySubmission(
     newResponseId: () => string;
   },
 ): Promise<SubmitOutcome> {
-  const { surveyId, answers, identity, now, newResponseId } = params;
+  const { surveyId, rawAnswers, identity, now, newResponseId } = params;
 
   const surveySnapshot = await tx.get(surveyPath(surveyId));
   const candidate = toCandidateSurvey(
@@ -197,6 +197,12 @@ async function decideAndApplySubmission(
     return "invalid_submission";
   }
   const survey: Survey = candidate;
+
+  // Validated against this survey's own question set (never a fixed set).
+  const payload = encodeResponsePayload(survey, rawAnswers);
+  if (payload === null) {
+    return "invalid_submission";
+  }
 
   if (effectiveLifecycle(survey, now) !== "open") {
     return "survey_unavailable";
@@ -242,7 +248,7 @@ async function decideAndApplySubmission(
   // makes a detected conflict retry cleanly with fresh reads above.
   let encrypted;
   try {
-    encrypted = encrypt(JSON.stringify(answers));
+    encrypted = encrypt(payload);
   } catch {
     return "encryption_failed";
   }
@@ -356,8 +362,9 @@ export async function submitSurveyResponse(
   idToken: string | undefined,
   deps: SubmitSurveyResponseDeps = {},
 ): Promise<SubmitSurveyResponseResult> {
-  const validated = validateSurveyAnswers(rawAnswers);
-  if (!validated.ok) {
+  // Shape only here. The answers are validated against the survey's own
+  // question set inside the transaction, after the survey is read.
+  if (typeof rawAnswers !== "object" || rawAnswers === null) {
     return { ok: false, error: "invalid_submission" };
   }
 
@@ -384,7 +391,7 @@ export async function submitSurveyResponse(
     outcome = await db.runTransaction((tx) =>
       decideAndApplySubmission(tx, {
         surveyId,
-        answers: validated.data,
+        rawAnswers,
         identity,
         identityRefusal,
         // Called fresh on every invocation of this callback — i.e. once

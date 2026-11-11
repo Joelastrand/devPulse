@@ -3,7 +3,8 @@ import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import { isValidTeamStatus } from "../../teams/domain/team";
 import { isValidMembershipFor, membershipDocId } from "../../teams/domain/team-membership";
-import { effectiveLifecycle, isValidSurvey, type Survey } from "../domain/survey";
+import { effectiveLifecycle, isValidSurvey, resolveSurveyQuestions, type Survey } from "../domain/survey";
+import type { SurveyQuestion } from "../domain/question-definitions";
 
 const SURVEYS_COLLECTION = "surveys";
 const TEAMS_COLLECTION = "teams";
@@ -121,6 +122,9 @@ export interface SafeSurveyParticipationView {
   surveyId: string;
   title?: string;
   teamName?: string;
+  /** Present only for an answerable survey: the question set the respondent sees. */
+  description?: string;
+  questions?: SurveyQuestion[];
 }
 
 /**
@@ -260,5 +264,17 @@ export async function resolveSurveyForParticipation(
   const lifecycle = effectiveLifecycle(survey, now);
   const status = deriveAvailability(lifecycle, team.active);
 
-  return { ok: true, status, survey: toSafeView(survey, team) };
+  const view = toSafeView(survey, team);
+  if (status === "answerable") {
+    return {
+      ok: true,
+      status,
+      survey: {
+        ...view,
+        ...(survey.description !== undefined ? { description: survey.description } : {}),
+        questions: resolveSurveyQuestions(survey),
+      },
+    };
+  }
+  return { ok: true, status, survey: view };
 }

@@ -3,6 +3,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SurveyResponseForm } from "./SurveyResponseForm";
+import { getBuiltInTemplate } from "../domain/templates";
+
+const TEAM_PULSE = getBuiltInTemplate("team-pulse").questions;
 
 function next() {
   return screen.getByRole("button", { name: "Neste" });
@@ -16,7 +19,7 @@ describe("SurveyResponseForm one-question stepper (TASK-021)", () => {
   afterEach(cleanup);
 
   it("shows one question at a time with 'Spørsmål N av 3' progress text", () => {
-    render(<SurveyResponseForm surveyId="survey-1" idToken={null} />);
+    render(<SurveyResponseForm surveyId="survey-1" idToken={null} questions={TEAM_PULSE} />);
 
     expect(screen.getByText("Spørsmål 1 av 3")).toBeTruthy();
     expect(screen.getByRole("group", { name: "Arbeidsflyt og leveransetilfredshet" })).toBeTruthy();
@@ -25,7 +28,7 @@ describe("SurveyResponseForm one-question stepper (TASK-021)", () => {
 
   it("disables Next until the current question is answered, and says why in text", async () => {
     const user = userEvent.setup();
-    render(<SurveyResponseForm surveyId="survey-1" idToken={null} />);
+    render(<SurveyResponseForm surveyId="survey-1" idToken={null} questions={TEAM_PULSE} />);
 
     expect(next().hasAttribute("disabled")).toBe(true);
     expect(screen.getByText("Velg et svar for å fortsette")).toBeTruthy();
@@ -38,7 +41,7 @@ describe("SurveyResponseForm one-question stepper (TASK-021)", () => {
 
   it("keeps the answer when Back is pressed, and Back never clears it", async () => {
     const user = userEvent.setup();
-    render(<SurveyResponseForm surveyId="survey-1" idToken={null} />);
+    render(<SurveyResponseForm surveyId="survey-1" idToken={null} questions={TEAM_PULSE} />);
 
     await user.click(screen.getByLabelText("4", { selector: "#flow-4" }));
     await user.click(next());
@@ -50,7 +53,7 @@ describe("SurveyResponseForm one-question stepper (TASK-021)", () => {
 
   it("preserves all three values across forward and backward navigation", async () => {
     const user = userEvent.setup();
-    render(<SurveyResponseForm surveyId="survey-1" idToken={null} />);
+    render(<SurveyResponseForm surveyId="survey-1" idToken={null} questions={TEAM_PULSE} />);
 
     await user.click(screen.getByLabelText("1", { selector: "#flow-1" }));
     await user.click(next());
@@ -70,7 +73,7 @@ describe("SurveyResponseForm one-question stepper (TASK-021)", () => {
   });
 
   it("disables Back on the first question", () => {
-    render(<SurveyResponseForm surveyId="survey-1" idToken={null} />);
+    render(<SurveyResponseForm surveyId="survey-1" idToken={null} questions={TEAM_PULSE} />);
 
     expect(back().hasAttribute("disabled")).toBe(true);
   });

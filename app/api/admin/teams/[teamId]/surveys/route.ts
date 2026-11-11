@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { QuestionValidationError } from "../../../../../../src/features/surveys/domain/question-definitions";
 import { createSurvey } from "../../../../../../src/features/surveys/server/create-survey";
 import { listTeamSurveys } from "../../../../../../src/features/surveys/server/list-team-surveys";
 import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../../../src/features/auth/server/auth-refusal";
@@ -75,6 +76,9 @@ function statusForCreateError(
     | "invalid_start_at"
     | "invalid_end_at"
     | "invalid_date_range"
+    | "invalid_description"
+    | QuestionValidationError
+    | "invalid_template"
     | "team_not_found"
     | "team_disabled"
     | "persistence_failed",

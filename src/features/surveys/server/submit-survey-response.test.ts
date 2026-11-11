@@ -8,6 +8,7 @@ import type {
   SubmitSurveyResponseTransaction,
 } from "./submit-survey-response";
 import { submitSurveyResponse } from "./submit-survey-response";
+import { decrypt } from "../../../lib/encryption/encryption";
 
 const TEAM_ID = "team-42";
 const OTHER_TEAM_ID = "team-99";
@@ -394,17 +395,14 @@ describe("submitSurveyResponse", () => {
       expect(malformedResult).toEqual({ ok: false, error: "invalid_submission" });
     });
 
-    it("rejects a structurally invalid answer payload before ever reading Firestore", async () => {
+    it("rejects an out-of-range legacy answer payload and persists nothing", async () => {
       const { db, store } = createInMemoryFirestore({
         "surveys/survey-1": surveyDoc(),
         "teams/team-42": teamDoc(),
       });
-      const getSpy = vi.spyOn(db, "runTransaction");
-
       const result = await submitSurveyResponse(SURVEY_ID, [1, 6, 3], undefined, baseDeps(db));
 
       expect(result).toEqual({ ok: false, error: "invalid_submission" });
-      expect(getSpy).not.toHaveBeenCalled();
       expect(responseDocs(store)).toHaveLength(0);
     });
   });
@@ -1031,5 +1029,103 @@ describe("submitSurveyResponse", () => {
       warnSpy.mockRestore();
       errorSpy.mockRestore();
     });
+  });
+});
+
+describe("submitSurveyResponse with configurable questions (team-survey-builder)", () => {
+  beforeEach(() => {
+    vi.stubEnv("ENCRYPTION_KEY", randomBytes(32).toString("base64"));
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  const CONFIGURED_QUESTIONS = [
+    { id: "energy", type: "rating", prompt: "Energi", required: true },
+    {
+      id: "support",
+      type: "single_choice",
+      prompt: "Støtte",
+      required: true,
+      options: [
+        { id: "good", label: "Godt" },
+        { id: "poor", label: "Dårlig" },
+      ],
+    },
+    { id: "note", type: "free_text", prompt: "Notat", required: false, maxLength: 50 },
+  ];
+
+  function configuredDoc(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return surveyDoc({
+      questions: CONFIGURED_QUESTIONS,
+      questionSetVersion: 2,
+      ...overrides,
+    });
+  }
+
+  function decryptStored(record: Record<string, unknown>): string {
+    return decrypt({
+      ciphertext: record.ciphertext as string,
+      iv: record.iv as string,
+      authTag: record.authTag as string,
+      keyVersion: "v1",
+    });
+  }
+
+  it("persists answers keyed by question id in the versioned payload, and omits a blank optional answer", async () => {
+    const { db, store } = createInMemoryFirestore({
+      "surveys/survey-1": configuredDoc(),
+      "teams/team-42": teamDoc(),
+    });
+
+    const result = await submitSurveyResponse(
+      SURVEY_ID,
+      { energy: 4, support: "good", note: "   " },
+      undefined,
+      baseDeps(db),
+    );
+
+    expect(result).toEqual({ ok: true });
+    const [stored] = responseDocs(store);
+    expect(JSON.parse(decryptStored(stored))).toEqual({ version: 2, answers: { energy: 4, support: "good" } });
+    expect(stored).not.toHaveProperty("uid");
+  });
+
+  it("rejects a configurable submission that misses a required answer, and persists nothing", async () => {
+    const { db, store } = createInMemoryFirestore({
+      "surveys/survey-1": configuredDoc(),
+      "teams/team-42": teamDoc(),
+    });
+
+    const result = await submitSurveyResponse(SURVEY_ID, { energy: 4 }, undefined, baseDeps(db));
+
+    expect(result).toEqual({ ok: false, error: "invalid_submission" });
+    expect(responseDocs(store)).toHaveLength(0);
+  });
+
+  it("rejects an option id that the question does not offer", async () => {
+    const { db, store } = createInMemoryFirestore({
+      "surveys/survey-1": configuredDoc(),
+      "teams/team-42": teamDoc(),
+    });
+
+    const result = await submitSurveyResponse(SURVEY_ID, { energy: 4, support: "unknown" }, undefined, baseDeps(db));
+
+    expect(result).toEqual({ ok: false, error: "invalid_submission" });
+    expect(responseDocs(store)).toHaveLength(0);
+  });
+
+  it("keeps the legacy array format for a Team Pulse survey, even when the object form is sent", async () => {
+    const { db, store } = createInMemoryFirestore({
+      "surveys/survey-1": surveyDoc(),
+      "teams/team-42": teamDoc(),
+    });
+
+    const result = await submitSurveyResponse(SURVEY_ID, { flow: 3, stress: 4, fun: 5 }, undefined, baseDeps(db));
+
+    expect(result).toEqual({ ok: true });
+    const [stored] = responseDocs(store);
+    expect(decryptStored(stored)).toBe("[3,4,5]");
   });
 });

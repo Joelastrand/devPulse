@@ -66,6 +66,7 @@ export const teamsCopy = {
     title: "Resultater",
     description: "Undersøkelser, trender og kompetansestiger for teamet.",
     openLink: "Se resultater og trender",
+    surveysLink: "Undersøkelser",
     backToOverview: "Tilbake til Oversikt",
     loading: "Laster resultater…",
     forbidden: "Du har ikke tilgang til resultatene for dette teamet.",

@@ -1,4 +1,15 @@
+import {
+  validateQuestionDefinitions,
+  type SurveyQuestion,
+} from "./question-definitions";
+import { getBuiltInTemplate } from "./templates";
+
 export type SurveyAccessMode = "public" | "authenticated";
+
+/** Question-set version of surveys created by the team survey builder (team-survey-builder SPEC — "Compatibility"). */
+export const CONFIGURABLE_QUESTION_SET_VERSION = 2;
+
+export const MAX_DESCRIPTION_LENGTH = 1000;
 
 const SURVEY_ACCESS_MODES: readonly SurveyAccessMode[] = ["public", "authenticated"];
 
@@ -70,6 +81,13 @@ export interface Survey {
   surveyId: string;
   teamId: string;
   title?: string;
+  description?: string;
+  /**
+   * Present on surveys created by the team survey builder. Absent on legacy
+   * surveys, which are the fixed Team Pulse set (see `resolveSurveyQuestions`).
+   */
+  questions?: SurveyQuestion[];
+  questionSetVersion?: typeof CONFIGURABLE_QUESTION_SET_VERSION;
   accessMode: SurveyAccessMode;
   minimumResponses: number;
   startAt?: Date;
@@ -167,6 +185,8 @@ export function isValidSurvey(
     record.surveyId === expected.surveyId &&
     isNonEmptyString(record.teamId) &&
     (record.title === undefined || typeof record.title === "string") &&
+    isValidOptionalDescription(record.description) &&
+    isValidQuestionSetFields(record) &&
     isValidSurveyAccessMode(record.accessMode) &&
     isValidMinimumResponses(record.minimumResponses) &&
     isValidOptionalDate(record.startAt) &&
@@ -197,4 +217,45 @@ function isValidOptionalDate(value: unknown): value is Date | undefined {
  */
 function isNullableActor(value: unknown): value is string | null {
   return value === null || isNonEmptyString(value);
+}
+
+function isValidOptionalDescription(value: unknown): value is string | undefined {
+  return (
+    value === undefined ||
+    (typeof value === "string" && value.trim().length <= MAX_DESCRIPTION_LENGTH)
+  );
+}
+
+/**
+ * A survey either has no question fields (legacy Team Pulse) or has both a
+ * valid question set and the configurable version marker. A partial state
+ * (questions without version, or version without questions) fails closed.
+ */
+function isValidQuestionSetFields(record: Record<string, unknown>): boolean {
+  const hasQuestions = record.questions !== undefined;
+  const hasVersion = record.questionSetVersion !== undefined;
+  if (!hasQuestions && !hasVersion) {
+    return true;
+  }
+  if (!hasQuestions || !hasVersion) {
+    return false;
+  }
+  return (
+    record.questionSetVersion === CONFIGURABLE_QUESTION_SET_VERSION &&
+    validateQuestionDefinitions(record.questions).ok
+  );
+}
+
+/**
+ * The question set a survey actually uses. Legacy surveys (no stored
+ * questions) are the fixed Team Pulse set, so they keep rendering and
+ * aggregating exactly as before without any document rewrite.
+ */
+export function resolveSurveyQuestions(survey: { questions?: SurveyQuestion[] }): SurveyQuestion[] {
+  return survey.questions ?? getBuiltInTemplate("team-pulse").questions;
+}
+
+/** Whether a survey stores its own question set (as opposed to the legacy Team Pulse fallback). */
+export function isLegacySurvey(survey: { questionSetVersion?: unknown }): boolean {
+  return survey.questionSetVersion === undefined;
 }

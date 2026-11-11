@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { validateCreateSurveyInput } from "./create-survey-input";
+import { getBuiltInTemplate } from "./templates";
+
+const TEAM_PULSE = getBuiltInTemplate("team-pulse").questions;
 
 describe("validateCreateSurveyInput", () => {
   it("accepts a valid immediate survey (accessMode + minimumResponses only)", () => {
     const result = validateCreateSurveyInput({ accessMode: "public", minimumResponses: 5 });
     expect(result).toEqual({
       ok: true,
-      data: { accessMode: "public", minimumResponses: 5 },
+      data: { accessMode: "public", minimumResponses: 5, questions: TEAM_PULSE },
     });
   });
 
@@ -18,7 +21,7 @@ describe("validateCreateSurveyInput", () => {
     });
     expect(result).toEqual({
       ok: true,
-      data: { accessMode: "authenticated", minimumResponses: 5, title: "Q3 pulse" },
+      data: { accessMode: "authenticated", minimumResponses: 5, title: "Q3 pulse", questions: TEAM_PULSE },
     });
   });
 
@@ -131,18 +134,18 @@ describe("validateCreateSurveyInput", () => {
     it("accepts the boundary values 3 and 20, and the default 5", () => {
       expect(
         validateCreateSurveyInput({ accessMode: "public", minimumResponses: 3 }),
-      ).toEqual({ ok: true, data: { accessMode: "public", minimumResponses: 3 } });
+      ).toEqual({ ok: true, data: { accessMode: "public", minimumResponses: 3, questions: TEAM_PULSE } });
       expect(
         validateCreateSurveyInput({ accessMode: "public", minimumResponses: 5 }),
-      ).toEqual({ ok: true, data: { accessMode: "public", minimumResponses: 5 } });
+      ).toEqual({ ok: true, data: { accessMode: "public", minimumResponses: 5, questions: TEAM_PULSE } });
       expect(
         validateCreateSurveyInput({ accessMode: "public", minimumResponses: 20 }),
-      ).toEqual({ ok: true, data: { accessMode: "public", minimumResponses: 20 } });
+      ).toEqual({ ok: true, data: { accessMode: "public", minimumResponses: 20, questions: TEAM_PULSE } });
     });
 
     it("persists exactly the submitted valid value, e.g. 10", () => {
       const result = validateCreateSurveyInput({ accessMode: "public", minimumResponses: 10 });
-      expect(result).toEqual({ ok: true, data: { accessMode: "public", minimumResponses: 10 } });
+      expect(result).toEqual({ ok: true, data: { accessMode: "public", minimumResponses: 10, questions: TEAM_PULSE } });
     });
 
     it("rejects a value below 3", () => {

@@ -3,6 +3,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SurveyResponseForm } from "./SurveyResponseForm";
+import { getBuiltInTemplate } from "../domain/templates";
+
+const TEAM_PULSE = getBuiltInTemplate("team-pulse").questions;
 import { surveysCopy } from "../copy";
 
 function submitButton() {
@@ -25,7 +28,7 @@ describe("SurveyResponseForm", () => {
   });
 
   it("starts on the first of three questions and shows no team selector, in Norwegian", () => {
-    render(<SurveyResponseForm surveyId="survey-1" idToken={null} />);
+    render(<SurveyResponseForm surveyId="survey-1" idToken={null} questions={TEAM_PULSE} />);
 
     expect(screen.getByRole("group", { name: "Arbeidsflyt og leveransetilfredshet" })).toBeTruthy();
     expect(screen.queryByRole("group", { name: "Bærekraftig arbeidsmengde og stress" })).toBeNull();
@@ -34,7 +37,7 @@ describe("SurveyResponseForm", () => {
 
   it("offers submission only on the review step, after all three answers", async () => {
     const user = userEvent.setup();
-    render(<SurveyResponseForm surveyId="survey-1" idToken={null} />);
+    render(<SurveyResponseForm surveyId="survey-1" idToken={null} questions={TEAM_PULSE} />);
 
     expect(screen.queryByRole("button", { name: /send inn/i })).toBeNull();
     await fillAllFields(user);
@@ -48,7 +51,7 @@ describe("SurveyResponseForm", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const user = userEvent.setup();
-    render(<SurveyResponseForm surveyId="survey-1" idToken={null} />);
+    render(<SurveyResponseForm surveyId="survey-1" idToken={null} questions={TEAM_PULSE} />);
     await fillAllFields(user);
     await user.click(submitButton());
 
@@ -66,7 +69,7 @@ describe("SurveyResponseForm", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const user = userEvent.setup();
-    render(<SurveyResponseForm surveyId="survey-1" idToken="a-token" />);
+    render(<SurveyResponseForm surveyId="survey-1" idToken="a-token" questions={TEAM_PULSE} />);
     await fillAllFields(user);
     await user.click(submitButton());
 
@@ -86,7 +89,7 @@ describe("SurveyResponseForm", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const user = userEvent.setup();
-    render(<SurveyResponseForm surveyId="survey-1" idToken={null} />);
+    render(<SurveyResponseForm surveyId="survey-1" idToken={null} questions={TEAM_PULSE} />);
     await fillAllFields(user);
     await user.click(submitButton());
 
@@ -101,7 +104,7 @@ describe("SurveyResponseForm", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const user = userEvent.setup();
-    render(<SurveyResponseForm surveyId="survey-1" idToken="a-token" />);
+    render(<SurveyResponseForm surveyId="survey-1" idToken="a-token" questions={TEAM_PULSE} />);
     await fillAllFields(user);
     await user.click(submitButton());
 
@@ -117,7 +120,7 @@ describe("SurveyResponseForm", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const user = userEvent.setup();
-    render(<SurveyResponseForm surveyId="survey-1" idToken={null} />);
+    render(<SurveyResponseForm surveyId="survey-1" idToken={null} questions={TEAM_PULSE} />);
     await fillAllFields(user);
     await user.click(submitButton());
 
@@ -137,7 +140,7 @@ describe("SurveyResponseForm", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const user = userEvent.setup();
-    render(<SurveyResponseForm surveyId="survey-1" idToken={null} />);
+    render(<SurveyResponseForm surveyId="survey-1" idToken={null} questions={TEAM_PULSE} />);
     await fillAllFields(user);
     await user.click(submitButton());
 
@@ -149,7 +152,7 @@ describe("SurveyResponseForm", () => {
   });
 
   it("contains no leftover English copy", () => {
-    render(<SurveyResponseForm surveyId="survey-1" idToken={null} />);
+    render(<SurveyResponseForm surveyId="survey-1" idToken={null} questions={TEAM_PULSE} />);
 
     expect(screen.queryByText(/delivery satisfaction/i)).toBeNull();
     expect(screen.queryByText(/sustainable workload/i)).toBeNull();
@@ -164,7 +167,7 @@ describe("SurveyResponseForm composition (visual-redesign TASK-017)", () => {
   });
 
   it("keeps Forrige and Neste in a bottom action bar on phones, inline from md up", () => {
-    render(<SurveyResponseForm surveyId="survey-1" idToken={null} />);
+    render(<SurveyResponseForm surveyId="survey-1" idToken={null} questions={TEAM_PULSE} />);
 
     const next = screen.getByRole("button", { name: surveysCopy.form.stepper.next });
     const bar = next.parentElement as HTMLElement;
@@ -174,7 +177,7 @@ describe("SurveyResponseForm composition (visual-redesign TASK-017)", () => {
   });
 
   it("shows the real question count, the disabled-Neste text, and no time estimate or percentage text", () => {
-    render(<SurveyResponseForm surveyId="survey-1" idToken={null} />);
+    render(<SurveyResponseForm surveyId="survey-1" idToken={null} questions={TEAM_PULSE} />);
 
     expect(screen.getByText(surveysCopy.form.stepper.progress(1, 3))).toBeTruthy();
     expect(screen.getByText(surveysCopy.form.stepper.nextDisabled)).toBeTruthy();
