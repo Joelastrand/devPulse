@@ -1,145 +1,95 @@
 import { describe, expect, it, vi } from "vitest";
-import { createFakeRoleStore } from "./fake-role-store";
+vi.mock("server-only", () => ({}));
 import { listRolesForAdmin, type ListRolesForAdminDeps } from "./list-roles-for-admin";
-import type { RawSkillTreeRead, RawSkillTreeReader } from "./skill-tree-seam-types";
+import { createFakeRoleStore } from "./fake-role-store";
 
-const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_UID = "admin-1";
-const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
-const BASE = new Date("2026-10-01T10:00:00Z");
-const at = (minutes: number) => new Date(BASE.getTime() + minutes * 60_000);
-
-const validTree = {
-  name: "API design",
-  nodes: [
-    { nodeId: "node-0", label: "Basic", order: 0 },
-    { nodeId: "node-1", label: "Solid", order: 1 },
-  ],
-  createdAt: BASE,
-  createdBy: "curator-uid",
-};
-
-function treeReader(docs: Record<string, unknown>, failOn?: string): RawSkillTreeReader {
-  return {
-    async getMany(treeIds) {
-      if (failOn !== undefined && treeIds.includes(failOn)) throw new Error("boom");
-      return treeIds.map((id): RawSkillTreeRead => ({ id, data: docs[id] }));
-    },
-  };
-}
+const T0 = new Date("2026-06-01T00:00:00.000Z");
 
 function deps(overrides: Partial<ListRolesForAdminDeps> = {}): ListRolesForAdminDeps {
   return {
-    verifyToken: vi.fn().mockResolvedValue({ uid: "admin-1", email: ADMIN_EMAIL, email_verified: true }),
-    isSuperadmin: isAdminUid,
+    verifyToken: vi.fn().mockResolvedValue({ uid: ADMIN_UID, email: "admin@example.com", email_verified: true }),
+    isSuperadmin: async (uid: string) => uid === ADMIN_UID,
+    readFence: async () => ({ kind: "none" }),
     store: createFakeRoleStore(),
-    treeReader: treeReader({ api: validTree }),
     ...overrides,
   };
 }
 
-function seedValid(store: ReturnType<typeof createFakeRoleStore>, id: string, minute: number, extra: Record<string, unknown> = {}) {
-  store.seedRaw(id, {
-    name: `Role ${id}`,
-    expectations: [{ treeId: "api", expectedLevel: 2 }],
-    createdAt: at(minute),
-    createdBy: "admin-1",
-    ...extra,
-  });
-}
-
 describe("listRolesForAdmin", () => {
-  it("refuses a non-admin caller", async () => {
-    const result = await listRolesForAdmin("token", {}, deps({ isSuperadmin: async () => false }));
-    expect(result).toEqual({ ok: false, error: "forbidden" });
-  });
-
-  it("refuses a non-boolean includeArchived", async () => {
-    const result = await listRolesForAdmin("token", { includeArchived: "yes" }, deps());
-    expect(result).toEqual({ ok: false, error: "invalid_input" });
-  });
-
-  it("returns admin DTOs in createdAt order, with treeName from the SkillTree and no audit fields", async () => {
+  it("returns admin views in createdAt order with title, description and lifecycle only", async () => {
     const store = createFakeRoleStore();
-    seedValid(store, "later", 5);
-    seedValid(store, "earlier", 1);
+    await store.create({ name: "Senere", description: "Beskrivelse B", createdAt: new Date(T0.getTime() + 1000), createdBy: ADMIN_UID });
+    await store.create({ name: "Tidligere", description: "Beskrivelse A", createdAt: T0, createdBy: ADMIN_UID, updatedBy: ADMIN_UID, updatedAt: new Date(T0.getTime() + 5) });
+
     const result = await listRolesForAdmin("token", {}, deps({ store }));
+
     expect(result).toEqual({
       ok: true,
       truncated: false,
       roles: [
-        {
-          roleId: "earlier",
-          name: "Role earlier",
-          expectations: [{ treeId: "api", treeName: "API design", expectedLevel: 2 }],
-          archived: false,
-          createdAt: at(1),
-        },
-        {
-          roleId: "later",
-          name: "Role later",
-          expectations: [{ treeId: "api", treeName: "API design", expectedLevel: 2 }],
-          archived: false,
-          createdAt: at(5),
-        },
+        { roleId: "fake-role-2", name: "Tidligere", description: "Beskrivelse A", archived: false, createdAt: T0, updatedAt: new Date(T0.getTime() + 5) },
+        { roleId: "fake-role-1", name: "Senere", description: "Beskrivelse B", archived: false, createdAt: new Date(T0.getTime() + 1000) },
       ],
     });
-    expect(JSON.stringify(result)).not.toContain("createdBy");
-  });
-
-  it("reports a null treeName for a missing SkillTree", async () => {
-    const store = createFakeRoleStore();
-    seedValid(store, "r", 1, { expectations: [{ treeId: "gone", expectedLevel: 4 }] });
-    const result = await listRolesForAdmin("token", {}, deps({ store, treeReader: treeReader({}) }));
-    expect(result.ok && result.roles[0]?.expectations).toEqual([{ treeId: "gone", treeName: null, expectedLevel: 4 }]);
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("createdBy");
+    expect(serialized).not.toContain("updatedBy");
+    expect(serialized).not.toContain("expectations");
   });
 
   it("includes archived roles by default and omits them when includeArchived is false", async () => {
     const store = createFakeRoleStore();
-    seedValid(store, "active", 1);
-    seedValid(store, "archived", 2, { archivedAt: at(3), archivedBy: "admin-2" });
+    await store.create({ name: "Aktiv", description: "Beskrivelse", createdAt: T0, createdBy: ADMIN_UID });
+    await store.create({ name: "Arkivert", description: "Beskrivelse", createdAt: T0, createdBy: ADMIN_UID, archivedAt: T0, archivedBy: ADMIN_UID });
 
-    const included = await listRolesForAdmin("token", {}, deps({ store }));
-    expect(included.ok && included.roles.map((role) => [role.roleId, role.archived])).toEqual([
-      ["active", false],
-      ["archived", true],
+    const all = await listRolesForAdmin("token", {}, deps({ store }));
+    const active = await listRolesForAdmin("token", { includeArchived: false }, deps({ store }));
+
+    expect(all.ok && all.roles.map((role) => [role.name, role.archived])).toEqual([
+      ["Aktiv", false],
+      ["Arkivert", true],
     ]);
-
-    const excluded = await listRolesForAdmin("token", { includeArchived: false }, deps({ store }));
-    expect(excluded.ok && excluded.roles.map((role) => role.roleId)).toEqual(["active"]);
+    expect(active.ok && active.roles.map((role) => role.name)).toEqual(["Aktiv"]);
   });
 
-  it("skips a malformed document silently but lets it consume a window slot, and sets truncated on the 51st raw document", async () => {
-    const store = createFakeRoleStore();
-    store.seedRaw("malformed", { name: "", expectations: [], createdAt: at(0), createdBy: "admin-1" });
-    for (let index = 1; index <= 49; index += 1) {
-      seedValid(store, `valid-${index}`, index);
-    }
-    seedValid(store, "beyond-window", 50);
-
-    const result = await listRolesForAdmin("token", {}, deps({ store }));
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.truncated).toBe(true);
-    expect(result.roles).toHaveLength(49);
-    expect(result.roles.map((role) => role.roleId)).not.toContain("malformed");
-    expect(result.roles.map((role) => role.roleId)).not.toContain("beyond-window");
+  it("refuses a non-boolean includeArchived with invalid_input", async () => {
+    const result = await listRolesForAdmin("token", { includeArchived: "yes" }, deps());
+    expect(result).toEqual({ ok: false, error: "invalid_input" });
   });
 
-  it("reports truncated false when exactly 50 raw documents exist", async () => {
+  it("refuses a non-admin with forbidden and reads nothing", async () => {
     const store = createFakeRoleStore();
+    const spy = vi.spyOn(store, "listWindow");
+
+    const result = await listRolesForAdmin(
+      "token",
+      {},
+      deps({ store, verifyToken: vi.fn().mockResolvedValue({ uid: "member-1", email: "m@example.com", email_verified: true }) }),
+    );
+
+    expect(result).toEqual({ ok: false, error: "forbidden" });
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("skips a malformed document silently, lets it consume a window slot, and sets truncated on the 51st raw document", async () => {
+    const store = createFakeRoleStore();
+    store.seedRaw("broken", { name: "Skjult", createdAt: T0, createdBy: ADMIN_UID, expectations: [] });
     for (let index = 0; index < 50; index += 1) {
-      seedValid(store, `valid-${index}`, index);
+      await store.create({ name: `Rolle ${index}`, description: "Beskrivelse", createdAt: new Date(T0.getTime() + index + 1), createdBy: ADMIN_UID });
     }
+
     const result = await listRolesForAdmin("token", {}, deps({ store }));
-    expect(result.ok && result.truncated).toBe(false);
+
+    expect(result.ok && result.truncated).toBe(true);
+    expect(result.ok && result.roles).toHaveLength(49);
+    expect(JSON.stringify(result)).not.toContain("Skjult");
   });
 
-  it("reports a SkillTree read failure as persistence_failed, never as missing", async () => {
+  it("reports a read failure as persistence_failed, never as an empty list", async () => {
     const store = createFakeRoleStore();
-    seedValid(store, "r", 1);
-    const result = await listRolesForAdmin("token", {}, deps({ store, treeReader: treeReader({ api: validTree }, "api") }));
-    expect(result).toEqual({ ok: false, error: "persistence_failed" });
+    vi.spyOn(store, "listWindow").mockRejectedValue(new Error("unavailable"));
+
+    expect(await listRolesForAdmin("token", {}, deps({ store }))).toEqual({ ok: false, error: "persistence_failed" });
   });
 });

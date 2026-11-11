@@ -37,6 +37,8 @@ const EXPECTED_URLS = [
   "/teams/[teamId]/results",
   "/teams/[teamId]/roadmap",
   "/teams/[teamId]/settings",
+  // Retired legacy page: redirects to /teams/[teamId]/competence (old links only, no competence entry point).
+  "/teams/[teamId]/skills",
   "/teams/[teamId]/surveys",
   "/teams/[teamId]/systems",
 ];

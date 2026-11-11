@@ -194,7 +194,7 @@ handle. Boundaries:
 - **Surface.** Feature A lives inside the existing *Kompetanseområder*
   section; it adds no route, tab or navigation entry. The dedicated Team
   Roadmap surface is Feature B (below). Future `teamSkillNeeds`
-  and `roleDefinitions` are described in "Role profiles" below (built 2026-10-28); personal `skillProfiles`
+  and `roleDefinitions` are described in "Role profiles" below (simplified 2026-11-11); personal `skillProfiles`
   (C1) is described in "Individual skill self-assessment" below.
 
 ## Team Roadmap (Feature B, decided, implemented)
@@ -401,7 +401,7 @@ reader of `skillProfiles` other than the owner. Boundaries:
 - **Catalog read.** The member-readable bounded catalog read (500/501 raw window, the C1 rule) is
   a minimal duplicate in `team-skills/server/skill-need-catalog.ts`; `listSkillTrees` and C1's
   catalog module are neither changed nor imported.
-- **Client.** `TeamSkillNeedsSection` is rendered by `TeamDetail` on Oversikt (no new route or
+- **Client (superseded 2026-11-11).** `TeamSkillNeedsSection` is no longer rendered by any page: `TeamDetail` does not use it, and `TeamCompetenceNeedsSection` has no caller. The needs and coverage routes remain (see TC-SI-11 in SECURITY.md). Originally it was rendered by `TeamDetail` on Oversikt (no new route or
   navigation). It loads needs, then coverage when `viewer.canReadCoverage`; the participation panel
   loads separately. The browser uses the gateway only.
 - **Independence.** C2 writes only `teamSkillNeeds` and the caller's own `skillContribution`. It never
@@ -443,7 +443,7 @@ goals. It is independent of C1 and C2 data. Boundaries as delivered:
 - **SkillTree reuse.** The global catalog supplies only the optional topic link (`treeId`) and the
   name resolved at read; a bounded catalog read (500/501 raw window) is duplicated minimally in the
   slice. A stored link whose tree is gone or invalid is reported as unavailable, and editing stays
-  possible. D1 writes no SkillTree data and never reads `skillProfiles`. (Scoped 2026-10-28: the owner-only role comparison of role-profiles reads `skillProfiles` through the existing C1 owner read; D1 itself still never does, see "Role profiles".)
+  possible. D1 writes no SkillTree data and never reads `skillProfiles`. (D1 never reads `skillProfiles`. The owner-only role comparison that once read it was removed with the role simplification on 2026-11-11; no role feature reads skill data now.)
 - **Limits, read window and recovery.** At most 100 goals per owner, enforced count-then-create
   (a small overshoot under concurrent creates is accepted). The list reads a bounded window
   (newest 100 by `createdAt`); malformed or overflow documents count toward the cap, and a bounded
@@ -636,23 +636,28 @@ flowchart LR
 - Hosting/runtime target for the server-side boundary (not decided in this
   session; no deployment work has been done).
 
-## Role profiles (role-profiles, built 2026-10-28)
+## Role profiles (organizational roles and formal assignment, simplified 2026-11-11)
 
-Feature spec: `docs/features/role-profiles/SPEC.md`. Vertical slice in `src/features/role-profiles/` (domain, Admin SDK
-server operations, client components), with routes under `app/api/admin/roles/`, `app/api/roles/`,
-`app/api/me/role-target/`, `app/api/me/role-comparison/`, pages `app/admin/roles/` and the section on `app/me/skills/`.
+Feature spec: `docs/features/role-profiles/SPEC.md` (current contract). Vertical slice in `src/features/role-profiles/`
+(domain, Admin SDK server operations, client components and gateways). Routes: `app/api/admin/roles/` (catalogue),
+`app/api/admin/users/[uid]/role-assignment/` (assign, change, remove), `app/api/admin/role-assignments/lookup/` (batch read),
+`app/api/roles/` (active roles, title and description only) and `app/api/me/role-assignment/` (the person's own role).
+Pages: `app/(app)/admin/roles/` (catalogue), the member section of `app/(app)/admin/teams/[teamId]/` (assignments), and the
+section on `app/(app)/me/skills/` (Min rolle).
 
 Boundaries:
-- **Persistence:** only `roleDefinitions` and `userDevelopment/{uid}/roleTarget/current`, through the Admin SDK on the
-  server. No client Firestore path, no `collectionGroup`, no composite index, no environment variable, no dependency.
-- **Reads of other features:** the owner-only comparison reads the owner's C1 levels through the existing
-  `getOwnSkills` read (one approved importer, pinned by the C1 guard). The "Opprett mål" entry links to the D1 goals
-  page with `treeId` as the only parameter (the D1 seam). Nothing else in D1, C2, D2, roadmap or team planning is read.
-- **Transactions:** target selection reads the role and its SkillTrees in one Firestore transaction (`tx.get`) and writes
-  once. Every other write is a single-document update or a single delete.
-- **Guards:** the C2 and D1 static guards admit only exact role-profiles files (PG-12), and the C1 guard admits only the
-  comparison module by exact path. These guards are change detection, not authorization; authorization is pinned by the
-  actor × operation matrix in `role-profiles-authz-matrix.test.ts`.
+- **Persistence:** only `roleDefinitions` and `roleAssignments/{uid}`, through the Admin SDK on the server. No client Firestore
+  path, no `collectionGroup`, no composite index, no environment variable, no dependency.
+- **Authorization:** catalogue and assignment writes use `requireAppAdmin`. Assignment reads by the person use the verified
+  token's uid only. An assignment grants no application permission; no authorization path reads it.
+- **Transactions:** assignment writes run in a fenced transaction on the target uid (`runFencedTransaction`), which reads the
+  erasure record first. Role catalogue writes use the same fence on the acting admin.
+- **Cross-feature reads:** the admin team page composes the member role section from role-profiles. The personal workspace
+  reads its own assignment only through `/api/me/role-assignment`. Nothing in skills, goals, team planning or the roadmap
+  reads roles.
+- **Guards:** the C2, D1 and erasure fence guards list the exact role-profiles write owners. The personal workspace guard
+  forbids the `roleAssignments` collection name in that feature. These guards are change detection, not authorization.
+  The Firestore deny rules for both collections are checked statically in `role-assignments-rules.test.ts`.
 
 ## Account erasure (2026-11-02)
 
@@ -684,10 +689,49 @@ Boundaries:
 - **Storage.** Personal ratings are one document per (person, team skill), `teamSkillAssessments/{uid}__{skillId}`. A
   map keyed by skill id was rejected: it needs dynamic keys that the erasure guard admits only for its reviewed C1 shape.
 - **Module.** `src/features/team-owned-skills/` owns the domain, the store seam with a Firestore implementation and an
-  in-memory fake and the operations (list, create, update, own rating set/clear). No aggregate exists yet (see below).
+  in-memory fake and the operations (list, create, update, own rating set/clear, and the administrator-entered manual level).
 - **Gates.** Member and administrator decisions reuse `requireGenuineMemberWith` and `requireTeamAdministratorWith`, run
   inside the same transaction as the write. App-admin status grants team configuration only, never a member's rating.
 - **Known limits.** Previous guidance text is not retained after an edit (only the criteria version changes). The
   team aggregate (`server/get-team-owned-skill-aggregate.ts`) is the single approved team-owned consumer of the C2 membership
   scan. It reads ratings through `server/read-team-skill-ratings-batch.ts`, an identity-free reader over exact documents,
-  applies consent, criteria version and threshold 5, and returns only a level or `insufficient_data` per active skill.
+  applies consent, criteria version and threshold 3 (owner decision 2026-11-11), and returns only a level or `insufficient_data` per active skill.
+
+## Unified Teamkompetanse and Competence Plan (2026-11-11, current)
+
+Sources: `docs/features/team-experience-redesign/SPEC.md` (OD-3 to OD-6) and `docs/SECURITY.md` (TC-SI-1 to TC-SI-11). This
+section describes the code as it stands. Older sections above that describe the retired parallel systems are historical.
+
+- **One Teamkompetanse page.** `/teams/[teamId]/competence` (`app/(app)/teams/[teamId]/competence/page.tsx`) renders
+  `TeamCompetenceWorkspace` from `src/features/team-owned-skills/components/`. It has two modes, selected on the page:
+  *Automatisk profil* (the team level derived from shared ratings) and *Felles vurdering* (the team level entered by an
+  administrator). Each mode shows one radar and one readable list, which are built from the same rows.
+- **Canonical catalog.** `teamSkills/{skillId}` is the team's own catalog (`src/features/team-owned-skills/`). Administrators
+  create, edit and deactivate skills through `/api/teams/[teamId]/team-skills` and `.../[skillId]`. Names are unique among
+  active skills. A guidance change bumps `criteriaVersion`. The global `skillTrees` catalog is a separate identity and is
+  not mapped to team skills by name.
+- **Individual assessment.** A member sets or clears their own level per active skill through
+  `PUT` / `DELETE /api/teams/[teamId]/team-skills/[skillId]/level` (`teamSkillAssessments/{uid}__{skillId}`). Team
+  members never read another person's rating.
+- **Automatic team level.** `GET /api/teams/[teamId]/team-skills/aggregate` (`server/get-team-owned-skill-aggregate.ts`)
+  reads only shared, current-criteria ratings through `server/read-team-skill-ratings-batch.ts`, applies the k = 3 threshold
+  (`SKILL_COVERAGE_MIN_CONTRIBUTORS`) and returns a level or `insufficient_data` per active skill. It returns no count or
+  person-level value.
+- **Manual team level.** `teamManualAssessments/{skillId}` is written by `PUT` / `DELETE
+  /api/teams/[teamId]/team-skills/[skillId]/manual` (administrators only) and read by `GET
+  /api/teams/[teamId]/team-skills/manual` (genuine members and administrators). The read reports `outdated` when the level
+  was entered under older criteria. It never reports the administrator who entered it.
+- **Competence Plan (independent).** `/teams/[teamId]/competence-plan` is a separate navigation entry. Plans live in
+  `teamCompetencePlans/{planId}` (random UUID) and are created, read, edited and archived through
+  `/api/teams/[teamId]/competence-plans` and `.../[planId]`. A plan needs no competence area, rating, consent or profile.
+  Its title is its own. `treeId` is an optional catalog label, `null` for every plan created now.
+- **Module boundaries.** `team-owned-skills` owns the catalog, the individual and manual levels, the aggregate, the radar
+  (`components/KompetanseprofilRadar.tsx`, `domain/radar-model.ts`) and the workspace copy. It imports the C2 consent,
+  need, coverage-policy and contribution-store modules from `team-skills` (`domain/skill-contribution`, `domain/skill-coverage-policy`, `domain/skill-need`,
+  `domain/team-level`, `server/skill-contribution-store`). `team-competence-plan` imports the team and auth helpers, the roadmap read used for the read-only legacy records (BR-17), and shared level constants from `skill-profiles`. It has
+  no import from `team-owned-skills` or `team-skills`, and no competence area or skill-catalog module.
+- **Retired and not present.** `teamCompetenceAreas`, `teamProfileSettings`, `teamCollaborativeLevels`, the `competence-areas`,
+  `profile-settings` and `skill-levels` routes, the `team-competence-catalog` and `team-competence-profile` modules, and the
+  collaborative profile and numeric skill-levels operations. These have no rules, inventory rows or callers.
+- **Open.** `team-skills` still provides the `skill-needs` and `skill-coverage` routes and their domain, store and gateway,
+  but no page renders them. Whether they return to Teamkompetanse (BR-17a) or are retired is a product decision.

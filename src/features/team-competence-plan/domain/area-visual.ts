@@ -50,11 +50,11 @@ function stableHash(value: string): number {
  * Icon and tone for a competence area. `name` may be null when the area is unavailable; the tree id then decides the
  * fallback, so the same area never changes colour between renders.
  */
-export function areaVisualFor(name: string | null, treeId: string): AreaVisual {
+export function areaVisualFor(name: string | null, planId: string): AreaVisual {
   const matched = name === null ? undefined : KEYWORD_RULES.find((rule) => rule.pattern.test(name));
   if (matched) {
     return matched.visual;
   }
-  const hash = stableHash(treeId);
+  const hash = stableHash(planId);
   return { icon: Layers3, tone: FALLBACK_PALETTE[hash % FALLBACK_PALETTE.length] ?? "slate" };
 }

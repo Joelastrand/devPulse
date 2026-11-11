@@ -9,7 +9,13 @@ import { SELF_ASSESSED_LEVEL_COPY } from "../../skill-profiles/copy";
 import { SELF_ASSESSED_LEVELS, isSelfAssessedLevel, type SelfAssessedLevel } from "../../skill-profiles/domain/self-assessed-level";
 import { isRoadmapPriority, ROADMAP_PRIORITIES, type RoadmapPriority } from "../../roadmap/domain/roadmap-item";
 import { isValidPlanDate } from "../../roadmap/domain/roadmap-dates";
-import { MILESTONE_TITLE_MAX_LENGTH, PLAN_MILESTONES_MAX, type MilestoneStatus } from "../domain/competence-plan";
+import {
+  MILESTONE_TITLE_MAX_LENGTH,
+  PLAN_MILESTONES_MAX,
+  PLAN_TITLE_MAX_LENGTH,
+  normalizePlanTitle,
+  type MilestoneStatus,
+} from "../domain/competence-plan";
 import { MILESTONE_STATUS_LABEL, PRIORITY_LABEL, competencePlanCopy } from "../copy";
 import type { ClientCompetencePlan, CompetencePlanInput, CompetencePlanWriteResult } from "../client/competence-plan-gateway";
 
@@ -27,7 +33,6 @@ interface MilestoneRow {
 export interface CompetencePlanEditorProps {
   /** Stable form-id prefix, unique per editor on the page. */
   idPrefix: string;
-  areaName: string;
   /** `null` creates a new plan. */
   initial: ClientCompetencePlan | null;
   onSave: (input: CompetencePlanInput) => Promise<CompetencePlanWriteResult>;
@@ -39,7 +44,8 @@ export interface CompetencePlanEditorProps {
  * Lead editor for one plan (TASK-006, BR-15). Sends the whole editable plan; the server validates and is the only
  * authorization boundary. Client checks only avoid obvious mistakes.
  */
-export function CompetencePlanEditor({ idPrefix, areaName, initial, onSave, onCancel, onSaved }: CompetencePlanEditorProps) {
+export function CompetencePlanEditor({ idPrefix, initial, onSave, onCancel, onSaved }: CompetencePlanEditorProps) {
+  const [title, setTitle] = useState(initial?.title ?? "");
   const [targetStage, setTargetStage] = useState<SelfAssessedLevel>(initial?.targetStage ?? 2);
   const [priority, setPriority] = useState<RoadmapPriority>(initial?.priority ?? "medium");
   const [archived, setArchived] = useState(initial?.archived ?? false);
@@ -55,6 +61,7 @@ export function CompetencePlanEditor({ idPrefix, areaName, initial, onSave, onCa
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<{ variant: "error" | "success"; text: string } | null>(null);
   const [titleError, setTitleError] = useState(false);
+  const [planTitleError, setPlanTitleError] = useState(false);
 
   function updateRow(key: string, patch: Partial<MilestoneRow>) {
     setRows((current) => current.map((row) => (row.key === key ? { ...row, ...patch } : row)));
@@ -71,6 +78,12 @@ export function CompetencePlanEditor({ idPrefix, areaName, initial, onSave, onCa
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const planTitle = normalizePlanTitle(title);
+    setPlanTitleError(planTitle === null);
+    if (planTitle === null) {
+      setMessage({ variant: "error", text: competencePlanCopy.invalidInput });
+      return;
+    }
     const emptyTitle = rows.some((row) => row.title.trim().length === 0);
     setTitleError(emptyTitle);
     if (emptyTitle) {
@@ -85,6 +98,7 @@ export function CompetencePlanEditor({ idPrefix, areaName, initial, onSave, onCa
     setPending(true);
     setMessage(null);
     const result = await onSave({
+      title: planTitle,
       targetStage,
       priority,
       archived,
@@ -114,12 +128,20 @@ export function CompetencePlanEditor({ idPrefix, areaName, initial, onSave, onCa
 
   return (
     <form
-      aria-label={`${competencePlanCopy.edit}: ${areaName}`}
+      aria-label={initial ? `${competencePlanCopy.edit}: ${initial.title}` : competencePlanCopy.newPlanHeading}
       onSubmit={handleSubmit}
       className="flex flex-col gap-4"
       noValidate
     >
       {message ? <Alert variant={message.variant} role={message.variant === "error" ? "alert" : "status"}>{message.text}</Alert> : null}
+      <TextField
+        id={`${idPrefix}-title`}
+        label={competencePlanCopy.titleField}
+        value={title}
+        maxLength={PLAN_TITLE_MAX_LENGTH}
+        aria-invalid={planTitleError}
+        onChange={(event) => setTitle(event.target.value)}
+      />
       <div className="grid gap-4 sm:grid-cols-3">
         <Select
           id={`${idPrefix}-target-stage`}

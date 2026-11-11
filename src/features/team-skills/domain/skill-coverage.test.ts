@@ -69,8 +69,8 @@ describe("deriveCoverageState", () => {
   });
 
   it("represents unassessed contributors by absence", () => {
-    // Four assessed contributors, however many are unassessed (absent), stay below k.
-    expect(deriveCoverageState({ requiredLevel: 2, requiredCoverage: 1, levels: cohort(4) })).toBe(
+    // k - 1 assessed contributors, however many are unassessed (absent), stay below k.
+    expect(deriveCoverageState({ requiredLevel: 2, requiredCoverage: 1, levels: cohort(k - 1) })).toBe(
       "insufficient_data",
     );
   });

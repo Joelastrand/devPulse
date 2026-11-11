@@ -79,7 +79,9 @@ const PERSON_OWNED: readonly InventoryRow[] = [
   { id: "I-1", collection: "skillProfiles", locator: "docIdIsUid", class: "DELETE", fields: [plain("levels")] },
   { id: "I-2", collection: "userProfiles", locator: "docIdIsUid", class: "DELETE", fields: [plain("displayName")] },
   { id: "I-3", collection: "userDevelopment/{uid}/goals", locator: "subtree", class: "DELETE", fields: [] },
-  { id: "I-4", collection: "userDevelopment/{uid}/roleTarget", locator: "subtree", class: "DELETE", fields: [] },
+  // I-4: the person's formal organizational role assignment (roleAssignments/{uid}). Deleting it never touches the shared
+  // role definition. It carries no personal text, only the stable role id.
+  { id: "I-4", collection: "roleAssignments", locator: "docIdIsUid", class: "DELETE", fields: [plain("roleId")] },
   { id: "I-5", collection: "userDevelopment/{uid}/conversations", locator: "subtree", class: "DELETE", fields: [] },
   {
     id: "I-6",
@@ -164,6 +166,14 @@ const ACTOR_AUDIT: readonly InventoryRow[] = [
     class: "ANONYMIZE",
     fields: [uid("createdBy"), uid("updatedBy"), uid("archivedBy")],
   },
+  // A-18: the administrator who assigned or changed another person's formal role. The assignee's own row is I-4.
+  {
+    id: "A-18",
+    collection: "roleAssignments",
+    locator: "fieldsOnly",
+    class: "ANONYMIZE",
+    fields: [uid("createdBy"), uid("updatedBy")],
+  },
   {
     id: "A-4",
     collection: "roadmapItems",
@@ -219,6 +229,14 @@ const ACTOR_AUDIT: readonly InventoryRow[] = [
     locator: "fieldsOnly",
     class: "ANONYMIZE",
     fields: [uid("createdBy"), uid("updatedBy")],
+  },
+  // A-19 (docs/features/team-owned-skills/SPEC.md §12): the acting administrator of a collaborative team level is audit only.
+  {
+    id: "A-19",
+    collection: "teamManualAssessments",
+    locator: "fieldsOnly",
+    class: "ANONYMIZE",
+    fields: [uid("updatedBy")],
   },
   // A-16: the superadmin registry records the granting and revoking administrator on each record. Erasing a person clears
   // those references on other people's records and keeps the record state (the registry count is never changed by this row).
@@ -330,6 +348,8 @@ export const ACTOR_AUDIT_TARGETS = [
   { collection: "roleDefinitions", field: "createdBy" },
   { collection: "roleDefinitions", field: "updatedBy" },
   { collection: "roleDefinitions", field: "archivedBy" },
+  { collection: "roleAssignments", field: "createdBy" },
+  { collection: "roleAssignments", field: "updatedBy" },
   { collection: "challenges", field: "resolvedBy" },
   { collection: "challenges", field: "archivedBy" },
   { collection: "roadmapItems", field: "createdBy" },
@@ -355,4 +375,6 @@ export const ACTOR_AUDIT_TARGETS = [
   // A-17 (team-owned skills, SPEC §7): the acting admin of a team skill definition is audit only.
   { collection: "teamSkills", field: "createdBy" },
   { collection: "teamSkills", field: "updatedBy" },
+  // A-19: the acting administrator of a collaborative team level is audit only.
+  { collection: "teamManualAssessments", field: "updatedBy" },
 ] as const;

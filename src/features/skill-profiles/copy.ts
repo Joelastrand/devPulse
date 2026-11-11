@@ -97,6 +97,15 @@ export const skillProfileCopy = {
     reviewAction: "Gjennomgå og endre ferdighetene dine",
     goalsAction: "Åpne mine utviklingsmål",
     roleWorkspaceAction: "Min rolle og mine bidrag",
+    viewSwitchLabel: "Visning av kompetanseprofilen",
+    viewList: "Liste",
+    viewRadar: "Radar",
+    radarLabel: (count: number) => `Radardiagram over ${count} vurderte ferdigheter, nivå 1 til 4.`,
+    radarLegend: "Din vurdering",
+    radarTableCaption: "Nivå per vurdert ferdighet",
+    radarOmitted: (count: number) => `${count} vurderte ferdigheter vises bare i listen.`,
+    radarUnassessedNote: (count: number) => `${count} ikke vurdert: vises ikke i radaren.`,
+    radarTooFew: (assessed: number) => `Radaren vises når minst 3 ferdigheter er vurdert. Du har vurdert ${assessed}.`,
   },
 } as const;
 

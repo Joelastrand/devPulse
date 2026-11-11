@@ -70,7 +70,7 @@ function guardOver(files: SourceFile[]) {
 /** The SPEC row ids (SPEC "Erasure inventory"). Every one must appear exactly once in the registry. */
 const SPEC_ROW_IDS = [
   ...Array.from({ length: 19 }, (_, i) => `I-${i + 1}`),
-  ...Array.from({ length: 17 }, (_, i) => `A-${i + 1}`),
+  ...Array.from({ length: 19 }, (_, i) => `A-${i + 1}`),
   ...Array.from({ length: 6 }, (_, i) => `P-${i + 1}`),
   ...Array.from({ length: 4 }, (_, i) => `E-${i + 1}`),
 ];
@@ -126,7 +126,7 @@ describe("erasure inventory sweep query shapes", () => {
 
   it("locates I-3 to I-6 by subtree under the person's userDevelopment document", () => {
     expect(sweepsOf("I-3")).toEqual([{ kind: "subtree", path: "userDevelopment/{uid}/goals" }]);
-    expect(sweepsOf("I-4")).toEqual([{ kind: "subtree", path: "userDevelopment/{uid}/roleTarget" }]);
+    expect(sweepsOf("I-4")).toEqual([{ kind: "docIdEquals", value: "uid" }]);
     expect(sweepsOf("I-5")).toEqual([{ kind: "subtree", path: "userDevelopment/{uid}/conversations" }]);
     expect(sweepsOf("I-6")).toEqual([
       { kind: "subtree", path: "userDevelopment/{uid}/conversationParticipations" },

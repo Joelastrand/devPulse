@@ -55,7 +55,6 @@ const APPROVED_COLLECTION_REFERENCES = [
  */
 const APPROVED_WHEN_PRESENT_COLLECTION_REFERENCES = [
   "src/lib/firebase/firestore-deployment-config.test.ts",
-  "src/features/team-competence-profile/server/collaborative-profile.test.ts",
 ];
 /**
  * Account erasure (erasure-only persistence metadata, file-exact): the inventory registry names `skillProfiles` (I-1) for
@@ -310,8 +309,8 @@ function coverageModuleViolations(files: SourceFile[]): string[] {
   const code = stripComments(file.text);
   const problems: string[] = [];
   if (reExportTargets(file).length > 0 || /\bexport\s*(?:type\s*)?(?:\*|\{[^}]*\})\s*from\b/.test(code)) problems.push(`${file.path}: export … from`);
-  // `getTeamSkillLevels` is the production binding of the approved numeric factory (owner decision 2026-11-08).
-  const approvedRuntime = new Set(["getTeamSkillCoverage", "createGetTeamSkillCoverage", "createGetTeamSkillLevels", "getTeamSkillLevels"]);
+  // The numeric team-level factory was retired with the legacy skill-levels route (2026-11-11).
+  const approvedRuntime = new Set(["getTeamSkillCoverage", "createGetTeamSkillCoverage"]);
   for (const match of code.matchAll(/^export\s+(?:declare\s+)?(?:async\s+)?(?:function|const|let|var|class|enum)\s+([\w$]+)/gm)) {
     if (!approvedRuntime.has(match[1])) problems.push(`${file.path}: unapproved export ${match[1]}`);
   }

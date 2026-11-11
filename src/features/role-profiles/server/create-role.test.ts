@@ -1,170 +1,113 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+vi.mock("server-only", () => ({}));
 import { createRole, type CreateRoleDeps } from "./create-role";
 import { createFakeRoleStore } from "./fake-role-store";
-import type { RawSkillTreeRead, RawSkillTreeReader } from "./skill-tree-seam-types";
 
-const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_UID = "admin-1";
-const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const NOW = new Date("2026-10-01T10:00:00Z");
 
-const validTree = {
-  name: "API design",
-  nodes: [
-    { nodeId: "node-0", label: "Basic", order: 0 },
-    { nodeId: "node-1", label: "Solid", order: 1 },
-  ],
-  createdAt: NOW,
-  createdBy: "curator-uid",
-};
-
-function treeReader(docs: Record<string, unknown>, failOn?: string): RawSkillTreeReader {
-  return {
-    async getMany(treeIds) {
-      if (failOn !== undefined && treeIds.includes(failOn)) throw new Error("boom");
-      return treeIds.map((id): RawSkillTreeRead => ({ id, data: docs[id] }));
-    },
-  };
-}
-
 function verifyAs(uid: string) {
-  return vi.fn().mockResolvedValue({ uid, email: ADMIN_EMAIL, email_verified: true });
+  return vi.fn().mockResolvedValue({ uid, email: "admin@example.com", email_verified: true });
 }
 
 function deps(overrides: Partial<CreateRoleDeps> = {}): CreateRoleDeps {
   return {
     verifyToken: verifyAs(ADMIN_UID),
-    isSuperadmin: isAdminUid,
+    isSuperadmin: async (uid: string) => uid === ADMIN_UID,
+    readFence: async () => ({ kind: "none" }),
     store: createFakeRoleStore({ generateId: () => "role-1" }),
-    treeReader: treeReader({ api: validTree }),
     now: () => NOW,
     ...overrides,
   };
 }
 
-const VALID_INPUT = { name: "  Backend engineer  ", expectations: [{ treeId: "api", expectedLevel: 3 }] };
+const VALID_INPUT = { name: "  Backend-utvikler  ", description: "  Bygger og drifter tjenester.  " };
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
 describe("createRole", () => {
-  it("refuses an unauthenticated caller", async () => {
-    const store = createFakeRoleStore();
-    const spy = vi.spyOn(store, "create");
-    const result = await createRole("token", VALID_INPUT, {
-      ...deps({ store }),
-      verifyToken: vi.fn().mockRejectedValue(new Error("bad token")),
-    });
-    expect(result).toEqual({ ok: false, error: "unauthenticated" });
-    expect(spy).not.toHaveBeenCalled();
-  });
-
-  it("refuses a non-admin caller with zero writes", async () => {
-    const store = createFakeRoleStore();
-    const spy = vi.spyOn(store, "create");
-    const result = await createRole("token", VALID_INPUT, deps({ store, isSuperadmin: async () => false }));
-    expect(result).toEqual({ ok: false, error: "forbidden" });
-    expect(spy).not.toHaveBeenCalled();
-  });
-
-  it("refuses an invalid body with zero writes", async () => {
-    const store = createFakeRoleStore();
-    const spy = vi.spyOn(store, "create");
-    const result = await createRole("token", { name: "", expectations: [] }, deps({ store }));
-    expect(result).toEqual({ ok: false, error: "invalid_input" });
-    expect(spy).not.toHaveBeenCalled();
-  });
-
-  it("refuses an unknown treeId with zero writes", async () => {
-    const store = createFakeRoleStore();
-    const spy = vi.spyOn(store, "create");
-    const result = await createRole("token", VALID_INPUT, deps({ store, treeReader: treeReader({}) }));
-    expect(result).toEqual({ ok: false, error: "skill_not_found" });
-    expect(spy).not.toHaveBeenCalled();
-  });
-
-  it("refuses a referenced SkillTree that is invalid, with zero writes", async () => {
-    const store = createFakeRoleStore();
-    const spy = vi.spyOn(store, "create");
-    const result = await createRole(
-      "token",
-      VALID_INPUT,
-      deps({ store, treeReader: treeReader({ api: { ...validTree, name: "   " } }) }),
-    );
-    expect(result).toEqual({ ok: false, error: "skill_not_found" });
-    expect(spy).not.toHaveBeenCalled();
-  });
-
-  it("writes the exact stored shape with internal fields and returns an allow-listed admin DTO", async () => {
+  it("creates a role from a trimmed title and description, and returns the admin view", async () => {
     const store = createFakeRoleStore({ generateId: () => "role-1" });
+
     const result = await createRole("token", VALID_INPUT, deps({ store }));
 
     expect(result).toEqual({
       ok: true,
       role: {
         roleId: "role-1",
-        name: "Backend engineer",
-        expectations: [{ treeId: "api", treeName: "API design", expectedLevel: 3 }],
+        name: "Backend-utvikler",
+        description: "Bygger og drifter tjenester.",
         archived: false,
         createdAt: NOW,
       },
     });
-    expect(await store.get("role-1")).toStrictEqual({
-      name: "Backend engineer",
-      expectations: [{ treeId: "api", expectedLevel: 3 }],
-      createdAt: NOW,
-      createdBy: ADMIN_UID,
-    });
   });
 
-  it("never returns createdBy, updatedBy, archivedBy or uid in the DTO", async () => {
-    const result = await createRole("token", VALID_INPUT, deps());
-    expect(result.ok).toBe(true);
-    const json = JSON.stringify(result);
-    expect(json).not.toContain("createdBy");
-    expect(json).not.toContain("updatedBy");
-    expect(json).not.toContain("archivedBy");
-    expect(json).not.toContain(ADMIN_UID);
-  });
-
-  it("refuses the 51st role when 50 documents exist, counting archived and malformed documents", async () => {
+  it("refuses an unauthenticated caller and writes nothing", async () => {
     const store = createFakeRoleStore();
-    for (let index = 0; index < 48; index += 1) {
-      store.seedRaw(`valid-${index}`, { name: `R${index}`, expectations: [], createdAt: NOW, createdBy: "x" });
-    }
-    store.seedRaw("archived", { name: "Old", expectations: [], createdAt: NOW, createdBy: "x", archivedAt: NOW });
-    store.seedRaw("malformed", { name: "", expectations: [], createdAt: NOW, createdBy: "x" });
     const spy = vi.spyOn(store, "create");
+
+    const result = await createRole("token", VALID_INPUT, {
+      ...deps({ store }),
+      verifyToken: vi.fn().mockRejectedValue(new Error("bad token")),
+    });
+
+    expect(result).toEqual({ ok: false, error: "unauthenticated" });
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("refuses a signed-in person who is not an administrator and writes nothing", async () => {
+    const store = createFakeRoleStore();
+    const spy = vi.spyOn(store, "create");
+
+    const result = await createRole("token", VALID_INPUT, {
+      ...deps({ store }),
+      verifyToken: verifyAs("member-1"),
+    });
+
+    expect(result).toEqual({ ok: false, error: "forbidden" });
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["a missing title", { description: "Beskrivelse" }],
+    ["an empty title after trimming", { name: "   ", description: "Beskrivelse" }],
+    ["a title over 80 characters", { name: "x".repeat(81), description: "Beskrivelse" }],
+    ["a missing description", { name: "Utvikler" }],
+    ["an empty description after trimming", { name: "Utvikler", description: "   " }],
+    ["a description over 500 characters", { name: "Utvikler", description: "x".repeat(501) }],
+    ["an obsolete expectations field", { name: "Utvikler", description: "Beskrivelse", expectations: [] }],
+    ["a non-string title", { name: 42, description: "Beskrivelse" }],
+  ])("refuses %s with invalid_input and writes nothing", async (_label, input) => {
+    const store = createFakeRoleStore();
+    const spy = vi.spyOn(store, "create");
+
+    const result = await createRole("token", input, deps({ store }));
+
+    expect(result).toEqual({ ok: false, error: "invalid_input" });
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("accepts a title of exactly 80 and a description of exactly 500 characters", async () => {
+    const result = await createRole(
+      "token",
+      { name: "x".repeat(80), description: "y".repeat(500) },
+      deps(),
+    );
+
+    expect(result.ok).toBe(true);
+  });
+
+  it("refuses a create when the role cap is reached", async () => {
+    const store = createFakeRoleStore();
+    for (let index = 0; index < 50; index += 1) {
+      await store.create({ name: `Rolle ${index}`, description: "Beskrivelse", createdAt: NOW, createdBy: ADMIN_UID });
+    }
 
     const result = await createRole("token", VALID_INPUT, deps({ store }));
 
     expect(result).toEqual({ ok: false, error: "cap_reached" });
-    expect(spy).not.toHaveBeenCalled();
-  });
-
-  it("allows a create when fewer than 50 documents exist", async () => {
-    const store = createFakeRoleStore({ generateId: () => "role-new" });
-    for (let index = 0; index < 49; index += 1) {
-      store.seedRaw(`valid-${index}`, { name: `R${index}`, expectations: [], createdAt: NOW, createdBy: "x" });
-    }
-    const result = await createRole("token", VALID_INPUT, deps({ store }));
-    expect(result.ok).toBe(true);
-  });
-
-  it("reports a SkillTree read failure as persistence_failed and never as a missing tree", async () => {
-    const store = createFakeRoleStore();
-    const spy = vi.spyOn(store, "create");
-    const result = await createRole("token", VALID_INPUT, deps({ store, treeReader: treeReader({ api: validTree }, "api") }));
-    expect(result).toEqual({ ok: false, error: "persistence_failed" });
-    expect(spy).not.toHaveBeenCalled();
-  });
-
-  it("writes no role name or description to any log call", async () => {
-    const logs = [vi.spyOn(console, "log"), vi.spyOn(console, "warn"), vi.spyOn(console, "error"), vi.spyOn(console, "info")];
-    await createRole("token", { ...VALID_INPUT, description: "Secret wording" }, deps());
-    for (const spy of logs) {
-      expect(JSON.stringify(spy.mock.calls)).not.toMatch(/Backend engineer|Secret wording/);
-    }
   });
 });

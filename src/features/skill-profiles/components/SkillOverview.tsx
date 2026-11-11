@@ -12,7 +12,9 @@ import { fetchOwnSkills } from "../client/skill-profile-gateway";
 import { SELF_ASSESSED_LEVEL_COPY, skillProfileCopy, skillViewCopy } from "../copy";
 import { SELF_ASSESSED_LEVELS, type SelfAssessedLevel } from "../domain/self-assessed-level";
 import { buildOverviewModel, type OverviewAreaRow, type OverviewModel } from "../domain/overview-model";
+import { buildPersonalRadarModel } from "../domain/personal-radar";
 import type { SkillRowDto } from "../domain/skill-profile-view";
+import { PersonalRadar } from "./PersonalRadar";
 
 /** How many skill areas the overview lists. The full, editable list lives in the Kompetansekart view. */
 const OVERVIEW_AREA_LIMIT = 7;
@@ -207,12 +209,19 @@ function NextStepsPanel({ model }: { readonly model: OverviewModel }) {
   );
 }
 
-/** The competence profile of the person's own assessments: one row per skill, the level as text and a four-step bar. */
+type ProfileView = "list" | "radar";
+
+/**
+ * The competence profile of the person's own assessments. The list is the default, detailed view; the radar is an optional
+ * view of the same own levels, switched on by the person. Neither view reads anything beyond the overview model.
+ */
 function ProfilePanel({ model }: { readonly model: OverviewModel }) {
   const headingId = useId();
   const copy = skillProfileCopy.overview;
+  const [view, setView] = useState<ProfileView>("list");
   const shown = model.areas.slice(0, OVERVIEW_AREA_LIMIT);
   const hidden = model.areas.length - shown.length;
+  const radar = buildPersonalRadarModel(model.areas);
   return (
     <Card as="section" padding="sm" aria-labelledby={headingId} className="flex min-w-0 flex-col gap-2">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
@@ -224,12 +233,28 @@ function ProfilePanel({ model }: { readonly model: OverviewModel }) {
         </Link>
       </div>
       <p className="text-xs text-text-secondary">{copy.profileIntro}</p>
-      <ul className="flex flex-col divide-y divide-border-subtle">
-        {shown.map((area) => (
-          <ProfileRow key={area.treeId} area={area} />
-        ))}
-      </ul>
-      {hidden > 0 ? <p className="text-xs text-text-secondary">{copy.moreAreas(hidden)}</p> : null}
+      <div role="group" aria-label={copy.viewSwitchLabel} className="flex gap-2">
+        <Button variant={view === "list" ? "primary" : "secondary"} size="sm" aria-pressed={view === "list"} onClick={() => setView("list")}>
+          {copy.viewList}
+        </Button>
+        <Button variant={view === "radar" ? "primary" : "secondary"} size="sm" aria-pressed={view === "radar"} onClick={() => setView("radar")}>
+          {copy.viewRadar}
+        </Button>
+      </div>
+      {view === "list" ? (
+        <>
+          <ul className="flex flex-col divide-y divide-border-subtle">
+            {shown.map((area) => (
+              <ProfileRow key={area.treeId} area={area} />
+            ))}
+          </ul>
+          {hidden > 0 ? <p className="text-xs text-text-secondary">{copy.moreAreas(hidden)}</p> : null}
+        </>
+      ) : radar.status === "ready" ? (
+        <PersonalRadar points={radar.points} unassessedCount={radar.unassessedCount} omittedByCap={radar.omittedByCap} />
+      ) : (
+        <p className="text-sm text-text-secondary">{copy.radarTooFew(radar.assessedCount)}</p>
+      )}
     </Card>
   );
 }

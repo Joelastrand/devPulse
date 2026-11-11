@@ -3,7 +3,6 @@ import {
   validateRolePatch,
   type RoleAdminDto,
   type RoleDefinition,
-  type RoleDescriptionChange,
 } from "../domain/role-definition";
 import { requireAppAdmin, type RequireAppAdminDeps } from "../../teams/server/require-app-admin";
 import { toAdminRoleDto } from "./role-admin-mapping";
@@ -15,11 +14,6 @@ import { type AuthRefusal } from "../../auth/server/auth-refusal";
 export interface UpdateRoleDeps extends RequireAppAdminDeps {
   store?: RoleStore;
   now?: () => Date;
-}
-
-function nextDescription(current: string | undefined, change: RoleDescriptionChange | undefined): string | undefined {
-  if (change === undefined) return current;
-  return "set" in change ? change.set : undefined;
 }
 
 export type UpdateRoleResult =
@@ -68,20 +62,15 @@ export async function updateRole(
     const updatedAt = (deps.now ?? (() => new Date()))();
     const changes: RoleFieldChanges = { set: { updatedAt, updatedBy: admin.identity.uid }, unset: [] };
     if (patch.name !== undefined) changes.set.name = patch.name;
-    if (patch.description !== undefined) {
-      if ("set" in patch.description) {
-        changes.set.description = patch.description.set;
-      } else {
-        changes.unset.push("description");
-      }
-    }
+    if (patch.description !== undefined) changes.set.description = patch.description;
     await store.update(roleId, changes);
 
-    const next: RoleDefinition = { name: patch.name ?? current.name, createdAt: current.createdAt, updatedAt };
-    const description = nextDescription(current.description, patch.description);
-    if (description !== undefined) {
-      next.description = description;
-    }
+    const next: RoleDefinition = {
+      name: patch.name ?? current.name,
+      description: patch.description ?? current.description,
+      createdAt: current.createdAt,
+      updatedAt,
+    };
     return { ok: true, role: toAdminRoleDto(roleId, next) };
   } catch (error) {
     return { ok: false, error: writeRefusalFor(error) };

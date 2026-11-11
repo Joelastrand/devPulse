@@ -7,7 +7,7 @@ const BASE = new Date("2026-10-01T10:00:00Z");
 function role(name: string, offsetDays = 0): StoredRoleDefinition {
   return {
     name,
-    expectations: [],
+    description: "Beskrivelse",
     createdAt: new Date(BASE.getTime() + offsetDays * 86_400_000),
     createdBy: "admin-uid",
   };

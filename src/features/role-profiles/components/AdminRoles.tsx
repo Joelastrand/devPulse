@@ -139,7 +139,7 @@ export function AdminRoles() {
                     <Icon icon={UserCog} size="inline" />
                     {role.name}
                   </span>
-                  {role.description !== undefined && <span className="line-clamp-2 text-xs text-text-secondary">{role.description}</span>}
+                  <span className="line-clamp-2 text-xs text-text-secondary">{role.description}</span>
                   {role.archived && <span className="text-xs text-text-secondary">{adminRolesCopy.statusArchived}</span>}
                 </button>
               </li>
@@ -204,7 +204,7 @@ function RoleRow({
           {role.archived ? adminRolesCopy.statusArchived : adminRolesCopy.statusActive}
         </span>
       </div>
-      {role.description !== undefined && (
+      {(
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{role.description}</p>
       )}
 

@@ -3,7 +3,7 @@
 Specification: [SPEC.md](./SPEC.md) (Approved, owner decision Option A).
 
 ## Status
-Ready: 0  In Progress: 0  Done: 7
+Ready: 0  In Progress: 1 (TASK-010)  Done: 9 (TASK-001 to TASK-009)
 
 Task ground rules: one task at a time; no commit, push, deploy or Firestore rules deployment; no change to global
 `skillTrees`, `skillProfiles`, C2 thresholds or `authorizeTeamAccess`.
@@ -20,7 +20,7 @@ update (criteria version, duplicate rule), set and clear own rating. Gates run i
 ## TASK-003 — Aggregate view (privacy-thresholded) — Done
 `src/features/team-owned-skills/server/get-team-owned-skill-aggregate.ts` (single approved C2 scan consumer, SPEC §6),
 `read-team-skill-ratings-batch.ts` (identity-free exact-document reader), route `team-skills/aggregate`, and the member-visible
-`TeamSkillStatus` on the Kompetanser tab. Threshold 5, opted-in members only, current criteria version, suspect ratings suppress.
+`TeamSkillStatus` on the Kompetanser tab. Threshold 3 (owner decision 2026-11-11, previously 5), opted-in members only, current criteria version, suspect ratings suppress.
 Tests: `get-team-owned-skill-aggregate.test.ts`; C2 guard allowlists updated exactly.
 
 ## TASK-004 — API routes — Done
@@ -82,3 +82,20 @@ Remaining (not done, not blocking acceptance):
   display name. `demo-skill-testing` comes from `src/features/demo-team/fixtures.ts`, and `demoteam-test-automation` comes
   from `scripts/seed-demoteam.mjs`. Both are seeded, and the demo member has a level on each. Both records are preserved.
   Renaming one of the demo trees is a demo-data decision and was not made here.
+
+## TASK-008 — Collaborative team level (canonical skill ids) — Done
+`domain/team-manual-assessment.ts`, `server/manage-team-manual-assessments.ts`, store seam methods (real and fake), routes
+`team-skills/manual` and `team-skills/[skillId]/manual`, client gateway calls. Team administrators write; members read; no
+member attribution. Tests: `server/team-manual-assessments.test.ts` (18 tests). See SPEC §12.
+
+## TASK-009 — Unified Teamkompetanse page and navigation — Done
+`components/TeamCompetenceWorkspace.tsx` (one page: catalog administration, mode switch Automatisk profil / Felles vurdering,
+radar, readable list), `components/TeamManualLevelEditor.tsx`, `workspace-copy.ts`. `/competence` renders it; `/skills` redirects;
+the duplicate tab is removed (five tabs). Retired: `TeamSkillStatus`, C2 `TeamCompetenceCoverage`, the collaborative profile
+component tree and the profile-mode settings control. Tests: `components/TeamCompetenceWorkspace.test.tsx` (10 tests).
+
+## TASK-010 — Legacy retirement, Competence Plan independence and cleanup — In Progress
+Done: erasure A-19; deny-only rules for `teamManualAssessments`; threshold and notice consistency (earlier increment).
+Open: Competence Plan still requires assignment in the retired `teamCompetenceAreas` catalog (`competence-plans.ts`);
+server routes and stores of the retired catalogs, profile settings, collaborative levels, skill-levels, skill-coverage and
+skill-needs are still callable; no legacy Firestore cleanup has been run or scripted. See SPEC §13.

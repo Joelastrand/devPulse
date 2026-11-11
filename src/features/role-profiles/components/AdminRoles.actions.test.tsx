@@ -24,10 +24,10 @@ const { AdminRoles } = await import("./AdminRoles");
 const ACTIVE: AdminRoleView = {
   roleId: "role-1",
   name: "Backend",
+  description: "Bygger API-et",
   archived: false,
-  expectations: [{ treeId: "api", treeName: "API design", expectedLevel: 3 }],
 };
-const ARCHIVED: AdminRoleView = { roleId: "role-2", name: "Frontend", archived: true, expectations: [] };
+const ARCHIVED: AdminRoleView = { roleId: "role-2", name: "Frontend", description: "Bygger brukergrensesnittet", archived: true };
 
 afterEach(() => {
   cleanup();

@@ -36,8 +36,8 @@ function role(overrides: Partial<AdminRoleView> = {}): AdminRoleView {
   return {
     roleId: "role-1",
     name: "Backend",
+    description: "Bygger API-et",
     archived: false,
-    expectations: [{ treeId: "api", treeName: "API design", expectedLevel: 3 }],
     ...overrides,
   };
 }
@@ -64,22 +64,15 @@ describe("AdminRoles", () => {
     expect(fetchAdminRolesMock).toHaveBeenCalledWith("admin-token");
   });
 
-  it("lists each expectation with its level, and marks an unavailable SkillTree as unavailable", async () => {
+  it("shows the title and the required description of each role", async () => {
     await renderWith({
       status: "ok",
       truncated: false,
-      roles: [
-        role({
-          expectations: [
-            { treeId: "api", treeName: "API design", expectedLevel: 3 },
-            { treeId: "gone", treeName: null, expectedLevel: 2 },
-          ],
-        }),
-      ],
+      roles: [role({ name: "Backend", description: "Bygger API-et" })],
     });
 
-    expect(screen.getByText(/API design/)).toBeTruthy();
-    expect(screen.getByText(`${adminRolesCopy.unavailableArea} — ${adminRolesCopy.expectedLevel(2)}`, { exact: false })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Backend" })).toBeTruthy();
+    expect(screen.getAllByText("Bygger API-et").length).toBeGreaterThan(0);
   });
 
   it("shows the empty-state copy when there are no roles", async () => {
@@ -88,10 +81,11 @@ describe("AdminRoles", () => {
     expect(screen.getByText(adminRolesCopy.empty)).toBeTruthy();
   });
 
-  it("shows the no-expectations copy for a role without expectations", async () => {
-    await renderWith({ status: "ok", truncated: false, roles: [role({ expectations: [] })] });
+  it("does not render any skill expectation, level or SkillTree copy", async () => {
+    await renderWith({ status: "ok", truncated: false, roles: [role()] });
 
-    expect(screen.getByText(adminRolesCopy.noExpectations)).toBeTruthy();
+    expect(screen.queryByText(/forventning/i)).toBeNull();
+    expect(screen.queryByText(/nivå/i)).toBeNull();
   });
 
   it("shows a generic forbidden alert for a non-admin without confirming any admin list", async () => {
@@ -133,21 +127,18 @@ describe("AdminRoles split view (visual-redesign TASK-015)", () => {
     expect(screen.queryByText(/Rettigheter/)).toBeNull();
   });
 
-  it("lists every role in the summary list with its expectation count and archived text", async () => {
+  it("lists every role in the summary list with its description and archived text", async () => {
     await renderWith({
       status: "ok",
       truncated: false,
       roles: [
         role({ description: "Bygger API-et" }),
-        role({ roleId: "role-2", name: "Frontend", archived: true, expectations: [] }),
+        role({ roleId: "role-2", name: "Frontend", description: "Bygger brukergrensesnittet", archived: true }),
       ],
     });
 
     const summary = screen.getByRole("list", { name: adminRolesCopy.splitListLabel });
-    expect(within(summary).getByText("Bygger API-et")).toBeTruthy();
-    expect(within(summary).getByRole("button", { name: /Backend/ }).textContent).toContain(
-      adminRolesCopy.expectationCount(1),
-    );
+    expect(within(summary).getByRole("button", { name: /Backend/ }).textContent).toContain("Bygger API-et");
     expect(within(summary).getByRole("button", { name: /Frontend/ }).textContent).toContain(adminRolesCopy.statusArchived);
   });
 

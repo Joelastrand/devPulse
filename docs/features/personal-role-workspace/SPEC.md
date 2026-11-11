@@ -1,5 +1,12 @@
 # Personal role workspace and conversation evidence
 
+> **Current contract override (2026-11-11, role simplification).** The personal target role (`userDevelopment/{uid}/roleTarget/current`)
+> and the role comparison are withdrawn and no longer exist in code or data. The company section of the workspace ("Min rolle") shows the
+> person's formally assigned organizational role: its title and description, read through `GET /api/me/role-assignment`, with a concise
+> empty state when none is assigned. Responsibilities and contributions are unchanged and independent of the assignment. The role
+> carries no permission. The authoritative contract is `docs/features/role-profiles/SPEC.md`. Where this document describes a target
+> role, a "Ditt utviklingsmål" section, or a comparison, that text is historical.
+
 ## Status
 Draft — Phase 2A decisions recorded, security validation run, and first-increment blockers resolved in documentation (2026-11-10, second pass). **First increment: NO-GO until the approvals in SECURITY-REVIEW §11.8 are recorded. Assigned role (Phase 2B): NO-GO** (§10).
 

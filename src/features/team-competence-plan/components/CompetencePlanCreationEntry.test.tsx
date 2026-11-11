@@ -8,6 +8,7 @@ const hook = vi.hoisted(() => ({ data: { phase: "loading" } as unknown }));
 vi.mock("../client/use-competence-plans", () => ({
   useCompetencePlans: () => ({
     data: hook.data,
+    create: vi.fn(),
     save: vi.fn(),
     saveMilestoneCompletion: vi.fn(),
     reload: vi.fn(),
@@ -16,9 +17,6 @@ vi.mock("../client/use-competence-plans", () => ({
 
 import { CompetencePlanSection } from "./CompetencePlanSection";
 
-const PLANNED = "tree-testing";
-const UNPLANNED = "tree-observability";
-
 function loaded(overrides: Partial<Extract<CompetencePlanPageData, { phase: "loaded" }>> = {}): CompetencePlanPageData {
   return {
     phase: "loaded",
@@ -26,11 +24,7 @@ function loaded(overrides: Partial<Extract<CompetencePlanPageData, { phase: "loa
     truncated: false,
     legacyItems: [],
     legacyFailed: false,
-    areas: [
-      { treeId: PLANNED, name: "Testautomatisering", status: "active" },
-      { treeId: UNPLANNED, name: "Observerbarhet", status: "active" },
-    ],
-    plans: [{ treeId: PLANNED, targetStage: 3, priority: "high", archived: false, progress: { completed: 0, total: 0 }, milestones: [] }],
+    plans: [],
     ...overrides,
   };
 }
@@ -40,36 +34,24 @@ afterEach(() => {
 });
 
 describe("CompetencePlanSection creation entry (Kompetanseplan)", () => {
-  it("offers a visible 'Ny kompetanseplan' action to a lead when an unplanned area is assigned", () => {
+  it("offers 'Ny kompetanseplan' to a lead even when the team has no competence areas", () => {
     hook.data = loaded();
     render(<CompetencePlanSection teamId="team-1" />);
 
     expect(screen.getByRole("button", { name: "Ny kompetanseplan" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Tildel kompetanseområder på Teamkompetanse" })).toBeNull();
   });
 
-  it("opens the creation form with the area preselected from Teamkompetanse", async () => {
+  it("opens a creation form with a plan title field and no competence-area picker", async () => {
     hook.data = loaded();
-    render(<CompetencePlanSection teamId="team-1" initialAreaTreeId={UNPLANNED} />);
-
-    const picker = screen.getByLabelText("Kompetanseområde") as HTMLSelectElement;
-    expect(picker.value).toBe(UNPLANNED);
-    expect(screen.getByRole("form", { name: /Observerbarhet/ })).toBeTruthy();
-  });
-
-  it("ignores a preselected area that already has a plan, so no duplicate can be started", () => {
-    hook.data = loaded();
-    render(<CompetencePlanSection teamId="team-1" initialAreaTreeId={PLANNED} />);
-
-    const picker = screen.queryByLabelText("Kompetanseområde") as HTMLSelectElement | null;
-    expect(picker === null || picker.value !== PLANNED).toBe(true);
-  });
-
-  it("explains missing assigned areas and links a lead to Teamkompetanse, instead of a dead end", () => {
-    hook.data = loaded({ areas: [], plans: [] });
+    const { default: userEvent } = await import("@testing-library/user-event");
     render(<CompetencePlanSection teamId="team-1" />);
 
-    const link = screen.getByRole("link", { name: "Tildel kompetanseområder på Teamkompetanse" });
-    expect(link.getAttribute("href")).toBe("/teams/team-1/competence");
+    await userEvent.setup().click(screen.getByRole("button", { name: "Ny kompetanseplan" }));
+
+    expect(screen.getByRole("form", { name: "Legg til kompetanseplan" })).toBeTruthy();
+    expect(screen.getByLabelText("Navn på plan")).toBeTruthy();
+    expect(screen.queryByLabelText("Kompetanseområde")).toBeNull();
   });
 
   it("does not show the creation action to a member", () => {

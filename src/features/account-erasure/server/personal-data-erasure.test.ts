@@ -12,7 +12,8 @@ const OTHER = "other-uid";
 type Seed = {
   skill?: string[];
   profiles?: string[];
-  roleTargets?: Record<string, string[]>;
+  /** uids that hold a formal role assignment (`roleAssignments/{uid}`). */
+  roleAssignments?: string[];
   goals?: Record<string, string[]>;
   responsibilities?: Record<string, string[]>;
   achievements?: Record<string, string[]>;
@@ -22,9 +23,7 @@ type Seed = {
 function fakeData(seed: Seed = {}) {
   const skill = new Set(seed.skill ?? []);
   const profiles = new Set(seed.profiles ?? []);
-  const roleTargets = new Map<string, Set<string>>(
-    Object.entries(seed.roleTargets ?? {}).map(([uid, ids]) => [uid, new Set(ids)]),
-  );
+  const roleAssignments = new Set(seed.roleAssignments ?? []);
   const goals = new Map<string, Set<string>>(Object.entries(seed.goals ?? {}).map(([uid, ids]) => [uid, new Set(ids)]));
   const responsibilities = new Map<string, Set<string>>(
     Object.entries(seed.responsibilities ?? {}).map(([uid, ids]) => [uid, new Set(ids)]),
@@ -48,12 +47,12 @@ function fakeData(seed: Seed = {}) {
       log.push(`profile:${uid}`);
       profiles.delete(uid);
     },
-    async roleTargetIds(uid, limit) {
-      return [...(roleTargets.get(uid) ?? [])].slice(0, limit);
+    async roleAssignmentExists(uid) {
+      return roleAssignments.has(uid);
     },
-    async deleteRoleTarget(uid, roleTargetId) {
-      log.push(`roleTarget:${uid}:${roleTargetId}`);
-      roleTargets.get(uid)?.delete(roleTargetId);
+    async deleteRoleAssignment(uid) {
+      log.push(`roleAssignment:${uid}`);
+      roleAssignments.delete(uid);
     },
     async goalIds(uid, limit) {
       return [...(goals.get(uid) ?? [])].slice(0, limit);
@@ -85,7 +84,7 @@ function fakeData(seed: Seed = {}) {
     },
   };
 
-  return { port, skill, profiles, roleTargets, goals, responsibilities, achievements, teamAssessments, log };
+  return { port, skill, profiles, roleAssignments, goals, responsibilities, achievements, teamAssessments, log };
 }
 
 async function runToDone(port: PersonalDataErasurePort, uid: string, maxWrites = 100): Promise<number> {
@@ -98,11 +97,11 @@ async function runToDone(port: PersonalDataErasurePort, uid: string, maxWrites =
 }
 
 describe("personal data erasure step (TASK-022)", () => {
-  it("deletes the skill profile, the user profile, every role-target document, and every goal of the erased person", async () => {
+  it("deletes the skill profile, the user profile, the role assignment, and every goal of the erased person", async () => {
     const store = fakeData({
       skill: [UID],
       profiles: [UID],
-      roleTargets: { [UID]: ["current", "history-1"] },
+      roleAssignments: [UID],
       goals: { [UID]: ["goal-1", "goal-2"] },
     });
 
@@ -110,17 +109,17 @@ describe("personal data erasure step (TASK-022)", () => {
 
     expect(store.skill.has(UID)).toBe(false);
     expect(store.profiles.has(UID)).toBe(false);
-    expect(store.roleTargets.get(UID)?.size).toBe(0);
+    expect(store.roleAssignments.has(UID)).toBe(false);
     expect(store.goals.get(UID)?.size).toBe(0);
   });
 
-  it("removes every role-target document under the subtree, not only the current one (I-4 is the whole subtree)", async () => {
-    const store = fakeData({ roleTargets: { [UID]: ["current", "older-target", "another"] } });
+  it("removes the formal role assignment (I-4) and records exactly one delete for it", async () => {
+    const store = fakeData({ roleAssignments: [UID] });
 
-    await runToDone(store.port, UID, 1);
+    await runToDone(store.port, UID);
 
-    expect(store.roleTargets.get(UID)?.size).toBe(0);
-    expect(store.log.filter((entry) => entry.startsWith("roleTarget:"))).toHaveLength(3);
+    expect(store.roleAssignments.has(UID)).toBe(false);
+    expect(store.log.filter((entry) => entry.startsWith("roleAssignment:"))).toEqual([`roleAssignment:${UID}`]);
   });
 
   it("pages across more than one goal page, removing every goal", async () => {
@@ -143,11 +142,11 @@ describe("personal data erasure step (TASK-022)", () => {
     expect(store.profiles.has(UID)).toBe(false);
   });
 
-  it("leaves another person's personal data untouched", async () => {
+  it("leaves another person's personal data and role assignment untouched", async () => {
     const store = fakeData({
       skill: [UID, OTHER],
       profiles: [OTHER],
-      roleTargets: { [OTHER]: ["current"] },
+      roleAssignments: [UID, OTHER],
       goals: { [OTHER]: ["other-goal"] },
     });
 
@@ -155,12 +154,12 @@ describe("personal data erasure step (TASK-022)", () => {
 
     expect(store.skill.has(OTHER)).toBe(true);
     expect(store.profiles.has(OTHER)).toBe(true);
-    expect(store.roleTargets.get(OTHER)?.has("current")).toBe(true);
+    expect(store.roleAssignments.has(OTHER)).toBe(true);
     expect(store.goals.get(OTHER)?.has("other-goal")).toBe(true);
   });
 
   it("is idempotent: a second run over already-removed data reports done and deletes nothing", async () => {
-    const store = fakeData({ skill: [UID], goals: { [UID]: ["goal-1"] } });
+    const store = fakeData({ skill: [UID], roleAssignments: [UID], goals: { [UID]: ["goal-1"] } });
     await runToDone(store.port, UID);
     const writesAfterFirstRun = store.log.length;
 

@@ -1,5 +1,6 @@
 import type { TeamSkillRecord } from "../domain/team-skill";
 import { teamSkillAssessmentDocId, type TeamSkillAssessmentRecord } from "../domain/team-skill-assessment";
+import { teamManualAssessmentDocId, type TeamManualAssessmentRecord } from "../domain/team-manual-assessment";
 import type { RawDoc, TeamSkillStore, TeamSkillTx } from "./team-skill-store";
 
 type Doc = Record<string, unknown>;
@@ -12,6 +13,8 @@ export interface FakeTeamSkillState {
   skills: Record<string, unknown>;
   /** Keyed by `uid__skillId`. Raw data, so tests can plant malformed documents. */
   assessments: Record<string, Doc>;
+  /** Keyed by `teamId__skillId`. Raw data, so tests can plant malformed documents. */
+  manualAssessments?: Record<string, Doc>;
 }
 
 /**
@@ -24,6 +27,7 @@ export function createFakeTeamSkillStore(initial: Partial<FakeTeamSkillState> = 
     memberships: { ...(initial.memberships ?? {}) },
     skills: { ...(initial.skills ?? {}) },
     assessments: { ...(initial.assessments ?? {}) },
+    manualAssessments: { ...(initial.manualAssessments ?? {}) },
   };
   let counter = 0;
 
@@ -61,6 +65,24 @@ export function createFakeTeamSkillStore(initial: Partial<FakeTeamSkillState> = 
     },
     deleteAssessment(uid, skillId) {
       delete state.assessments[teamSkillAssessmentDocId(uid, skillId)];
+    },
+    async getManualAssessment(teamId, skillId) {
+      const doc = state.manualAssessments?.[teamManualAssessmentDocId(teamId, skillId)];
+      return doc && { ...doc };
+    },
+    async listManualAssessments(teamId, limit) {
+      return Object.entries(state.manualAssessments ?? {})
+        .filter(([, data]) => data.teamId === teamId)
+        .slice(0, limit)
+        .map(([id, data]) => ({ id, data: { ...data } }));
+    },
+    putManualAssessment(record: TeamManualAssessmentRecord) {
+      state.manualAssessments = { ...(state.manualAssessments ?? {}), [teamManualAssessmentDocId(record.teamId, record.skillId)]: { ...record } };
+    },
+    deleteManualAssessment(teamId, skillId) {
+      const next = { ...(state.manualAssessments ?? {}) };
+      delete next[teamManualAssessmentDocId(teamId, skillId)];
+      state.manualAssessments = next;
     },
   };
 

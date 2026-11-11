@@ -1,5 +1,10 @@
 # Individual Skill Self-Assessment (C1)
 
+> **Current contract override (2026-11-11).** The role expectation dashed series described in the 2026-10 permission below is withdrawn.
+> Organizational roles no longer carry skill expectations, and the overview shows no target role, no expected level and no role
+> comparison. The radar, if it is restored, shows only the person's own levels, and that needs an owner decision (see
+> `docs/features/role-profiles/TASKS.md`, RS-8). This note supersedes the permission text where they differ.
+
 ## Status
 **Implemented** (closed out 2026-10-05; TASK-001–011 Done). Approved, revision 2 —
 planned 2026-10-04 against commit `2f2ff68` (Feature B closed). Revision 2 passed final
@@ -21,10 +26,11 @@ The product owner explicitly approved a **personal** competence visualization on
 "no chart" restriction (BR-29, A5, D12, D13, the matching out-of-scope bullet and acceptance criterion) **for the
 signed-in person's own assessments only**. The historical text is not rewritten; the scope below is authoritative.
 
-- **Permitted (new):** one radar chart of the signed-in person's own levels on the Oversikt view of `/me/skills`. When a
-  target role is selected and it has an expectation for **every** plotted skill, the role's expectation is a second,
-  dashed series. The scale is the canonical 1–4 scale (BR-4), with a text legend, a visually hidden table of the exact level
-  names, and the editable list stays the canonical representation (BR-31).
+- **Permitted (new):** one radar chart of the signed-in person's own levels on the Oversikt view of `/me/skills`. It has
+  one series only (the person's own levels). No target-role or expectation series is drawn: the role-expectation radar was
+  removed with the simplified role model and is not restored. The scale is the canonical 1–4 scale (BR-4), with a text legend, a
+  visually hidden table of the exact level names, and the editable list stays the canonical representation (BR-31). The
+  list is the default view; a switch (`Liste` / `Radar`, `aria-pressed`) shows the radar.
 - **Axes:** only the person's **assessed** skills, in canonical list order, at most 12 (more are listed, not drawn, and
   the page says so). An unassessed skill is never drawn as zero or as a gap that implies a value. With fewer than three
   assessed skills there is no chart. No area of the polygon, no overall figure and no average is shown (BR-22, BR-26).

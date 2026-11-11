@@ -25,7 +25,7 @@ export interface TimelineMarker {
 }
 
 export interface TimelineRow {
-  treeId: string;
+  planId: string;
   /** Bar start and width in percent of the window; `null` when the plan has no dated milestone inside the window. */
   bar: { startPct: number; widthPct: number } | null;
   markers: TimelineMarker[];
@@ -55,7 +55,7 @@ export function addMonths(start: MonthRef, offset: number): MonthRef {
 
 /** Builds the month columns and one row per plan. A plan without dated milestones still gets a row (no bar). */
 export function buildPlanTimeline(
-  plans: ReadonlyArray<{ treeId: string; milestones: readonly PlanMilestone[] }>,
+  plans: ReadonlyArray<{ planId: string; milestones: readonly PlanMilestone[] }>,
   start: MonthRef,
   span: TimelineSpan,
 ): PlanTimeline {
@@ -83,12 +83,12 @@ export function buildPlanTimeline(
     const first = dated.length === 0 ? null : Math.min(...dated.map(({ day }) => day));
     const last = dated.length === 0 ? null : Math.max(...dated.map(({ day }) => day));
     const overlaps = first !== null && last !== null && last >= windowStart && first < windowEnd;
-    if (!overlaps || first === null || last === null) return { treeId: plan.treeId, bar: null, markers };
+    if (!overlaps || first === null || last === null) return { planId: plan.planId, bar: null, markers };
 
     const clippedStart = Math.max(first, windowStart);
     const clippedEnd = Math.min(last, windowEnd - 1);
     return {
-      treeId: plan.treeId,
+      planId: plan.planId,
       bar: { startPct: pctOf(clippedStart), widthPct: Math.max(pctOf(clippedEnd) - pctOf(clippedStart), 1) },
       markers,
     };
@@ -98,7 +98,7 @@ export function buildPlanTimeline(
 }
 
 export interface NextStep {
-  treeId: string;
+  planId: string;
   milestone: PlanMilestone;
 }
 
@@ -107,12 +107,12 @@ export interface NextStep {
  * member data is involved.
  */
 export function nextPlanSteps(
-  plans: ReadonlyArray<{ treeId: string; archived: boolean; milestones: readonly PlanMilestone[] }>,
+  plans: ReadonlyArray<{ planId: string; archived: boolean; milestones: readonly PlanMilestone[] }>,
   limit: number,
 ): NextStep[] {
   const open = plans
     .filter((plan) => !plan.archived)
-    .flatMap((plan) => plan.milestones.filter((m) => m.status !== "completed").map((milestone) => ({ treeId: plan.treeId, milestone })));
+    .flatMap((plan) => plan.milestones.filter((m) => m.status !== "completed").map((milestone) => ({ planId: plan.planId, milestone })));
   const key = (step: NextStep) => (step.milestone.targetDate !== null && isValidPlanDate(step.milestone.targetDate) ? step.milestone.targetDate : "￿");
   return open.sort((a, b) => key(a).localeCompare(key(b))).slice(0, limit);
 }

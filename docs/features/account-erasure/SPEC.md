@@ -204,7 +204,7 @@ cannot drift from the code.
 | I-1 | `skillProfiles/{uid}` | self-assessment levels | DELETE | Document id is the uid. |
 | I-2 | `userProfiles/{uid}` | display name | DELETE | Document id is the uid. |
 | I-3 | `userDevelopment/{uid}/goals/*` | owner goals | DELETE | Owner subtree; paged. |
-| I-4 | `userDevelopment/{uid}/roleTarget/current` | role target | DELETE | Owner subtree. |
+| I-4 | `roleAssignments/{uid}` | formal organizational role assignment (`roleId` only) | DELETE | Located by document id = uid. The shared role definition is kept. (Replaces the obsolete `userDevelopment/{uid}/roleTarget` subtree, removed by the role simplification; see the decision log below.) |
 | I-5 | `userDevelopment/{uid}/conversations/*` (owned) | owner content, participant binding, shared snapshots | DELETE | D4. Cascade to the participant index (I-7) and to the binding is performed by the existing owner-delete semantics, with participants losing the conversation. |
 | I-6 | `userDevelopment/{uid}/conversationParticipations/*` | participant locator `{ownerUid, invitedAt}` | DELETE | Own subtree. Discovery of bindings uses I-8, not this index. |
 | I-7 | Participant binding in others' owned conversations: plain fields `participantUid`, `participantMemberRef`, `participantState`, `participantInvitedAt`, `participantAcceptedAt`, and encrypted `participantNotes` | participant identity and notes | DETACH + DELETE (content) | D2 exception (BR-9). Owner content is kept. |
@@ -461,7 +461,7 @@ claim.
 | W-1 | `PUT/DELETE /api/me/profile` (`set-own-profile`, `delete-own-profile`) | `userProfiles` | Transactional (`user-profile-store.ts` `runTransaction` for set; delete is a plain `delete()` at `user-profile-store.ts:65`: convert). |
 | W-2 | `PUT/DELETE /api/me/skills/[treeId]` | `skillProfiles` | Transactional (`skill-profile-store.ts` `runTransaction`). |
 | W-3 | `DELETE /api/me/skills` (`delete-own-skill-profile`) | `skillProfiles` | Plain `delete()` at `skill-profile-store.ts:85`: convert. |
-| W-4 | `PUT/DELETE /api/me/role-target` | `userDevelopment/*/roleTarget` | Transactional for set (`role-target-store.ts:44`); clear: verify. |
+| W-4 | `PUT/DELETE /api/admin/users/{uid}/role-assignment` | `roleAssignments/{uid}` | Transactional fence on the target uid (`role-assignment-store.ts`, `runFencedTransaction`). Replaces the removed `/api/me/role-target` writes. |
 | W-5 | `POST/PATCH/DELETE /api/me/goals*` | `userDevelopment/*/goals` | Update transactional (`goal-store.ts:110`); create and delete: verify. |
 | W-6 | `POST /api/me/conversations`, `PATCH /api/me/conversations/[id]`, `DELETE`, complete, invite, change participant, shared goals, participant notes (`PUT`), participation accept | `userDevelopment/*/conversations`, `conversationParticipations` | Section and snapshot writes are transactional per the development-conversations SPEC (TASKS notes); **verify each route**. |
 | W-7 | `POST /api/teams/[teamId]/forum/threads` (`create-thread.ts`) | `forumThreads` | Verify (uses a collection `add`; convert if plain). |
@@ -1262,6 +1262,15 @@ Source: `docs/features/personal-role-workspace/SECURITY-REVIEW.md` §11.3 and `d
   step, which is not yet implemented.
 - Not covered by this log, and blocked: `roleAssignments/{uid}`, its history, and the `assignedBy` actor row. See §11.3 of the packet.
 
+## Decision log: formal role assignment, I-4 and A-18 (role-profiles, 2026-11-11)
+
+- **I-4 (replaced)** `roleAssignments/{uid}`: the person's formal organizational role assignment (`roleId` plus audit
+  timestamps). DELETE, located by document id = uid, deleted by the `personal_data` step. The shared
+  `roleDefinitions/{roleId}` document is never deleted or changed by erasure. The former `userDevelopment/{uid}/roleTarget`
+  subtree was removed from Firestore by the approved legacy cleanup (2026-11-11) and no longer has an inventory row.
+- **A-18** `roleAssignments/{uid}`: `createdBy` and `updatedBy`, the administrator who assigned or changed another person's
+  role. ANONYMIZE, cleared by the `actor_audit` step. The assignment of other people is kept.
+
 ## Decision log: team-owned skills inventory, I-19 and A-17 (approved 2026-11-11, docs/features/team-owned-skills)
 
 - **I-19** `teamSkillAssessments/{uid}__{skillId}`: a person's private team-skill ratings, one document per (person,
@@ -1269,3 +1278,7 @@ Source: `docs/features/personal-role-workspace/SECURITY-REVIEW.md` §11.3 and `d
 - **A-17** `teamSkills/{skillId}`: `createdBy` and `updatedBy` of a team-owned skill definition. ANONYMIZE, cleared by the
   `actor_audit` step. The definition itself is team configuration and is kept.
 - No P-row and no new erasure step. Team-owned skill definitions follow the team lifecycle, not the person.
+
+## Decision log: collaborative team competence level, A-19 (approved 2026-11-11, docs/features/team-owned-skills SPEC §12)
+
+- **A-19** `teamManualAssessments/{teamId}__{skillId}`: `updatedBy`, the team administrator who recorded the agreed level. ANONYMIZE, cleared by the `actor_audit` step. The agreed level, note and timestamp are team-level values and are kept. No member is attributed, so no personal row is added.

@@ -7,7 +7,6 @@ import userEvent from "@testing-library/user-event";
 const observeIdTokenMock = vi.fn();
 const fetchGoalsMock = vi.fn();
 const fetchConversationListMock = vi.fn();
-const fetchOwnRoleTargetMock = vi.fn();
 const fetchOwnProfileMock = vi.fn();
 const fetchTeamsOverviewMock = vi.fn();
 const requestTeamAccessMock = vi.fn();
@@ -18,7 +17,6 @@ vi.mock("../../personal-goals/client/goals-gateway", () => ({ fetchGoals: fetchG
 vi.mock("../../development-conversations/client/conversations-gateway", () => ({
   fetchConversationList: fetchConversationListMock,
 }));
-vi.mock("../../role-profiles/client/role-target-gateway", () => ({ fetchOwnRoleTarget: fetchOwnRoleTargetMock }));
 vi.mock("../../profiles/client/profile-gateway", () => ({ fetchOwnProfile: fetchOwnProfileMock }));
 vi.mock("../../teams/client/teams-overview-gateway", () => ({
   fetchTeamsOverview: fetchTeamsOverviewMock,
@@ -92,7 +90,6 @@ function healthyReads() {
       participating: { items: [], truncated: false },
     },
   });
-  fetchOwnRoleTargetMock.mockResolvedValue({ status: "ok", view: { status: "none" } });
   fetchTeamsOverviewMock.mockResolvedValue({
     status: "ok",
     teams: [{ teamId: "t1", name: "Demo Team", relationship: "member" }],
@@ -129,13 +126,14 @@ describe("AuthenticatedHome composition", () => {
     expect(within(section).getByRole("link", { name: "Gå til samtale" }).getAttribute("href")).toBe("/me/conversations/c-next");
   });
 
-  it("offers the role selection action when no role is selected", async () => {
+  it("offers a next step to the organizational role section, without any role-selection control", async () => {
     signedIn();
     healthyReads();
     render(<AuthenticatedHome />);
 
-    expect(await screen.findByText("Ingen rolle valgt")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Velg rolle" }).getAttribute("href")).toBe("/me/skills");
+    const link = await screen.findByRole("link", { name: /Se din organisatoriske rolle/ });
+    expect(link.getAttribute("href")).toBe("/me/skills?vy=rolle");
+    expect(screen.queryByText("Ingen rolle valgt")).toBeNull();
   });
 
   it("isolates a failed read: the goals panel shows an error and other panels still render", async () => {
@@ -149,7 +147,6 @@ describe("AuthenticatedHome composition", () => {
     await waitFor(() => expect(within(goalsSection).getByText(/Kunne ikke laste dette nå/)).toBeTruthy());
     // A failed read is never shown as a zero count.
     expect(within(goalsSection).queryByText("0")).toBeNull();
-    expect(await screen.findByText("Ingen rolle valgt")).toBeTruthy();
   });
 
   it("a rejected read leaves no panel stuck on loading: it shows the error state", async () => {
@@ -334,7 +331,6 @@ describe("AuthenticatedHome composition (reference 03, visual-fidelity TASK-027)
     expect(fetchTeamResultsMock).toHaveBeenCalledWith("token", "t1");
     expect(fetchGoalsMock).toHaveBeenCalledTimes(1);
     expect(fetchConversationListMock).toHaveBeenCalledTimes(1);
-    expect(fetchOwnRoleTargetMock).toHaveBeenCalledTimes(1);
     expect(fetchOwnProfileMock).toHaveBeenCalledTimes(1);
     expect(fetchTeamsOverviewMock).toHaveBeenCalledTimes(1);
   });

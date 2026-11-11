@@ -175,7 +175,7 @@ const W_SURFACES: Readonly<Record<string, { readonly owners: readonly string[] }
   "W-1": { owners: ["src/features/profiles/server/user-profile-store.ts"] },
   "W-2": { owners: ["src/features/skill-profiles/server/skill-profile-store.ts"] },
   "W-3": { owners: ["src/features/skill-profiles/server/skill-profile-store.ts"] },
-  "W-4": { owners: ["src/features/role-profiles/server/role-target-store.ts"] },
+  "W-4": { owners: ["src/features/role-profiles/server/role-assignment-store.ts"] },
   "W-5": { owners: ["src/features/personal-goals/server/goal-store.ts"] },
   "W-6": { owners: ["src/features/development-conversations/server/conversation-store.ts"] },
   "W-7": { owners: ["src/features/forum/server/create-thread.ts"] },

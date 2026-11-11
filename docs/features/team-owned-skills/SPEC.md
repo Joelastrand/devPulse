@@ -110,8 +110,8 @@ never identifiers. Limit: 100 team skills per team (active and inactive together
 - The existing team-level opt-in (`teamMemberships.skillContribution`, effective notice version) is the only sharing
   switch. It is not changed. A person who has not opted in is never counted.
 - A new aggregate view returns, per **active** team skill, one of:
-  - `value` with the derived integer level, when at least `SKILL_COVERAGE_MIN_CONTRIBUTORS` (fixed at 5, the stricter
-    existing C2 threshold; the lower automatic team-level floor of 3 is deliberately not used) eligible contributors have
+  - `value` with the derived integer level, when at least `SKILL_COVERAGE_MIN_CONTRIBUTORS` (fixed at 3 by the owner's unified team competence decision,
+    2026-11-11; previously 5) eligible contributors have
     a rating at the **current** `criteriaVersion`;
   - `insufficient_data` otherwise.
 - Contributors below the current criteria version are excluded from the aggregate, so ratings with different meanings
@@ -150,3 +150,33 @@ never identifiers. Limit: 100 team skills per team (active and inactive together
 - No deletion of skills or assessments. No hard delete path exists.
 - No change to global catalog ownership, C2 thresholds or sharing notice versions.
 - No new dependency, chart library or composite index.
+
+## 12. Unified team competence (owner decision 2026-11-11)
+
+Status: **implemented in part** (see `docs/features/team-owned-skills/TASKS.md`, TASK-008 to TASK-010).
+
+- **One catalog.** `teamSkills` is the only team competence area catalog. Both profiles reference its skill ids. No
+  legacy catalog, name matching or automatic merge is used.
+- **Automatic profile.** Served by `GET /api/teams/[teamId]/team-skills/aggregate` (§6), threshold
+  `SKILL_COVERAGE_MIN_CONTRIBUTORS` = 3. It is the only automatic team source. Suppressed skills are not plotted as zero.
+- **Collaborative profile (manual).** `teamManualAssessments/{teamId}__{skillId}`: one agreed level 1–4 per active team
+  skill, an optional note (≤300 characters), `criteriaVersion` (the skill's version when entered), `updatedAt` and
+  `updatedBy` (audit only). Written by a team administrator of an active team (`requireTeamAdministratorWith`). Read by
+  any genuine member or administrator: `GET /api/teams/[teamId]/team-skills/manual`. Responses never contain `updatedBy`.
+  Individual self-assessments are never read or changed by this path. A guidance change marks an entry as outdated but
+  keeps it. No k-threshold applies (directly entered team-level value).
+- **Erasure.** A-19 (`updatedBy`, ANONYMIZE, `actor_audit`). The agreed level and note are team-level values and are kept.
+- **Navigation.** One Teamkompetanse tab (`/teams/[teamId]/competence`) holds the catalog administration, the mode switch
+  (Automatisk profil / Felles vurdering), the radar and the readable list. `/teams/[teamId]/skills` redirects there and
+  the duplicate "Kompetanser" tab is removed. Kompetanseplan stays a separate tab.
+- **Retired UI.** The categorical C2 coverage view, the collaborative profile component tree, the profile-mode settings
+  control and the team-level status panel are no longer rendered. Their server routes and stores still exist (see §13).
+
+## 13. Open items (not yet implemented)
+
+- **Competence Plan independence.** Plan validation still requires an assignment in the retired `teamCompetenceAreas`
+  catalog (`src/features/team-competence-plan/server/competence-plans.ts`). It must be decoupled before that catalog is
+  removed, and existing `teamCompetencePlans` documents keep their content.
+- **Server retirement.** `teamCompetenceAreas`, `teamProfileSettings`, `teamCollaborativeLevels`, `skill-levels`,
+  `skill-coverage` and `skill-needs` routes and their stores remain callable but have no UI.
+- **Legacy data cleanup.** Not performed. A dry-run script is still to be written; nothing has been deleted in Firestore.

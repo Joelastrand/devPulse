@@ -7,8 +7,11 @@ export const workspaceCopy = {
   privacy: "Dette er privat for deg. Ingen andre i DevPulse kan se det, og det brukes ikke i team- eller statistikkvisninger.",
   formalRole: {
     heading: "Min rolle",
-    none: "Du har ikke fått tildelt en rolle ennå.",
-    explanation: "Organisatoriske roller tildeles av en administrator.",
+    loading: "Laster rollen din…",
+    signedOut: "Logg inn for å se rollen din.",
+    readFailed: "Rollen din kunne ikke vises nå. Prøv igjen senere.",
+    none: "Du har ingen organisatorisk rolle tildelt ennå.",
+    explanation: "Organisatoriske roller tildeles av en administrator. Rollen gir ingen tilgang i DevPulse.",
   },
   relationLabel: "Relasjon til rollen",
   relationOptions: {

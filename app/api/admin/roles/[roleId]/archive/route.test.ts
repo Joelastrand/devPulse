@@ -11,7 +11,7 @@ const { POST } = await import("./route");
 const ROLE_DTO = {
   roleId: "role-1",
   name: "Backend",
-  expectations: [{ treeId: "api", treeName: "API design", expectedLevel: 3 }],
+  description: "Bygger API-et",
   archived: true,
   createdAt: "2026-10-01T10:00:00.000Z",
   updatedAt: "2026-10-04T10:00:00.000Z",

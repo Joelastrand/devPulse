@@ -7,8 +7,6 @@ import { isEffectiveSkillContribution } from "../domain/skill-contribution";
 import { deriveCoverageState, type CoverageRowState } from "../domain/skill-coverage";
 import { TEAM_SKILL_COHORT_SCAN_MAX } from "../domain/skill-coverage-policy";
 import type { RequiredLevel } from "../domain/skill-need";
-import { AUTOMATIC_TEAM_LEVEL_MIN_CONTRIBUTORS, deriveTeamLevel } from "../domain/team-level";
-import type { SelfAssessedLevel } from "../../skill-profiles/domain/self-assessed-level";
 import { requireGenuineMember, type GenuineMembershipDeps } from "./genuine-team-membership";
 import {
   getDefaultSkillNeedCatalogReader,
@@ -148,97 +146,3 @@ export function createGetTeamSkillCoverage(deps: GetTeamSkillCoverageDeps) {
 
 /** Production binding: the identity-stripped adapter is the only way personal levels reach C2. */
 export const getTeamSkillCoverage = createGetTeamSkillCoverage({ readLevels: readSkillLevelsBatch });
-
-/**
- * Internal numeric team level per need (Amendment A, on-demand design). Lives in this approved module so that no second
- * personal-data reader exists. NOT wired to any route: the active API is `getTeamSkillCoverage`. Activation requires the
- * approvals in AMENDMENT-A-DRAFT.md §A.14.
- *
- * Same authorization, eligibility and fail-closed reads as coverage; only the derivation differs (integer team level or
- * `insufficient_data`). No requiredCoverage, count, sum, uid or contributor data is returned. Nothing is cached.
- */
-export type TeamSkillLevelRow =
-  | { treeId: string; areaName: string; targetLevel: RequiredLevel; state: "value"; level: SelfAssessedLevel }
-  | { treeId: string; areaName: string; targetLevel: RequiredLevel; state: "insufficient_data" }
-  | { treeId: string; areaName: null; targetLevel: RequiredLevel; state: "area_unavailable" };
-
-export type TeamSkillLevelsResponse =
-  | { availability: "available"; rows: TeamSkillLevelRow[] }
-  /** The membership scan hit its bound: nothing is derived from a known-incomplete cohort. */
-  | { availability: "incomplete"; rows: [] };
-
-export type GetTeamSkillLevelsResult =
-  | ({ ok: true } & TeamSkillLevelsResponse)
-  | { ok: false; error: GetTeamSkillCoverageError };
-
-export interface GetTeamSkillLevelsDeps extends GetTeamSkillCoverageDeps {
-  /**
-   * Threshold `k`. Defaults to the enforced constant. Injected only by tests that exercise another `k`; no request,
-   * setting or environment variable reaches it.
-   */
-  minContributors?: number;
-}
-
-export function createGetTeamSkillLevels(deps: GetTeamSkillLevelsDeps) {
-  return async function getTeamSkillLevels(idToken: string, teamId: string): Promise<GetTeamSkillLevelsResult> {
-    const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
-    if (!verified.ok) return { ok: false, error: authRefusalFor(verified) };
-
-    const member = await requireGenuineMember(verified.identity, teamId, { reads: deps.reads });
-    if (!member.ok) return { ok: false, error: member.error };
-
-    try {
-      const { needs } = await (deps.needsStore ?? getDefaultSkillNeedsStore()).listNeeds(teamId);
-      if (needs.length === 0) return { ok: true, availability: "available", rows: [] };
-
-      const scanned = await (deps.contributionStore ?? getDefaultSkillContributionStore()).listMembershipsForCoverage(
-        teamId,
-        TEAM_SKILL_COHORT_SCAN_MAX + 1,
-      );
-      if (scanned.length > TEAM_SKILL_COHORT_SCAN_MAX) return { ok: true, availability: "incomplete", rows: [] };
-      const uids = eligibleUids(scanned, teamId);
-
-      const catalogReader = deps.catalogReader ?? getDefaultSkillNeedCatalogReader();
-      const trees = await Promise.all(needs.map((need) => readValidSkillTree(catalogReader, need.treeId)));
-      const validTreeIds = needs.filter((_, index) => trees[index] !== null).map((need) => need.treeId);
-
-      let levelsByTree: ReadonlyMap<string, readonly number[]> = new Map();
-      if (uids.length > 0 && validTreeIds.length > 0) {
-        const levels = await deps.readLevels(uids, validTreeIds);
-        if (!levels.ok) return { ok: false, error: "read_failed" };
-        levelsByTree = levels.levelsByTree;
-      }
-
-      const threshold = deps.minContributors ?? AUTOMATIC_TEAM_LEVEL_MIN_CONTRIBUTORS;
-      const rows = needs.map((need, index): TeamSkillLevelRow => {
-        const tree = trees[index];
-        const targetLevel = need.requiredLevel;
-        if (tree === null) return { treeId: need.treeId, areaName: null, targetLevel, state: "area_unavailable" };
-        const derived = deriveTeamLevel(levelsByTree.get(need.treeId) ?? [], threshold);
-        if (derived.state === "insufficient_data") {
-          return { treeId: need.treeId, areaName: tree.name, targetLevel, state: "insufficient_data" };
-        }
-        return { treeId: need.treeId, areaName: tree.name, targetLevel, state: "value", level: derived.level };
-      });
-      return { ok: true, availability: "available", rows: sortTeamSkillLevelRows(rows) };
-    } catch {
-      // Malformed or unreadable data is a read failure, never a partial or zero result.
-      return { ok: false, error: "read_failed" };
-    }
-  };
-}
-
-/** Named areas by name, then unavailable areas by tree id; deterministic regardless of read order. */
-function sortTeamSkillLevelRows(rows: TeamSkillLevelRow[]): TeamSkillLevelRow[] {
-  const byId = new Map(rows.map((row) => [row.treeId, row]));
-  const named = sortSkillRows(
-    rows.flatMap((row) => (row.areaName === null ? [] : [{ treeId: row.treeId, name: row.areaName }])),
-  );
-  const unavailable = rows
-    .filter((row) => row.areaName === null)
-    .sort((a, b) => (a.treeId < b.treeId ? -1 : a.treeId > b.treeId ? 1 : 0));
-  return [...named.flatMap(({ treeId }) => byId.get(treeId) ?? []), ...unavailable];
-}
-
-/** Production binding for the automatic numeric profile. The identity-stripped adapter is the only personal-level reader. */
-export const getTeamSkillLevels = createGetTeamSkillLevels({ readLevels: readSkillLevelsBatch });

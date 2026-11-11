@@ -272,9 +272,11 @@ for (const n of NEEDS) {
 
 // Competence plans
 for (const p of PLANS) {
-  add("teamCompetencePlans", `${TEAM_ID}__${p.treeId}`, {
+  const PLAN_TITLES = {"demoteam-appsec":"Applikasjonssikkerhet","demoteam-cloud-platform":"Skyplattformer","demoteam-system-architecture":"Systemarkitektur","demoteam-test-automation":"Testautomatisering","demoteam-typescript-frontend":"TypeScript og frontend"};
+  add("teamCompetencePlans", uuidFrom(`plan-doc:${TEAM_ID}:${p.treeId}`), {
     teamId: TEAM_ID,
-    treeId: p.treeId,
+    title: PLAN_TITLES[p.treeId],
+    treeId: null,
     targetStage: p.targetStage,
     priority: p.priority,
     archived: false,

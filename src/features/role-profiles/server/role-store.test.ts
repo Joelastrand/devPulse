@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { vi } from "vitest";
+vi.mock("server-only", () => ({}));
 import { Timestamp } from "firebase-admin/firestore";
 import { describe, expect, it } from "vitest";
 import { toFirestoreRoleData, toRawRoleData } from "./role-store";
@@ -11,25 +13,24 @@ describe("Admin role store mappers", () => {
   it("writes only the stored keys, converting dates to Timestamps and omitting absent optionals", () => {
     const data = toFirestoreRoleData({
       name: "Backend",
-      expectations: [{ treeId: "api", expectedLevel: 3 }],
+      description: "Owns APIs",
       createdAt: CREATED_AT,
       createdBy: "admin-uid",
     });
     expect(data).toEqual({
       name: "Backend",
-      expectations: [{ treeId: "api", expectedLevel: 3 }],
+      description: "Owns APIs",
       createdAt: Timestamp.fromDate(CREATED_AT),
       createdBy: "admin-uid",
     });
-    expect(data).not.toHaveProperty("description");
     expect(data).not.toHaveProperty("archivedAt");
+    expect(data).not.toHaveProperty("expectations");
   });
 
-  it("writes the optional fields when present", () => {
+  it("writes the optional lifecycle fields when present", () => {
     const data = toFirestoreRoleData({
       name: "Backend",
       description: "Owns APIs",
-      expectations: [],
       createdAt: CREATED_AT,
       createdBy: "admin-uid",
       updatedAt: CREATED_AT,
@@ -50,13 +51,11 @@ describe("Admin role store mappers", () => {
     const raw = toRawRoleData({
       name: "Backend",
       createdAt: Timestamp.fromDate(CREATED_AT),
-      expectations: [{ treeId: "api", expectedLevel: 2 }],
       malformed: 42,
     });
     expect(raw).toEqual({
       name: "Backend",
       createdAt: CREATED_AT,
-      expectations: [{ treeId: "api", expectedLevel: 2 }],
       malformed: 42,
     });
   });

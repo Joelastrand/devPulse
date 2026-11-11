@@ -3,13 +3,13 @@ import { ErasureStepFailure, type BatchResult, type StepHandler } from "./erasur
 /**
  * The `personal_data` erasure step (TASK-022; SPEC D1, AE-SI-6, I-1, I-2, I-3, I-4). It deletes the erased person's own
  * personal data: the skill profile (self-assessed levels), the user profile (display name), the personal development goals,
- * and the role target subtree (I-4 is the whole `roleTarget` subtree, not only its `current` document). These are raw
+ * and the formal role assignment (I-4, `roleAssignments/{uid}`; the shared role definition is kept). These are raw
  * deletions. No validated shape is required, so a malformed document is still removed (BR-16). Deletion is idempotent, so a
  * retry after an interruption is safe.
  *
- * Order within a batch: skill profile, user profile, then role targets and goals one page at a time. Each batch removes one
+ * Order within a batch: skill profile, user profile, role assignment, then goals one page at a time. Each batch removes one
  * unit of data and reports `more`. `done` only when none is left. The port hides the store paths. The production adapter
- * (TASK-038) must cover the whole `roleTarget` subtree and the whole goals subtree, and its tests must assert that a delete
+ * (TASK-038) must cover the whole goals subtree, and its tests must assert that a delete
  * really removes the id it was given, so a silent no-op cannot make a page repeat.
  */
 
@@ -18,9 +18,9 @@ export interface PersonalDataErasurePort {
   deleteSkillProfile(uid: string): Promise<void>;
   userProfileExists(uid: string): Promise<boolean>;
   deleteUserProfile(uid: string): Promise<void>;
-  /** Role-target document ids under the uid's whole `roleTarget` subtree, at most `limit`. */
-  roleTargetIds(uid: string, limit: number): Promise<string[]>;
-  deleteRoleTarget(uid: string, roleTargetId: string): Promise<void>;
+  /** I-4: the uid's formal role assignment document (`roleAssignments/{uid}`). Deletion never touches the shared role. */
+  roleAssignmentExists(uid: string): Promise<boolean>;
+  deleteRoleAssignment(uid: string): Promise<void>;
   /** Goal document ids of the uid, at most `limit`. */
   goalIds(uid: string, limit: number): Promise<string[]>;
   deleteGoal(uid: string, goalId: string): Promise<void>;
@@ -58,11 +58,8 @@ export async function runPersonalDataBatch(deps: PersonalDataStepDeps, uid: stri
     await port.deleteUserProfile(uid);
     return "more";
   }
-  const roleTargets = await port.roleTargetIds(uid, maxWrites);
-  if (roleTargets.length > 0) {
-    for (const roleTargetId of roleTargets) {
-      await port.deleteRoleTarget(uid, roleTargetId);
-    }
+  if (await port.roleAssignmentExists(uid)) {
+    await port.deleteRoleAssignment(uid);
     return "more";
   }
 

@@ -21,7 +21,6 @@ vi.mock("../../auth/client/use-auth-gated-resource", async () => {
 
 vi.mock("./competence-plan-gateway", () => ({
   fetchCompetencePlans: vi.fn(),
-  fetchCompetenceAreas: vi.fn(),
   putCompetencePlan: vi.fn(),
 }));
 
@@ -30,7 +29,6 @@ vi.mock("../../roadmap/client/roadmap-gateway", () => ({
 }));
 
 import {
-  fetchCompetenceAreas,
   fetchCompetencePlans,
   putCompetencePlan,
 } from "./competence-plan-gateway";
@@ -60,7 +58,6 @@ describe("useCompetencePlans legacy roadmap records (BR-17)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(fetchCompetencePlans).mockResolvedValue({ status: "ok", plans: [], canEdit: false, truncated: false });
-    vi.mocked(fetchCompetenceAreas).mockResolvedValue({ status: "ok", areas: [] });
   });
 
   it("keeps the plans visible and flags the legacy list when the legacy roadmap read fails", async () => {

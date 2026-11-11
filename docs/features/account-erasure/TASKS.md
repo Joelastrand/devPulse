@@ -858,6 +858,12 @@ No join between responses and participations (AE-SI-8).
 
 ### TASK-022 — Personal data erasure (I-1 to I-4)
 
+> **Superseded in part (2026-11-11, role simplification).** The I-4 subtree was `userDevelopment/{uid}/roleTarget/*`. That subtree was
+> removed from the test project by the approved legacy cleanup and no longer has an inventory row. I-4 is now the single document
+> `roleAssignments/{uid}` (document id = uid), deleted by the same `personal_data` step. The shared role definition is kept. A-18
+> (`createdBy` and `updatedBy` of other people's role assignments, anonymized by `actor_audit`) was added. See SPEC.md, decision log
+> "formal role assignment, I-4 and A-18". The text below is the 2026-10-29 record and is historical for I-4.
+
 **Status:** Done (2026-10-29). Implemented: `src/features/account-erasure/server/personal-data-erasure.ts` (raw, idempotent, existence-based deletion of the skill profile, user profile, role target, and goals one page per batch; the port hides store paths; the production adapter is a TASK-038 item). Tests `personal-data-erasure.test.ts` 7/7 (four stores, goal paging across pages, malformed still removed, other person untouched, idempotent re-run, empty, zero-budget refusal). Focused: `pnpm vitest run src/features/account-erasure/server/personal-data-erasure.test.ts`: 8/8 (the malformed case is a port-contract test; malformed removal against the real store is a TASK-038 adapter test); typecheck and lint exit 0. Independent review 1 (2026-10-29): one Important (I-4 is the whole roleTarget subtree), repaired by paging the subtree. Re-review 2 (2026-10-29): PASS_WITH_SUGGESTIONS; its code findings were none, and its two Important items were documentation accuracy (this Outcome line and this status line), both corrected here.
 **Covers:** D1, AE-SI-6, inventory I-1, I-2, I-3, I-4
 **Depends on:** TASK-006, TASK-011

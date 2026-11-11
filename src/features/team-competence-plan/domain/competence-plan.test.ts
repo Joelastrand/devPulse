@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  competencePlanDocId,
   parseStoredCompetencePlan,
   planProgress,
   progressFillPercent,
@@ -20,7 +19,8 @@ function milestone(overrides: Partial<PlanMilestone> = {}): PlanMilestone {
 function storedPlan(overrides: Record<string, unknown> = {}) {
   return {
     teamId: "team-1",
-    treeId: "tree-alpha",
+    title: "Testautomatisering",
+    treeId: null,
     targetStage: 3,
     priority: "high",
     archived: false,
@@ -31,10 +31,11 @@ function storedPlan(overrides: Record<string, unknown> = {}) {
   };
 }
 
-const DOC_ID = competencePlanDocId("team-1", "tree-alpha");
+const DOC_ID = "55555555-5555-4555-8555-555555555555";
 
 describe("validatePlanInput", () => {
   const valid = {
+    title: "  Sikkerhetsopplæring  ",
     targetStage: 3,
     priority: "high",
     archived: false,
@@ -46,12 +47,18 @@ describe("validatePlanInput", () => {
     expect(result).toEqual({
       ok: true,
       value: {
+        title: "Sikkerhetsopplæring",
         targetStage: 3,
         priority: "high",
         archived: false,
         milestones: [{ title: "Første steg", targetDate: "2026-09-01", status: "planned" }],
       },
     });
+  });
+
+  it("refuses a blank or over-long plan title, since a plan is named by its own title", () => {
+    expect(validatePlanInput({ ...valid, title: "   " })).toEqual({ ok: false, issues: ["title_invalid"] });
+    expect(validatePlanInput({ ...valid, title: "x".repeat(121) })).toEqual({ ok: false, issues: ["title_invalid"] });
   });
 
   it("rejects a target stage outside the four existing levels instead of coercing it", () => {
@@ -118,8 +125,8 @@ describe("parseStoredCompetencePlan", () => {
     expect(parseStoredCompetencePlan(storedPlan(), { docId: DOC_ID })?.targetStage).toBe(3);
   });
 
-  it("refuses a document whose id does not match its team and area", () => {
-    expect(parseStoredCompetencePlan(storedPlan(), { docId: "team-2__tree-alpha" })).toBeNull();
+  it("refuses a document whose id is not a plan UUID, such as a legacy teamId__treeId id", () => {
+    expect(parseStoredCompetencePlan(storedPlan(), { docId: "team-1__tree-alpha" })).toBeNull();
   });
 
   it("refuses a stored target stage that is not an existing level rather than defaulting it", () => {

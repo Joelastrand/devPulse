@@ -43,21 +43,10 @@ export const ALLOWED_UNREGISTERED_COLLECTIONS: Readonly<Record<string, string>> 
     "Team-scoped delivery planning (title, dates, lifecycle, priority). Stores no uid-bearing field: TASK-003 writes no " +
     "createdBy/updatedBy/archivedBy and no memberRef, so there is no person-linked data to erase. Do not add an actor field " +
     "without a registry row.",
-  teamCompetenceAreas:
-    "A team's assignment of admin-owned catalog areas (TASK-007). Stores teamId, treeId, status, sortOrder and timestamps only: " +
-    "no uid-bearing field, no actor and no memberRef, so there is no person-linked data to erase. Do not add an actor field " +
-    "without a registry row.",
-  teamProfileSettings:
-    "A team's competence-profile mode (automatic | collaborative), keyed by teamId (team-collaborative-profile). Stores " +
-    "teamId, mode and updatedAt only: no uid-bearing field, no actor and no memberRef, so there is no person-linked data " +
-    "to erase. Do not add an actor field without a registry row.",
-  teamCollaborativeLevels:
-    "A teamadmin-entered integer 1–4 per team and competence area, document id teamId__treeId (team-collaborative-profile). " +
-    "Stores teamId, treeId, level and updatedAt only: no uid, no actor, no memberRef and no member assessment, so there is no " +
-    "person-linked data to erase. Do not add an actor field without a registry row.",
   teamCompetencePlans:
-    "A team's competence development plan for one assigned catalog area (TASK-006): teamId, treeId, a target stage (a goal, " +
-    "not a rating), priority, archived flag, embedded milestones (id, title, optional target date, status) and timestamps. " +
+    "A team's competence development plan, independent of any competence area (document id is a random plan UUID): teamId, " +
+    "title, an optional treeId catalog label (null for new plans), a target stage (a goal, not a rating), priority, archived " +
+    "flag, embedded milestones (id, title, optional target date, status) and timestamps. " +
     "No uid-bearing field, no actor and no memberRef and no member assessment is copied in, so there is no person-linked data " +
     "to erase. Do not add an actor field without a registry row.",
 };

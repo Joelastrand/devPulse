@@ -2,6 +2,7 @@
 // Refuses to run unless both emulator hosts are localhost and the project id starts with "demo-".
 // Never reads .env.local, never uses service-account credentials, and never writes to a real project.
 // Run after `firebase emulators:start --config firebase.emulator.json --project demo-devpulse-verify --only auth,firestore`.
+import { createHash } from "node:crypto";
 import { initializeApp, getApps } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
@@ -112,18 +113,6 @@ for (const t of trees) {
   });
 }
 
-// Six active competence areas in a fixed display order (the team's Kompetanseområder).
-const areaTreeIds = trees.map((t) => t.treeId);
-for (const [index, treeId] of areaTreeIds.entries()) {
-  await db.collection("teamCompetenceAreas").doc(`${TEAM_ID}__${treeId}`).set({
-    teamId: TEAM_ID,
-    treeId,
-    status: "active",
-    sortOrder: index,
-    createdAt: now,
-    updatedAt: now,
-  });
-}
 
 const planUpdated = Timestamp.fromDate(new Date("2026-10-20T09:00:00Z"));
 const plans = [
@@ -156,10 +145,17 @@ const plans = [
   },
 ];
 
+// Plans are independent of competence areas: a random-looking UUID id and a team-authored title.
+const PLAN_TITLES = { "verify-tree-testing": "Testautomatisering", "verify-tree-observability": "Observerbarhet", "verify-tree-systemdesign": "Systemdesign", "verify-tree-integrations": "Integrasjoner" };
+const planDocId = (treeId) => {
+  const h = createHash("sha256").update(`plan-doc:${TEAM_ID}:${treeId}`).digest("hex");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-8${h.slice(17, 20)}-${h.slice(20, 32)}`;
+};
 for (const p of plans) {
-  await db.collection("teamCompetencePlans").doc(`${TEAM_ID}__${p.treeId}`).set({
+  await db.collection("teamCompetencePlans").doc(planDocId(p.treeId)).set({
     teamId: TEAM_ID,
-    treeId: p.treeId,
+    title: PLAN_TITLES[p.treeId],
+    treeId: null,
     targetStage: p.targetStage,
     priority: p.priority,
     archived: false,
@@ -169,18 +165,10 @@ for (const p of plans) {
   });
 }
 
-await db.collection("teamProfileSettings").doc(TEAM_ID).set({ teamId: TEAM_ID, mode: "collaborative", updatedAt: planUpdated });
-
-// Team-entered collaborative levels (one integer 1–4 per area). Not member assessments.
-const collaborativeLevels = { "verify-tree-testing": 3, "verify-tree-observability": 2, "verify-tree-systemdesign": 2, "verify-tree-integrations": 1, "verify-tree-delivery": 3, "verify-tree-secure-dev": 2 };
-for (const [treeId, level] of Object.entries(collaborativeLevels)) {
-  await db.collection("teamCollaborativeLevels").doc(`${TEAM_ID}__${treeId}`).set({ teamId: TEAM_ID, treeId, level, updatedAt: planUpdated });
-}
-
 // Synthetic team skill needs (target level per area, coverage 1). Targets give the overview statuses meets, near and under.
 const needTargets = { "verify-tree-testing": 3, "verify-tree-observability": 3, "verify-tree-systemdesign": 3, "verify-tree-integrations": 3, "verify-tree-delivery": 2, "verify-tree-secure-dev": 2 };
 for (const [treeId, requiredLevel] of Object.entries(needTargets)) {
   await db.collection("skillNeeds").doc(`${TEAM_ID}__${treeId}`).set({ teamId: TEAM_ID, treeId, requiredLevel, requiredCoverage: 1, createdAt: planUpdated, updatedAt: planUpdated });
 }
 
-console.log(`Seeded synthetic emulator data for ${PROJECT_ID}: ${USERS.length} users, 1 team, ${projects.length} projects, ${participations.length} participations, ${trees.length} skill trees, ${areaTreeIds.length} competence areas, ${plans.length} plans, ${Object.keys(collaborativeLevels).length} collaborative levels.`);
+console.log(`Seeded synthetic emulator data for ${PROJECT_ID}: ${USERS.length} users, 1 team, ${projects.length} projects, ${participations.length} participations, ${trees.length} skill trees, ${plans.length} plans.`);

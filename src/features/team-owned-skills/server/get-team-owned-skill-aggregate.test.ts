@@ -111,8 +111,8 @@ describe("team-owned skill aggregate (privacy-thresholded)", () => {
     });
   });
 
-  it("returns insufficient_data with four contributors (below threshold five)", async () => {
-    const four = contributors("c", 4, 4);
+  it("returns insufficient_data with two contributors (below threshold three)", async () => {
+    const four = contributors("c", 2, 4);
     const { run } = setup({
       scan: four.uids.map((uid) => membershipScanDoc(uid)),
       assessments: four.assessments.map(([uid, level, cv]) => [uid, SKILL, assessmentDoc(uid, SKILL, { level, criteriaVersion: cv })]),
@@ -124,7 +124,7 @@ describe("team-owned skill aggregate (privacy-thresholded)", () => {
   });
 
   it("never counts a member who has not opted in, even with a rating", async () => {
-    const yes = contributors("c", 4, 4);
+    const yes = contributors("c", 2, 4);
     const no = contributors("n", 5, 1);
     const { run } = setup({
       scan: [...yes.uids.map((uid) => membershipScanDoc(uid)), ...no.uids.map((uid) => membershipScanDoc(uid, T, 0))],
@@ -137,7 +137,7 @@ describe("team-owned skill aggregate (privacy-thresholded)", () => {
   });
 
   it("excludes ratings given under an older criteria version rather than mixing them in", async () => {
-    const current = contributors("c", 4, 4, 2);
+    const current = contributors("c", 2, 4, 2);
     const stale = contributors("s", 3, 1, 1);
     const { run } = setup({
       scan: [...current.uids, ...stale.uids].map((uid) => membershipScanDoc(uid)),

@@ -4,8 +4,8 @@ import { isRoadmapPriority, type RoadmapPriority } from "../../roadmap/domain/ro
 import { isMilestoneStatus, type MilestoneStatus } from "../domain/competence-plan";
 
 /**
- * Client gateway for the team competence plan API (TASK-006). Thin `fetch` wrappers: no Firestore access. Responses are
- * rebuilt field by field, so unexpected keys are dropped. The server is the authorization boundary.
+ * Client gateway for the team competence plan API. Thin `fetch` wrappers: no Firestore access. Responses are rebuilt
+ * field by field, so unexpected keys are dropped. The server is the authorization boundary.
  */
 
 export interface ClientMilestone {
@@ -16,19 +16,15 @@ export interface ClientMilestone {
 }
 
 export interface ClientCompetencePlan {
-  treeId: string;
+  planId: string;
+  title: string;
+  /** Optional catalog label kept from earlier plans. `null` for plans created now; never used to gate or link a plan. */
+  treeId: string | null;
   targetStage: SelfAssessedLevel;
   priority: RoadmapPriority;
   archived: boolean;
   milestones: ClientMilestone[];
   progress: { completed: number; total: number };
-}
-
-/** Team-assigned catalog area, names only (no ratings). `name` is `null` when the catalog entry is unavailable. */
-export interface ClientCompetenceArea {
-  treeId: string;
-  name: string | null;
-  status: "active" | "inactive" | "archived";
 }
 
 export type ClientReadStatus = "unauthenticated" | "forbidden" | "read_failed";
@@ -37,9 +33,8 @@ export type CompetencePlanListResult =
   | { status: "ok"; plans: ClientCompetencePlan[]; canEdit: boolean; truncated: boolean }
   | { status: ClientReadStatus };
 
-export type CompetenceAreaListResult = { status: "ok"; areas: ClientCompetenceArea[] } | { status: ClientReadStatus };
-
 export interface CompetencePlanInput {
+  title: string;
   targetStage: SelfAssessedLevel;
   priority: RoadmapPriority;
   archived: boolean;
@@ -49,7 +44,7 @@ export interface CompetencePlanInput {
 export type CompetencePlanWriteResult =
   | { status: "ok"; plan: ClientCompetencePlan }
   | { status: "invalid_input"; issues: string[] }
-  | { status: "unauthenticated" | "forbidden" | "conflict" | "write_failed" };
+  | { status: "unauthenticated" | "forbidden" | "not_found" | "conflict" | "write_failed" };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -72,8 +67,11 @@ function parseMilestone(value: unknown): ClientMilestone | null {
 function parsePlan(value: unknown): ClientCompetencePlan | null {
   if (!isRecord(value)) return null;
   if (
-    typeof value.treeId !== "string" ||
-    value.treeId.length === 0 ||
+    typeof value.planId !== "string" ||
+    value.planId.length === 0 ||
+    typeof value.title !== "string" ||
+    value.title.length === 0 ||
+    (value.treeId !== null && (typeof value.treeId !== "string" || value.treeId.length === 0)) ||
     !isSelfAssessedLevel(value.targetStage) ||
     !isRoadmapPriority(value.priority) ||
     typeof value.archived !== "boolean" ||
@@ -91,7 +89,9 @@ function parsePlan(value: unknown): ClientCompetencePlan | null {
     milestones.push(milestone);
   }
   return {
-    treeId: value.treeId,
+    planId: value.planId,
+    title: value.title,
+    treeId: value.treeId as string | null,
     targetStage: value.targetStage,
     priority: value.priority,
     archived: value.archived,
@@ -100,22 +100,16 @@ function parsePlan(value: unknown): ClientCompetencePlan | null {
   };
 }
 
-function parseArea(value: unknown): ClientCompetenceArea | null {
-  if (!isRecord(value) || typeof value.treeId !== "string" || value.treeId.length === 0) return null;
-  if (value.name !== null && typeof value.name !== "string") return null;
-  if (value.status !== "active" && value.status !== "inactive" && value.status !== "archived") return null;
-  return { treeId: value.treeId, name: value.name as string | null, status: value.status };
-}
-
 function readFailureStatus(status: number): ClientReadStatus {
   if (status === 401) return "unauthenticated";
   if (status === 403) return "forbidden";
   return "read_failed";
 }
 
-function writeFailureStatus(status: number): "unauthenticated" | "forbidden" | "conflict" | "write_failed" {
+function writeFailureStatus(status: number): "unauthenticated" | "forbidden" | "not_found" | "conflict" | "write_failed" {
   if (status === 401) return "unauthenticated";
   if (status === 403) return "forbidden";
+  if (status === 404) return "not_found";
   if (status === 409) return "conflict";
   return "write_failed";
 }
@@ -143,51 +137,47 @@ export async function fetchCompetencePlans(idToken: string, teamId: string, incl
   }
 }
 
-export async function fetchCompetenceAreas(idToken: string, teamId: string): Promise<CompetenceAreaListResult> {
+async function readWriteResponse(response: Response): Promise<CompetencePlanWriteResult> {
+  const body: unknown = await response.json().catch(() => null);
+  if (response.ok) {
+    const plan = isRecord(body) ? parsePlan(body.plan) : null;
+    return plan === null ? { status: "write_failed" } : { status: "ok", plan };
+  }
+  if (response.status === 400 && isRecord(body) && body.error === "invalid_input") {
+    const issues = Array.isArray(body.issues) ? body.issues.filter((i): i is string => typeof i === "string") : [];
+    return { status: "invalid_input", issues };
+  }
+  return { status: writeFailureStatus(response.status) };
+}
+
+/** Creates a plan. No competence area is needed. */
+export async function createCompetencePlan(idToken: string, teamId: string, input: CompetencePlanInput): Promise<CompetencePlanWriteResult> {
   try {
-    const response = await fetch(`/api/teams/${encodeURIComponent(teamId)}/competence-areas`, {
-      headers: { Authorization: `Bearer ${idToken}` },
+    const response = await fetch(`/api/teams/${encodeURIComponent(teamId)}/competence-plans`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${idToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify(input),
     });
-    if (!response.ok) return { status: readFailureStatus(response.status) };
-    const body: unknown = await response.json();
-    if (!isRecord(body) || !Array.isArray(body.areas)) return { status: "read_failed" };
-    const areas: ClientCompetenceArea[] = [];
-    for (const item of body.areas) {
-      const area = parseArea(item);
-      if (area === null) return { status: "read_failed" };
-      areas.push(area);
-    }
-    return { status: "ok", areas };
+    return await readWriteResponse(response);
   } catch {
-    return { status: "read_failed" };
+    return { status: "write_failed" };
   }
 }
 
+/** Replaces the editable fields of one existing plan. */
 export async function putCompetencePlan(
   idToken: string,
   teamId: string,
-  treeId: string,
+  planId: string,
   input: CompetencePlanInput,
 ): Promise<CompetencePlanWriteResult> {
   try {
-    const response = await fetch(
-      `/api/teams/${encodeURIComponent(teamId)}/competence-plans/${encodeURIComponent(treeId)}`,
-      {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${idToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify(input),
-      },
-    );
-    const body: unknown = await response.json().catch(() => null);
-    if (response.ok) {
-      const plan = isRecord(body) ? parsePlan(body.plan) : null;
-      return plan === null ? { status: "write_failed" } : { status: "ok", plan };
-    }
-    if (response.status === 400 && isRecord(body) && body.error === "invalid_input") {
-      const issues = Array.isArray(body.issues) ? body.issues.filter((i): i is string => typeof i === "string") : [];
-      return { status: "invalid_input", issues };
-    }
-    return { status: writeFailureStatus(response.status) };
+    const response = await fetch(`/api/teams/${encodeURIComponent(teamId)}/competence-plans/${encodeURIComponent(planId)}`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${idToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    return await readWriteResponse(response);
   } catch {
     return { status: "write_failed" };
   }

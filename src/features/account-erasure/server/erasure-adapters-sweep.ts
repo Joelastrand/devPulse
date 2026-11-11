@@ -51,8 +51,8 @@ const COUNTERS: ReadonlyMap<string, Counter> = new Map<string, Counter>([
   ["userProfiles|docIdEquals|uid", async (db, b) => ((await db.collection("userProfiles").doc(b.uid).get()).exists ? 1 : 0)],
   // I-3 to I-6: owner subtrees (direct documents; see VERIFICATION.md on nested collections).
   ["userDevelopment/{uid}/goals|subtree|", async (db, b) => (await db.collection("userDevelopment").doc(b.uid).collection("goals").get()).size],
-  ["userDevelopment/{uid}/roleTarget|subtree|", async (db, b) =>
-    (await db.collection("userDevelopment").doc(b.uid).collection("roleTarget").get()).size],
+  // I-4: the formal role assignment, one document keyed by uid.
+  ["roleAssignments|docIdEquals|uid", async (db, b) => ((await db.collection("roleAssignments").doc(b.uid).get()).exists ? 1 : 0)],
   ["userDevelopment/{uid}/responsibilities|subtree|", async (db, b) =>
     (await db.collection("userDevelopment").doc(b.uid).collection("responsibilities").get()).size],
   ["userDevelopment/{uid}/achievements|subtree|", async (db, b) =>
@@ -110,6 +110,8 @@ const COUNTERS: ReadonlyMap<string, Counter> = new Map<string, Counter>([
   // A-17: team skill definition actor fields (team-owned skills).
   ["teamSkills|fieldEquals|createdBy", async (db, b) => (await db.collection("teamSkills").where("createdBy", "==", b.uid).select().get()).size],
   ["teamSkills|fieldEquals|updatedBy", async (db, b) => (await db.collection("teamSkills").where("updatedBy", "==", b.uid).select().get()).size],
+  // A-19: acting administrator of a collaborative team level (team-owned skills, SPEC §12).
+  ["teamManualAssessments|fieldEquals|updatedBy", async (db, b) => (await db.collection("teamManualAssessments").where("updatedBy", "==", b.uid).select().get()).size],
   // I-19: a person's team-skill ratings (team-owned skills), located by the stored uid field.
   ["teamSkillAssessments|fieldEquals|uid", async (db, b) => (await db.collection("teamSkillAssessments").where("uid", "==", b.uid).select().get()).size],
   // I-13, I-14, A-8: forum authorship and tombstone markers.
@@ -123,6 +125,8 @@ const COUNTERS: ReadonlyMap<string, Counter> = new Map<string, Counter>([
   ["roleDefinitions|fieldEquals|createdBy", async (db, b) => (await db.collection("roleDefinitions").where("createdBy", "==", b.uid).select().get()).size],
   ["roleDefinitions|fieldEquals|updatedBy", async (db, b) => (await db.collection("roleDefinitions").where("updatedBy", "==", b.uid).select().get()).size],
   ["roleDefinitions|fieldEquals|archivedBy", async (db, b) => (await db.collection("roleDefinitions").where("archivedBy", "==", b.uid).select().get()).size],
+  ["roleAssignments|fieldEquals|createdBy", async (db, b) => (await db.collection("roleAssignments").where("createdBy", "==", b.uid).select().get()).size],
+  ["roleAssignments|fieldEquals|updatedBy", async (db, b) => (await db.collection("roleAssignments").where("updatedBy", "==", b.uid).select().get()).size],
   ["roadmapItems|fieldEquals|createdBy", async (db, b) => (await db.collection("roadmapItems").where("createdBy", "==", b.uid).select().get()).size],
   ["roadmapItems|fieldEquals|updatedBy", async (db, b) => (await db.collection("roadmapItems").where("updatedBy", "==", b.uid).select().get()).size],
   ["roadmapItems|fieldEquals|archivedBy", async (db, b) => (await db.collection("roadmapItems").where("archivedBy", "==", b.uid).select().get()).size],

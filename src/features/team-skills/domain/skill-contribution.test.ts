@@ -25,7 +25,7 @@ describe("skill contribution", () => {
     expect(isEffectiveSkillContribution(membership({ ...current, consentedAt: ts }))).toBe(true);
   });
 
-  it.each([SKILL_CONTRIBUTION_NOTICE_VERSION - 1, SKILL_CONTRIBUTION_NOTICE_VERSION + 1, 0, 2])(
+  it.each([SKILL_CONTRIBUTION_NOTICE_VERSION - 1, SKILL_CONTRIBUTION_NOTICE_VERSION + 1, 0, 1])(
     "is readable but not effective for version %s",
     (noticeVersion) => {
       const raw = membership({ ...current, noticeVersion });

@@ -2,7 +2,7 @@
 export interface AdminRoleView {
   roleId: string;
   name: string;
-  description?: string;
+  description: string;
   archived: boolean;
 }
 
@@ -15,13 +15,13 @@ export type FetchAdminRolesResult =
 /** A role write: the admin DTO on success, otherwise the server's neutral error code (never role content). */
 export type AdminRoleWriteResult = { ok: true; role: AdminRoleView } | { ok: false; error: string };
 
-/** A create body: a title and an optional description. Absent `description` means no description. */
+/** A create body: a title and a required description. */
 export interface CreateAdminRoleInput {
   name: string;
-  description?: string;
+  description: string;
 }
 
-/** A PATCH body: only the changed fields. `description: ""` clears the stored description. */
+/** A PATCH body: only the changed fields. A description cannot be cleared (it is required). */
 export interface UpdateAdminRoleInput {
   name?: string;
   description?: string;
@@ -36,7 +36,7 @@ export function isAdminRoleView(value: unknown): value is AdminRoleView {
     isRecord(value) &&
     typeof value.roleId === "string" &&
     typeof value.name === "string" &&
-    (value.description === undefined || typeof value.description === "string") &&
+    typeof value.description === "string" &&
     typeof value.archived === "boolean"
   );
 }

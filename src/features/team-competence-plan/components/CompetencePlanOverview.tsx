@@ -22,13 +22,13 @@ export function currentMonth(now: Date = new Date()): MonthRef {
 export interface CompetencePlanOverviewProps {
   plans: readonly ClientCompetencePlan[];
   /** Area name for a tree id, or `null` when the area is not available. */
-  nameOf: (treeId: string) => string | null;
+  nameOf: (planId: string) => string | null;
   /** Injected for tests; defaults to the current UTC month. */
   start?: MonthRef;
   /** Injected for tests; an ISO day (`YYYY-MM-DD`). Defaults to today (UTC). */
   today?: string;
   /** Scrolls to and expands a plan's card in "Detaljer og tiltak". */
-  onOpenPlan: (treeId: string) => void;
+  onOpenPlan: (planId: string) => void;
 }
 
 /**
@@ -121,13 +121,13 @@ export function CompetencePlanOverview({ plans, nameOf, start, today, onOpenPlan
               <p className="text-xs text-text-secondary">{planOverviewCopy.nextStepsHint}</p>
               <ul className="flex flex-col divide-y divide-border-subtle">
                 {steps.map((step) => {
-                  const areaName = nameOf(step.treeId) ?? competencePlanCopy.areaUnavailable;
-                  const visual = areaVisualFor(nameOf(step.treeId), step.treeId);
+                  const areaName = nameOf(step.planId) ?? competencePlanCopy.areaUnavailable;
+                  const visual = areaVisualFor(nameOf(step.planId), step.planId);
                   const tone = AREA_TONE_CLASSES[visual.tone];
                   const overdue = isMilestoneOverdue(step.milestone, todayIso);
                   const date = formatPlanDate(step.milestone.targetDate);
                   return (
-                    <li key={`${step.treeId}-${step.milestone.id}`} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+                    <li key={`${step.planId}-${step.milestone.id}`} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
                       <span aria-hidden="true" className={"flex size-8 shrink-0 items-center justify-center rounded-field " + tone.subtle}>
                         <Icon icon={visual.icon} size="inline" className={tone.text} />
                       </span>
@@ -145,7 +145,7 @@ export function CompetencePlanOverview({ plans, nameOf, start, today, onOpenPlan
                         size="sm"
                         className="shrink-0"
                         aria-label={planOverviewCopy.openPlanFor(areaName, step.milestone.title)}
-                        onClick={() => onOpenPlan(step.treeId)}
+                        onClick={() => onOpenPlan(step.planId)}
                       >
                         {planOverviewCopy.openPlan}
                       </Button>

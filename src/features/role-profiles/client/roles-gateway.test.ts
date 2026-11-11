@@ -4,8 +4,8 @@ import { fetchAdminRoles } from "./roles-gateway";
 const ROLE = {
   roleId: "role-1",
   name: "Backend",
+  description: "Bygger API-et",
   archived: false,
-  expectations: [{ treeId: "api", treeName: "API design", expectedLevel: 3 }],
   createdAt: "2026-10-01T10:00:00.000Z",
 };
 

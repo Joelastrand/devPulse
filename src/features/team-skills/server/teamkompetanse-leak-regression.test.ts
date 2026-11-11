@@ -139,25 +139,25 @@ const roster = (levels: Array<number | null>): Member[] =>
   levels.map((level, i) => ({ uid: uid(String.fromCharCode(97 + i)), level }));
 
 describe("fixture sanity (these must pass; they prove the vulnerability cases below are meaningful)", () => {
-  it("five consenting members at level 4 reach the evaluated state covered", async () => {
-    expect(await stateOf(roster([4, 4, 4, 4, 4]), 4, 1)).toBe("covered");
+  it("three consenting members at level 4 reach the evaluated state covered", async () => {
+    expect(await stateOf(roster([4, 4, 4]), 4, 1)).toBe("covered");
   });
 
-  it("four contributors are suppressed as insufficient_data", async () => {
-    expect(await stateOf(roster([4, 4, 4, 4]), 4, 1)).toBe("insufficient_data");
+  it("two contributors are suppressed as insufficient_data", async () => {
+    expect(await stateOf(roster([4, 4]), 4, 1)).toBe("insufficient_data");
   });
 
-  it("the pure derivation is the one the operation uses (k = 5 on the contributor count)", () => {
-    expect(deriveCoverageState({ requiredLevel: 4, requiredCoverage: 1, levels: [4, 4, 4, 4] })).toBe("insufficient_data");
-    expect(deriveCoverageState({ requiredLevel: 4, requiredCoverage: 1, levels: [4, 4, 4, 4, 4] })).toBe("covered");
+  it("the pure derivation is the one the operation uses (k = 3 on the contributor count)", () => {
+    expect(deriveCoverageState({ requiredLevel: 4, requiredCoverage: 1, levels: [4, 4] })).toBe("insufficient_data");
+    expect(deriveCoverageState({ requiredLevel: 4, requiredCoverage: 1, levels: [4, 4, 4] })).toBe("covered");
   });
 });
 
 describe("KNOWN VULNERABILITY A1: self-toggle reveals the exact contributor threshold (expected-to-fail)", () => {
-  // Synthetic: five contributors, one of them (u-a, level 4) withdraws. Safe behaviour: a single member's withdrawal
+  // Synthetic: three contributors (the threshold), one of them (u-a, level 4) withdraws. Safe behaviour: a single member's withdrawal
   // must not flip the published state between an evaluated state and insufficient_data.
-  it.fails("a single contributor's withdrawal from a cohort of exactly five does not change the published state", async () => {
-    const withAll = roster([4, 4, 4, 4, 4]);
+  it.fails("a single contributor's withdrawal from a cohort of exactly three does not change the published state", async () => {
+    const withAll = roster([4, 4, 4]);
     const withoutA = withAll.map((m) => (m.uid === uid("a") ? { ...m, contributing: false } : m));
     expect(await stateOf(withoutA, 4, 1)).toBe(await stateOf(withAll, 4, 1));
   });
@@ -195,12 +195,12 @@ describe("KNOWN VULNERABILITY A3: a five-member team exposes whole-team coverage
 });
 
 describe("KNOWN VULNERABILITY A4: one join or opt-in changes the published state immediately (expected-to-fail)", () => {
-  // Synthetic: four contributors, then a fifth member (u-e, level 4) opts in. Safe behaviour: a single opt-in does not
+  // Synthetic: two contributors, then a third member (u-c, level 4) opts in. Safe behaviour: a single opt-in does not
   // change the published state on the very next read (stable publication).
-  it.fails("a single opt-in that completes a cohort of five does not change the state on the next read", async () => {
-    const beforeOptIn = roster([4, 4, 4, 4, 4]).map((m) => (m.uid === uid("e") ? { ...m, contributing: false } : m));
+  it.fails("a single opt-in that completes a cohort of three does not change the state on the next read", async () => {
+    const beforeOptIn = roster([4, 4, 4]).map((m) => (m.uid === uid("c") ? { ...m, contributing: false } : m));
     const before = await stateOf(beforeOptIn, 4, 1);
-    const afterOptIn = roster([4, 4, 4, 4, 4]);
+    const afterOptIn = roster([4, 4, 4]);
     const after = await stateOf(afterOptIn, 4, 1);
     expect(after).toBe(before);
   });

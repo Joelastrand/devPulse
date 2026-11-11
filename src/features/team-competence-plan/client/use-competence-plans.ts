@@ -5,10 +5,9 @@ import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource"
 import { fetchRoadmapItems } from "../../roadmap/client/roadmap-gateway";
 import type { RoadmapItemView } from "../../roadmap/server/list-roadmap-items";
 import {
-  fetchCompetenceAreas,
+  createCompetencePlan,
   fetchCompetencePlans,
   putCompetencePlan,
-  type ClientCompetenceArea,
   type ClientCompetencePlan,
   type CompetencePlanInput,
   type CompetencePlanWriteResult,
@@ -22,8 +21,6 @@ export type CompetencePlanPageData =
       canEdit: boolean;
       truncated: boolean;
       plans: ClientCompetencePlan[];
-      /** Assigned areas (not archived). Empty when the area read failed; plans then render with a fallback name. */
-      areas: ClientCompetenceArea[];
       /** Existing roadmap competence-stage records, shown read-only and unchanged (BR-17). */
       legacyItems: RoadmapItemView[];
       legacyFailed: boolean;
@@ -32,9 +29,8 @@ export type CompetencePlanPageData =
 type AuthState = { phase: "loading" } | { phase: "signed_out" } | { phase: "signed_in"; token: string };
 
 async function load(token: string, teamId: string): Promise<CompetencePlanPageData> {
-  const [plansResult, areasResult, legacyResult] = await Promise.all([
+  const [plansResult, legacyResult] = await Promise.all([
     fetchCompetencePlans(token, teamId, true),
-    fetchCompetenceAreas(token, teamId),
     fetchRoadmapItems(token, teamId, { includeArchived: false }),
   ]);
   if (plansResult.status !== "ok") {
@@ -45,15 +41,14 @@ async function load(token: string, teamId: string): Promise<CompetencePlanPageDa
     canEdit: plansResult.canEdit,
     truncated: plansResult.truncated,
     plans: plansResult.plans,
-    areas: areasResult.status === "ok" ? areasResult.areas.filter((area) => area.status !== "archived") : [],
     legacyItems: legacyResult.status === "ok" ? legacyResult.items.filter((item) => !item.archived) : [],
     legacyFailed: legacyResult.status !== "ok",
   };
 }
 
 /**
- * Loads the team's competence plans and assigned areas (TASK-006). Responses from a superseded load are dropped. A saved
- * plan reloads the page data, so the view never shows a stale plan after a successful write.
+ * Loads the team's competence plans (TASK-006). Plans need no competence area. Responses from a superseded load are
+ * dropped. A saved plan reloads the page data, so the view never shows a stale plan after a successful write.
  */
 export function useCompetencePlans(teamId: string) {
   const [auth, setAuth] = useState<AuthState>({ phase: "loading" });
@@ -85,9 +80,16 @@ export function useCompetencePlans(teamId: string) {
   const data: CompetencePlanPageData =
     result !== null && result.requestKey === requestKey ? result.data : { phase: "loading" };
 
-  async function save(treeId: string, input: CompetencePlanInput): Promise<CompetencePlanWriteResult> {
+  async function create(input: CompetencePlanInput): Promise<CompetencePlanWriteResult> {
     if (token === null) return { status: "unauthenticated" };
-    const outcome = await putCompetencePlan(token, teamId, treeId, input);
+    const outcome = await createCompetencePlan(token, teamId, input);
+    if (outcome.status === "ok") setReloadKey((key) => key + 1);
+    return outcome;
+  }
+
+  async function save(planId: string, input: CompetencePlanInput): Promise<CompetencePlanWriteResult> {
+    if (token === null) return { status: "unauthenticated" };
+    const outcome = await putCompetencePlan(token, teamId, planId, input);
     if (outcome.status === "ok") setReloadKey((key) => key + 1);
     return outcome;
   }
@@ -97,14 +99,15 @@ export function useCompetencePlans(teamId: string) {
    * the loaded one in place, so the page does not reload and every progress view derives from the one saved plan.
    */
   async function saveMilestoneCompletion(
-    treeId: string,
+    planId: string,
     milestoneId: string,
     completed: boolean,
   ): Promise<CompetencePlanWriteResult> {
     if (token === null || requestKey === null) return { status: "unauthenticated" };
-    const current = data.phase === "loaded" ? data.plans.find((plan) => plan.treeId === treeId) : undefined;
+    const current = data.phase === "loaded" ? data.plans.find((plan) => plan.planId === planId) : undefined;
     if (current === undefined) return { status: "write_failed" };
     const input: CompetencePlanInput = {
+      title: current.title,
       targetStage: current.targetStage,
       priority: current.priority,
       archived: current.archived,
@@ -114,17 +117,17 @@ export function useCompetencePlans(teamId: string) {
           : { id: milestone.id, title: milestone.title, targetDate: milestone.targetDate, status: milestone.status },
       ),
     };
-    const outcome = await putCompetencePlan(token, teamId, treeId, input);
+    const outcome = await putCompetencePlan(token, teamId, planId, input);
     if (outcome.status === "ok") {
       const saved = outcome.plan;
       setResult((previous) => {
         if (previous === null || previous.requestKey !== requestKey || previous.data.phase !== "loaded") return previous;
-        const plans = previous.data.plans.map((plan) => (plan.treeId === treeId ? saved : plan));
+        const plans = previous.data.plans.map((plan) => (plan.planId === planId ? saved : plan));
         return { requestKey: previous.requestKey, data: { ...previous.data, plans } };
       });
     }
     return outcome;
   }
 
-  return { data, save, saveMilestoneCompletion, reload: () => setReloadKey((key) => key + 1) };
+  return { data, create, save, saveMilestoneCompletion, reload: () => setReloadKey((key) => key + 1) };
 }

@@ -229,3 +229,70 @@ export async function fetchTeamSkillAggregate(token: string, teamId: string): Pr
   if (rows.some((row) => row === null)) return { status: "read_failed" };
   return { status: "ok", availability: "available", rows: rows as TeamOwnedSkillAggregateRowView[] };
 }
+
+/** One agreed (collaborative) team level of an active team skill. Team-level value only; no actor is ever returned. */
+export interface TeamManualAssessmentView {
+  skillId: string;
+  name: string;
+  level: TeamSkillLevel;
+  note: string | null;
+  criteriaVersion: number;
+  outdated: boolean;
+  updatedAt: string;
+}
+
+export type TeamManualAssessmentsStatus =
+  | { status: "ok"; canEdit: boolean; assessments: TeamManualAssessmentView[] }
+  | { status: "unauthenticated" | "forbidden" | "team_disabled" | "read_failed" };
+
+export type TeamManualWriteStatus = { status: "ok" } | { status: TeamSkillsWriteStatus | "persistence_failed" };
+
+function toManualAssessment(value: unknown): TeamManualAssessmentView | null {
+  if (!isRecord(value)) return null;
+  const { skillId, name, level, note, criteriaVersion, outdated, updatedAt } = value;
+  if (typeof skillId !== "string" || typeof name !== "string" || !isLevel(level)) return null;
+  if (note !== null && typeof note !== "string") return null;
+  if (typeof criteriaVersion !== "number" || typeof outdated !== "boolean" || typeof updatedAt !== "string") return null;
+  return { skillId, name, level, note, criteriaVersion, outdated, updatedAt };
+}
+
+function manualPath(teamId: string): string {
+  return `/api/teams/${encodeURIComponent(teamId)}/team-skills`;
+}
+
+/** The team's agreed levels for its active skills. Members and administrators only. Any malformed row fails the whole read. */
+export async function fetchTeamManualAssessments(token: string, teamId: string): Promise<TeamManualAssessmentsStatus> {
+  const response = await send("GET", `${manualPath(teamId)}/manual`, token);
+  if (!response.ok) {
+    const code = errorCode(response.json);
+    if (code === "unauthenticated" || code === "forbidden" || code === "team_disabled") return { status: code };
+    return { status: "read_failed" };
+  }
+  if (!isRecord(response.json) || !Array.isArray(response.json.assessments) || typeof response.json.canEdit !== "boolean") {
+    return { status: "read_failed" };
+  }
+  const assessments = response.json.assessments.map(toManualAssessment);
+  if (assessments.some((row) => row === null)) return { status: "read_failed" };
+  return { status: "ok", canEdit: response.json.canEdit, assessments: assessments as TeamManualAssessmentView[] };
+}
+
+export async function setTeamManualAssessment(
+  token: string,
+  teamId: string,
+  skillId: string,
+  level: TeamSkillLevel,
+  note: string | null,
+): Promise<TeamManualWriteStatus> {
+  const response = await send("PUT", `${manualPath(teamId)}/${encodeURIComponent(skillId)}/manual`, token, { level, note });
+  if (!response.ok) {
+    const code = errorCode(response.json);
+    return { status: code === "persistence_failed" ? "persistence_failed" : writeStatus(response.json) };
+  }
+  return { status: "ok" };
+}
+
+export async function clearTeamManualAssessment(token: string, teamId: string, skillId: string): Promise<TeamManualWriteStatus> {
+  const response = await send("DELETE", `${manualPath(teamId)}/${encodeURIComponent(skillId)}/manual`, token);
+  if (!response.ok) return { status: writeStatus(response.json) };
+  return { status: "ok" };
+}

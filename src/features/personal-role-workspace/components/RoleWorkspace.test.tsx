@@ -5,9 +5,6 @@ import userEvent from "@testing-library/user-event";
 
 const observeIdTokenMock = vi.fn();
 vi.mock("../../auth/client/auth-client", () => ({ observeIdToken: observeIdTokenMock }));
-vi.mock("../../role-profiles/components/RoleTargetSection", () => ({
-  RoleTargetSection: () => <div data-testid="role-target-section" />,
-}));
 
 const { RoleWorkspace } = await import("./RoleWorkspace");
 const { ResponsibilitiesSection } = await import("./ResponsibilitiesSection");
@@ -22,6 +19,7 @@ interface FakeBackend {
   calls: { method: string; path: string; body?: unknown }[];
   responsibilityGetStatus: number;
   nextId: number;
+  formalRole: { status: "none" } | { status: "assigned"; title: string; description: string };
 }
 
 let backend: FakeBackend;
@@ -77,6 +75,9 @@ function installFakeFetch() {
     backend.calls.push({ method, path: url, body });
     if (url === "/api/me/goals") {
       return json(200, { goals: backend.goals, recoveryItems: [], truncated: false, skillOptions: [], skillOptionsTruncated: false });
+    }
+    if (url === "/api/me/role-assignment" && method === "GET") {
+      return json(200, backend.formalRole);
     }
     if (url === "/api/me/responsibilities" && method === "GET") {
       if (backend.responsibilityGetStatus !== 200) return json(backend.responsibilityGetStatus, { error: "persistence_failed" });
@@ -141,6 +142,7 @@ beforeEach(() => {
     calls: [],
     responsibilityGetStatus: 200,
     nextId: 1,
+    formalRole: { status: "none" },
   };
   observeIdTokenMock.mockImplementation((callback: (token: string | null) => void) => {
     callback("test-token");
@@ -157,14 +159,30 @@ afterEach(() => {
 
 const callsTo = (method: string, path: string) => backend.calls.filter((call) => call.method === method && call.path === path);
 
-describe("role workspace: formal role and target role are kept apart (SPEC BR-1, BR-2, PR-SI-4)", () => {
-  it("states that no formal role is assigned and never presents the target role as an assigned role", async () => {
+describe("role workspace: Min rolle shows the assigned organizational role (role-profiles SPEC, personal display)", () => {
+  it("shows the assigned role title and description under Min rolle", async () => {
+    backend.formalRole = { status: "assigned", title: "Backend-utvikler", description: "Bygger og drifter tjenester." };
     render(<RoleWorkspace />);
-    expect(screen.getByRole("heading", { name: "Formell rolle i selskapet" })).toBeTruthy();
-    expect(screen.getByText(/Ingen formell rolle er tildelt deg/)).toBeTruthy();
-    expect(screen.getByText(/Den er ikke tildelt av arbeidsgiver/)).toBeTruthy();
-    expect(screen.getByTestId("role-target-section")).toBeTruthy();
+
+    const section = (await screen.findByRole("heading", { name: "Min rolle" })).closest("section")!;
+    expect(await within(section).findByRole("heading", { name: "Backend-utvikler" })).toBeTruthy();
+    expect(within(section).getByText("Bygger og drifter tjenester.")).toBeTruthy();
     expect(screen.getByText(/privat for deg/)).toBeTruthy();
+  });
+
+  it("shows a concise empty state when no role is assigned, and keeps responsibilities and contributions", async () => {
+    render(<RoleWorkspace />);
+
+    const section = (await screen.findByRole("heading", { name: "Min rolle" })).closest("section")!;
+    expect(await within(section).findByText("Du har ingen organisatorisk rolle tildelt ennå.")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Mine ansvarsområder" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Mine bidrag og resultater" })).toBeTruthy();
+  });
+
+  it("never shows target-role or role-expectation copy", async () => {
+    render(<RoleWorkspace />);
+    await screen.findByRole("heading", { name: "Min rolle" });
+    expect(screen.queryByText(/Ditt utviklingsmål|Rolleforventninger|målrolle|forventninger/i)).toBeNull();
   });
 });
 
@@ -417,8 +435,4 @@ describe("workspace filters, ordering and linked names (BR-16, BR-23, BR-24, BR-
     expect(screen.getByText("Mål: Lær Rust")).toBeTruthy();
   });
 
-  it("states that the target role is the employee own choice and never an assigned role", async () => {
-    render(<RoleWorkspace />);
-    expect(screen.getByText("Ditt utviklingsmål er ditt eget valg. Det er ikke en rolle som er tildelt deg.")).toBeTruthy();
-  });
 });

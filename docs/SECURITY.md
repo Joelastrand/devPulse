@@ -178,7 +178,7 @@ team editing authority is the `teamadmin` role, granted only by a superadmin (TA
     distribution, min/max, timestamp, completeness or contributor identity.
     Participation is opt-in, per team, revocable, destroyed with the
     membership, absent after a rejoin, and never overridden by a lead or app
-    admin. The cohort is judged per skill with a fixed threshold of 5 eligible
+    admin. The cohort is judged per skill with a fixed threshold of 3 eligible (owner decision 2026-11-11, previously 5)
     contributors; below it the result is `insufficient_data`, and every
     suppression cause is indistinguishable.
 33. Roles do not widen coverage or profile access. Coverage is readable only
@@ -194,7 +194,7 @@ team editing authority is the `teamadmin` role, granted only by a superadmin (TA
     need mutation, coverage or participation.
 *TA-SI amendment (2026-11-06):* the single C2 capability is now team administration of `teamSkillNeeds` for a superadmin or
 a genuine `teamadmin` of an active team (TA-SI-4). Participation and coverage remain unchanged and never use this check.
-34. The coverage threshold `k = 5` is the code constant
+34. The coverage threshold `k = 3` is the code constant
     `SKILL_COVERAGE_MIN_CONTRIBUTORS` (with the notice version
     `SKILL_CONTRIBUTION_NOTICE_VERSION`, both owned by
     `src/features/team-skills/domain/skill-coverage-policy.ts`). It is never
@@ -208,12 +208,18 @@ a genuine `teamadmin` of an active team (TA-SI-4). Participation and coverage re
     threshold `AUTOMATIC_TEAM_LEVEL_MIN_CONTRIBUTORS = 3`
     (`src/features/team-skills/domain/team-level.ts`) applies to the rounded
     arithmetic mean per competence area. It is served only by
-    `GET /api/teams/[teamId]/skill-levels` through a strict DTO allow-list: no
+    `GET /api/teams/[teamId]/team-skills/aggregate` (team-owned skills, k = 3 via `SKILL_COVERAGE_MIN_CONTRIBUTORS`) through a strict DTO allow-list: no
     identity, individual rating, contributor count, sum or `requiredCoverage`.
     There is no additional team-size floor. A three-person aggregate is **not
     anonymous**: inference about an individual rating is possible and is an
-    accepted product risk. The categorical coverage view keeps k = 5 until its
-    retirement is approved.
+    accepted product risk. The retired `GET /api/teams/[teamId]/skill-levels` route (2026-11-11) and its DTO are gone. The categorical coverage view uses the same k = 3 (owner decision 2026-11-11);
+    its retirement is a separate decision.
+*Unified team competence amendment (owner decision, 2026-11-11, final):* the shared-assessment threshold for the team-owned skill
+aggregate and the categorical coverage view is lowered from 5 to 3 by changing the single owner constant
+`SKILL_COVERAGE_MIN_CONTRIBUTORS`. `SKILL_CONTRIBUTION_NOTICE_VERSION` is bumped from 1 to 2 because the notice text states the
+threshold. Every participation recorded under version 1 lapses; each member must re-consent. Two or fewer eligible
+contributors remain suppressed. Membership, explicit sharing consent, criteria-version checks and every other protection in
+this section are unchanged.
 35. Nothing derived from personal assessments is persisted or cached: no
     aggregate, coverage/gap score, matrix snapshot, contribution record,
     history or trend. Every coverage request recomputes from the canonical
@@ -229,7 +235,7 @@ a genuine `teamadmin` of an active team (TA-SI-4). Participation and coverage re
 
 **Residual-risk statement for invariants 32–36 (approved, P6).** The output is
 **privacy-thresholded team coverage**. It is **not** anonymous in any formal
-sense, and `k = 5` is a product threshold, not an anonymity guarantee. C2 does
+sense, and `k = 3` is a product threshold, not an anonymity guarantee. C2 does
 not provide differential privacy, and does not protect against: a lead who
 deliberately mutates the persisted needs and compares the categorical results
 over time (the *malicious-lead oracle*: by varying `requiredLevel` and
@@ -506,40 +512,37 @@ verifies each bound participant with an index read and an owner read per item. S
 See `docs/ARCHITECTURE.md` for where these boundaries live, and
 `docs/features/<feature-id>/SPEC.md` for feature-specific decisions.
 
-## Role profiles invariants (RP-SI, 2026-10-28)
+## Role profiles invariants (RP-SI, simplified 2026-11-11)
 
-The role-profiles feature (`docs/features/role-profiles/SPEC.md`) adds the invariants below. They use their own `RP-SI`
-prefix, so the numbered invariants above are not renumbered. They do not weaken any existing invariant.
+The role-profiles feature (`docs/features/role-profiles/SPEC.md`) uses its own `RP-SI` prefix, so the numbered invariants above
+are not renumbered. The 2026-10-28 invariants about a personal target role and a derived comparison are withdrawn with that
+model. Their collection no longer exists in the code and was removed from the test project on 2026-11-11.
 
-- **RP-SI-1 (owner-only target).** Only the verified token uid reads or writes `userDevelopment/{uid}/roleTarget/current`. No
-  route, query, body, DTO or operation accepts another uid. A `uid` in a body or query is refused or ignored.
-- **RP-SI-2 (comparison is derived).** The comparison is owner-only, computed on request, and never stored, cached, logged
-  or aggregated. No request writes a document for it.
-- **RP-SI-3 (no other reader or assigner).** No admin, lead, team, member or app-admin route reads or writes any person's
-  target or comparison. App-admin status grants administration of role definitions only.
-- **RP-SI-4 (role definitions are reference data).** `roleDefinitions` is written and read only through Admin SDK routes behind
-  `requireAppAdmin`. Client Firestore access is denied by an explicit deny-only rule. Descriptions are org text and must not
-  contain personal names (the admin form shows the notice).
+- **RP-SI-1 (organizational roles are reference data).** `roleDefinitions` (title and description only) is written only by an
+  app administrator through Admin SDK routes behind `requireAppAdmin`, and read by signed-in people only through the
+  allow-listed `GET /api/roles`. Client Firestore access is denied by an explicit deny-only rule. Descriptions are org text and
+  must not contain personal names (the admin form shows the notice).
+- **RP-SI-2 (formal assignment is server-only and admin-written).** `roleAssignments/{uid}` is written only by an app
+  administrator through `requireAppAdmin` routes, and read only through the Admin SDK. Client Firestore access is denied by an
+  explicit deny-only rule. Writes are fenced on the target uid's erasure record.
+- **RP-SI-3 (no self-assignment).** An administrator cannot assign or remove their own role. The check compares the verified
+  token's uid with the route's target uid before any write.
+- **RP-SI-4 (an assignment grants nothing).** No application permission, team role, superadmin decision, skill calculation,
+  goal rule or access check reads `roleAssignments`. The personal read returns only the title and description of the
+  assigned active role to its owner.
 - **RP-SI-5 (internal fields stay internal).** `createdBy`, `updatedBy`, `archivedBy` and `uid` never appear in any response.
-  Route responses are field allow-lists.
-- **RP-SI-6 (new reader of `skillProfiles`, scoped).** The owner-only comparison is the only reader of C1 levels added by this
-  feature, through the existing owner read. This scopes D1 SI-6 to this feature: D1 still never reads `skillProfiles`.
-  For notice purposes it counts as a further reader of private C1 assessments: the C1 privacy notice is amended (approved
-  2026-10-28) with the owner-only comparison sentence, and the C1 anti-surveillance scan exempts only that exact sentence.
-  No other copy or reader changes.
-- **RP-SI-7 (no D1 goal access).** role-profiles never reads or writes a goal document, the D1 goal store or the D1 routes, and
-  uses no `collectionGroup`. D1 never reads or writes the target. D1 SI-15 and invariant 51 are unchanged.
-- **RP-SI-8 (no D2 or team-planning data).** No role data reaches D2, team skill needs, coverage, progress or the roadmap.
-  The D2 guard, the C2 guard and the cross-feature suite pin this.
-- **RP-SI-9 (neutral errors and logs).** Errors and logs carry no role name, description, `roleId`, skill-area name, level or
-  comparison (BR-23). A failed read is a neutral failure (`500` or `persistence_failed`), never `not_assessed` or
-  `area_unavailable`.
-- **RP-SI-10 (malformed content is never echoed or repaired).** A malformed role or target is `not_found`, `unavailable` or
-  skipped, with no content returned. Reads never repair a document.
-- **RP-SI-11 (one write per operation).** Every operation performs at most one write, and every refusal writes nothing (PG-7,
-  TASK-012). Create is count-then-create: a small overshoot under concurrent creates is accepted (BR-7).
-- **RP-SI-12 (static guards are not authorization).** The scope guards are change detection. Authorization evidence is the
-  actor × operation matrix (`role-profiles-authz-matrix.test.ts`) and the route suites.
+  Route responses are field allow-lists. The personal response carries no uid and no role id.
+- **RP-SI-6 (no skill or goal reader).** role-profiles reads no skill, goal, responsibility, achievement or team-planning data.
+  No role data reaches D2, team skill needs, coverage, progress or the roadmap.
+- **RP-SI-7 (neutral errors and logs).** Errors and logs carry no role title, description, role id or uid. A failed read is a
+  neutral failure (`persistence_failed`), never an empty list or a different role.
+- **RP-SI-8 (malformed content is never echoed or repaired).** A malformed role or assignment is skipped or reported as
+  `none`, with no content returned. Reads never repair a document.
+- **RP-SI-9 (one write per operation).** Every operation performs at most one write, and every refusal writes nothing.
+- **RP-SI-10 (archived roles receive no new assignments).** An assignment to an archived or missing role is refused. An
+  existing assignment to a role that is later archived is kept as stored and is not replaced silently.
+- **RP-SI-11 (static guards are not authorization).** The scope guards and the rules check are change detection. Authorization
+  evidence is the operation tests (`role-assignments.test.ts`) and the route suites.
 
 ## Personal role workspace invariants (PR-SI, 2026-11-10)
 
@@ -561,9 +564,9 @@ by this section: where the numbered text above differs from the "Now" text below
   **not** runtime authorization and does not authorize any request. The enforceable boundaries are: the verified authenticated owner
   identity; server-side authorization on every request; strict owner-scoped data access; Firestore client denial; minimal response
   DTOs; and negative cross-user access tests. Documented guard exceptions are listed in SECURITY-REVIEW §11.4.
-- **PR-SI-4 (target role is never an assigned role).** No API, DTO, copy, UI label, stored field or log treats
-  `userDevelopment/{uid}/roleTarget/current` as an assignment or a registered role. Target-role copy is `Ditt utviklingsmål`; assigned-
-  role copy (deferred) is `Din registrerte rolle`. The two are never interchanged.
+- **PR-SI-4 (the formal role is read only by its owner).** The personal workspace shows the signed-in person's own formal
+  organizational role (title and description) through `GET /api/me/role-assignment` only. It never reads `roleAssignments`
+  directly, never shows another person's role, and never presents the role as a permission. No target-role concept exists.
 - **PR-SI-5 (source records are encrypted; key failures are never data loss).** `title`, `description` and `outcome` of
   responsibilities and achievements are stored only inside an encrypted payload, using the existing AES-256-GCM helper
   (`src/lib/encryption`, invariants 3–5 and 65). The stored envelope is `{ ciphertext, iv, authTag, keyVersion, keyCheck }`.
@@ -642,7 +645,7 @@ any environment variable; no client-supplied role is ever trusted.
   public team. Private, disabled, malformed and missing teams return the same `not_found`. No token is read on this path, no
   member, competence, project, planning, forum or audit field is returned, and the response is never cached. Further public
   fields need a separate approval and privacy review; any competence data would additionally need consent (invariants
-  31–36) and the k = 5 threshold (invariant 34).
+  31–36) and the k = 3 threshold (invariant 34).
 - **TA-SI-7 Visibility does not bypass consent.** A public team exposes no competence data, so no consent decision is
   bypassed. Any future public coverage must still apply invariants 32–35.
 - **TA-SI-8 No actor uid for visibility.** A visibility change stores `visibility` and `visibilityUpdatedAt` only, so it adds
@@ -709,10 +712,59 @@ remains superadmin-only pending an owner decision.
 - **TS-SI-3 Aggregates use only the existing opt-in.** The team skill aggregate (`get-team-owned-skill-aggregate.ts`) is the
   one approved team-owned consumer of the C2 membership scan (reviewed in `team-skills-scope-guard.test.ts`). It counts only
   genuine members whose existing team sharing consent is effective, only ratings under the current criteria version, and
-  only at a threshold of 5 (`SKILL_COVERAGE_MIN_CONTRIBUTORS`). A skill with any unreadable or inconsistent eligible rating
+  only at a threshold of 3 (`SKILL_COVERAGE_MIN_CONTRIBUTORS`, owner decision 2026-11-11). A skill with any unreadable or inconsistent eligible rating
   is suppressed. It never returns a count, a uid, a contributor number or a per-person value, and the reader never queries
   across people (exact `{uid}__{skillId}` documents only).
 - **TS-SI-4 Erasure covers the new records.** I-19 (`teamSkillAssessments`, owner-only, DELETE) and A-17 (`teamSkills`
   actor fields, ANONYMIZE) are registered in the inventory, the sweep and the erasure steps.
 - **TS-SI-5 No dynamic keys.** The team-skill write path builds no dynamic map key or field path. The erasure guard
   stays unchanged, and its reviewed exception is not extended.
+
+## Team competence invariants (unified Teamkompetanse and Competence Plan, 2026-11-11)
+
+Source: `docs/features/team-experience-redesign/SPEC.md` (OD-6 for the plan) and `src/features/team-owned-skills/`. These
+describe the code as it stands after the legacy retirement. They replace the earlier statements about the retired
+`teamCompetenceAreas`, collaborative profile, `skill-levels` route and numeric profile endpoints, which no longer exist.
+
+- **TC-SI-1 Manual team level: administrator writes only.** The collaborative team level (`teamManualAssessments/{skillId}`:
+  `level` 1–4, optional `note`, `criteriaVersion`, `updatedAt`, and the audit actor `updatedBy`) is written only by
+  `PUT` / `DELETE /api/teams/[teamId]/team-skills/[skillId]/manual`. Each write re-checks inside its transaction that the
+  caller is a superadmin or a genuine `teamadmin` of an active team (`requireTeamAdministratorWith`). Other callers get
+  `forbidden`; a disabled team gets `team_disabled`; a skill of another team, an unknown skill or an inactive skill gets `skill_unavailable`, so a foreign id is not an existence signal.
+- **TC-SI-2 Manual team level: genuine members read, no person data.** `GET /api/teams/[teamId]/team-skills/manual` returns
+  to a genuine member or an administrator only: `skillId`, `name`, `level`, `note`, `criteriaVersion`, `outdated`,
+  `updatedAt` and `canEdit`. It never returns `updatedBy`, another person's uid or any member rating. A caller who is
+  neither a genuine member nor an administrator gets `forbidden`.
+- **TC-SI-3 Criteria version handling.** Every manual level stores the `criteriaVersion` of the skill at the time it was
+  entered. `outdated` is `entry.criteriaVersion < skill.criteriaVersion`. An outdated level is kept and shown with the flag;
+  it is never reinterpreted, rescaled or cleared automatically. A new write stores the current version.
+- **TC-SI-4 Fail closed on malformed data.** A malformed stored skill, or a manual-assessment document that fails
+  `isValidTeamManualAssessment` (extra keys, a wrong document id, an unknown level), fails the whole read with `read_failed`.
+  It is never skipped, defaulted or shown as zero. Assessments whose skill is inactive are left out of the read view.
+- **TC-SI-5 Automatic profile: k = 3 on shared, current-criteria ratings only.** The automatic team level
+  (`GET /api/teams/[teamId]/team-skills/aggregate`) is derived only from members with an effective team sharing consent
+  (TS-SI-3), only from ratings under the current criteria version, and only when at least
+  `SKILL_COVERAGE_MIN_CONTRIBUTORS = 3` such ratings exist. Below that, the area is reported as insufficient data, never as
+  zero. Any unreadable or inconsistent eligible rating suppresses the area. The response carries no count, uid, sum or
+  per-person value. Three contributors is the minimum product threshold, not an anonymity guarantee (invariant 34).
+- **TC-SI-6 Canonical catalog writes.** Creating or editing a team skill (`teamSkills`) requires a superadmin or a genuine
+  `teamadmin` of an active team, re-checked in the write transaction. Guidance changes bump the skill's `criteriaVersion`.
+  Names are unique among active skills of the team.
+- **TC-SI-7 Competence Plan: no competence dependency.** A plan (`teamCompetencePlans/{planId}`, a random UUID) is written
+  only by a lead of an active team and read by any team role other than `denied`. It stores a title, an optional catalog label `treeId`
+  (`null` for new plans, never checked against any assignment), a target stage, a priority, milestones and timestamps. No
+  read or write checks a competence area, a team skill, an assessment, sharing consent or a profile. It holds no uid,
+  actor, `memberRef` or member assessment.
+- **TC-SI-8 Direct client access is denied.** `teamSkills`, `teamSkillAssessments`, `teamManualAssessments`,
+  `teamCompetencePlans` and `teamSkillNeeds` have deny-only Firestore rules. Every read and write goes through the Admin SDK
+  on the server, behind the checks above.
+- **TC-SI-9 Erasure.** `teamSkillAssessments` (the owner's own ratings) is deleted with the owner (I-19). The audit actor
+  fields `teamSkills.createdBy` / `updatedBy` (A-17) and `teamManualAssessments.updatedBy` (A-19) are anonymized on erasure,
+  and the record and its level are kept. `teamCompetencePlans` holds no person field and needs no erasure step; the allow-list
+  states this with a reason. Erasure never deletes a team's manual level or plan because a member left.
+- **TC-SI-10 Retired surfaces.** The `teamCompetenceAreas`, `teamProfileSettings`, `teamCollaborativeLevels` collections, the
+  `profile-settings`, `competence-areas` and `skill-levels` routes and the collaborative-profile modules are removed. They have
+  no rules, no inventory rows and no callers. A request to them returns no route.
+- **TC-SI-11 Open items.** The `skill-needs` and `skill-coverage` routes remain. They are not wired into any page: the
+  needs section is unmounted, so the routes have no live caller, although BR-17a places needs and coverage on Teamkompetanse.
+  Re-mounting or retiring them is a product decision, recorded in `docs/features/team-experience-redesign/TASKS.md`.

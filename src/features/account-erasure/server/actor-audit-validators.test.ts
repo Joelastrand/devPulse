@@ -53,7 +53,8 @@ describe("skill tree createdBy and updatedBy (A-2)", () => {
 });
 
 describe("role definition createdBy, updatedBy and archivedBy (A-3)", () => {
-  const stored = { name: "Backend engineer", expectations: [{ treeId: "api", expectedLevel: 3 }], createdAt: T0 };
+  // A role is a title and a required description; the obsolete skill `expectations` field is no longer valid.
+  const stored = { name: "Backend engineer", description: "Bygger API-et.", createdAt: T0 };
 
   it("accepts null for each actor field on a stored role", () => {
     const result = parseStoredRoleDefinition({

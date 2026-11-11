@@ -26,8 +26,7 @@ vi.mock("../client/use-competence-plans", () => ({
 
 import { CompetencePlanSection } from "./CompetencePlanSection";
 
-const TREE_B = "tree-testing";
-const TREE_C = "tree-observability";
+const PLAN_B = "66666666-6666-4666-8666-666666666666";
 const MS_DONE = "11111111-1111-4111-8111-111111111111";
 const MS_OPEN = "22222222-2222-4222-8222-222222222222";
 
@@ -38,13 +37,11 @@ function loaded(overrides: Partial<Extract<CompetencePlanPageData, { phase: "loa
     truncated: false,
     legacyItems: [],
     legacyFailed: false,
-    areas: [
-      { treeId: TREE_B, name: "Testautomatisering", status: "active" },
-      { treeId: TREE_C, name: "Observerbarhet", status: "active" },
-    ],
     plans: [
       {
-        treeId: TREE_B,
+        planId: PLAN_B,
+        title: "Testautomatisering",
+        treeId: null,
         targetStage: 3,
         priority: "high",
         archived: false,
@@ -127,14 +124,11 @@ describe("CompetencePlanSection", () => {
     expect(screen.getByText("Bare teamleder kan krysse av steg.")).toBeTruthy();
   });
 
-  it("gives a lead an edit action and a picker for assigned areas without a plan", async () => {
+  it("gives a lead an edit action for an existing plan, with its title as the plan's name", async () => {
     hook.data = loaded({ canEdit: true });
     render(<CompetencePlanSection teamId="team-1" />);
-    expect(screen.getByRole("button", { name: "Rediger plan: Testautomatisering" }));
-    await userEvent.click(screen.getByRole("button", { name: "Ny kompetanseplan" }));
-    const picker = screen.getByLabelText("Kompetanseområde");
-    expect(within(picker).getByRole("option", { name: "Observerbarhet" }));
-    expect(within(picker).queryByRole("option", { name: "Testautomatisering" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Rediger plan: Testautomatisering" }));
+    expect(screen.getByLabelText("Navn på plan")).toHaveProperty("value", "Testautomatisering");
   });
 
   it("states that the plan is advisory and that only a lead can edit it, for members", () => {
@@ -180,7 +174,7 @@ describe("CompetencePlanSection milestone completion (team admin)", () => {
     render(<CompetencePlanSection teamId="team-1" />);
     await userEvent.click(screen.getByRole("button", { name: "Vis steg: Testautomatisering" }));
     await userEvent.click(completeButton("Ende-til-ende-tester"));
-    expect(hook.saveMilestoneCompletion).toHaveBeenCalledWith(TREE_B, MS_OPEN, true);
+    expect(hook.saveMilestoneCompletion).toHaveBeenCalledWith(PLAN_B, MS_OPEN, true);
     expect(await screen.findByRole("status")).toBeTruthy();
   });
 
@@ -189,7 +183,7 @@ describe("CompetencePlanSection milestone completion (team admin)", () => {
     render(<CompetencePlanSection teamId="team-1" />);
     await userEvent.click(screen.getByRole("button", { name: "Vis steg: Testautomatisering" }));
     await userEvent.click(completeButton("Dekning i hovedflyt"));
-    expect(hook.saveMilestoneCompletion).toHaveBeenCalledWith(TREE_B, MS_DONE, false);
+    expect(hook.saveMilestoneCompletion).toHaveBeenCalledWith(PLAN_B, MS_DONE, false);
   });
 
   it("shows an error and does not report success when the save is refused", async () => {

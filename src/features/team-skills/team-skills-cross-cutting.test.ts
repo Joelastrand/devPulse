@@ -128,8 +128,8 @@ describe("C2 scope regression — nothing outside the approved surface (BR-35, B
 
   it("complementary scan: the threshold literal has one production owner; write-style calls appear only in the two stores", () => {
     const owner = "src/features/team-skills/domain/skill-coverage-policy.ts";
-    expect(read(owner)).toMatch(/SKILL_COVERAGE_MIN_CONTRIBUTORS\s*=\s*5/);
-    const redeclared = C2_PRODUCTION.filter((p) => p !== owner && /SKILL_COVERAGE_MIN_CONTRIBUTORS\s*=|\bk\s*=\s*5\b/.test(read(p)));
+    expect(read(owner)).toMatch(/SKILL_COVERAGE_MIN_CONTRIBUTORS\s*=\s*3/);
+    const redeclared = C2_PRODUCTION.filter((p) => p !== owner && /SKILL_COVERAGE_MIN_CONTRIBUTORS\s*=|\bk\s*=\s*3\b/.test(read(p)));
     expect(redeclared).toEqual([]);
     // Token scan only: it does not prove persistence is impossible; the exact writer statements are pinned by TASK-017.
     expect(C2_PRODUCTION.filter((p) => /\.(set|create|update|delete)\(/.test(read(p)) && !/skill-needs-store|skill-contribution-store/.test(p))).toEqual([]);

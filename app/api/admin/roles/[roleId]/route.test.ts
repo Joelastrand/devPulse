@@ -11,7 +11,7 @@ const { PATCH } = await import("./route");
 const ROLE_DTO = {
   roleId: "role-1",
   name: "Backend (renamed)",
-  expectations: [{ treeId: "api", treeName: "API design", expectedLevel: 3 }],
+  description: "Bygger API-et",
   archived: false,
   createdAt: "2026-10-01T10:00:00.000Z",
 };
@@ -71,7 +71,6 @@ describe("PATCH /api/admin/roles/[roleId]", () => {
     ["forbidden", 403],
     ["invalid_input", 400],
     ["not_found", 404],
-    ["skill_not_found", 404],
     ["role_archived", 409],
     ["persistence_failed", 500],
   ] as const)("maps %s to %i with the neutral error body", async (error, status) => {

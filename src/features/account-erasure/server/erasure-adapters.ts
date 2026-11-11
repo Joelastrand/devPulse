@@ -43,12 +43,14 @@ export function createPersonalDataPort(): PersonalDataErasurePort {
       assertUidSegment(uid);
       await db().collection("userProfiles").doc(uid).delete();
     },
-    async roleTargetIds(uid, limit) {
-      const snapshot = await owned(uid).collection("roleTarget").select().limit(limit).get();
-      return snapshot.docs.map((doc) => doc.id);
+    // I-4: the person's formal role assignment, one document keyed by uid. Deleting it never touches the shared role.
+    async roleAssignmentExists(uid) {
+      assertUidSegment(uid);
+      return (await db().collection("roleAssignments").doc(uid).get()).exists;
     },
-    async deleteRoleTarget(uid, roleTargetId) {
-      await owned(uid).collection("roleTarget").doc(roleTargetId).delete();
+    async deleteRoleAssignment(uid) {
+      assertUidSegment(uid);
+      await db().collection("roleAssignments").doc(uid).delete();
     },
     async goalIds(uid, limit) {
       const snapshot = await owned(uid).collection("goals").select().limit(limit).get();
@@ -151,6 +153,13 @@ const ACTOR_AUDIT_ACCESS: ReadonlyMap<string, ActorAccess> = new Map<string, Act
   ["roleDefinitions|archivedBy", access(
     async (db, uid) => (await db.collection("roleDefinitions").where("archivedBy", "==", uid).select().limit(1).get()).docs[0]?.id,
     (db, id) => db.collection("roleDefinitions").doc(id))],
+  // A-18: the administrator who assigned or changed another person's role. The assignment document id is the assignee's uid.
+  ["roleAssignments|createdBy", access(
+    async (db, uid) => (await db.collection("roleAssignments").where("createdBy", "==", uid).select().limit(1).get()).docs[0]?.id,
+    (db, id) => db.collection("roleAssignments").doc(id))],
+  ["roleAssignments|updatedBy", access(
+    async (db, uid) => (await db.collection("roleAssignments").where("updatedBy", "==", uid).select().limit(1).get()).docs[0]?.id,
+    (db, id) => db.collection("roleAssignments").doc(id))],
   ["challenges|resolvedBy", access(
     async (db, uid) => (await db.collection("challenges").where("resolvedBy", "==", uid).select().limit(1).get()).docs[0]?.id,
     (db, id) => db.collection("challenges").doc(id))],
@@ -219,6 +228,10 @@ const ACTOR_AUDIT_ACCESS: ReadonlyMap<string, ActorAccess> = new Map<string, Act
   ["teamSkills|updatedBy", access(
     async (db, uid) => (await db.collection("teamSkills").where("updatedBy", "==", uid).select().limit(1).get()).docs[0]?.id,
     (db, id) => db.collection("teamSkills").doc(id))],
+  // A-19 (team-owned skills, SPEC §12): acting admin of a collaborative team level, audit only.
+  ["teamManualAssessments|updatedBy", access(
+    async (db, uid) => (await db.collection("teamManualAssessments").where("updatedBy", "==", uid).select().limit(1).get()).docs[0]?.id,
+    (db, id) => db.collection("teamManualAssessments").doc(id))],
 ]);
 
 function accessFor(target: ActorAuditTarget): ActorAccess {

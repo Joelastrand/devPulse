@@ -29,9 +29,18 @@ export interface PlanMilestone {
   status: MilestoneStatus;
 }
 
+/** Upper bound of a plan title, in characters after trimming. */
+export const PLAN_TITLE_MAX_LENGTH = 120;
+
 export interface CompetencePlan {
   teamId: string;
-  treeId: string;
+  /** Team-authored plan name. A plan needs no competence area, so the name is the plan's own. */
+  title: string;
+  /**
+   * Optional label reference to the global skill catalog, kept from plans created before plans became independent.
+   * `null` for every plan created now. It never gates a plan: no assignment, rating or catalog entry is required.
+   */
+  treeId: string | null;
   /** Target stage: one of the existing self-assessment levels. A goal, not an observed level. */
   targetStage: SelfAssessedLevel;
   priority: RoadmapPriority;
@@ -41,9 +50,19 @@ export interface CompetencePlan {
   updatedAt: Date;
 }
 
-/** Plan document id: a uniqueness device only. Never parsed apart, never proof of authorization. */
-export function competencePlanDocId(teamId: string, treeId: string): string {
-  return `${teamId}__${treeId}`;
+/** Plan document id shape: a server-issued random UUID. Independent of any competence-area id. */
+const PLAN_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+export function isWellFormedPlanId(value: unknown): value is string {
+  return typeof value === "string" && PLAN_ID_PATTERN.test(value);
+}
+
+/** Normalises a plan title: trimmed, non-empty, within the maximum length. `null` when invalid. */
+export function normalizePlanTitle(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (trimmed.length === 0 || trimmed.length > PLAN_TITLE_MAX_LENGTH) return null;
+  return trimmed;
 }
 
 export function isMilestoneStatus(value: unknown): value is MilestoneStatus {
@@ -79,21 +98,22 @@ export function isValidMilestone(value: unknown): value is PlanMilestone {
   );
 }
 
-const PLAN_KEYS = ["teamId", "treeId", "targetStage", "priority", "archived", "milestones", "createdAt", "updatedAt"] as const;
+const PLAN_KEYS = ["teamId", "title", "treeId", "targetStage", "priority", "archived", "milestones", "createdAt", "updatedAt"] as const;
 
 /**
  * Fail-closed validation of a stored plan. Timestamps must already be `Date`. Extra or missing keys, a malformed identity,
- * a document id that is not `teamId__treeId`, an unknown level or priority, or an invalid milestone are all invalid.
- * Never throws and never coerces a bad value to a default.
+ * a document id that is not a plan UUID, an empty title, a malformed optional catalog label, an unknown level or priority,
+ * or an invalid milestone are all invalid. Never throws and never coerces a bad value to a default.
  */
 export function parseStoredCompetencePlan(data: unknown, context: { docId: string }): CompetencePlan | null {
   try {
     if (!isPlainObject(data)) return null;
     if (Object.keys(data).length !== PLAN_KEYS.length || !PLAN_KEYS.every((key) => Object.hasOwn(data, key))) return null;
-    const { teamId, treeId, targetStage, priority, archived, milestones, createdAt, updatedAt } = data;
+    const { teamId, title, treeId, targetStage, priority, archived, milestones, createdAt, updatedAt } = data;
     if (typeof teamId !== "string" || teamId.length === 0) return null;
-    if (!isWellFormedTreeId(treeId)) return null;
-    if (context.docId !== competencePlanDocId(teamId, treeId)) return null;
+    if (!isWellFormedPlanId(context.docId)) return null;
+    if (typeof title !== "string" || normalizePlanTitle(title) !== title) return null;
+    if (treeId !== null && !isWellFormedTreeId(treeId)) return null;
     if (!isSelfAssessedLevel(targetStage) || !isRoadmapPriority(priority)) return null;
     if (typeof archived !== "boolean") return null;
     if (!Array.isArray(milestones) || milestones.length > PLAN_MILESTONES_MAX) return null;
@@ -103,6 +123,7 @@ export function parseStoredCompetencePlan(data: unknown, context: { docId: strin
     if (!isValidDate(createdAt) || !isValidDate(updatedAt)) return null;
     return {
       teamId,
+      title,
       treeId,
       targetStage,
       priority,
@@ -147,6 +168,7 @@ export interface MilestoneInput {
 }
 
 export interface PlanInput {
+  title: string;
   targetStage: SelfAssessedLevel;
   priority: RoadmapPriority;
   archived: boolean;
@@ -154,6 +176,7 @@ export interface PlanInput {
 }
 
 export type PlanInputIssue =
+  | "title_invalid"
   | "target_stage_invalid"
   | "priority_invalid"
   | "archived_invalid"
@@ -165,7 +188,7 @@ export type PlanInputIssue =
 
 export type PlanInputResult = { ok: true; value: PlanInput } | { ok: false; issues: PlanInputIssue[] };
 
-const PLAN_INPUT_KEYS = ["targetStage", "priority", "archived", "milestones"] as const;
+const PLAN_INPUT_KEYS = ["title", "targetStage", "priority", "archived", "milestones"] as const;
 const MILESTONE_INPUT_KEYS = ["id", "title", "targetDate", "status"] as const;
 
 /**
@@ -177,8 +200,10 @@ export function validatePlanInput(body: unknown): PlanInputResult {
     return { ok: false, issues: ["milestones_invalid"] };
   }
   const issues: PlanInputIssue[] = [];
-  const { targetStage, priority, archived, milestones } = body;
+  const { title, targetStage, priority, archived, milestones } = body;
 
+  const planTitle = normalizePlanTitle(title);
+  if (planTitle === null) issues.push("title_invalid");
   if (!isSelfAssessedLevel(targetStage)) issues.push("target_stage_invalid");
   if (!isRoadmapPriority(priority)) issues.push("priority_invalid");
   if (typeof archived !== "boolean") issues.push("archived_invalid");
@@ -199,6 +224,7 @@ export function validatePlanInput(body: unknown): PlanInputResult {
   return {
     ok: true,
     value: {
+      title: planTitle as string,
       targetStage: targetStage as SelfAssessedLevel,
       priority: priority as RoadmapPriority,
       archived: archived as boolean,

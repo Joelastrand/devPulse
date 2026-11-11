@@ -40,21 +40,32 @@ describe("personal data adapter", () => {
     expect(db.docs.has(`userProfiles/${UID}`)).toBe(false);
   });
 
-  it("lists goal and role-target ids under the owner subtree only, bounded by the limit", async () => {
+  it("lists goal ids under the owner subtree only, bounded by the limit", async () => {
     db.docs.set(`userDevelopment/${UID}/goals/g1`, {});
     db.docs.set(`userDevelopment/${UID}/goals/g2`, {});
     db.docs.set(`userDevelopment/${UID}/goals/g3`, {});
-    db.docs.set(`userDevelopment/${UID}/roleTarget/current`, {});
     db.docs.set(`userDevelopment/${OTHER}/goals/foreign`, {});
     const port = createPersonalDataPort();
 
     expect(await port.goalIds(UID, 2)).toEqual(["g1", "g2"]);
-    expect(await port.roleTargetIds(UID, 10)).toEqual(["current"]);
     await port.deleteGoal(UID, "g1");
-    await port.deleteRoleTarget(UID, "current");
     expect(db.docs.has(`userDevelopment/${UID}/goals/g1`)).toBe(false);
-    expect(db.docs.has(`userDevelopment/${UID}/roleTarget/current`)).toBe(false);
     expect(db.docs.has(`userDevelopment/${OTHER}/goals/foreign`)).toBe(true);
+  });
+
+  it("deletes only the uid's own role assignment document (I-4), never a role definition", async () => {
+    db.docs.set(`roleAssignments/${UID}`, { roleId: "role-1" });
+    db.docs.set(`roleAssignments/${OTHER}`, { roleId: "role-1" });
+    db.docs.set("roleDefinitions/role-1", { name: "Utvikler" });
+    const port = createPersonalDataPort();
+
+    expect(await port.roleAssignmentExists(UID)).toBe(true);
+    await port.deleteRoleAssignment(UID);
+
+    expect(db.docs.has(`roleAssignments/${UID}`)).toBe(false);
+    expect(await port.roleAssignmentExists(UID)).toBe(false);
+    expect(db.docs.has(`roleAssignments/${OTHER}`)).toBe(true);
+    expect(db.docs.has("roleDefinitions/role-1")).toBe(true);
   });
 
   it("refuses a path-breaking uid before any read or write", async () => {

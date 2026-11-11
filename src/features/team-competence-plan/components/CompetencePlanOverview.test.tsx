@@ -12,7 +12,9 @@ const TODAY = "2026-12-10";
 
 const plans: ClientCompetencePlan[] = [
   {
-    treeId: TREE_A,
+    planId: TREE_A,
+    title: "Testautomatisering",
+    treeId: null,
     targetStage: 3,
     priority: "low",
     archived: false,
@@ -23,7 +25,9 @@ const plans: ClientCompetencePlan[] = [
     ],
   },
   {
-    treeId: TREE_B,
+    planId: TREE_B,
+    title: "Testautomatisering",
+    treeId: null,
     targetStage: 2,
     priority: "high",
     archived: false,
@@ -33,11 +37,13 @@ const plans: ClientCompetencePlan[] = [
 ];
 
 const names: Record<string, string> = { [TREE_A]: "Testautomatisering", [TREE_B]: "Observerbarhet" };
-const nameOf = (treeId: string) => names[treeId] ?? null;
+const nameOf = (planId: string) => names[planId] ?? null;
 
 function planWithCompleted(completed: number, total: number): ClientCompetencePlan {
   return {
-    treeId: TREE_A,
+    planId: TREE_A,
+    title: "Testautomatisering",
+    treeId: null,
     targetStage: 3,
     priority: "low",
     archived: false,

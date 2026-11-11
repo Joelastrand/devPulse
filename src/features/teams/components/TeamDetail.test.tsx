@@ -289,7 +289,7 @@ describe("TeamDetail", () => {
     }
 
     it.each(["ok", "read_failed"] as const)(
-      "renders the six team tabs navigation plus 'Se roadmap' in the %s branch",
+      "renders the five team tabs navigation plus 'Se roadmap' in the %s branch",
       async (resultsStatus) => {
         mockAuthorized(resultsStatus);
 
@@ -303,7 +303,6 @@ describe("TeamDetail", () => {
           "/teams/team-1/competence-plan",
           "/teams/team-1/competence",
           "/teams/team-1/systems",
-          "/teams/team-1/skills",
         ]);
         // The roadmap link now lives on the Teamkompetanse/Roadmap sub-pages, not on the overview.
         expect(screen.queryByRole("link", { name: "Se roadmap" })).toBeNull();
@@ -330,7 +329,7 @@ describe("TeamDetail", () => {
       render(<TeamDetail teamId="team-1" />);
 
       const nav = await screen.findByRole("navigation", { name: teamsCopy.nav.label });
-      expect(within(nav).getAllByRole("link")).toHaveLength(6);
+      expect(within(nav).getAllByRole("link")).toHaveLength(5);
     });
   });
 
@@ -869,7 +868,7 @@ describe("TeamDetail tabs and insufficient data (visual-redesign TASK-008)", () 
     fetchTeamResultsMock.mockReset();
   });
 
-  it("offers only the approved team routes as tabs (Oversikt, Roadmap, Kompetanseplan, Teamkompetanse, Systemoversikt, Kompetanser)", async () => {
+  it("offers only the approved team routes as tabs (Oversikt, Roadmap, Kompetanseplan, Teamkompetanse, Systemoversikt)", async () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
@@ -890,7 +889,6 @@ describe("TeamDetail tabs and insufficient data (visual-redesign TASK-008)", () 
       "/teams/team-1/competence-plan",
       "/teams/team-1/competence",
       "/teams/team-1/systems",
-      "/teams/team-1/skills",
     ]);
   });
 

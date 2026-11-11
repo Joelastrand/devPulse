@@ -15,8 +15,7 @@ const { GET } = await import("./route");
 const ROLE = {
   roleId: "role-1",
   name: "Backend",
-  selectable: true,
-  expectations: [{ treeId: "api", treeName: "API design", expectedLevel: 3 }],
+  description: "Bygger API-et",
 };
 
 function request(query = "", header: string | undefined = "Bearer id-token"): Request {
@@ -73,7 +72,7 @@ describe("GET /api/roles", () => {
     const body = (await response.json()) as { roles: Record<string, unknown>[]; truncated: boolean };
 
     expect(body.truncated).toBe(true);
-    expect(Object.keys(body.roles[0]).sort()).toEqual(["expectations", "name", "roleId", "selectable"]);
+    expect(Object.keys(body.roles[0]).sort()).toEqual(["description", "name", "roleId"]);
     expect(JSON.stringify(body)).not.toMatch(/admin-1|admin-2|admin-3/);
   });
 

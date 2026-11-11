@@ -194,30 +194,14 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // teamCompetenceAreas holds a team's own assignment of admin-owned catalog areas (TASK-007, BR-18): team-level state only,
-    // no uid or rating. Server-only via the Admin SDK in src/features/team-skills/server/; deny-only for the client SDK.
-    match /teamCompetenceAreas/{document=**} {
-      allow read, write: if false;
-    }
 
-    // teamCompetencePlans holds a team's development plan for one assigned catalog area (TASK-006, BR-15): team-level
-    // planning state (target stage, priority, milestones), no uid or rating. Server-only via the Admin SDK; deny-only for the client SDK.
+    // teamCompetencePlans holds a team's development plan (BR-15, independent of any competence area): team-level planning
+    // state (title, target stage, priority, milestones), no uid or rating. Server-only via the Admin SDK; deny-only for the client SDK.
     match /teamCompetencePlans/{document=**} {
       allow read, write: if false;
     }
 
-    // teamProfileSettings holds one team's competence-profile mode (automatic | collaborative), keyed by teamId. Team-level
-    // state only: no uid, no member data. Server-only via the Admin SDK (src/features/team-competence-profile/server/);
-    // deny-only for the client SDK, regardless of authentication state.
-    match /teamProfileSettings/{document=**} {
-      allow read, write: if false;
-    }
 
-    // teamCollaborativeLevels holds one teamadmin-entered integer 1–4 per team and competence area (document id
-    // teamId__treeId). These values are independent of member self-assessments and carry no uid. Server-only; deny-only.
-    match /teamCollaborativeLevels/{document=**} {
-      allow read, write: if false;
-    }
 
     // userProfiles holds one self-set display name per Firebase uid
     // (document id = uid; displayName, createdAt, updatedAt — no e-mail or
@@ -316,6 +300,20 @@ service cloud.firestore {
       allow read, write: if false;
     }
     match /teamSkillAssessments/{document=**} {
+      allow read, write: if false;
+    }
+    // Collaborative (agreed) team level per canonical team skill (docs/features/team-owned-skills/SPEC.md §12). Team-level
+    // value only, server-only; no client path reads or writes it.
+    match /teamManualAssessments/{document=**} {
+      allow read, write: if false;
+    }
+
+    // Formal organizational role assignment: one document per user (roleAssignments/{uid}, docs/features/role-profiles/
+    // SPEC.md). Written only by app admins and read by the assigned person through server routes, all via the Admin SDK
+    // (src/features/role-profiles/server/role-assignments.ts), which bypasses these rules. The explicit deny keeps direct
+    // client access closed for admins, the assigned person and every other signed-in user. An assignment grants no
+    // application permission.
+    match /roleAssignments/{document=**} {
       allow read, write: if false;
     }
 

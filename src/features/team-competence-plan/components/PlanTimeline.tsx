@@ -38,11 +38,11 @@ export function PlanTimeline({
   span,
 }: {
   plans: readonly ClientCompetencePlan[];
-  nameOf: (treeId: string) => string | null;
+  nameOf: (planId: string) => string | null;
   model: PlanTimelineModel;
   span: TimelineSpan;
 }) {
-  const rowsByTree = new Map(model.rows.map((row) => [row.treeId, row]));
+  const rowsByTree = new Map(model.rows.map((row) => [row.planId, row]));
   const columns = `${LABEL_COLUMN} repeat(${span}, minmax(0,1fr))`;
 
   return (
@@ -62,16 +62,16 @@ export function PlanTimeline({
           ))}
 
           {plans.map((plan) => {
-            const row = rowsByTree.get(plan.treeId);
-            const name = nameOf(plan.treeId) ?? competencePlanCopy.areaUnavailable;
-            const visual = areaVisualFor(nameOf(plan.treeId), plan.treeId);
+            const row = rowsByTree.get(plan.planId);
+            const name = nameOf(plan.planId) ?? competencePlanCopy.areaUnavailable;
+            const visual = areaVisualFor(nameOf(plan.planId), plan.planId);
             const tone = AREA_TONE_CLASSES[visual.tone];
             const progress = planProgress(plan.milestones);
             const fill = progressFillPercent(progress);
             const statusText = `${PLAN_CARD_STATUS_LABEL[planCardStatus(plan.milestones)]} · ${competencePlanCopy.progress(progress.completed, progress.total)}`;
 
             return (
-              <div key={plan.treeId} className="contents">
+              <div key={plan.planId} className="contents">
                 <div className="flex min-h-16 items-center gap-2 border-b border-border-subtle py-2 pr-3 text-sm font-medium text-text-primary">
                   <span aria-hidden="true" className={"flex size-8 shrink-0 items-center justify-center rounded-field " + tone.subtle}>
                     <Icon icon={visual.icon} size="inline" className={tone.text} />
@@ -82,7 +82,7 @@ export function PlanTimeline({
                 <div
                   className="relative min-h-16 border-b border-border-subtle py-2"
                   style={{ gridColumn: `2 / span ${span}` }}
-                  data-testid={`timeline-row-${plan.treeId}`}
+                  data-testid={`timeline-row-${plan.planId}`}
                 >
                   {row?.bar ? (
                     <div className="flex flex-col gap-2 pb-12">
@@ -102,7 +102,7 @@ export function PlanTimeline({
                           <div
                             className={"h-full rounded-full motion-safe:transition-[width] motion-safe:duration-progress " + tone.fill}
                             style={{ width: `${fill}%` }}
-                            data-testid={`timeline-fill-${plan.treeId}`}
+                            data-testid={`timeline-fill-${plan.planId}`}
                           />
                         </div>
                         {row.markers.map((marker) => {

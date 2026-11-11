@@ -12,6 +12,8 @@ import { ADMIN_SCOPE_EYEBROW } from "../../../components/ui/copy";
 import { TextField } from "../../../components/ui/TextField";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import { TeamVisibilitySettings } from "./TeamVisibilitySettings";
+import { MemberRoleAssignments } from "../../role-profiles/components/MemberRoleAssignments";
+import { roleAssignmentCopy } from "../../role-profiles/copy";
 import {
   archiveAdminChallenge,
   deleteAdminChallenge,
@@ -1166,6 +1168,15 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
             })}
           </ul>
         )}
+      </section>
+
+      {/* Formal organizational role per member (role-profiles SPEC, "Formal role assignment"). Admin-only, one role per user. */}
+      <section id="admin-section-roles" aria-labelledby="admin-section-roles-heading" className="flex flex-col gap-3">
+        <h2 id="admin-section-roles-heading" className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
+          {roleAssignmentCopy.sectionTitle}
+        </h2>
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">{roleAssignmentCopy.sectionDescription}</p>
+        <MemberRoleAssignments token={token} members={members} />
       </section>
 
       <section id="admin-section-invitations" className="flex flex-col gap-3">

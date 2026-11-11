@@ -399,10 +399,10 @@
       cross-team scope (CL-2, D2 SPEC "Explicit future work"). Deployment is separate and has not been performed.
       Current authoritative behaviour is defined by `docs/features/development-conversations/SPEC.md` (including its
       closeout record) and `docs/SECURITY.md` (invariants 55–72).
-  - **Role profiles** *(built 2026-10-28 as feature `role-profiles`)*: admin-maintained `roleDefinitions` and an
-    owner-only target role with a derived comparison; no planning use, no team or admin assignment
-    (`docs/features/role-profiles/SPEC.md`). Formerly the separate, unscheduled "Role expectations" entry, labelled
-    "D1/D2 — Role expectations" until the label was resolved on 2026-10-11 (see the D1 SPEC "Label resolution").
+  - **Organizational roles** *(feature `role-profiles`, simplified 2026-11-11)*: admin-maintained roles with a required
+    title and description, and one formal role assignment per person (`roleAssignments/{uid}`), shown to that person under
+    "Min rolle". Roles carry no skill expectations, targets or comparisons, and an assignment grants no permission
+    (`docs/features/role-profiles/SPEC.md`). The 2026-10-28 target-role and comparison model is withdrawn.
   Only F0, A, B, C1, C2 and D1 exist; later phases are intentions, not commitments, and each
   needs its own approved SPEC.
   *Dated pointer (2026-10-21):* the sentence above is the historical 2026-10-14 planning statement and is not
@@ -435,7 +435,7 @@ Experience.
 - Multiple conversation participants
 - Mentor / cross-team conversation sharing (CL-2)
 - Role-definition proposals
-- Multiple target roles, role families, role levels, role comparison summaries
+- Role families, role levels, skill expectations per role (withdrawn with the 2026-11-11 role simplification)
 - Additional roadmap views (roadmap history, Gantt, Kanban, dependencies)
 - Cross-team or Section/department grouping
 

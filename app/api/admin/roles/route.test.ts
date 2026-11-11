@@ -15,7 +15,7 @@ const { GET, POST } = await import("./route");
 const ROLE_DTO = {
   roleId: "role-1",
   name: "Backend",
-  expectations: [{ treeId: "api", treeName: "API design", expectedLevel: 3 }],
+  description: "Bygger API-et",
   archived: false,
   createdAt: "2026-10-01T10:00:00.000Z",
 };
@@ -94,7 +94,7 @@ describe("POST /api/admin/roles", () => {
   it("creates a role for an app admin and returns the admin DTO with 201", async () => {
     createRoleMock.mockResolvedValue({ ok: true, role: ROLE_DTO });
 
-    const response = await POST(postRequest({ name: "Backend", expectations: [{ treeId: "api", expectedLevel: 3 }] }));
+    const response = await POST(postRequest({ name: "Backend", description: "Bygger API-et", expectations: [{ treeId: "api", expectedLevel: 3 }] }));
 
     expect(response.status).toBe(201);
     expect(await response.json()).toEqual(ROLE_DTO);
@@ -104,10 +104,10 @@ describe("POST /api/admin/roles", () => {
     createRoleMock.mockResolvedValue({ ok: true, role: ROLE_DTO });
 
     await POST(
-      postRequest({ name: "Backend", expectations: [], uid: "spoofed", createdBy: "spoofed", archivedAt: "x" }),
+      postRequest({ name: "Backend", description: "Bygger API-et", uid: "spoofed", createdBy: "spoofed", archivedAt: "x" }),
     );
 
-    expect(createRoleMock).toHaveBeenCalledWith("id-token", { name: "Backend", expectations: [] });
+    expect(createRoleMock).toHaveBeenCalledWith("id-token", { name: "Backend", description: "Bygger API-et" });
   });
 
   it("returns 400 for a malformed or non-object body without calling the operation", async () => {
@@ -120,13 +120,12 @@ describe("POST /api/admin/roles", () => {
     ["unauthenticated", 401],
     ["forbidden", 403],
     ["invalid_input", 400],
-    ["skill_not_found", 404],
     ["cap_reached", 409],
     ["persistence_failed", 500],
   ] as const)("maps %s to %i with the neutral error body", async (error, status) => {
     createRoleMock.mockResolvedValue({ ok: false, error });
 
-    const response = await POST(postRequest({ name: "Backend", expectations: [] }));
+    const response = await POST(postRequest({ name: "Backend", description: "Bygger API-et" }));
 
     expect(response.status).toBe(status);
     expect(await response.json()).toEqual({ error });

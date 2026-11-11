@@ -37,7 +37,8 @@ function seedPerson(): void {
   db.docs.set(`skillProfiles/${UID}`, { levels: {} });
   db.docs.set(`userProfiles/${UID}`, { displayName: "Synthetic Person" });
   db.docs.set(`userDevelopment/${UID}/goals/g1`, { title: "goal" });
-  db.docs.set(`userDevelopment/${UID}/roleTarget/current`, { roleId: "r" });
+  db.docs.set(`roleAssignments/${UID}`, { roleId: "r", createdAt: new Date(0), createdBy: "admin-e2e" });
+  db.docs.set("roleDefinitions/r", { name: "Synthetic role" });
   db.docs.set(`surveyParticipations/${UID}__s1`, { uid: UID, surveyId: "s1" });
   db.docs.set(`surveys/sv1`, { createdBy: UID, title: "kept" });
   db.docs.set(`teamMemberships/${UID}__${TEAM}`, { uid: UID, teamId: TEAM, memberRef: "ref-e2e", role: "teamadmin" });
@@ -111,7 +112,8 @@ describe("production erasure chain, end to end", () => {
     expect(db.docs.has(`skillProfiles/${UID}`)).toBe(false);
     expect(db.docs.has(`userProfiles/${UID}`)).toBe(false);
     expect(db.docs.has(`userDevelopment/${UID}/goals/g1`)).toBe(false);
-    expect(db.docs.has(`userDevelopment/${UID}/roleTarget/current`)).toBe(false);
+    expect(db.docs.has(`roleAssignments/${UID}`)).toBe(false);
+    expect(db.docs.get("roleDefinitions/r")).toMatchObject({ name: "Synthetic role" });
     expect(db.docs.has(`surveyParticipations/${UID}__s1`)).toBe(false);
     expect(db.docs.get("surveys/sv1")).toMatchObject({ createdBy: null, title: "kept" });
     expect(db.docs.has(`teamMemberships/${UID}__${TEAM}`)).toBe(false);

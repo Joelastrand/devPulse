@@ -65,10 +65,10 @@ describe("deriveTeamLevel: threshold boundaries", () => {
     expect(deriveTeamLevel([1, 4, 4], 3)).toEqual({ state: "value", level: 3 });
   });
 
-  it("keeps the currently enforced k = 5 unchanged", () => {
-    expect(SKILL_COVERAGE_MIN_CONTRIBUTORS).toBe(5);
-    expect(deriveTeamLevel([4, 4, 4, 4], SKILL_COVERAGE_MIN_CONTRIBUTORS)).toEqual({ state: "insufficient_data" });
-    expect(deriveTeamLevel([4, 4, 4, 4, 4], SKILL_COVERAGE_MIN_CONTRIBUTORS)).toEqual({ state: "value", level: 4 });
+  it("uses the owner-approved k = 3 for the categorical policy constant", () => {
+    expect(SKILL_COVERAGE_MIN_CONTRIBUTORS).toBe(3);
+    expect(deriveTeamLevel([4, 4], SKILL_COVERAGE_MIN_CONTRIBUTORS)).toEqual({ state: "insufficient_data" });
+    expect(deriveTeamLevel([4, 4, 4], SKILL_COVERAGE_MIN_CONTRIBUTORS)).toEqual({ state: "value", level: 4 });
   });
 
   it("returns insufficient_data for zero and one contributor, never a level", () => {

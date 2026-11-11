@@ -9,10 +9,8 @@ import { isAppAdmin, type IsAppAdminDeps } from "../../teams/domain/app-admin";
 import { canAdministerTeam } from "../../teams/domain/team-authority";
 import { membershipDocId } from "../../teams/domain/team-membership";
 import { resolveTeamRole, type ResolveTeamRoleDeps } from "../../teams/server/resolve-team-role";
-import { competenceAreaDocId, isValidCompetenceArea } from "../../team-competence-catalog/domain/competence-area";
-import { isWellFormedTreeId } from "../../skill-profiles/domain/skill-profile";
 import {
-  competencePlanDocId,
+  isWellFormedPlanId,
   parseStoredCompetencePlan,
   planProgress,
   resolveMilestones,
@@ -26,16 +24,17 @@ import type { SelfAssessedLevel } from "../../skill-profiles/domain/self-assesse
 import type { RoadmapPriority } from "../../roadmap/domain/roadmap-item";
 
 const PLANS_COLLECTION = "teamCompetencePlans";
-const AREAS_COLLECTION = "teamCompetenceAreas";
 const TEAMS_COLLECTION = "teams";
 const MEMBERSHIPS_COLLECTION = "teamMemberships";
 
-/** Upper bound of plans per team (archived included). A repository choice, aligned with the area cap. */
+/** Upper bound of plans per team (archived included). A repository choice. */
 export const COMPETENCE_PLANS_PER_TEAM_MAX = 100;
 
-/** Team-readable view. Milestones and progress only: no uid, actor, rating or member data. */
+/** Team-readable view. Plan content and progress only: no uid, actor, rating or member data. */
 export interface CompetencePlanView {
-  treeId: string;
+  planId: string;
+  title: string;
+  treeId: string | null;
   targetStage: SelfAssessedLevel;
   priority: RoadmapPriority;
   archived: boolean;
@@ -49,8 +48,7 @@ export type CompetencePlanError =
   | "team_disabled"
   | "invalid_request"
   | "invalid_input"
-  | "area_unavailable"
-  | "area_archived"
+  | "not_found"
   | "limit_reached"
   | "read_failed"
   | "persistence_failed";
@@ -66,9 +64,8 @@ export interface RawPlanDoc {
 export interface CompetencePlanWriteTx {
   getMembership(uid: string, teamId: string): Promise<unknown>;
   getTeamStatus(teamId: string): Promise<unknown>;
-  getArea(docId: string): Promise<unknown>;
-  getPlan(docId: string): Promise<unknown>;
-  putPlan(docId: string, record: CompetencePlan): void;
+  getPlan(planId: string): Promise<unknown>;
+  putPlan(planId: string, record: CompetencePlan): void;
 }
 
 export interface CompetencePlanWriteStore {
@@ -101,8 +98,10 @@ function mapDates(data: unknown, fields: readonly string[]): unknown {
   return copy;
 }
 
-function toView(plan: CompetencePlan): CompetencePlanView {
+function toView(planId: string, plan: CompetencePlan): CompetencePlanView {
   return {
+    planId,
+    title: plan.title,
     treeId: plan.treeId,
     targetStage: plan.targetStage,
     priority: plan.priority,
@@ -136,16 +135,12 @@ function toFirestoreTx(db: Firestore, tx: Transaction): CompetencePlanWriteTx {
       const snapshot = await tx.get(db.collection(TEAMS_COLLECTION).doc(teamId));
       return snapshot.exists ? snapshot.data()?.status : undefined;
     },
-    async getArea(docId) {
-      const snapshot = await tx.get(db.collection(AREAS_COLLECTION).doc(docId));
+    async getPlan(planId) {
+      const snapshot = await tx.get(plans().doc(planId));
       return snapshot.exists ? mapDates(snapshot.data(), ["createdAt", "updatedAt"]) : undefined;
     },
-    async getPlan(docId) {
-      const snapshot = await tx.get(plans().doc(docId));
-      return snapshot.exists ? mapDates(snapshot.data(), ["createdAt", "updatedAt"]) : undefined;
-    },
-    putPlan(docId, record) {
-      tx.set(plans().doc(docId), record);
+    putPlan(planId, record) {
+      tx.set(plans().doc(planId), record);
     },
   };
 }
@@ -207,17 +202,17 @@ export async function listCompetencePlans(
     return { ok: false, error: "read_failed" };
   }
   const truncated = raw.length > COMPETENCE_PLANS_PER_TEAM_MAX;
-  const plans: CompetencePlan[] = [];
+  const plans: { planId: string; plan: CompetencePlan }[] = [];
   for (const { id, data } of raw.slice(0, COMPETENCE_PLANS_PER_TEAM_MAX)) {
     const plan = parseStoredCompetencePlan(data, { docId: id });
     if (plan === null || plan.teamId !== teamId) return { ok: false, error: "read_failed" };
-    plans.push(plan);
+    plans.push({ planId: id, plan });
   }
 
   const visible = plans
-    .filter((plan) => options.includeArchived === true || !plan.archived)
-    .sort((a, b) => a.treeId.localeCompare(b.treeId))
-    .map(toView);
+    .filter(({ plan }) => options.includeArchived === true || !plan.archived)
+    .sort((a, b) => a.plan.title.localeCompare(b.plan.title, "nb"))
+    .map(({ planId, plan }) => toView(planId, plan));
   return { ok: true, plans: visible, canEdit: role.canAdminister, truncated };
 }
 
@@ -226,20 +221,17 @@ export type CompetencePlanWriteResult =
   | { ok: false; error: CompetencePlanError; issues?: CompetencePlanInputIssue[] };
 
 /**
- * Creates or replaces the plan for one assigned competence area (SPEC — BR-15, BR-16, BR-17). Lead of an active team only.
- * The area must be assigned to the team and not archived. The body is a full replacement of the plan's editable fields.
- * Existing milestone ids are kept; an unknown id is refused. The target stage is a goal and is never copied from a rating.
+ * Creates a plan (SPEC — BR-15, OD-6). Lead of an active team only. A plan needs no competence area, catalog entry, rating or
+ * consent: the body is the plan's own content, and the document id is a fresh server-issued UUID. `treeId` is always `null`.
  */
-export async function upsertCompetencePlan(
+export async function createCompetencePlan(
   idToken: string,
   teamId: string,
-  treeId: string,
   body: unknown,
   deps: CompetencePlanDeps = {},
 ): Promise<CompetencePlanWriteResult> {
   const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
   if (!verified.ok) return { ok: false, error: authRefusalFor(verified) };
-  if (!isWellFormedTreeId(treeId)) return { ok: false, error: "invalid_input" };
   const now = (deps.now ?? (() => new Date()))();
   const newId = deps.newId ?? randomUUID;
   const store = deps.writeStore ?? getDefaultWriteStore();
@@ -252,36 +244,79 @@ export async function upsertCompetencePlan(
       const lead = await gateLead(verified.identity, teamId, tx, deps.isSuperadmin);
       if (!lead.ok) return lead;
 
-      const areaDocId = competenceAreaDocId(teamId, treeId);
-      const rawArea = await tx.getArea(areaDocId);
-      if (rawArea === undefined || !isValidCompetenceArea(rawArea, { docId: areaDocId }) || rawArea.teamId !== teamId) {
-        return { ok: false, error: "area_unavailable" };
-      }
-      if (rawArea.status === "archived") return { ok: false, error: "area_archived" };
-
-      const docId = competencePlanDocId(teamId, treeId);
-      const rawExisting = await tx.getPlan(docId);
-      let existing: CompetencePlan | null = null;
-      if (rawExisting !== undefined) {
-        existing = parseStoredCompetencePlan(rawExisting, { docId });
-        if (existing === null || existing.teamId !== teamId) return { ok: false, error: "persistence_failed" };
-      }
-
-      const resolved = resolveMilestones(input.value.milestones, existing?.milestones ?? [], newId);
+      const planId = newId();
+      if (!isWellFormedPlanId(planId)) return { ok: false, error: "persistence_failed" };
+      const resolved = resolveMilestones(input.value.milestones, [], newId);
       if (!resolved.ok) return { ok: false, error: "invalid_input", issues: ["milestone_id_invalid"] };
 
       const record: CompetencePlan = {
         teamId,
-        treeId,
+        title: input.value.title,
+        treeId: null,
         targetStage: input.value.targetStage,
         priority: input.value.priority,
         archived: input.value.archived,
         milestones: resolved.milestones,
-        createdAt: existing?.createdAt ?? now,
+        createdAt: now,
         updatedAt: now,
       };
-      tx.putPlan(docId, record);
-      return { ok: true, plan: toView(record) };
+      tx.putPlan(planId, record);
+      return { ok: true, plan: toView(planId, record) };
+    });
+  } catch {
+    return { ok: false, error: "persistence_failed" };
+  }
+}
+
+/**
+ * Replaces the editable fields of one existing plan (SPEC — BR-15, BR-17). Lead of an active team only. A plan id that is
+ * unknown, or stored for another team, is `not_found`. Existing milestone ids are kept; an unknown id is refused. The stored
+ * `treeId` label and creation time are preserved. The target stage is a goal and is never copied from a rating.
+ */
+export async function updateCompetencePlan(
+  idToken: string,
+  teamId: string,
+  planId: string,
+  body: unknown,
+  deps: CompetencePlanDeps = {},
+): Promise<CompetencePlanWriteResult> {
+  const verified = await verifyIdToken(idToken, { verifyToken: deps.verifyToken });
+  if (!verified.ok) return { ok: false, error: authRefusalFor(verified) };
+  if (!isWellFormedPlanId(planId)) return { ok: false, error: "invalid_input" };
+  const now = (deps.now ?? (() => new Date()))();
+  const newId = deps.newId ?? randomUUID;
+  const store = deps.writeStore ?? getDefaultWriteStore();
+
+  const input = validatePlanInput(body);
+  if (!input.ok) return { ok: false, error: "invalid_input", issues: input.issues };
+
+  try {
+    return await store.runTransaction(async (tx): Promise<CompetencePlanWriteResult> => {
+      const lead = await gateLead(verified.identity, teamId, tx, deps.isSuperadmin);
+      if (!lead.ok) return lead;
+
+      const rawExisting = await tx.getPlan(planId);
+      if (rawExisting === undefined) return { ok: false, error: "not_found" };
+      const existing = parseStoredCompetencePlan(rawExisting, { docId: planId });
+      if (existing === null) return { ok: false, error: "persistence_failed" };
+      if (existing.teamId !== teamId) return { ok: false, error: "not_found" };
+
+      const resolved = resolveMilestones(input.value.milestones, existing.milestones, newId);
+      if (!resolved.ok) return { ok: false, error: "invalid_input", issues: ["milestone_id_invalid"] };
+
+      const record: CompetencePlan = {
+        teamId,
+        title: input.value.title,
+        treeId: existing.treeId,
+        targetStage: input.value.targetStage,
+        priority: input.value.priority,
+        archived: input.value.archived,
+        milestones: resolved.milestones,
+        createdAt: existing.createdAt,
+        updatedAt: now,
+      };
+      tx.putPlan(planId, record);
+      return { ok: true, plan: toView(planId, record) };
     });
   } catch {
     return { ok: false, error: "persistence_failed" };

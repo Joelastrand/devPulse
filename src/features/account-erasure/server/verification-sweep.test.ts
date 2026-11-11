@@ -41,7 +41,7 @@ const SPEC_OWNING_STEP: Readonly<Record<ErasureStep, readonly string[]>> = {
   locators: ["I-6"],
   personal_data: ["I-1", "I-2", "I-3", "I-4", "I-16", "I-17", "I-18", "I-19"],
   survey_participations: ["I-12"],
-  actor_audit: ["A-1", "A-2", "A-3", "A-4", "A-6", "A-7", "A-8", "A-9", "A-10", "A-11", "A-12", "A-13", "A-16", "A-17"],
+  actor_audit: ["A-1", "A-2", "A-3", "A-4", "A-6", "A-7", "A-8", "A-9", "A-10", "A-11", "A-12", "A-13", "A-16", "A-17", "A-18", "A-19"],
   verify_data: [],
   auth_delete: [],
   final_sweep: [],

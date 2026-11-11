@@ -1,3 +1,4 @@
+import { SKILL_COVERAGE_MIN_CONTRIBUTORS } from "../team-skills/domain/skill-coverage-policy";
 /**
  * Norwegian UI copy for team-owned skills. Level names and descriptions come from the personal skill copy, so the four
  * levels are worded exactly once (`SELF_ASSESSED_LEVEL_COPY`).
@@ -77,7 +78,7 @@ export const teamSkillsCopy = {
   teamStatus: {
     heading: "Teamets status",
     description:
-      "Et nivå vises bare når minst 5 medlemmer som har valgt å dele, har vurdert kompetansen på gjeldende veiledning. Individuelle vurderinger vises aldri.",
+      `Et nivå vises bare når minst ${SKILL_COVERAGE_MIN_CONTRIBUTORS} medlemmer som har valgt å dele, har vurdert kompetansen på gjeldende veiledning. Individuelle vurderinger vises aldri.`,
     level: (level: number, name: string) => `Teamnivå ${level}: ${name}`,
     insufficient: "Ikke nok data ennå",
     empty: "Ingen aktive kompetanser å vise status for.",

@@ -3,6 +3,11 @@ import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { membershipDocId } from "../../teams/domain/team-membership";
 import type { TeamSkillRecord } from "../domain/team-skill";
 import { teamSkillAssessmentDocId, type TeamSkillAssessmentRecord } from "../domain/team-skill-assessment";
+import {
+  TEAM_MANUAL_ASSESSMENTS_COLLECTION,
+  teamManualAssessmentDocId,
+  type TeamManualAssessmentRecord,
+} from "../domain/team-manual-assessment";
 
 export const TEAM_SKILLS_COLLECTION = "teamSkills";
 export const TEAM_SKILL_ASSESSMENTS_COLLECTION = "teamSkillAssessments";
@@ -32,6 +37,12 @@ export interface TeamSkillTx {
   listOwnAssessments(uid: string, teamId: string, limit: number): Promise<RawDoc[]>;
   putAssessment(record: TeamSkillAssessmentRecord): void;
   deleteAssessment(uid: string, skillId: string): void;
+  /** Raw `teamManualAssessments/{teamId}__{skillId}` data, or `undefined` when absent. */
+  getManualAssessment(teamId: string, skillId: string): Promise<unknown>;
+  /** Every manual assessment of one team, at most `limit`. Team-level state only; no member data is read here. */
+  listManualAssessments(teamId: string, limit: number): Promise<RawDoc[]>;
+  putManualAssessment(record: TeamManualAssessmentRecord): void;
+  deleteManualAssessment(teamId: string, skillId: string): void;
 }
 
 export interface TeamSkillStore {
@@ -100,6 +111,20 @@ export function getDefaultTeamSkillStore(): TeamSkillStore {
           },
           deleteAssessment(uid, skillId) {
             tx.delete(db.collection(TEAM_SKILL_ASSESSMENTS_COLLECTION).doc(teamSkillAssessmentDocId(uid, skillId)));
+          },
+          async getManualAssessment(teamId, skillId) {
+            const snapshot = await tx.get(db.collection(TEAM_MANUAL_ASSESSMENTS_COLLECTION).doc(teamManualAssessmentDocId(teamId, skillId)));
+            return snapshot.exists ? mapDates(snapshot.data()) : undefined;
+          },
+          async listManualAssessments(teamId, limit) {
+            const snapshot = await tx.get(db.collection(TEAM_MANUAL_ASSESSMENTS_COLLECTION).where("teamId", "==", teamId).limit(limit));
+            return snapshot.docs.map((doc) => ({ id: doc.id, data: mapDates(doc.data()) }));
+          },
+          putManualAssessment(record) {
+            tx.set(db.collection(TEAM_MANUAL_ASSESSMENTS_COLLECTION).doc(teamManualAssessmentDocId(record.teamId, record.skillId)), record);
+          },
+          deleteManualAssessment(teamId, skillId) {
+            tx.delete(db.collection(TEAM_MANUAL_ASSESSMENTS_COLLECTION).doc(teamManualAssessmentDocId(teamId, skillId)));
           },
         }),
       );

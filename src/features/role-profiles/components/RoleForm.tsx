@@ -25,7 +25,7 @@ interface FormErrors {
 }
 
 /**
- * Create and edit form for one role: a title and an optional description, nothing else. Client validation reuses the
+ * Create and edit form for one role: a required title and a required description, nothing else. Client validation reuses the
  * domain rules, so it cannot drift from the server, and the server stays authoritative. Edit sends only changed fields.
  */
 export function RoleForm({ token, role, onSaved, onCancel }: RoleFormProps) {
@@ -53,10 +53,7 @@ export function RoleForm({ token, role, onSaved, onCancel }: RoleFormProps) {
 
     if (role === undefined) {
       setPending(true);
-      const created = await createAdminRole(token, {
-        name: nameResult.name,
-        ...(descriptionResult.description !== undefined ? { description: descriptionResult.description } : {}),
-      });
+      const created = await createAdminRole(token, { name: nameResult.name, description: descriptionResult.description });
       setPending(false);
       if (created.ok) onSaved();
       else setErrors({ form: roleErrorMessage(created.error) });
@@ -65,7 +62,7 @@ export function RoleForm({ token, role, onSaved, onCancel }: RoleFormProps) {
 
     const patch: UpdateAdminRoleInput = {};
     if (nameResult.name !== role.name) patch.name = nameResult.name;
-    if (descriptionResult.description !== role.description) patch.description = descriptionResult.description ?? "";
+    if (descriptionResult.description !== role.description) patch.description = descriptionResult.description;
     if (Object.keys(patch).length === 0) {
       onCancel();
       return;

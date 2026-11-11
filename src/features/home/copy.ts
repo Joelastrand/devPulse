@@ -78,9 +78,9 @@ export const authenticatedHomeCopy = {
       href: "/me/conversations",
     },
     roles: {
-      label: "Vurder rolleforventninger",
-      description: "Se hvordan ferdighetene dine passer til rollen din.",
-      href: "/me/skills",
+      label: "Se din organisatoriske rolle",
+      description: "Se rollen du er tildelt, og dine ansvarsområder.",
+      href: "/me/skills?vy=rolle",
     },
   },
 } as const;

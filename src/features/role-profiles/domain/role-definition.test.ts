@@ -10,7 +10,7 @@ import {
 
 const createdAt = new Date("2026-01-01T10:00:00.000Z");
 
-describe("role draft validation (title and description only)", () => {
+describe("role draft validation (title and required description)", () => {
   it("accepts a title with a description", () => {
     expect(validateRoleDraft({ name: "Senior utvikler", description: "Utvikler løsninger." })).toEqual({
       ok: true,
@@ -18,8 +18,12 @@ describe("role draft validation (title and description only)", () => {
     });
   });
 
-  it("accepts a title without a description", () => {
-    expect(validateRoleDraft({ name: "Senior utvikler" })).toEqual({ ok: true, draft: { name: "Senior utvikler" } });
+  it("rejects a missing description", () => {
+    expect(validateRoleDraft({ name: "Senior utvikler" }).ok).toBe(false);
+  });
+
+  it("rejects a blank description rather than storing an empty string", () => {
+    expect(validateRoleDraft({ name: "Rolle", description: "   " }).ok).toBe(false);
   });
 
   it("rejects a missing or blank title", () => {
@@ -28,20 +32,17 @@ describe("role draft validation (title and description only)", () => {
   });
 
   it("rejects a title over 80 characters", () => {
-    expect(validateRoleDraft({ name: "x".repeat(ROLE_NAME_MAX + 1) }).ok).toBe(false);
+    expect(validateRoleDraft({ name: "x".repeat(ROLE_NAME_MAX + 1), description: "Beskrivelse" }).ok).toBe(false);
   });
 
-  it("rejects a description over 500 characters", () => {
+  it("accepts a description of exactly 500 characters and rejects 501", () => {
+    expect(validateRoleDraft({ name: "Rolle", description: "x".repeat(ROLE_DESCRIPTION_MAX) }).ok).toBe(true);
     expect(validateRoleDraft({ name: "Rolle", description: "x".repeat(ROLE_DESCRIPTION_MAX + 1) }).ok).toBe(false);
   });
 
-  it("drops a blank description rather than storing an empty string", () => {
-    expect(validateRoleDraft({ name: "Rolle", description: "   " })).toEqual({ ok: true, draft: { name: "Rolle" } });
-  });
-
   it("rejects the obsolete expectations field and any other unknown key", () => {
-    expect(validateRoleDraft({ name: "Rolle", expectations: [] }).ok).toBe(false);
-    expect(validateRoleDraft({ name: "Rolle", createdBy: "someone" }).ok).toBe(false);
+    expect(validateRoleDraft({ name: "Rolle", description: "Beskrivelse", expectations: [] }).ok).toBe(false);
+    expect(validateRoleDraft({ name: "Rolle", description: "Beskrivelse", createdBy: "someone" }).ok).toBe(false);
   });
 });
 
@@ -50,8 +51,12 @@ describe("role patch validation", () => {
     expect(validateRolePatch({}).ok).toBe(false);
   });
 
-  it("treats a blank description as a clear", () => {
-    expect(validateRolePatch({ description: "  " })).toEqual({ ok: true, patch: { description: { clear: true } } });
+  it("refuses a blank description, which cannot clear a required field", () => {
+    expect(validateRolePatch({ description: "  " }).ok).toBe(false);
+  });
+
+  it("accepts a title-only patch", () => {
+    expect(validateRolePatch({ name: "Ny tittel" })).toEqual({ ok: true, patch: { name: "Ny tittel" } });
   });
 
   it("rejects the obsolete expectations field", () => {
@@ -69,6 +74,11 @@ describe("stored role parsing", () => {
     });
   });
 
+  it("fails closed on a document without a description", () => {
+    const withoutDescription = { name: stored.name, createdAt: stored.createdAt, createdBy: stored.createdBy };
+    expect(parseStoredRoleDefinition(withoutDescription).ok).toBe(false);
+  });
+
   it("fails closed on a legacy document that still has expectations", () => {
     expect(parseStoredRoleDefinition({ ...stored, expectations: [{ treeId: "t", expectedLevel: 3 }] }).ok).toBe(false);
   });
@@ -81,7 +91,7 @@ describe("stored role parsing", () => {
 
 describe("admin DTO", () => {
   it("exposes only title, description, lifecycle and dates", () => {
-    const dto = toRoleAdminDto({ roleId: "r1", name: "Arkitekt", archived: false, createdAt });
-    expect(Object.keys(dto).sort()).toEqual(["archived", "createdAt", "name", "roleId"]);
+    const dto = toRoleAdminDto({ roleId: "r1", name: "Arkitekt", description: "Designer systemer.", archived: false, createdAt });
+    expect(Object.keys(dto).sort()).toEqual(["archived", "createdAt", "description", "name", "roleId"]);
   });
 });

@@ -9,13 +9,12 @@ import { Icon } from "../../../components/ui/Icon";
 import { Button } from "../../../components/ui/Button";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { LoadingState } from "../../../components/ui/LoadingState";
-import { Select } from "../../../components/ui/Select";
 import { SELF_ASSESSED_LEVEL_COPY } from "../../skill-profiles/copy";
 import { PLAN_CARD_STATUS_LABEL, PRIORITY_LABEL, competencePlanCopy } from "../copy";
 import { planProgress, type PlanMilestone } from "../domain/competence-plan";
 import { planCardStatus } from "../domain/plan-presentation";
 import { useCompetencePlans } from "../client/use-competence-plans";
-import type { ClientCompetenceArea, ClientCompetencePlan, CompetencePlanInput, CompetencePlanWriteResult } from "../client/competence-plan-gateway";
+import type { ClientCompetencePlan, CompetencePlanInput, CompetencePlanWriteResult } from "../client/competence-plan-gateway";
 import { CompetencePlanEditor } from "./CompetencePlanEditor";
 import { CompetencePlanOverview } from "./CompetencePlanOverview";
 import { PlanMilestoneChecklist } from "./PlanMilestoneChecklist";
@@ -23,29 +22,25 @@ import { AREA_TONE_CLASSES, areaVisualFor } from "../domain/area-visual";
 
 export interface CompetencePlanSectionProps {
   teamId: string;
-  /** Area to preselect in the creation form, from Teamkompetanse ("Opprett kompetanseplan"). Ignored unless it is unplanned. */
-  initialAreaTreeId?: string | null;
 }
 
 const todayUtc = (): string => new Date().toISOString().slice(0, 10);
 
 /**
  * Team Kompetanseplan (TASK-006, BR-15–BR-17). Shows development plans and their steps. Members see everything
- * read-only; a lead can create, edit and archive plans and complete or reopen steps. Progress is the count of completed
- * steps only. No member assessment is read or shown. Team competence needs and coverage live on Teamkompetanse, and
- * roadmap competence steps are managed in Roadmap; both are linked, not repeated here.
+ * read-only; a lead can create, edit and archive plans and complete or reopen steps. A plan needs no competence area.
+ * Progress is the count of completed steps only. No member assessment is read or shown. Team competence needs and
+ * coverage live on Teamkompetanse, and roadmap competence steps are managed in Roadmap; both are linked, not repeated here.
  */
-export function CompetencePlanSection({ teamId, initialAreaTreeId = null }: CompetencePlanSectionProps) {
-  const { data, save, saveMilestoneCompletion, reload } = useCompetencePlans(teamId);
-  const [openTree, setOpenTree] = useState<string | null>(null);
-  // A preselected area opens the same creation form as "Ny kompetanseplan", with that area chosen. NewPlan ignores it
-  // when the area is not an unplanned, assigned area.
-  const [editing, setEditing] = useState<string | "new" | null>(initialAreaTreeId ? "new" : null);
-  const [newTreeId, setNewTreeId] = useState(initialAreaTreeId ?? "");
+export function CompetencePlanSection({ teamId }: CompetencePlanSectionProps) {
+  const { data, create, save, saveMilestoneCompletion, reload } = useCompetencePlans(teamId);
+  const [openPlanId, setOpenPlanId] = useState<string | null>(null);
+  // `"new"` opens the creation form; a plan id opens that plan's editor.
+  const [editing, setEditing] = useState<string | "new" | null>(null);
   const [today] = useState<string>(todayUtc);
   // One milestone save at a time, page-wide. The ref closes the window before React re-renders with the pending state.
-  const [pending, setPending] = useState<{ treeId: string; milestoneId: string } | null>(null);
-  const [saveResult, setSaveResult] = useState<{ treeId: string; outcome: "saved" | "failed" } | null>(null);
+  const [pending, setPending] = useState<{ planId: string; milestoneId: string } | null>(null);
+  const [saveResult, setSaveResult] = useState<{ planId: string; outcome: "saved" | "failed" } | null>(null);
   const inFlight = useRef(false);
 
   if (data.phase === "loading") {
@@ -68,31 +63,25 @@ export function CompetencePlanSection({ teamId, initialAreaTreeId = null }: Comp
     );
   }
 
-  const areaName = (treeId: string): string | null => data.areas.find((area) => area.treeId === treeId)?.name ?? null;
-  const plannedTreeIds = new Set(data.plans.map((plan) => plan.treeId));
-  const candidateAreas = data.areas.filter((area) => !plannedTreeIds.has(area.treeId));
-  const visiblePlans = [...data.plans].sort((a, b) => (areaName(a.treeId) ?? "").localeCompare(areaName(b.treeId) ?? "", "nb"));
+  const titleOf = (planId: string): string | null => data.plans.find((plan) => plan.planId === planId)?.title ?? null;
+  const visiblePlans = [...data.plans].sort((a, b) => a.title.localeCompare(b.title, "nb"));
   const base = `/teams/${encodeURIComponent(teamId)}`;
 
-  async function handleSave(treeId: string, input: CompetencePlanInput): Promise<CompetencePlanWriteResult> {
-    return save(treeId, input);
-  }
-
-  async function toggleMilestone(treeId: string, milestone: PlanMilestone) {
+  async function toggleMilestone(planId: string, milestone: PlanMilestone) {
     if (inFlight.current || data.phase !== "loaded") return;
     inFlight.current = true;
-    setPending({ treeId, milestoneId: milestone.id });
+    setPending({ planId, milestoneId: milestone.id });
     setSaveResult(null);
-    const outcome = await saveMilestoneCompletion(treeId, milestone.id, milestone.status !== "completed");
+    const outcome = await saveMilestoneCompletion(planId, milestone.id, milestone.status !== "completed");
     inFlight.current = false;
     setPending(null);
     // The card and the overview both derive from the saved plan, so they update only on a confirmed write.
-    setSaveResult({ treeId, outcome: outcome.status === "ok" ? "saved" : "failed" });
+    setSaveResult({ planId, outcome: outcome.status === "ok" ? "saved" : "failed" });
   }
 
-  function openPlan(treeId: string) {
-    setOpenTree(treeId);
-    const card = document.getElementById(`plan-card-${treeId}`);
+  function openPlan(planId: string) {
+    setOpenPlanId(planId);
+    const card = document.getElementById(`plan-card-${planId}`);
     card?.scrollIntoView?.({ block: "start", behavior: "smooth" });
   }
 
@@ -117,7 +106,7 @@ export function CompetencePlanSection({ teamId, initialAreaTreeId = null }: Comp
 
       {data.truncated ? <Alert variant="info">{competencePlanCopy.truncated}</Alert> : null}
 
-      {data.plans.length > 0 ? <CompetencePlanOverview plans={data.plans} nameOf={areaName} today={today} onOpenPlan={openPlan} /> : null}
+      {data.plans.length > 0 ? <CompetencePlanOverview plans={data.plans} nameOf={titleOf} today={today} onOpenPlan={openPlan} /> : null}
 
       <div className="flex flex-col gap-3">
         <h3 className="text-base font-semibold text-text-primary">{competencePlanCopy.details}</h3>
@@ -129,35 +118,32 @@ export function CompetencePlanSection({ teamId, initialAreaTreeId = null }: Comp
         ) : (
           <ul className="flex flex-col gap-3" aria-label={competencePlanCopy.details}>
             {visiblePlans.map((plan) => {
-              const name = areaName(plan.treeId);
-              const expanded = openTree === plan.treeId;
-              const isEditing = editing === plan.treeId;
-              const planPending = pending?.treeId === plan.treeId ? pending.milestoneId : null;
+              const expanded = openPlanId === plan.planId;
+              const isEditing = editing === plan.planId;
+              const planPending = pending?.planId === plan.planId ? pending.milestoneId : null;
               return (
-                <li key={plan.treeId} id={`plan-card-${plan.treeId}`} className="scroll-mt-6 rounded-surface border border-border-subtle bg-surface p-4">
+                <li key={plan.planId} id={`plan-card-${plan.planId}`} className="scroll-mt-6 rounded-surface border border-border-subtle bg-surface p-4">
                   {isEditing ? (
                     <CompetencePlanEditor
-                      idPrefix={`plan-${plan.treeId}`}
-                      areaName={name ?? plan.treeId}
+                      idPrefix={`plan-${plan.planId}`}
                       initial={plan}
-                      onSave={(input) => handleSave(plan.treeId, input)}
+                      onSave={(input) => save(plan.planId, input)}
                       onCancel={() => setEditing(null)}
                       onSaved={() => setEditing(null)}
                     />
                   ) : (
                     <PlanCard
                       plan={plan}
-                      areaName={name}
                       today={today}
                       expanded={expanded}
                       canEdit={data.canEdit}
-                      onToggle={() => setOpenTree(expanded ? null : plan.treeId)}
-                      onEdit={() => setEditing(plan.treeId)}
+                      onToggle={() => setOpenPlanId(expanded ? null : plan.planId)}
+                      onEdit={() => setEditing(plan.planId)}
                       checklist={{
                         pendingMilestoneId: planPending,
                         busy: pending !== null,
-                        saveFailed: saveResult?.treeId === plan.treeId && saveResult.outcome === "failed",
-                        onToggle: (milestone) => void toggleMilestone(plan.treeId, milestone),
+                        saveFailed: saveResult?.planId === plan.planId && saveResult.outcome === "failed",
+                        onToggle: (milestone) => void toggleMilestone(plan.planId, milestone),
                       }}
                     />
                   )}
@@ -175,18 +161,11 @@ export function CompetencePlanSection({ teamId, initialAreaTreeId = null }: Comp
 
       {data.canEdit ? (
         <NewPlan
-          areas={candidateAreas}
-          assignHref={`${base}/competence`}
           open={editing === "new"}
-          treeId={newTreeId}
           onOpen={() => setEditing("new")}
-          onSelect={setNewTreeId}
-          onSave={(input) => handleSave(newTreeId, input)}
+          onSave={(input) => create(input)}
           onCancel={() => setEditing(null)}
-          onSaved={() => {
-            setEditing(null);
-            setNewTreeId("");
-          }}
+          onSaved={() => setEditing(null)}
         />
       ) : null}
     </section>
@@ -200,10 +179,9 @@ interface PlanChecklistProps {
   onToggle: (milestone: PlanMilestone) => void;
 }
 
-/** One competence plan's card: the area, its status and progress, and (expanded) the milestone checklist. */
+/** One competence plan's card: its title, status and progress, and (expanded) the milestone checklist. */
 function PlanCard({
   plan,
-  areaName,
   today,
   expanded,
   canEdit,
@@ -212,7 +190,6 @@ function PlanCard({
   checklist,
 }: {
   plan: ClientCompetencePlan;
-  areaName: string | null;
   today: string;
   expanded: boolean;
   canEdit: boolean;
@@ -222,11 +199,11 @@ function PlanCard({
 }) {
   const progress = planProgress(plan.milestones);
   const percent = progress.total === 0 ? 0 : (progress.completed / progress.total) * 100;
-  const title = areaName ?? competencePlanCopy.areaUnavailable;
-  const visual = areaVisualFor(areaName, plan.treeId);
+  const title = plan.title;
+  const visual = areaVisualFor(title, plan.planId);
   const tone = AREA_TONE_CLASSES[visual.tone];
   const progressText = progress.total === 0 ? competencePlanCopy.progressNone : competencePlanCopy.progress(progress.completed, progress.total);
-  const controlsId = `plan-milestones-${plan.treeId}`;
+  const controlsId = `plan-milestones-${plan.planId}`;
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-start gap-3">
@@ -294,43 +271,20 @@ function PlanCard({
   );
 }
 
-/**
- * The single plan-creation entry point and form. Teamkompetanse links here with the area preselected, so both entry
- * points share this form, its validation and the same save path.
- */
+/** The single plan-creation entry point. It needs no competence area: the lead names the plan and fills its content. */
 function NewPlan({
-  areas,
-  assignHref,
   open,
-  treeId,
   onOpen,
-  onSelect,
   onSave,
   onCancel,
   onSaved,
 }: {
-  areas: ClientCompetenceArea[];
-  assignHref: string;
   open: boolean;
-  treeId: string;
   onOpen: () => void;
-  onSelect: (treeId: string) => void;
   onSave: (input: CompetencePlanInput) => Promise<CompetencePlanWriteResult>;
   onCancel: () => void;
   onSaved: () => void;
 }) {
-  if (areas.length === 0) {
-    return (
-      <div className="flex flex-col gap-2 rounded-field border border-border-subtle bg-surface p-4">
-        <p className="text-sm text-text-secondary">{competencePlanCopy.noAreasAvailable}</p>
-        <div>
-          <Link href={assignHref} className="text-sm font-medium text-primary underline underline-offset-2 hover:text-text-primary">
-            {competencePlanCopy.assignAreasLink}
-          </Link>
-        </div>
-      </div>
-    );
-  }
   if (!open) {
     return (
       <div>
@@ -340,35 +294,10 @@ function NewPlan({
       </div>
     );
   }
-  const selected = areas.find((area) => area.treeId === treeId);
   return (
     <div className="flex flex-col gap-4 rounded-field border border-border-subtle bg-surface p-4">
       <h3 className="text-base font-semibold text-text-primary">{competencePlanCopy.newPlanHeading}</h3>
-      <Select
-        id="new-plan-area"
-        label={competencePlanCopy.newPlanSelect}
-        description={competencePlanCopy.newPlanSelectHint}
-        value={treeId}
-        onChange={(event) => onSelect(event.target.value)}
-      >
-        <option value="">—</option>
-        {areas.map((area) => (
-          <option key={area.treeId} value={area.treeId}>
-            {area.name ?? competencePlanCopy.areaUnavailable}
-          </option>
-        ))}
-      </Select>
-      {selected ? (
-        <CompetencePlanEditor
-          key={selected.treeId}
-          idPrefix={`new-${selected.treeId}`}
-          areaName={selected.name ?? selected.treeId}
-          initial={null}
-          onSave={onSave}
-          onCancel={onCancel}
-          onSaved={onSaved}
-        />
-      ) : null}
+      <CompetencePlanEditor idPrefix="new-plan" initial={null} onSave={onSave} onCancel={onCancel} onSaved={onSaved} />
     </div>
   );
 }
