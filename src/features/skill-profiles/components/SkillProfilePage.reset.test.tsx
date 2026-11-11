@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { teamSkillsCopy } from "../../team-owned-skills/copy";
 
 const observeIdTokenMock = vi.fn();
 const fetchOwnSkillsMock = vi.fn();
@@ -58,7 +59,42 @@ async function renderWith(result: unknown) {
 }
 
 const resetButton = () => screen.queryByRole("button", { name: "Nullstill alle ferdigheter" });
-const select = (name: string) => screen.getByRole("combobox", { name }) as HTMLSelectElement;
+const LEVEL_NAMES = ["Grunnleggende kjennskap", "Kan med støtte", "Kan selvstendig", "Avansert"] as const;
+
+/** The rating group for one skill (four radio buttons, the team-owned control reused for the global list). */
+function groupFor(name: string) {
+  return screen.getByRole("radiogroup", { name: teamSkillsCopy.own.groupLabel(name) });
+}
+
+function rowOf(name: string) {
+  return groupFor(name).closest("li")!;
+}
+
+/** The confirmed level as its digit, or "" when not assessed (the checked radio's accessible label carries it). */
+function levelOf(name: string): string {
+  const checked = within(groupFor(name))
+    .getAllByRole("radio")
+    .find((radio) => radio.getAttribute("aria-checked") === "true");
+  return checked ? (checked.getAttribute("aria-label") ?? "").match(/: (\d)\. /)![1] : "";
+}
+
+function lockedOf(name: string): boolean {
+  return within(groupFor(name))
+    .getAllByRole("radio")
+    .every((radio) => (radio as HTMLButtonElement).disabled);
+}
+
+/** Chooses a level by clicking its radio, or "" to clear it through the row's "Ikke vurdert" action. */
+async function chooseLevel(name: string, value: string) {
+  if (value === "") {
+    await userEvent.click(within(rowOf(name)).getByRole("button", { name: "Fjern vurdering" }));
+    return;
+  }
+  const level = Number(value) as 1 | 2 | 3 | 4;
+  await userEvent.click(
+    within(groupFor(name)).getByRole("radio", { name: `${name}: ${level}. ${LEVEL_NAMES[level - 1]}` }),
+  );
+}
 
 async function openConfirmation() {
   await userEvent.click(resetButton()!);
@@ -123,7 +159,7 @@ describe("SkillProfilePage — reset-all confirmation (TASK-009)", () => {
 
     expect(deleteOwnSkillProfileMock).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Ja, nullstill alle" })).toBeNull();
-    expect(select("Testing").value).toBe("2");
+    expect(levelOf("Testing")).toBe("2");
     expect(document.activeElement).toBe(resetButton());
   });
 
@@ -139,13 +175,13 @@ describe("SkillProfilePage — reset-all confirmation (TASK-009)", () => {
     expect(deleteOwnSkillProfileMock).toHaveBeenCalledWith("a-token");
     expect(screen.queryByRole("button", { name: "Ja, nullstill alle" })).toBeNull();
     expect((screen.getByRole("button", { name: "Nullstiller…" }) as HTMLButtonElement).disabled).toBe(true);
-    expect(select("Testing").value).toBe("2"); // not optimistic
-    expect(select("Testing").disabled).toBe(true); // no row write can conflict
+    expect(levelOf("Testing")).toBe("2"); // not optimistic
+    expect(lockedOf("Testing")).toBe(true); // no row write can conflict
     expect(setOwnSkillLevelMock).not.toHaveBeenCalled();
     expect(clearOwnSkillLevelMock).not.toHaveBeenCalled();
 
     pending.resolve({ ok: true });
-    await waitFor(() => expect(select("Testing").value).toBe(""));
+    await waitFor(() => expect(levelOf("Testing")).toBe(""));
   });
 });
 
@@ -156,9 +192,9 @@ describe("SkillProfilePage — reset-all outcomes (TASK-009)", () => {
 
     await userEvent.click(await openConfirmation());
 
-    await waitFor(() => expect(select("Testing").value).toBe(""));
-    expect(select("Arkitektur").value).toBe("");
-    expect(select("Testing").disabled).toBe(false);
+    await waitFor(() => expect(levelOf("Testing")).toBe(""));
+    expect(levelOf("Arkitektur")).toBe("");
+    expect(lockedOf("Testing")).toBe(false);
     expect(screen.getByText(/du har ikke vurdert noen ferdigheter ennå/i)).toBeTruthy();
     expect(resetButton()).toBeNull();
     expect(setOwnSkillLevelMock).not.toHaveBeenCalled();
@@ -170,13 +206,13 @@ describe("SkillProfilePage — reset-all outcomes (TASK-009)", () => {
     await renderWith(ok(assessed));
     deleteOwnSkillProfileMock.mockResolvedValue({ ok: true });
     await userEvent.click(screen.getByRole("radio", { name: "Vurdert" }));
-    expect(screen.queryByRole("combobox", { name: "Arkitektur" })).toBeNull();
+    expect(screen.queryByRole("radiogroup", { name: teamSkillsCopy.own.groupLabel("Arkitektur") })).toBeNull();
 
     await userEvent.click(await openConfirmation());
 
     await screen.findByText("Ingen ferdigheter samsvarer med valgt filter.");
     await userEvent.click(screen.getByRole("radio", { name: "Ikke vurdert" }));
-    expect(screen.getAllByRole("combobox")).toHaveLength(2);
+    expect(screen.getAllByRole("radiogroup")).toHaveLength(2);
   });
 
   it("failure: levels stay, an alert (not success) is shown, and retry is possible", async () => {
@@ -186,12 +222,12 @@ describe("SkillProfilePage — reset-all outcomes (TASK-009)", () => {
     await userEvent.click(await openConfirmation());
 
     expect((await screen.findByRole("alert")).textContent).toBe("Egenvurderingene dine ble ikke nullstilt. Prøv igjen.");
-    expect(select("Testing").value).toBe("2");
-    expect(select("Testing").disabled).toBe(false);
+    expect(levelOf("Testing")).toBe("2");
+    expect(lockedOf("Testing")).toBe(false);
 
     deleteOwnSkillProfileMock.mockResolvedValueOnce({ ok: true });
     await userEvent.click(await openConfirmation());
-    await waitFor(() => expect(select("Testing").value).toBe(""));
+    await waitFor(() => expect(levelOf("Testing")).toBe(""));
     expect(deleteOwnSkillProfileMock).toHaveBeenCalledTimes(2);
   });
 
@@ -202,7 +238,7 @@ describe("SkillProfilePage — reset-all outcomes (TASK-009)", () => {
     await userEvent.click(await openConfirmation());
 
     await screen.findByRole("alert");
-    expect(select("Testing").value).toBe("2");
+    expect(levelOf("Testing")).toBe("2");
   });
 
   it("401: shows the sign-in prompt and removes all personal content", async () => {
@@ -213,7 +249,7 @@ describe("SkillProfilePage — reset-all outcomes (TASK-009)", () => {
 
     expect((await screen.findByRole("link", { name: "Logg inn" })).getAttribute("href")).toBe("/sign-in");
     expect(screen.queryByText("Testing")).toBeNull();
-    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.queryByRole("radiogroup")).toBeNull();
     expect(resetButton()).toBeNull();
     expect(screen.queryByRole("alert")).toBeNull();
   });
@@ -225,19 +261,19 @@ describe("SkillProfilePage — reset-all versus row saves (TASK-009)", () => {
     const save = deferred<{ ok: true; level: 3 }>();
     setOwnSkillLevelMock.mockReturnValue(save.promise);
 
-    await userEvent.selectOptions(select("Arkitektur"), "3");
+    await chooseLevel("Arkitektur", "3");
 
     expect((resetButton() as HTMLButtonElement).disabled).toBe(true);
     save.resolve({ ok: true, level: 3 });
     await waitFor(() => expect((resetButton() as HTMLButtonElement).disabled).toBe(false));
-    expect(select("Arkitektur").value).toBe("3");
+    expect(levelOf("Arkitektur")).toBe("3");
   });
 
   it("rows cannot be edited while the confirmation is open", async () => {
     await renderWith(ok(assessed));
     await openConfirmation();
-    expect(select("Arkitektur").disabled).toBe(true);
-    expect(select("Testing").disabled).toBe(true);
+    expect(lockedOf("Arkitektur")).toBe(true);
+    expect(lockedOf("Testing")).toBe(true);
   });
 });
 
@@ -248,7 +284,7 @@ describe("SkillProfilePage — unreadable profile recovery (TASK-009)", () => {
     await renderWith(unreadable());
     expect(screen.getByText("Arkitektur")).toBeTruthy();
     expect(screen.getByRole("alert").textContent).toMatch(/kan ikke leses/i);
-    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.queryByRole("radiogroup")).toBeNull();
     expect(screen.queryByText("Ikke vurdert")).toBeNull();
     expect(screen.queryByRole("radio")).toBeNull();
   });
@@ -267,7 +303,7 @@ describe("SkillProfilePage — unreadable profile recovery (TASK-009)", () => {
 
     await userEvent.click(await openConfirmation());
 
-    await waitFor(() => expect(select("Arkitektur").value).toBe(""));
+    await waitFor(() => expect(levelOf("Arkitektur")).toBe(""));
     expect(screen.queryByText(/kan ikke leses/i)).toBeNull();
     expect(screen.getByText(/du har ikke vurdert noen ferdigheter ennå/i)).toBeTruthy();
     expect(resetButton()).toBeNull();
@@ -283,7 +319,7 @@ describe("SkillProfilePage — unreadable profile recovery (TASK-009)", () => {
 
     await waitFor(() => expect(screen.getAllByRole("alert")).toHaveLength(2));
     expect(screen.getByText(/kan ikke leses/i)).toBeTruthy();
-    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.queryByRole("radiogroup")).toBeNull();
     expect(screen.queryByText("Ikke vurdert")).toBeNull();
     expect(screen.queryByText(/du har ikke vurdert/i)).toBeNull();
     expect(resetButton()).toBeTruthy();
@@ -303,10 +339,10 @@ describe("SkillProfilePage — unreadable profile recovery (TASK-009)", () => {
     await renderWith(ok(assessed));
     setOwnSkillLevelMock.mockResolvedValue({ ok: false, error: "profile_unreadable" });
 
-    await userEvent.selectOptions(select("Arkitektur"), "3");
+    await chooseLevel("Arkitektur", "3");
 
     await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/kan ikke leses/i));
-    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.queryByRole("radiogroup")).toBeNull();
     expect(screen.queryByText("Ikke vurdert")).toBeNull();
     expect(resetButton()).toBeTruthy();
   });
@@ -343,7 +379,7 @@ describe("SkillProfilePage — truncated notice (TASK-009)", () => {
     await renderWith(ok(assessed, { truncated: true }));
     deleteOwnSkillProfileMock.mockResolvedValue({ ok: true });
     await userEvent.click(await openConfirmation());
-    await waitFor(() => expect(select("Testing").value).toBe(""));
+    await waitFor(() => expect(levelOf("Testing")).toBe(""));
     expect(screen.getByText("Listen kan være ufullstendig.")).toBeTruthy();
   });
 });

@@ -95,6 +95,14 @@ export const personRoleCopy = {
     ownLevel: (level: number) => `Ditt nivå ${level}`,
     readFailed: "Sammenligningen kunne ikke vises nå. Prøv igjen senere.",
     createGoal: "Opprett mål",
+    tableLabel: "Sammenligning med målrollen",
+    columns: {
+      skill: "Kompetanse",
+      own: "Mitt nivå",
+      expected: "Forventet",
+      status: "Status",
+      action: "Handling",
+    },
   },
   errors: {
     not_found: "Rollen finnes ikke lenger. Velg en annen rolle.",

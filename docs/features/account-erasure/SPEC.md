@@ -1261,3 +1261,11 @@ Source: `docs/features/personal-role-workspace/SECURITY-REVIEW.md` §11.3 and `d
   re-encryption must preserve `sharedEvidence` byte-for-byte and fail closed on a key error. This is a required test for the evidence
   step, which is not yet implemented.
 - Not covered by this log, and blocked: `roleAssignments/{uid}`, its history, and the `assignedBy` actor row. See §11.3 of the packet.
+
+## Decision log: team-owned skills inventory, I-19 and A-17 (approved 2026-11-11, docs/features/team-owned-skills)
+
+- **I-19** `teamSkillAssessments/{uid}__{skillId}`: a person's private team-skill ratings, one document per (person,
+  team skill). DELETE, located by the stored `uid` field (`uidField`), deleted in batches by the `personal_data` step.
+- **A-17** `teamSkills/{skillId}`: `createdBy` and `updatedBy` of a team-owned skill definition. ANONYMIZE, cleared by the
+  `actor_audit` step. The definition itself is team configuration and is kept.
+- No P-row and no new erasure step. Team-owned skill definitions follow the team lifecycle, not the person.

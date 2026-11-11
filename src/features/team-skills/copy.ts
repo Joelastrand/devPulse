@@ -93,6 +93,9 @@ export const sharingCopy = {
   stateNotContributing: "Du deler ikke kompetanse med teamet",
   optInButton: "Del kompetanse med teamet",
   withdrawButton: "Slutt å dele kompetanse med teamet",
+  badgeActive: "Deling aktiv",
+  badgeInactive: "Deling av",
+  noticeSummary: "Vilkår og personvern for deling",
 } as const;
 
 /**

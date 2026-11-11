@@ -46,9 +46,7 @@ describe("Ferdigheter private completion summary (TASK-030)", () => {
 
     const summary = assessedCard();
     const privacy = screen.getByText(skillProfileCopy.privacyNotice);
-    const roleNotice = screen.getByText(skillProfileCopy.roleComparisonNotice);
     expect(summary.compareDocumentPosition(privacy) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(privacy.compareDocumentPosition(roleNotice) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("states a count that matches the rendered skill list", async () => {

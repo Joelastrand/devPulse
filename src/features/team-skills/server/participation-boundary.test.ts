@@ -21,6 +21,8 @@ const OWN_STATE_OPERATIONS = [
 ];
 
 const COVERAGE_OPERATION = "src/features/team-skills/server/get-team-skill-coverage.ts";
+/** Team-owned skill aggregate (team-owned-skills SPEC §6): the second, narrowly approved consumer of the membership scan. */
+const TEAM_OWNED_AGGREGATE_OPERATION = "src/features/team-owned-skills/server/get-team-owned-skill-aggregate.ts";
 
 function walk(dir: string): string[] {
   return readdirSync(join(ROOT, dir), { withFileTypes: true }).flatMap((entry) => {
@@ -43,11 +45,11 @@ const filesContaining = (needle: string | RegExp) =>
 
 describe("participation boundary (source scan)", () => {
   it("names listMembershipsForCoverage only in the store that defines it and the coverage operation — no route, DTO or UI", () => {
-    expect(filesContaining("listMembershipsForCoverage")).toEqual([COVERAGE_OPERATION, STORE_FILE].sort());
+    expect(filesContaining("listMembershipsForCoverage")).toEqual([COVERAGE_OPERATION, STORE_FILE, TEAM_OWNED_AGGREGATE_OPERATION].sort());
   });
 
   it("imports the participation store only from the three own-state operations and the coverage operation (never a route, client or admin/lead path)", () => {
-    expect(filesContaining(/skill-contribution-store/)).toEqual([...OWN_STATE_OPERATIONS, COVERAGE_OPERATION].sort());
+    expect(filesContaining(/skill-contribution-store/)).toEqual([...OWN_STATE_OPERATIONS, COVERAGE_OPERATION, TEAM_OWNED_AGGREGATE_OPERATION].sort());
   });
 
   it("keeps the literal membership field name in the domain module only (plus the erasure registry, file-exact)", () => {

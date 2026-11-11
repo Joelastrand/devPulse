@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 
 const observeIdTokenMock = vi.fn();
@@ -88,7 +89,7 @@ describe("Oversikt is a dashboard, not the editing form (ref 07)", () => {
   it("renders no level select, filter or reset control", async () => {
     signedIn();
     render(<SkillOverview />);
-    await screen.findByRole("heading", { name: "Kompetanseområder" });
+    await screen.findByRole("heading", { name: "Kompetanseprofil" });
     expect(screen.queryByRole("combobox")).toBeNull();
     expect(screen.queryByRole("radio")).toBeNull();
     expect(screen.queryByRole("button", { name: "Nullstill alle ferdigheter" })).toBeNull();
@@ -97,7 +98,7 @@ describe("Oversikt is a dashboard, not the editing form (ref 07)", () => {
   it("lists the competence areas with their level names and links to the full editing view", async () => {
     signedIn();
     render(<SkillOverview />);
-    const areas = await screen.findByRole("heading", { name: "Kompetanseområder" });
+    const areas = await screen.findByRole("heading", { name: "Kompetanseprofil" });
     const section = areas.closest("section")!;
     expect(within(section).getByText("API-design")).toBeTruthy();
     expect(within(section).getByText("Ikke vurdert")).toBeTruthy();
@@ -107,6 +108,7 @@ describe("Oversikt is a dashboard, not the editing form (ref 07)", () => {
   it("gives the radar only the person's own assessed skills", async () => {
     signedIn();
     render(<SkillOverview />);
+    await userEvent.click(await screen.findByRole("button", { name: "Vis som radardiagram" }));
     const radar = await screen.findByTestId("personal-radar");
     expect(radar.getAttribute("data-axes")).toBe("API-design|Testing|Teamarbeid");
     expect(radar.getAttribute("data-role")).toBe("");
@@ -138,7 +140,8 @@ describe("Oversikt role development (owner-only comparison)", () => {
     const suggestions = sectionByHeading("Forslag til utvikling");
     expect(within(suggestions).getByText("Testing")).toBeTruthy();
     expect(within(suggestions).queryByText("API-design")).toBeNull();
-    expect(within(suggestions).getByRole("link").getAttribute("href")).toBe("/me/skills?vy=rolle");
+    expect(within(suggestions).getByRole("link", { name: /Testing/ }).getAttribute("href")).toBe("/me/skills?vy=rolle");
+    await userEvent.click(screen.getByRole("button", { name: "Vis som radardiagram" }));
     expect(screen.getByTestId("personal-radar").getAttribute("data-role")).toBe("Seniorutvikler");
   });
 
@@ -174,7 +177,7 @@ describe("Oversikt privacy and error states", () => {
     fetchOwnSkillsMock.mockResolvedValue({ status: "ok", dto: { skills: SKILLS, truncated: false, profile: "unreadable" } });
     render(<SkillOverview />);
     expect(await screen.findByText("Lagrede vurderinger kan ikke leses akkurat nå.")).toBeTruthy();
-    const areas = sectionByHeading("Kompetanseområder");
+    const areas = sectionByHeading("Kompetanseprofil");
     expect(within(areas).queryByText("Avansert")).toBeNull();
     expect(within(areas).getAllByText("Ikke vurdert").length).toBe(SKILLS.length);
   });
@@ -189,5 +192,30 @@ describe("Oversikt privacy and error states", () => {
     render(<SkillOverview />);
     expect(await screen.findByText("Noe gikk galt under lasting av ferdighetene dine.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Prøv igjen" })).toBeTruthy();
+  });
+});
+
+describe("Oversikt suggestions and profile (presentation of existing values)", () => {
+  it("shows the current and the expected level of each development suggestion, in the same words as the profile", async () => {
+    signedIn(SKILLS, {
+      status: "ok",
+      view: {
+        state: "available",
+        target: { roleId: "r1", name: "Seniorutvikler" },
+        rows: [{ treeId: "test", treeName: "Testing", expectedLevel: 3, status: "development_opportunity", ownLevel: 2 }],
+      },
+    });
+    render(<SkillOverview />);
+    const suggestions = await screen.findByRole("heading", { name: "Forslag til utvikling" });
+    expect(within(suggestions.closest("section")!).getByText("Nivå 2 nå · forventet nivå 3")).toBeTruthy();
+  });
+
+  it("names every skill in the profile with its own level as text, and marks unassessed skills as such", async () => {
+    signedIn();
+    render(<SkillOverview />);
+    const profile = (await screen.findByRole("heading", { name: "Kompetanseprofil" })).closest("section")!;
+    expect(within(profile).getByText("API-design")).toBeTruthy();
+    expect(within(profile).getByText("Nivå 4 · Avansert")).toBeTruthy();
+    expect(within(profile).getByText("Ikke vurdert")).toBeTruthy();
   });
 });

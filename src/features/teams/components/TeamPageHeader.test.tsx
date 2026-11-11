@@ -37,7 +37,7 @@ describe("TeamPageHeader", () => {
     currentToken = "token-1";
   });
 
-  it("shows the team name as the only h1 and the five tabs with the active tab marked", async () => {
+  it("shows the team name as the only h1 and the six tabs with the active tab marked", async () => {
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
       teams: [{ teamId: "team-1", name: "Plattform", relationship: "member" }],
@@ -48,7 +48,7 @@ describe("TeamPageHeader", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "Plattform" })).toBeTruthy();
     const nav = screen.getByRole("navigation", { name: teamsCopy.nav.label });
     const links = within(nav).getAllByRole("link").map((link) => link.textContent);
-    expect(links).toEqual(["Oversikt", "Roadmap", "Kompetanseplan", "Teamkompetanse", "Systemoversikt"]);
+    expect(links).toEqual(["Oversikt", "Roadmap", "Kompetanseplan", "Teamkompetanse", "Systemoversikt", "Kompetanser"]);
     expect(within(nav).getByRole("link", { name: "Teamkompetanse" }).getAttribute("aria-current")).toBe("page");
   });
 

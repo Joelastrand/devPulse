@@ -4,13 +4,10 @@ import { toAdminRoleDto } from "./role-admin-mapping";
 import { getDefaultRoleWriteStore } from "./role-store";
 import { writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import { isAddressableRoleId, type RoleStore } from "./role-store-types";
-import { getDefaultSkillTreeReader } from "./skill-tree-seam";
-import { resolveSkillTreeReferences, type RawSkillTreeReader } from "./skill-tree-seam-types";
 import { type AuthRefusal } from "../../auth/server/auth-refusal";
 
 export interface SetRoleArchivedDeps extends RequireAppAdminDeps {
   store?: RoleStore;
-  treeReader?: RawSkillTreeReader;
   now?: () => Date;
 }
 
@@ -19,10 +16,9 @@ export type SetRoleArchivedResult =
   | { ok: false; error: AuthRefusal | "forbidden" | "invalid_input" | "not_found" | "persistence_failed" };
 
 /**
- * Admin archive or restore (BR-5, AD-6, PG-6). Archive sets `archivedAt` and `archivedBy`; restore removes both.
- * Both are idempotent `200` no-ops when the role is already in the requested state, and a no-op writes nothing,
- * so `updatedAt` is not touched. Archiving never modifies any person's stored target. A missing or malformed
- * role is `not_found` (PG-9). `createdAt` is never changed.
+ * Admin archive or restore. Archive sets `archivedAt` and `archivedBy`; restore removes both. Both are idempotent
+ * `200` no-ops when the role is already in the requested state, and a no-op writes nothing. A missing or malformed
+ * role is `not_found`. `createdAt` is never changed.
  */
 export async function setRoleArchived(
   idToken: string,
@@ -37,7 +33,6 @@ export async function setRoleArchived(
   if (typeof archived !== "boolean") {
     return { ok: false, error: "invalid_input" };
   }
-  // PG-9: a roleId that cannot address a document is the same `not_found` as a missing role, never a persistence failure.
   if (!isAddressableRoleId(roleId)) return { ok: false, error: "not_found" };
 
   try {
@@ -57,12 +52,8 @@ export async function setRoleArchived(
       await store.update(roleId, { set: {}, unset: ["archivedAt", "archivedBy"] });
     }
 
-    const references = await resolveSkillTreeReferences(
-      current.expectations.map((expectation) => expectation.treeId),
-      deps.treeReader ?? getDefaultSkillTreeReader(),
-    );
     const next: RoleDefinition = { ...current, archivedAt: archived ? (current.archivedAt ?? now) : undefined };
-    return { ok: true, role: toAdminRoleDto(roleId, next, references) };
+    return { ok: true, role: toAdminRoleDto(roleId, next) };
   } catch (error) {
     return { ok: false, error: writeRefusalFor(error) };
   }

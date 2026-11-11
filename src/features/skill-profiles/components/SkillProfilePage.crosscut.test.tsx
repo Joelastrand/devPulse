@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { teamSkillsCopy } from "../../team-owned-skills/copy";
 
 const observeIdTokenMock = vi.fn();
 const fetchOwnSkillsMock = vi.fn();
@@ -52,7 +53,36 @@ async function renderReady() {
 }
 
 const resetButton = () => screen.getByRole("button", { name: /nullstill alle ferdigheter|nullstiller/i }) as HTMLButtonElement;
-const select = (name: string) => screen.getByRole("combobox", { name }) as HTMLSelectElement;
+const LEVEL_NAMES = ["Grunnleggende kjennskap", "Kan med støtte", "Kan selvstendig", "Avansert"] as const;
+
+/** The rating group for one skill (four radio buttons, the team-owned control reused for the global list). */
+function groupFor(name: string) {
+  return screen.getByRole("radiogroup", { name: teamSkillsCopy.own.groupLabel(name) });
+}
+
+function rowOf(name: string) {
+  return groupFor(name).closest("li")!;
+}
+
+/** The confirmed level as its digit, or "" when not assessed (the checked radio's accessible label carries it). */
+function levelOf(name: string): string {
+  const checked = within(groupFor(name))
+    .getAllByRole("radio")
+    .find((radio) => radio.getAttribute("aria-checked") === "true");
+  return checked ? (checked.getAttribute("aria-label") ?? "").match(/: (\d)\. /)![1] : "";
+}
+
+/** Chooses a level by clicking its radio, or "" to clear it through the row's "Ikke vurdert" action. */
+async function chooseLevel(name: string, value: string) {
+  if (value === "") {
+    await userEvent.click(within(rowOf(name)).getByRole("button", { name: "Fjern vurdering" }));
+    return;
+  }
+  const level = Number(value) as 1 | 2 | 3 | 4;
+  await userEvent.click(
+    within(groupFor(name)).getByRole("radio", { name: `${name}: ${level}. ${LEVEL_NAMES[level - 1]}` }),
+  );
+}
 
 describe("SkillProfilePage — mutation-time 409 with another save still in flight (TASK-010, S4)", () => {
   it("keeps recovery unavailable until the other in-flight save has settled", async () => {
@@ -60,8 +90,8 @@ describe("SkillProfilePage — mutation-time 409 with another save still in flig
     const a = deferred<unknown>();
     const b = deferred<unknown>();
     setOwnSkillLevelMock.mockReturnValueOnce(a.promise).mockReturnValueOnce(b.promise);
-    await userEvent.selectOptions(select("Arkitektur"), "3");
-    await userEvent.selectOptions(select("Testing"), "4");
+    await chooseLevel("Arkitektur", "3");
+    await chooseLevel("Testing", "4");
 
     a.resolve({ ok: false, error: "profile_unreadable" });
     await screen.findByText(/kan ikke leses/i);
@@ -76,24 +106,24 @@ describe("SkillProfilePage — mutation-time 409 with another save still in flig
     const a = deferred<unknown>();
     const b = deferred<unknown>();
     setOwnSkillLevelMock.mockReturnValueOnce(a.promise).mockReturnValueOnce(b.promise);
-    await userEvent.selectOptions(select("Arkitektur"), "3");
-    await userEvent.selectOptions(select("Testing"), "4");
+    await chooseLevel("Arkitektur", "3");
+    await chooseLevel("Testing", "4");
 
     a.resolve({ ok: false, error: "profile_unreadable" });
     await screen.findByText(/kan ikke leses/i);
     b.resolve({ ok: true, level: 4 });
     await waitFor(() => expect(resetButton().disabled).toBe(false));
     // Still unreadable: no known level is presented.
-    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.queryByRole("radiogroup")).toBeNull();
     expect(screen.queryAllByText("Avansert")).toHaveLength(1); // the legend only
 
     deleteOwnSkillProfileMock.mockResolvedValue({ ok: true });
     await userEvent.click(resetButton());
     await userEvent.click(screen.getByRole("button", { name: "Ja, nullstill alle" }));
 
-    await waitFor(() => expect(select("Testing").value).toBe(""));
-    expect(select("Arkitektur").value).toBe("");
-    expect(select("Utvikling").value).toBe("");
+    await waitFor(() => expect(levelOf("Testing")).toBe(""));
+    expect(levelOf("Arkitektur")).toBe("");
+    expect(levelOf("Utvikling")).toBe("");
   });
 
   it("a catalog refetch started by a 404 cannot restore a readable profile after a 409", async () => {
@@ -104,15 +134,15 @@ describe("SkillProfilePage — mutation-time 409 with another save still in flig
       .mockResolvedValueOnce({ ok: false, error: "profile_unreadable" });
     fetchOwnSkillsMock.mockReturnValueOnce(refetch.promise);
 
-    await userEvent.selectOptions(select("Arkitektur"), "3");
+    await chooseLevel("Arkitektur", "3");
     await waitFor(() => expect(fetchOwnSkillsMock).toHaveBeenCalledTimes(2));
-    await userEvent.selectOptions(select("Testing"), "4");
+    await chooseLevel("Testing", "4");
     await screen.findByText(/kan ikke leses/i);
 
     refetch.resolve({ status: "ok", dto: { skills: rows, truncated: false, profile: "ok" } });
     await new Promise((r) => setTimeout(r, 0));
     expect(screen.getByText(/kan ikke leses/i)).toBeTruthy();
-    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.queryByRole("radiogroup")).toBeNull();
   });
 });
 
@@ -192,7 +222,7 @@ describe("SkillProfilePage — repeated reset on a truncated catalog (TASK-010 r
     await screen.findByRole("alert");
     expect(screen.queryByText(SUCCESS)).toBeNull();
     expect(deleteOwnSkillProfileMock).toHaveBeenCalledTimes(2);
-    expect(select("Utvikling").value).toBe("");
+    expect(levelOf("Utvikling")).toBe("");
     expect(resetButton().disabled).toBe(false);
   });
 

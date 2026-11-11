@@ -38,7 +38,7 @@ function statusForError(error: Extract<UpdateRoleResult, { ok: false }>["error"]
   if (isAuthRefusal(error)) return authRefusalStatus(error);
   if (error === "forbidden") return 403;
   if (error === "invalid_input") return 400;
-  if (error === "not_found" || error === "skill_not_found") return 404;
+  if (error === "not_found") return 404;
   if (error === "role_archived") return 409;
   return 500;
 }

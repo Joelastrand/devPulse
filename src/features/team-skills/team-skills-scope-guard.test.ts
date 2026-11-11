@@ -85,6 +85,8 @@ const STORE_IMPORTERS: Record<string, string[]> = {
   [`${C2_DIR}server/skill-contribution-store`]: [
     `${C2_DIR}server/get-own-skill-contribution.ts`,
     `${C2_DIR}server/get-team-skill-coverage.ts`,
+    // team-owned-skills SPEC §6: the one approved team-owned consumer of the membership scan (read-only).
+    "src/features/team-owned-skills/server/get-team-owned-skill-aggregate.ts",
     `${C2_DIR}server/set-own-skill-contribution.ts`,
     `${C2_DIR}server/withdraw-own-skill-contribution.ts`,
   ],
@@ -109,7 +111,11 @@ const SKILL_CONTRIBUTION_FIELD_TEST_FILES = [
   "src/features/team-skills/server/get-team-skill-coverage.test.ts",
   "src/features/team-skills/server/participation-boundary.test.ts",
   "src/features/team-skills/server/participation-non-exposure.test.ts",
+  "src/features/team-owned-skills/server/get-team-owned-skill-aggregate.test.ts", // fixtures for the approved scan consumer
 ];
+
+/** Team-owned skill aggregate: the one approved team-owned consumer of the C2 membership scan (team-owned-skills SPEC §6). */
+const TEAM_OWNED_AGGREGATE_MODULE = "src/features/team-owned-skills/server/get-team-owned-skill-aggregate.ts";
 
 /** Exact production consumers of membership-owned participation state, by exported identifier. */
 const PARTICIPATION_CONSUMERS: Record<string, string[]> = {
@@ -118,11 +124,16 @@ const PARTICIPATION_CONSUMERS: Record<string, string[]> = {
     `${C2_DIR}server/skill-contribution-store.ts`,
     `${C2_DIR}server/withdraw-own-skill-contribution.ts`, // owner-only: checks presence on the caller's own membership
   ],
-  listMembershipsForCoverage: [`${C2_DIR}server/get-team-skill-coverage.ts`, `${C2_DIR}server/skill-contribution-store.ts`],
+  listMembershipsForCoverage: [
+    `${C2_DIR}server/get-team-skill-coverage.ts`,
+    `${C2_DIR}server/skill-contribution-store.ts`,
+    TEAM_OWNED_AGGREGATE_MODULE,
+  ],
   isEffectiveSkillContribution: [
     `${C2_DIR}domain/skill-contribution.ts`,
     `${C2_DIR}server/get-own-skill-contribution.ts`,
     `${C2_DIR}server/get-team-skill-coverage.ts`,
+    TEAM_OWNED_AGGREGATE_MODULE,
   ],
 };
 
@@ -303,13 +314,21 @@ function firebaseClientViolations(files: SourceFile[]): string[] {
 /* (3) importer maps for persistence modules, exact consumers of participation state ---------------- */
 
 /** Anything outside `team-skills/` and outside the exact C2 route map importing `team-skills/server/**` fails. */
+/** Non-C2 production modules approved to import one named C2 server module (exact pairs only). */
+const OUTSIDE_C2_SERVER_IMPORTS: Record<string, string[]> = {
+  "src/features/team-owned-skills/server/get-team-owned-skill-aggregate.ts": [`${C2_DIR}server/skill-contribution-store`],
+};
+
 function outsideImportViolations(files: SourceFile[]): string[] {
   return files
     .filter((f) => isGuarded(f.path) && !f.path.startsWith(C2_DIR))
     .flatMap((file) => {
       const targets = resolvedOf(file).filter((t) => t.startsWith(`${C2_DIR}server/`));
       if (targets.length === 0) return [];
-      const allowed = (C2_ROUTE_IMPORTS[file.path] ?? []).map((name) => `${C2_DIR}server/${name}`);
+      const allowed = [
+        ...(C2_ROUTE_IMPORTS[file.path] ?? []).map((name) => `${C2_DIR}server/${name}`),
+        ...(OUTSIDE_C2_SERVER_IMPORTS[file.path] ?? []),
+      ];
       const isRouteTest = isC2Route(file.path) && isTest(file.path);
       return targets.filter((t) => !isRouteTest && !allowed.includes(t)).map((t) => `${file.path} -> ${t}`);
     });

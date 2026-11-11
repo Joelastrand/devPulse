@@ -26,7 +26,8 @@ function walk(dir: string): string[] {
 }
 
 // Matches a team-nav link whose sub-route is NOT one of the five SPEC BR-30 tabs (Oversikt is the bare base).
-const UNAPPROVED_TEAM_NAV_HREF = /href:\s*`\$\{base\}\/(?!(roadmap|systems|competence-plan|competence)`)/;
+// `skills` is the team-owned skills administration tab (docs/features/team-owned-skills/SPEC.md §4), an explicit owner request.
+const UNAPPROVED_TEAM_NAV_HREF = /href:\s*`\$\{base\}\/(?!(roadmap|systems|competence-plan|competence|skills)`)/;
 
 const isTest =(path: string) => /\.test\.tsx?$/.test(path);
 const read = (path: string) => readFileSync(join(ROOT, path), "utf8");
@@ -144,7 +145,7 @@ describe("C2 scope regression — nothing outside the approved surface (BR-35, B
   });
 
   it("team navigation guard rejects unapproved destinations and accepts the five approved tabs", () => {
-    for (const sub of ["roadmap", "systems", "competence-plan", "competence"]) {
+    for (const sub of ["roadmap", "systems", "competence-plan", "competence", "skills"]) {
       expect(`href: \`\${base}/${sub}\``).not.toMatch(UNAPPROVED_TEAM_NAV_HREF);
     }
     for (const sub of ["skill-needs", "competence-plan/extra", "competence-x", "forum"]) {
@@ -185,7 +186,7 @@ function strings(value: unknown): string[] {
 describe("C1 + C2 privacy copy, scanned together (BR-21, BR-25, BR-27, BR-29)", () => {
   const c2 = [...strings(teamSkillsCopy), ...strings(participationCopy)];
   const c1Notice = skillProfileCopy.privacyNotice;
-  const all = [...c2, c1Notice, skillProfileCopy.roleComparisonNotice];
+  const all = [...c2, c1Notice];
   const sentences = all.flatMap((s) => s.split(/(?<=[.!?])\s+/));
 
   it("never says anonymous without an explicit negation, and never promises formal anonymity", () => {

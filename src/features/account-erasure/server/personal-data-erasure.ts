@@ -30,6 +30,9 @@ export interface PersonalDataErasurePort {
   /** Achievement document ids of the uid's whole `achievements` subtree (I-18), at most `limit`. */
   achievementIds(uid: string, limit: number): Promise<string[]>;
   deleteAchievement(uid: string, achievementId: string): Promise<void>;
+  /** I-19: team-skill rating document ids whose stored `uid` is the erased person, at most `limit`. */
+  teamSkillAssessmentIds(uid: string, limit: number): Promise<string[]>;
+  deleteTeamSkillAssessment(uid: string, assessmentId: string): Promise<void>;
 }
 
 export interface PersonalDataStepDeps {
@@ -84,6 +87,15 @@ export async function runPersonalDataBatch(deps: PersonalDataStepDeps, uid: stri
   if (achievements.length > 0) {
     for (const achievementId of achievements) {
       await port.deleteAchievement(uid, achievementId);
+    }
+    return "more";
+  }
+
+  // I-19 (team-owned skills, SPEC §7): the person's private team-skill ratings, one document each.
+  const teamAssessments = await port.teamSkillAssessmentIds(uid, maxWrites);
+  if (teamAssessments.length > 0) {
+    for (const assessmentId of teamAssessments) {
+      await port.deleteTeamSkillAssessment(uid, assessmentId);
     }
     return "more";
   }

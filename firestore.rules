@@ -261,9 +261,9 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // roleDefinitions holds org-wide reference role definitions (name,
-    // optional description, expectations, createdAt/createdBy, optional
-    // updatedAt/updatedBy/archivedAt/archivedBy). Written only by app admins
+    // roleDefinitions holds org-wide organizational role definitions: a title
+    // (name), optional description, createdAt/createdBy, optional
+    // updatedAt/updatedBy/archivedAt/archivedBy. No skill requirements. Written only by app admins
     // and read by signed-in people through server-side routes, all via the
     // Firebase Admin SDK (src/features/role-profiles/server/), which bypasses
     // these rules entirely. This rule exists solely to deny the separate
@@ -306,6 +306,16 @@ service cloud.firestore {
       allow read, write: if false;
     }
     match /superadminRegistry/{document=**} {
+      allow read, write: if false;
+    }
+
+    // Team-owned skill definitions (docs/features/team-owned-skills/SPEC.md §3.1) and per-skill private self-assessments
+    // (§3.2). Server-only via the Admin SDK (src/features/team-owned-skills/server/), which bypasses these rules. The
+    // explicit denies document that team administrators never read individual assessments through any client path.
+    match /teamSkills/{document=**} {
+      allow read, write: if false;
+    }
+    match /teamSkillAssessments/{document=**} {
       allow read, write: if false;
     }
 

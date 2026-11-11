@@ -76,8 +76,8 @@ export function OwnCompetenceSharing() {
           Deling med team
         </h2>
         <p className="text-sm text-text-secondary">
-          Av som standard. Du velger selv per team om dine egne vurderinger skal inngå i teamets kompetanseoversikt. Du kan
-          slutte når som helst.
+          Deling er av som standard. Du velger selv per team, og du kan slutte når som helst. Status for hvert team vises under,
+          sammen med vilkårene for deling.
         </p>
       </div>
       {memberTeams.length === 0 ? (

@@ -5,7 +5,7 @@ import { authRefusalFor, authRefusalStatus } from "../../../src/features/auth/se
 
 const BEARER_PATTERN = /^Bearer (.+)$/;
 /** PG-8: the person-facing role DTO allow-list, applied again here independently of the operation. */
-const ROLE_DTO_KEYS = ["roleId", "name", "description", "selectable", "expectations"] as const;
+const ROLE_DTO_KEYS = ["roleId", "name", "description"] as const;
 
 /**
  * Active role catalog for any signed-in person (SPEC "Role catalog (person, read-only)", BR-6). No admin requirement and

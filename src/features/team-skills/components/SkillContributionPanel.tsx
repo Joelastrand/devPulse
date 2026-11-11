@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
+import { StatusBadge } from "../../../components/ui/StatusBadge";
 import {
   fetchSkillContribution,
   optInSkillContribution,
@@ -106,12 +107,41 @@ export function SkillContributionPanel({
   if (view.kind === "hidden") return null;
 
   const name = teamName && teamName.length > 0 ? teamName : copy.fallbackTeamName;
+  // The full notice is the consent text: shown in full before the person shares. Once they share, it is collapsed to one
+  // disclosure, but it stays on the page and keeps every point.
+  const collapseNotice = wording === "sharing" && view.kind === "ready" && view.contributing;
+  const noticeBody = (
+    <>
+      <ul className="list-disc pl-5 text-zinc-700 dark:text-zinc-300">
+        {copy.noticePoints(name).map((point) => (
+          <li key={point}>{point}</li>
+        ))}
+      </ul>
+      <details>
+        <summary className="cursor-pointer font-medium text-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:text-zinc-50">
+          {copy.disclosureSummary}
+        </summary>
+        <ul className="mt-2 list-disc pl-5 text-zinc-700 dark:text-zinc-300">
+          {copy.disclosurePoints.map((point) => (
+            <li key={point}>{point}</li>
+          ))}
+        </ul>
+      </details>
+    </>
+  );
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-      <h4 id={headingId} className="text-base font-medium text-zinc-900 dark:text-zinc-50">
-        {text.heading(name)}
-      </h4>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h4 id={headingId} className="text-base font-medium text-zinc-900 dark:text-zinc-50">
+          {text.heading(name)}
+        </h4>
+        {wording === "sharing" && view.kind === "ready" ? (
+          <StatusBadge tone={view.contributing ? "success" : "neutral"}>
+            {view.contributing ? sharingCopy.badgeActive : sharingCopy.badgeInactive}
+          </StatusBadge>
+        ) : null}
+      </div>
       {view.kind === "loading" && <p className="text-zinc-600 dark:text-zinc-400">{copy.loading}</p>}
       {view.kind === "error" && (
         <div className="flex flex-col items-start gap-3">
@@ -125,21 +155,16 @@ export function SkillContributionPanel({
         <>
           <div className="flex flex-col gap-2">
             <h5 className="font-medium text-zinc-900 dark:text-zinc-50">{copy.noticeHeading}</h5>
-            <ul className="list-disc pl-5 text-zinc-700 dark:text-zinc-300">
-              {copy.noticePoints(name).map((point) => (
-                <li key={point}>{point}</li>
-              ))}
-            </ul>
-            <details>
-              <summary className="cursor-pointer font-medium text-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:text-zinc-50">
-                {copy.disclosureSummary}
-              </summary>
-              <ul className="mt-2 list-disc pl-5 text-zinc-700 dark:text-zinc-300">
-                {copy.disclosurePoints.map((point) => (
-                  <li key={point}>{point}</li>
-                ))}
-              </ul>
-            </details>
+            {collapseNotice ? (
+              <details>
+                <summary className="cursor-pointer font-medium text-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 dark:text-zinc-50">
+                  {sharingCopy.noticeSummary}
+                </summary>
+                <div className="mt-2 flex flex-col gap-2">{noticeBody}</div>
+              </details>
+            ) : (
+              noticeBody
+            )}
           </div>
           <p className="font-medium text-zinc-900 dark:text-zinc-50">
             {view.contributing ? text.stateContributing : text.stateNotContributing}

@@ -30,7 +30,7 @@ describe("TeamRouteNav", () => {
     cleanup();
   });
 
-  it("exposes exactly the five team tabs in order — no Forum or other destination", () => {
+  it("exposes exactly the six team tabs in order — no Forum or other destination", () => {
     const { links } = renderAt("/teams/team-1");
 
     expect(links.map((link) => link.textContent)).toEqual([
@@ -39,6 +39,7 @@ describe("TeamRouteNav", () => {
       "Kompetanseplan",
       "Teamkompetanse",
       "Systemoversikt",
+      "Kompetanser",
     ]);
   });
 

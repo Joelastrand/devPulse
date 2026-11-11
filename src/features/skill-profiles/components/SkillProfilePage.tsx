@@ -10,15 +10,15 @@ import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { LoadingState } from "../../../components/ui/LoadingState";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
-import { Select } from "../../../components/ui/Select";
 import { DeleteConfirmation, type DeleteActionState } from "../../forum/components/DeleteConfirmation";
+import { TeamSkillRatingControl } from "../../team-owned-skills/components/TeamSkillRatingControl";
 import {
   clearOwnSkillLevel,
   deleteOwnSkillProfile,
   fetchOwnSkills,
   setOwnSkillLevel,
 } from "../client/skill-profile-gateway";
-import { isSelfAssessedLevel, SELF_ASSESSED_LEVELS, type SelfAssessedLevel } from "../domain/self-assessed-level";
+import { SELF_ASSESSED_LEVELS, type SelfAssessedLevel } from "../domain/self-assessed-level";
 import { deriveOverview, type OwnSkillsDto } from "../domain/skill-profile-view";
 import { SELF_ASSESSED_LEVEL_COPY, skillDashboardCopy, skillProfileCopy } from "../copy";
 
@@ -299,6 +299,7 @@ function ReadyView({
     if (resetStatusActive) resetStatus.current?.focus();
   }, [resetStatusActive]);
 
+  const sameNamePosition = sameNamePositions(dto.skills);
   const visibleSkills = dto.skills.filter(
     (skill) => filter === "all" || (filter === "assessed" ? skill.level !== null : skill.level === null),
   );
@@ -322,7 +323,7 @@ function ReadyView({
               </h2>
               {readable && <FilterControl value={filter} onChange={setFilter} />}
             </div>
-            <LevelLegend />
+                  <LevelLegend />
             {readable && dto.skills.every((skill) => skill.level === null) ? (
               <p className="text-sm text-text-secondary">{skillProfileCopy.noAssessmentsYet}</p>
             ) : null}
@@ -331,10 +332,11 @@ function ReadyView({
             ) : (
               <ul className="flex flex-col divide-y divide-border-subtle">
                 {visibleSkills.map((skill) => (
-                  <li key={skill.treeId} className="flex flex-col gap-2 py-3">
+                  <li key={skill.treeId} className="py-3">
                     {readable ? (
                       <SkillRow
                         skill={skill}
+                        sameName={sameNamePosition.get(skill.treeId) ?? null}
                         status={rowStatus[skill.treeId]}
                         locked={resetInProgress}
                         onChangeLevel={(level) => onChangeLevel(skill.treeId, level)}
@@ -352,7 +354,6 @@ function ReadyView({
 
       <Card variant="nested" padding="sm" className="flex flex-col gap-1 text-sm text-text-secondary">
         <p>{skillProfileCopy.privacyNotice}</p>
-        <p>{skillProfileCopy.roleComparisonNotice}</p>
       </Card>
 
       <p ref={resetStatus} role="status" tabIndex={-1} className="text-sm text-zinc-700 outline-none empty:hidden dark:text-zinc-300">
@@ -448,50 +449,73 @@ function FilterControl({ value, onChange }: { value: SkillFilter; onChange: (val
 
 function SkillRow({
   skill,
+  sameName,
   status,
   locked,
   onChangeLevel,
 }: {
   skill: OwnSkillsDto["skills"][number];
+  /** Position among skills that share this name; null when the name is unique. */
+  sameName: { index: number; total: number } | null;
   status: RowStatus | undefined;
   /** True while a reset-all is confirming or pending, so no row write can conflict with it. */
   locked: boolean;
   onChangeLevel: (level: SelfAssessedLevel | null) => void;
 }) {
   const pending = status?.kind === "pending";
-  // Competence card (ref 22): the level indicator leads the card, the editable select (labelled with the skill name) follows.
+  const disabled = pending || locked;
+  // One level line per row; the rating control carries the selected value, so no second indicator repeats it. Selecting the
+  // current level is a no-op. "Fjern vurdering" is a labelled action shown only when a level is set.
+  const levelText =
+    skill.level === null
+      ? skillProfileCopy.unassessed
+      : skillProfileCopy.levelSummary(skill.level, SELF_ASSESSED_LEVEL_COPY[skill.level].name);
   return (
-    <>
-      <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
-        <LevelIndicator level={skill.level} />
+    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between md:gap-4">
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <p className="min-w-0 break-words font-medium text-zinc-900 dark:text-zinc-50">{skill.name}</p>
+        {sameName ? <p className="text-xs text-text-secondary">{skillProfileCopy.sameNameHint(sameName.index, sameName.total)}</p> : null}
+        <p className="text-sm text-text-secondary">{levelText}</p>
+        {pending ? (
+          <p role="status" className="text-sm text-text-secondary">
+            {skillProfileCopy.saving}
+          </p>
+        ) : null}
+        {status?.kind === "failed" ? <Alert variant="error" className="text-sm">{status.message}</Alert> : null}
       </div>
-      <div className="min-w-0 break-words">
-        <Select
-          id={`skill-level-${skill.treeId}`}
-          label={skill.name}
-          value={skill.level === null ? "" : String(skill.level)}
-          disabled={pending || locked}
-          error={status?.kind === "failed" ? status.message : undefined}
-          onChange={(event) => {
-            const raw = event.target.value;
-            if (raw === "") return onChangeLevel(null);
-            const level = Number(raw);
-            if (isSelfAssessedLevel(level)) onChangeLevel(level);
+      <div className="flex flex-wrap items-center gap-2 md:shrink-0 md:justify-end">
+        <TeamSkillRatingControl
+          skillName={skill.name}
+          value={skill.level}
+          disabled={disabled}
+          onSelect={(level) => {
+            if (level !== skill.level) onChangeLevel(level);
           }}
-        >
-          <option value="">{skillProfileCopy.unassessed}</option>
-          {SELF_ASSESSED_LEVELS.map((level) => (
-            <option key={level} value={level}>
-              {SELF_ASSESSED_LEVEL_COPY[level].name}
-            </option>
-          ))}
-        </Select>
+        />
+        {skill.level !== null ? (
+          <Button size="sm" variant="tertiary" disabled={disabled} onClick={() => onChangeLevel(null)}>
+            {skillProfileCopy.clearRating}
+          </Button>
+        ) : null}
       </div>
-      <p role="status" className="text-sm text-zinc-600 dark:text-zinc-400">
-        {pending ? skillProfileCopy.saving : null}
-      </p>
-    </>
+    </div>
   );
+}
+
+/** Position of each skill among skills sharing its name, keyed by treeId. Only names that occur more than once get an entry. */
+function sameNamePositions(skills: OwnSkillsDto["skills"]): Map<string, { index: number; total: number }> {
+  const totals = new Map<string, number>();
+  for (const skill of skills) totals.set(skill.name, (totals.get(skill.name) ?? 0) + 1);
+  const seen = new Map<string, number>();
+  const positions = new Map<string, { index: number; total: number }>();
+  for (const skill of skills) {
+    const total = totals.get(skill.name) ?? 1;
+    if (total < 2) continue;
+    const index = (seen.get(skill.name) ?? 0) + 1;
+    seen.set(skill.name, index);
+    positions.set(skill.treeId, { index, total });
+  }
+  return positions;
 }
 
 /**
@@ -538,13 +562,14 @@ function SummaryCards({ dto }: { dto: OwnSkillsDto }) {
   );
 }
 
-/** The four canonical levels with their wording (BR-30 "level descriptions"). Shown once, above the list. */
+/**
+ * The four canonical levels with their full wording (BR-30 "level descriptions"). Collapsed by default to keep the list
+ * compact; the rating buttons carry the same names in their accessible labels, so nothing depends on opening it.
+ */
 function LevelLegend() {
   return (
-    <section aria-labelledby="skill-legend-heading" className="rounded-md border border-border-subtle p-3">
-      <p id="skill-legend-heading" className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-        {skillProfileCopy.legendHeading}
-      </p>
+    <details className="rounded-md border border-border-subtle p-3">
+      <summary className="cursor-pointer text-sm font-medium text-text-primary">{skillProfileCopy.legendHeading}</summary>
       <dl className="mt-2 grid gap-x-4 gap-y-2 text-xs sm:grid-cols-2">
         {SELF_ASSESSED_LEVELS.map((level) => (
           <div key={level}>
@@ -553,25 +578,7 @@ function LevelLegend() {
           </div>
         ))}
       </dl>
-    </section>
+    </details>
   );
 }
 
-/** Four segments filled up to the level, plus the level name as text; the segments carry no meaning on their own. */
-function LevelIndicator({ level }: { level: SelfAssessedLevel | null }) {
-  return (
-    <span className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-      <span aria-hidden="true" className="flex gap-0.5">
-        {SELF_ASSESSED_LEVELS.map((segment) => (
-          <span
-            key={segment}
-            className={`h-2 w-4 rounded-sm ${
-              level !== null && segment <= level ? "bg-zinc-800 dark:bg-zinc-200" : "bg-zinc-200 dark:bg-zinc-700"
-            }`}
-          />
-        ))}
-      </span>
-      <span>{level === null ? skillProfileCopy.unassessed : SELF_ASSESSED_LEVEL_COPY[level].name}</span>
-    </span>
-  );
-}

@@ -8,7 +8,6 @@ import { Button } from "../../../components/ui/Button";
 import { Icon } from "../../../components/ui/Icon";
 import { LoadingState } from "../../../components/ui/LoadingState";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
-import { fetchAdminSkillTrees, type AdminSkillTreeEntry } from "../../skill-trees/client/skill-trees-gateway";
 import {
   fetchAdminRoles,
   setAdminRoleArchived,
@@ -21,8 +20,6 @@ import { RoleForm } from "./RoleForm";
 type LoadedState = { phase: "loaded"; token: string; generation: number; result: FetchAdminRolesResult };
 type ViewState = { phase: "loading" } | { phase: "signed_out" } | LoadedState;
 
-type CatalogState = { status: "loading" } | { status: "ok"; trees: AdminSkillTreeEntry[] } | { status: "error" };
-
 /** The one open panel: the create form, or the edit form of one role. Only one is open at a time. */
 type Panel = { kind: "create" } | { kind: "edit"; roleId: string } | null;
 
@@ -33,7 +30,6 @@ type Panel = { kind: "create" } | { kind: "edit"; roleId: string } | null;
  */
 export function AdminRoles() {
   const [state, setState] = useState<ViewState>({ phase: "loading" });
-  const [catalog, setCatalog] = useState<CatalogState>({ status: "loading" });
   const [panel, setPanel] = useState<Panel>(null);
   const [busyRoleId, setBusyRoleId] = useState<string>();
   const [actionError, setActionError] = useState<{ roleId: string; message: string }>();
@@ -49,13 +45,8 @@ export function AdminRoles() {
       return;
     }
     setState({ phase: "loading" });
-    setCatalog({ status: "loading" });
     void fetchAdminRoles(token).then((result) => {
       if (isCurrentGeneration(generation)) setState({ phase: "loaded", token, generation, result });
-    });
-    void fetchAdminSkillTrees(token).then((result) => {
-      if (!isCurrentGeneration(generation)) return;
-      setCatalog(result.status === "ok" ? { status: "ok", trees: result.trees } : { status: "error" });
     });
   });
 
@@ -93,9 +84,6 @@ export function AdminRoles() {
     return <Alert variant="error">{adminRolesCopy.readFailed}</Alert>;
   }
 
-  const catalogAvailable = catalog.status === "ok";
-  const catalogTrees = catalog.status === "ok" ? catalog.trees : [];
-
   const loadedRoles = state.phase === "loaded" && state.result.status === "ok" ? state.result.roles : [];
   const selectedRole = loadedRoles.find((role) => role.roleId === selectedRoleId) ?? loadedRoles[0];
   return (
@@ -118,8 +106,6 @@ export function AdminRoles() {
         <div id="role-create-form">
           <RoleForm
             token={state.token}
-            catalog={catalogTrees}
-            catalogAvailable={catalogAvailable}
             onSaved={() => {
               setPanel(null);
               refresh(state);
@@ -154,10 +140,7 @@ export function AdminRoles() {
                     {role.name}
                   </span>
                   {role.description !== undefined && <span className="line-clamp-2 text-xs text-text-secondary">{role.description}</span>}
-                  <span className="text-xs text-text-secondary">
-                    {adminRolesCopy.expectationCount(role.expectations.length)}
-                    {role.archived ? ` · ${adminRolesCopy.statusArchived}` : ""}
-                  </span>
+                  {role.archived && <span className="text-xs text-text-secondary">{adminRolesCopy.statusArchived}</span>}
                 </button>
               </li>
             ))}
@@ -169,8 +152,6 @@ export function AdminRoles() {
               role={role}
               selected={role.roleId === selectedRole?.roleId}
               token={state.token}
-              catalog={catalogTrees}
-              catalogAvailable={catalogAvailable}
               editing={panel?.kind === "edit" && panel.roleId === role.roleId}
               busy={busyRoleId === role.roleId}
               actionError={actionError?.roleId === role.roleId ? actionError.message : undefined}
@@ -196,8 +177,6 @@ interface RoleRowProps {
   /** On lg the split view shows only the selected role; below lg every role stays visible. */
   selected: boolean;
   token: string;
-  catalog: AdminSkillTreeEntry[];
-  catalogAvailable: boolean;
   editing: boolean;
   busy: boolean;
   actionError?: string;
@@ -210,8 +189,6 @@ function RoleRow({
   role,
   selected,
   token,
-  catalog,
-  catalogAvailable,
   editing,
   busy,
   actionError,
@@ -230,27 +207,12 @@ function RoleRow({
       {role.description !== undefined && (
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{role.description}</p>
       )}
-      {role.expectations.length === 0 ? (
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{adminRolesCopy.noExpectations}</p>
-      ) : (
-        <ul className="mt-3 flex flex-col gap-1 text-sm text-zinc-800 dark:text-zinc-200">
-          {role.expectations.map((expectation) => (
-            <li key={expectation.treeId}>
-              {expectation.treeName ?? adminRolesCopy.unavailableArea}
-              {" — "}
-              {adminRolesCopy.expectedLevel(expectation.expectedLevel)}
-            </li>
-          ))}
-        </ul>
-      )}
 
       {editing ? (
         <div className="mt-4">
           <RoleForm
             token={token}
             role={role}
-            catalog={catalog}
-            catalogAvailable={catalogAvailable}
             onSaved={onSaved}
             onCancel={onToggleEdit}
           />

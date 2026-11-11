@@ -208,17 +208,11 @@ const OWNER_GOALS = [
   { key: "06", title: "Sette opp enhetstester i byggløypa", treeId: "demo-skill-testing", status: "completed", completedAt: new Date("2026-10-20T10:00:00.000Z") },
 ];
 
-// Owner's synthetic role target and the roles they can select.
+// Organizational roles: a title and a description only (role-profiles SPEC). No skill requirements, no target role.
 const ROLES = [
-  { roleId: "demoteam-role-senior-dev", name: "Demo – Senior utvikler", description: "Syntetisk rolleprofil for demonstrasjon.", expectations: [
-    { treeId: "demoteam-typescript-frontend", expectedLevel: 3 }, { treeId: "demoteam-backend-api", expectedLevel: 3 },
-    { treeId: "demoteam-appsec", expectedLevel: 3 }, { treeId: "demoteam-test-automation", expectedLevel: 3 },
-    { treeId: "demo-skill-delivery", expectedLevel: 3 } ] },
-  { roleId: "demoteam-role-architect", name: "Demo – Arkitekt", description: "Syntetisk rolleprofil for demonstrasjon.", expectations: [
-    { treeId: "demoteam-system-architecture", expectedLevel: 4 }, { treeId: "demoteam-backend-api", expectedLevel: 3 },
-    { treeId: "demoteam-cloud-platform", expectedLevel: 3 } ] },
+  { roleId: "demoteam-role-senior-dev", name: "Demo – Senior utvikler", description: "Syntetisk rolleprofil for demonstrasjon." },
+  { roleId: "demoteam-role-architect", name: "Demo – Arkitekt", description: "Syntetisk rolleprofil for demonstrasjon." },
 ];
-const OWNER_ROLE_TARGET = "demoteam-role-senior-dev";
 
 // Sanity: participations must not overlap for one member.
 (function assertNoOverlap() {
@@ -342,11 +336,10 @@ for (const [m, projKey, startDate, endDate] of PARTICIPATIONS) {
   });
 }
 
-// Roles and owner role target
+// Roles. The owner has no target role and no role assignment is seeded (none is modelled yet).
 for (const r of ROLES) {
-  add("roleDefinitions", r.roleId, { name: r.name, description: r.description, expectations: r.expectations, createdAt: T_CREATED, createdBy: AUDIT, updatedAt: T_CREATED, updatedBy: AUDIT });
+  add("roleDefinitions", r.roleId, { name: r.name, description: r.description, createdAt: T_CREATED, createdBy: AUDIT, updatedAt: T_CREATED, updatedBy: AUDIT });
 }
-ops.push({ kind: "ownerRoleTarget", collection: "userDevelopment", path: `userDevelopment/${OWNER_UID}/roleTarget/current`, data: { roleId: OWNER_ROLE_TARGET, updatedAt: T_CREATED } });
 
 // Owner display name (roster) and memberRef. The memberRef is set only if absent,
 // mirroring materializeMemberRefs (which is superadmin-gated and not callable here).
@@ -375,7 +368,6 @@ ops.push({ kind: "ownerLevelsMerge", path: `skillProfiles/${OWNER_UID}`, levels:
 // Normalise: `doc` kinds carry collection+id; `add` kinds carry collection+id; keep paths.
 const docOps = ops.filter((o) => o.kind === undefined || o.kind === "doc");
 const authOps = ops.filter((o) => o.kind === "auth");
-const ownerRoleOps = ops.filter((o) => o.kind === "ownerRoleTarget");
 const ownerLevelOps = ops.filter((o) => o.kind === "ownerLevelsMerge");
 
 // ---------------------------------------------------------------------------
@@ -415,11 +407,6 @@ async function classify(extra) {
     else if (existing === op.memberRef) results.skip.push(op);
     else fail("owner membership already has a different memberRef; refusing to overwrite");
   }
-  for (const op of ownerRoleOps) {
-    const snap = await db.doc(op.path).get();
-    if (snap.exists) results.skip.push(op);
-    else results.create.push(op);
-  }
   const existingLevels = extra.ownerLevelsDoc.exists ? extra.ownerLevelsDoc.data().levels ?? {} : {};
   for (const op of ownerLevelOps) {
     const missing = Object.keys(op.levels).filter((k) => !Object.hasOwn(existingLevels, k));
@@ -435,7 +422,7 @@ function report(results) {
   const byCollection = (list, key) => {
     const m = {};
     for (const op of list) {
-      const c = op.kind === "auth" ? "Firebase Auth users" : op.kind === "ownerLevelsMerge" ? "skillProfiles (owner, merge)" : op.kind === "ownerRoleTarget" ? "userDevelopment/roleTarget" : op.collection;
+      const c = op.kind === "auth" ? "Firebase Auth users" : op.kind === "ownerLevelsMerge" ? "skillProfiles (owner, merge)" : op.collection;
       m[c] = (m[c] ?? 0) + 1;
     }
     return m;

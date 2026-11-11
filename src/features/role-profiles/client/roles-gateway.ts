@@ -4,13 +4,6 @@ export interface AdminRoleView {
   name: string;
   description?: string;
   archived: boolean;
-  expectations: AdminRoleExpectationView[];
-}
-
-export interface AdminRoleExpectationView {
-  treeId: string;
-  treeName: string | null;
-  expectedLevel: number;
 }
 
 export type FetchAdminRolesResult =
@@ -22,36 +15,20 @@ export type FetchAdminRolesResult =
 /** A role write: the admin DTO on success, otherwise the server's neutral error code (never role content). */
 export type AdminRoleWriteResult = { ok: true; role: AdminRoleView } | { ok: false; error: string };
 
-export interface AdminRoleExpectationInput {
-  treeId: string;
-  expectedLevel: number;
-}
-
-/** A create body: only the fields the operation accepts. Absent `description` means no description. */
+/** A create body: a title and an optional description. Absent `description` means no description. */
 export interface CreateAdminRoleInput {
   name: string;
   description?: string;
-  expectations: AdminRoleExpectationInput[];
 }
 
-/** A PATCH body: only the changed fields. `description: ""` clears the stored description (PG-10). */
+/** A PATCH body: only the changed fields. `description: ""` clears the stored description. */
 export interface UpdateAdminRoleInput {
   name?: string;
   description?: string;
-  expectations?: AdminRoleExpectationInput[];
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
-
-function isExpectation(value: unknown): value is AdminRoleExpectationView {
-  return (
-    isRecord(value) &&
-    typeof value.treeId === "string" &&
-    (typeof value.treeName === "string" || value.treeName === null) &&
-    typeof value.expectedLevel === "number"
-  );
-}
 
 /** Shape check for an untrusted admin role body; anything else is not treated as a role. */
 export function isAdminRoleView(value: unknown): value is AdminRoleView {
@@ -60,9 +37,7 @@ export function isAdminRoleView(value: unknown): value is AdminRoleView {
     typeof value.roleId === "string" &&
     typeof value.name === "string" &&
     (value.description === undefined || typeof value.description === "string") &&
-    typeof value.archived === "boolean" &&
-    Array.isArray(value.expectations) &&
-    value.expectations.every(isExpectation)
+    typeof value.archived === "boolean"
   );
 }
 

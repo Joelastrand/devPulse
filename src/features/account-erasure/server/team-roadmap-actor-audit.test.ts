@@ -59,7 +59,8 @@ describe("actor audit for TASK-024 fields (A-4, A-6, A-11, A-12)", () => {
     // 15 before TASK-039; TASK-039 (A-13) adds createdBy, updatedBy and three assessedBy targets.
     // Team-system overview round 2 adds one assessedBy target for each of the four newer attributes (seven total).
     // Owner decision (account erasure Option A) adds superadmin grantedByUid and revokedByUid (A-16): 26 in total.
-    expect(ACTOR_AUDIT_TARGETS).toHaveLength(26);
+    // Team-owned skills (SPEC §7) adds createdBy and updatedBy of teamSkills (A-17): 28 in total.
+    expect(ACTOR_AUDIT_TARGETS).toHaveLength(28);
   });
 
   it.each(NEW_TARGETS)("clears $collection.$field to null, keeps the record and its other fields", async ({ collection, field }) => {

@@ -353,3 +353,36 @@ describe("SkillContributionPanel", () => {
     expect(screen.queryByRole("table")).toBeNull();
   });
 });
+
+describe("SkillContributionPanel sharing status and consent (presentation only)", () => {
+  const FIRST_POINT = "Valgfritt – du bestemmer selv, team for team.";
+
+  it("shows 'Deling av' and the full consent notice expanded before the person shares", async () => {
+    fetchMock.mockResolvedValue(state(false));
+    render(<SkillContributionPanel teamId="team-1" token="t" teamName="Demoteam" wording="sharing" />);
+
+    expect(await screen.findByText("Deling av")).toBeTruthy();
+    const point = screen.getByText(FIRST_POINT);
+    expect(point.closest("details")).toBeNull();
+  });
+
+  it("shows 'Deling aktiv' while sharing, and keeps the full notice on the page inside one disclosure", async () => {
+    fetchMock.mockResolvedValue(state(true));
+    render(<SkillContributionPanel teamId="team-1" token="t" teamName="Demoteam" wording="sharing" />);
+
+    expect(await screen.findByText("Deling aktiv")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Slutt å dele kompetanse med teamet" })).toBeTruthy();
+    const point = screen.getByText(FIRST_POINT);
+    expect(point.closest("details")).not.toBeNull();
+    expect(screen.getByText("Vilkår og personvern for deling")).toBeTruthy();
+  });
+
+  it("does not show a sharing status badge for the participation wording", async () => {
+    fetchMock.mockResolvedValue(state(true));
+    render(<SkillContributionPanel teamId="team-1" token="t" teamName="Demoteam" />);
+
+    await screen.findByRole("button", { name: WITHDRAW });
+    expect(screen.queryByText("Deling aktiv")).toBeNull();
+    expect(screen.queryByText("Deling av")).toBeNull();
+  });
+});

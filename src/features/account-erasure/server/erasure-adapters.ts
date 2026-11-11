@@ -72,6 +72,15 @@ export function createPersonalDataPort(): PersonalDataErasurePort {
     async deleteAchievement(uid, achievementId) {
       await owned(uid).collection("achievements").doc(achievementId).delete();
     },
+    // I-19 (team-owned skills): one document per (person, team skill), located by its stored `uid` field.
+    async teamSkillAssessmentIds(uid, limit) {
+      assertUidSegment(uid);
+      const snapshot = await db().collection("teamSkillAssessments").where("uid", "==", uid).select().limit(limit).get();
+      return snapshot.docs.map((doc) => doc.id);
+    },
+    async deleteTeamSkillAssessment(_uid, assessmentId) {
+      await db().collection("teamSkillAssessments").doc(assessmentId).delete();
+    },
   };
 }
 
@@ -203,6 +212,13 @@ const ACTOR_AUDIT_ACCESS: ReadonlyMap<string, ActorAccess> = new Map<string, Act
   ["teamSystems|observability.assessedBy", access(
     async (db, uid) => (await db.collection("teamSystems").where("observability.assessedBy", "==", uid).select().limit(1).get()).docs[0]?.id,
     (db, id) => db.collection("teamSystems").doc(id))],
+  // A-17 (team-owned skills, SPEC §7): acting admin of a team skill definition, audit only.
+  ["teamSkills|createdBy", access(
+    async (db, uid) => (await db.collection("teamSkills").where("createdBy", "==", uid).select().limit(1).get()).docs[0]?.id,
+    (db, id) => db.collection("teamSkills").doc(id))],
+  ["teamSkills|updatedBy", access(
+    async (db, uid) => (await db.collection("teamSkills").where("updatedBy", "==", uid).select().limit(1).get()).docs[0]?.id,
+    (db, id) => db.collection("teamSkills").doc(id))],
 ]);
 
 function accessFor(target: ActorAuditTarget): ActorAccess {

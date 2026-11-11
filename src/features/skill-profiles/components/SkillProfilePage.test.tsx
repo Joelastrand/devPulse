@@ -91,30 +91,27 @@ describe("SkillProfilePage", () => {
     expect(rows[1].textContent).toContain("Arkitektur");
   });
 
-  it("shows the approved role-comparison notice directly after the C1 notice (role-profiles TASK-022)", async () => {
-    await renderWith(ok([{ treeId: "t-a", name: "Arkitektur", level: null }]));
 
-    const c1 = screen.getByText(skillProfileCopy.privacyNotice);
-    const approved = screen.getByText(skillProfileCopy.roleComparisonNotice);
-    expect(c1.compareDocumentPosition(approved) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  });
-
-  it("assessed row: indicator text equals the level name, segments are aria-hidden; level 4 is 'Avansert'", async () => {
+  it("assessed row: one level line names the level, and the matching rating option is the checked one", async () => {
     await renderWith(ok([{ treeId: "t-1", name: "Sikkerhet", level: 4 }]));
 
     const row = screen.getByText("Sikkerhet").closest("li")!;
-    expect(row.textContent).toContain("Avansert");
-    const hidden = row.querySelector('[aria-hidden="true"]')!;
-    expect(hidden.children).toHaveLength(4);
-    expect(hidden.textContent).toBe("");
+    expect(within(row).getByText("Nivå 4 · Avansert")).toBeTruthy();
+    const checked = within(row).getAllByRole("radio").filter((radio) => radio.getAttribute("aria-checked") === "true");
+    expect(checked.map((radio) => radio.getAttribute("aria-label"))).toEqual(["Sikkerhet: 4. Avansert"]);
+    expect(within(row).getByRole("button", { name: "Fjern vurdering" })).toBeTruthy();
   });
 
   it("unassessed row says 'Ikke vurdert', never a number or zero", async () => {
     await renderWith(ok([{ treeId: "t-1", name: "Sikkerhet", level: null }]));
 
     const row = screen.getByText("Sikkerhet").closest("li")!;
-    expect(row.textContent).toContain("Ikke vurdert");
-    expect(row.textContent).not.toMatch(/\d/);
+    // The four rating buttons carry their level digits; only the status text next to the name must be free of them.
+    const withoutRating = row.cloneNode(true) as HTMLElement;
+    withoutRating.querySelector('[role="radiogroup"]')?.remove();
+    const statusText = withoutRating.textContent ?? "";
+    expect(statusText).toContain("Ikke vurdert");
+    expect(statusText).not.toMatch(/\d/);
   });
 
   it("partial assessments: overview counts visible skills only, with per-level text for levels above zero", async () => {
@@ -159,8 +156,9 @@ describe("SkillProfilePage", () => {
     );
 
     expect(screen.getByText(/du har ikke vurdert noen ferdigheter ennå/i)).toBeTruthy();
-    expect(screen.getAllByRole("combobox").map((el) => (el as HTMLSelectElement).value)).toEqual(["", ""]);
-    expect(screen.getAllByText("Ikke vurdert", { selector: "span span" })).toHaveLength(2);
+    expect(screen.getAllByRole("radiogroup")).toHaveLength(2);
+    expect(screen.getAllByRole("radio").filter((radio) => radio.getAttribute("aria-checked") === "true")).toHaveLength(0);
+    expect(screen.getAllByText("Ikke vurdert", { selector: "p" })).toHaveLength(2);
     expect(screen.queryByText(/du har vurdert/i)).toBeNull();
   });
 
@@ -273,5 +271,30 @@ describe("skill profile heading structure (visual-redesign TASK-019)", () => {
   it("keeps a valid heading hierarchy for the loaded skills view", async () => {
     await renderWith(ok([{ treeId: "1", name: "A", level: 2 }]));
     expectHeadingStructure(document.body, { ownsPageTitle: false });
+  });
+});
+
+describe("SkillProfilePage — same-name skills stay distinct (presentation only)", () => {
+  it("keeps two skills with the same name as two rows, each with its own rating group and its position among them", async () => {
+    await renderWith(
+      ok([
+        { treeId: "demo-a", name: "Demo – Testautomatisering", level: null },
+        { treeId: "demo-b", name: "Demo – Testautomatisering", level: 3 },
+        { treeId: "other", name: "Arkitektur", level: null },
+      ]),
+    );
+
+    const rows = screen.getAllByText("Demo – Testautomatisering").map((node) => node.closest("li")!);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).not.toBe(rows[1]);
+    expect(within(rows[0]).getByText("Kompetanseområde 1 av 2 med dette navnet. Vurder hvert område for seg.")).toBeTruthy();
+    expect(within(rows[1]).getByText("Kompetanseområde 2 av 2 med dette navnet. Vurder hvert område for seg.")).toBeTruthy();
+    expect(within(rows[1]).getByRole("radio", { name: "Demo – Testautomatisering: 3. Kan selvstendig" }).getAttribute("aria-checked")).toBe("true");
+    expect(within(rows[0]).queryByText(/Kompetanseområde \d av/)).not.toBeNull();
+  });
+
+  it("does not add a same-name hint to a unique skill", async () => {
+    await renderWith(ok([{ treeId: "other", name: "Arkitektur", level: null }]));
+    expect(screen.queryByText(/med dette navnet/)).toBeNull();
   });
 });

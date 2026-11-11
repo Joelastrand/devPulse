@@ -142,6 +142,9 @@ const PERSON_OWNED: readonly InventoryRow[] = [
   // Personal role workspace, first increment (SECURITY-REVIEW §11.3). Owner subtrees; encrypted content; no key needed to delete.
   { id: "I-17", collection: "userDevelopment/{uid}/responsibilities", locator: "subtree", class: "DELETE", fields: [] },
   { id: "I-18", collection: "userDevelopment/{uid}/achievements", locator: "subtree", class: "DELETE", fields: [] },
+  // I-19 (docs/features/team-owned-skills/SPEC.md §7): a person's private team-skill ratings, one document per
+  // (person, team skill). Located by the stored `uid` field, not by the id, so the sweep is a field equality.
+  { id: "I-19", collection: "teamSkillAssessments", locator: "uidField", class: "DELETE", fields: [uid("uid")] },
 ];
 
 /** A-rows: actor and audit identities on preserved records (D5). Each field is set to null or to the erased marker. */
@@ -208,6 +211,14 @@ const ACTOR_AUDIT: readonly InventoryRow[] = [
     locator: "fieldsOnly",
     class: "DELETE",
     fields: [memberRef("memberRef")],
+  },
+  // A-17 (docs/features/team-owned-skills/SPEC.md §7): the acting admin of a team-owned skill definition is audit only.
+  {
+    id: "A-17",
+    collection: "teamSkills",
+    locator: "fieldsOnly",
+    class: "ANONYMIZE",
+    fields: [uid("createdBy"), uid("updatedBy")],
   },
   // A-16: the superadmin registry records the granting and revoking administrator on each record. Erasing a person clears
   // those references on other people's records and keeps the record state (the registry count is never changed by this row).
@@ -341,4 +352,7 @@ export const ACTOR_AUDIT_TARGETS = [
   { collection: "teamSystems", field: "observability.assessedBy" },
   { collection: "superadmins", field: "grantedByUid" },
   { collection: "superadmins", field: "revokedByUid" },
+  // A-17 (team-owned skills, SPEC §7): the acting admin of a team skill definition is audit only.
+  { collection: "teamSkills", field: "createdBy" },
+  { collection: "teamSkills", field: "updatedBy" },
 ] as const;

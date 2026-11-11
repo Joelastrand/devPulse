@@ -16,6 +16,7 @@ type Seed = {
   goals?: Record<string, string[]>;
   responsibilities?: Record<string, string[]>;
   achievements?: Record<string, string[]>;
+  teamAssessments?: Record<string, string[]>;
 };
 
 function fakeData(seed: Seed = {}) {
@@ -29,6 +30,7 @@ function fakeData(seed: Seed = {}) {
     Object.entries(seed.responsibilities ?? {}).map(([uid, ids]) => [uid, new Set(ids)]),
   );
   const achievements = new Map<string, Set<string>>(Object.entries(seed.achievements ?? {}).map(([uid, ids]) => [uid, new Set(ids)]));
+  const teamAssessments = new Map<string, Set<string>>(Object.entries(seed.teamAssessments ?? {}).map(([uid, ids]) => [uid, new Set(ids)]));
   const log: string[] = [];
 
   const port: PersonalDataErasurePort = {
@@ -74,9 +76,16 @@ function fakeData(seed: Seed = {}) {
       log.push(`achievement:${uid}:${achievementId}`);
       achievements.get(uid)?.delete(achievementId);
     },
+    async teamSkillAssessmentIds(uid, limit) {
+      return [...(teamAssessments.get(uid) ?? [])].slice(0, limit);
+    },
+    async deleteTeamSkillAssessment(uid, assessmentId) {
+      log.push(`teamAssessment:${uid}:${assessmentId}`);
+      teamAssessments.get(uid)?.delete(assessmentId);
+    },
   };
 
-  return { port, skill, profiles, roleTargets, goals, responsibilities, achievements, log };
+  return { port, skill, profiles, roleTargets, goals, responsibilities, achievements, teamAssessments, log };
 }
 
 async function runToDone(port: PersonalDataErasurePort, uid: string, maxWrites = 100): Promise<number> {
@@ -179,6 +188,15 @@ describe("personal data erasure step (TASK-022)", () => {
     expect(store.achievements.get(UID)?.size ?? 0).toBe(0);
     expect(store.responsibilities.get(OTHER)).toEqual(new Set(["keep-r"]));
     expect(store.achievements.get(OTHER)).toEqual(new Set(["keep-a"]));
+  });
+
+  it("removes every team-skill rating of the erased person (I-19), paged, and keeps other people's", async () => {
+    const store = fakeData({ teamAssessments: { [UID]: ["u__s1", "u__s2", "u__s3"], [OTHER]: ["keep__s9"] } });
+
+    await runToDone(store.port, UID, 2);
+
+    expect(store.teamAssessments.get(UID)?.size).toBe(0);
+    expect(store.teamAssessments.get(OTHER)?.has("keep__s9")).toBe(true);
   });
 
   it("the personal records step needs no encryption key: it only deletes by path", async () => {

@@ -675,3 +675,19 @@ Boundaries:
 
 - Icons: `lucide-react` (exact pin 1.66.0, ISC) is the only icon family, used through `src/components/ui/Icon.tsx`. Client bundle record: `docs/features/product-experience/VERIFICATION.md`.
 - Theme: a viewer-only `data-theme` attribute on `<html>`, set before first paint from one local key (`src/lib/theme/theme.ts`). No server state, no network call and no telemetry.
+
+## Team-owned skills (docs/features/team-owned-skills/SPEC.md)
+
+- **Identity.** Team-owned skills are a second, additive skill identity alongside the global `skillTrees` catalog. The
+  catalog stays supported, and nothing is migrated or name-mapped. A team skill is identified by its `teamSkills` document
+  id and is always scoped to one `teamId`.
+- **Storage.** Personal ratings are one document per (person, team skill), `teamSkillAssessments/{uid}__{skillId}`. A
+  map keyed by skill id was rejected: it needs dynamic keys that the erasure guard admits only for its reviewed C1 shape.
+- **Module.** `src/features/team-owned-skills/` owns the domain, the store seam with a Firestore implementation and an
+  in-memory fake and the operations (list, create, update, own rating set/clear). No aggregate exists yet (see below).
+- **Gates.** Member and administrator decisions reuse `requireGenuineMemberWith` and `requireTeamAdministratorWith`, run
+  inside the same transaction as the write. App-admin status grants team configuration only, never a member's rating.
+- **Known limits.** Previous guidance text is not retained after an edit (only the criteria version changes). The
+  team aggregate (`server/get-team-owned-skill-aggregate.ts`) is the single approved team-owned consumer of the C2 membership
+  scan. It reads ratings through `server/read-team-skill-ratings-batch.ts`, an identity-free reader over exact documents,
+  applies consent, criteria version and threshold 5, and returns only a level or `insufficient_data` per active skill.

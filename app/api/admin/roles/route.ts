@@ -57,7 +57,6 @@ function statusForCreateError(error: Extract<CreateRoleResult, { ok: false }>["e
   if (isAuthRefusal(error)) return authRefusalStatus(error);
   if (error === "forbidden") return 403;
   if (error === "invalid_input") return 400;
-  if (error === "skill_not_found") return 404;
   if (error === "cap_reached") return 409;
   return 500;
 }

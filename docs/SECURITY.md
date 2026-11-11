@@ -697,3 +697,22 @@ facts; see "Status" at the end of this section.
 Known, accepted limitation: a demoted teamadmin loses write access on their next request (TA-SI-1), but any client-side
 state already rendered continues until the next read. Team-admin management of ordinary membership and access requests
 remains superadmin-only pending an owner decision.
+
+## Team-owned skills invariants (docs/features/team-owned-skills/SPEC.md)
+
+- **TS-SI-1 Private ratings stay private.** `teamSkillAssessments` is owner-only. No API lets a team administrator, a
+  superadmin or any other member read another person's rating. The team skill list returns definitions and the caller's
+  own ratings only.
+- **TS-SI-2 Administration is server-authorized.** Creating or editing a team skill requires a superadmin or a genuine
+  `teamadmin` of an active team, re-checked inside the write transaction. A skill of another team is reported as
+  `not_found`, never as an existence signal.
+- **TS-SI-3 Aggregates use only the existing opt-in.** The team skill aggregate (`get-team-owned-skill-aggregate.ts`) is the
+  one approved team-owned consumer of the C2 membership scan (reviewed in `team-skills-scope-guard.test.ts`). It counts only
+  genuine members whose existing team sharing consent is effective, only ratings under the current criteria version, and
+  only at a threshold of 5 (`SKILL_COVERAGE_MIN_CONTRIBUTORS`). A skill with any unreadable or inconsistent eligible rating
+  is suppressed. It never returns a count, a uid, a contributor number or a per-person value, and the reader never queries
+  across people (exact `{uid}__{skillId}` documents only).
+- **TS-SI-4 Erasure covers the new records.** I-19 (`teamSkillAssessments`, owner-only, DELETE) and A-17 (`teamSkills`
+  actor fields, ANONYMIZE) are registered in the inventory, the sweep and the erasure steps.
+- **TS-SI-5 No dynamic keys.** The team-skill write path builds no dynamic map key or field path. The erasure guard
+  stays unchanged, and its reviewed exception is not extended.

@@ -14,7 +14,6 @@ import { TeamsOverview } from "../../teams/components/TeamsOverview";
 import { teamsCopy } from "../../teams/copy";
 import type { GoalDto } from "../../personal-goals/domain/goal";
 import type { OwnerSummaryWire } from "../../development-conversations/client/conversations-gateway";
-import type { RoleTargetView } from "../../role-profiles/client/role-target-gateway";
 import type { SurveyResultSummary } from "../../results/client/team-results-gateway";
 import { resultsCopy } from "../../results/copy";
 import { formatSurveyDate } from "../../results/domain/format-survey-date";
@@ -265,42 +264,6 @@ function pickNextConversation(items: readonly OwnerSummaryWire[]): OwnerSummaryW
     return a.plannedFor.localeCompare(b.plannedFor);
   });
   return sorted[0] ?? null;
-}
-
-export function RolePanel({ role }: { role: Read<RoleTargetView> }) {
-  return (
-    <SummaryPanel title={copy.role.title} icon={Layers}>
-      {role.phase === "loading" ? <p className="text-help text-text-muted">{LOADING_TEXT}</p> : null}
-      {role.phase === "error" ? <ReadErrorText /> : null}
-      {role.phase === "ok" && role.value.status === "unavailable" ? (
-        <p className="text-help text-text-secondary">{copy.role.unavailable}</p>
-      ) : null}
-      {role.phase === "ok" && role.value.status === "none" ? (
-        <div className="flex flex-col gap-3">
-          <p className="text-label font-medium text-text-primary">{copy.role.none}</p>
-          <p className="text-help text-text-secondary">{copy.role.noneDescription}</p>
-          <Link
-            href="/me/skills"
-            className="inline-flex w-fit items-center gap-2 rounded-control bg-primary-subtle px-4 py-2 text-label font-medium text-primary"
-          >
-            {copy.role.action}
-            <Icon icon={ArrowRight} size="inline" />
-          </Link>
-        </div>
-      ) : null}
-      {role.phase === "ok" && role.value.status === "selected" ? (
-        <div className="flex flex-col gap-2">
-          <p className="text-help text-text-secondary">{copy.role.selectedLabel}</p>
-          <p className="text-card-title font-semibold text-text-primary">{role.value.target.name}</p>
-          {role.value.target.archived ? <StatusBadge tone="warning">{copy.role.archived}</StatusBadge> : null}
-          <Link href="/me/skills" className="inline-flex w-fit items-center gap-2 text-label font-medium text-primary">
-            {copy.role.action}
-            <Icon icon={ArrowRight} size="inline" />
-          </Link>
-        </div>
-      ) : null}
-    </SummaryPanel>
-  );
 }
 
 /**

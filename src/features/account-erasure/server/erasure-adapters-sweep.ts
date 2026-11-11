@@ -107,6 +107,11 @@ const COUNTERS: ReadonlyMap<string, Counter> = new Map<string, Counter>([
   ["surveyParticipations|docIdStartsWith|uid", async (db, b) =>
     (await db.collection("surveyParticipations").where(FieldPath.documentId(), ">=", `${b.uid}__`).where(FieldPath.documentId(), "<", `${b.uid}__${PREFIX_END}`).select().get()).size],
   ["surveyParticipations|fieldEquals|uid", async (db, b) => (await db.collection("surveyParticipations").where("uid", "==", b.uid).select().get()).size],
+  // A-17: team skill definition actor fields (team-owned skills).
+  ["teamSkills|fieldEquals|createdBy", async (db, b) => (await db.collection("teamSkills").where("createdBy", "==", b.uid).select().get()).size],
+  ["teamSkills|fieldEquals|updatedBy", async (db, b) => (await db.collection("teamSkills").where("updatedBy", "==", b.uid).select().get()).size],
+  // I-19: a person's team-skill ratings (team-owned skills), located by the stored uid field.
+  ["teamSkillAssessments|fieldEquals|uid", async (db, b) => (await db.collection("teamSkillAssessments").where("uid", "==", b.uid).select().get()).size],
   // I-13, I-14, A-8: forum authorship and tombstone markers.
   ["forumThreads|fieldEquals|authorUid", async (db, b) => (await db.collection("forumThreads").where("authorUid", "==", b.uid).select().get()).size],
   ["forumReplies|fieldEquals|authorUid", async (db, b) => (await db.collection("forumReplies").where("authorUid", "==", b.uid).select().get()).size],

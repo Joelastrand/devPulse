@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, ChartPie, GraduationCap, House, Layers3, type LucideIcon } from "lucide-react";
+import { CalendarDays, ChartPie, GraduationCap, House, Layers3, ListChecks, type LucideIcon } from "lucide-react";
 import { Icon } from "../../../components/ui/Icon";
+import { teamSkillsCopy } from "../../team-owned-skills/copy";
 import { teamsCopy } from "../copy";
 
 /** Strips a single trailing slash so `/teams/x/` and `/teams/x` compare equal. */
@@ -31,6 +32,7 @@ export function TeamRouteNav({ teamId }: { teamId: string }) {
     { href: `${base}/competence-plan`, label: teamsCopy.nav.competencePlan, icon: GraduationCap },
     { href: `${base}/competence`, label: teamsCopy.nav.competence, icon: ChartPie },
     { href: `${base}/systems`, label: teamsCopy.nav.systems, icon: Layers3 },
+    { href: `${base}/skills`, label: teamSkillsCopy.nav, icon: ListChecks },
   ];
 
   return (

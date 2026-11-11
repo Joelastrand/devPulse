@@ -30,12 +30,11 @@ export interface RoleListWindow {
 }
 
 /** The only fields a field-level write may touch. `createdAt`, `createdBy` and the document id never change (AD-1). */
-export type MutableRoleField = "name" | "description" | "expectations" | "updatedAt" | "updatedBy" | "archivedAt" | "archivedBy";
+export type MutableRoleField = "name" | "description" | "updatedAt" | "updatedBy" | "archivedAt" | "archivedBy";
 
 export const MUTABLE_ROLE_FIELDS: ReadonlySet<string> = new Set<MutableRoleField>([
   "name",
   "description",
-  "expectations",
   "updatedAt",
   "updatedBy",
   "archivedAt",

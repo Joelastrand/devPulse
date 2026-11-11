@@ -55,15 +55,6 @@ export const authenticatedHomeCopy = {
     noDate: "Ingen dato satt",
     withPrefix: "Med",
   },
-  role: {
-    title: "Rolle og utvikling",
-    none: "Ingen rolle valgt",
-    noneDescription: "Velg en rolle for å se forventninger og utviklingsområder.",
-    action: "Velg rolle",
-    selectedLabel: "Din rolle",
-    archived: "Rollen er arkivert.",
-    unavailable: "Rolleinformasjonen er ikke tilgjengelig nå.",
-  },
   development: {
     title: "Teamets utvikling",
     empty: "Det finnes ingen resultater for teamet ennå.",

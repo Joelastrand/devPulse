@@ -78,7 +78,6 @@ export async function getRoleInTransaction(tx: Transaction, roleId: string): Pro
 export function toFirestoreRoleData(role: StoredRoleDefinition): Record<string, unknown> {
   return {
     name: role.name,
-    expectations: role.expectations.map(({ treeId, expectedLevel }) => ({ treeId, expectedLevel })),
     createdAt: Timestamp.fromDate(role.createdAt),
     createdBy: role.createdBy,
     ...(role.description !== undefined ? { description: role.description } : {}),

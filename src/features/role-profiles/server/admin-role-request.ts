@@ -1,5 +1,5 @@
 const BEARER_PATTERN = /^Bearer (.+)$/;
-const ROLE_FIELDS = ["name", "description", "expectations"];
+const ROLE_FIELDS = ["name", "description"];
 
 /** The bearer token from an `Authorization` header, or `""` (the operation then refuses as unauthenticated). */
 export function extractBearerToken(header: string | null): string {

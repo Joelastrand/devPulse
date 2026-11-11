@@ -10,13 +10,10 @@ import { toAdminRoleDto } from "./role-admin-mapping";
 import { getDefaultRoleWriteStore } from "./role-store";
 import { writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import { isAddressableRoleId, type RoleFieldChanges, type RoleStore } from "./role-store-types";
-import { getDefaultSkillTreeReader } from "./skill-tree-seam";
-import { resolveSkillTreeReferences, type RawSkillTreeReader } from "./skill-tree-seam-types";
 import { type AuthRefusal } from "../../auth/server/auth-refusal";
 
 export interface UpdateRoleDeps extends RequireAppAdminDeps {
   store?: RoleStore;
-  treeReader?: RawSkillTreeReader;
   now?: () => Date;
 }
 
@@ -29,21 +26,13 @@ export type UpdateRoleResult =
   | { ok: true; role: RoleAdminDto }
   | {
       ok: false;
-      error:
-        | AuthRefusal
-        | "forbidden"
-        | "invalid_input"
-        | "not_found"
-        | "role_archived"
-        | "skill_not_found"
-        | "persistence_failed";
+      error: AuthRefusal | "forbidden" | "invalid_input" | "not_found" | "role_archived" | "persistence_failed";
     };
 
 /**
- * Admin partial edit of a role (BR-1, BR-2, PG-6, PG-9, PG-10). Authorization runs first. A missing or malformed
- * role is `not_found` and is never repaired. An archived role is refused with `role_archived` and nothing is
- * written. Expectations, when present, replace the whole array and every `treeId` must resolve to a valid
- * SkillTree. `createdAt` is never changed. Last write wins (no transaction).
+ * Admin partial edit of a title and/or description. Authorization runs first. A missing or malformed role is
+ * `not_found` and is never repaired. An archived role is refused with `role_archived` and nothing is written.
+ * `createdAt` is never changed. Last write wins (no transaction).
  */
 export async function updateRole(
   idToken: string,
@@ -61,7 +50,7 @@ export async function updateRole(
     return { ok: false, error: "invalid_input" };
   }
   const { patch } = validated;
-  // PG-9: a roleId that cannot address a document is the same `not_found` as a missing role, never a persistence failure.
+  // A roleId that cannot address a document is the same `not_found` as a missing role, never a persistence failure.
   if (!isAddressableRoleId(roleId)) return { ok: false, error: "not_found" };
 
   try {
@@ -76,19 +65,9 @@ export async function updateRole(
       return { ok: false, error: "role_archived" };
     }
 
-    const expectations = patch.expectations ?? current.expectations;
-    const references = await resolveSkillTreeReferences(
-      expectations.map((expectation) => expectation.treeId),
-      deps.treeReader ?? getDefaultSkillTreeReader(),
-    );
-    if (!expectations.every((expectation) => references.get(expectation.treeId)?.status === "valid")) {
-      return { ok: false, error: "skill_not_found" };
-    }
-
     const updatedAt = (deps.now ?? (() => new Date()))();
     const changes: RoleFieldChanges = { set: { updatedAt, updatedBy: admin.identity.uid }, unset: [] };
     if (patch.name !== undefined) changes.set.name = patch.name;
-    if (patch.expectations !== undefined) changes.set.expectations = patch.expectations;
     if (patch.description !== undefined) {
       if ("set" in patch.description) {
         changes.set.description = patch.description.set;
@@ -98,17 +77,12 @@ export async function updateRole(
     }
     await store.update(roleId, changes);
 
-    const next: RoleDefinition = {
-      name: patch.name ?? current.name,
-      expectations,
-      createdAt: current.createdAt,
-      updatedAt,
-    };
+    const next: RoleDefinition = { name: patch.name ?? current.name, createdAt: current.createdAt, updatedAt };
     const description = nextDescription(current.description, patch.description);
     if (description !== undefined) {
       next.description = description;
     }
-    return { ok: true, role: toAdminRoleDto(roleId, next, references) };
+    return { ok: true, role: toAdminRoleDto(roleId, next) };
   } catch (error) {
     return { ok: false, error: writeRefusalFor(error) };
   }

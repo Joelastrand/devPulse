@@ -4,29 +4,21 @@ import { toAdminRoleDto } from "./role-admin-mapping";
 import { getDefaultRoleWriteStore } from "./role-store";
 import { writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import type { RoleStore } from "./role-store-types";
-import { getDefaultSkillTreeReader } from "./skill-tree-seam";
-import { resolveSkillTreeReferences, type RawSkillTreeReader } from "./skill-tree-seam-types";
 import { type AuthRefusal } from "../../auth/server/auth-refusal";
 
 export interface CreateRoleDeps extends RequireAppAdminDeps {
   store?: RoleStore;
-  treeReader?: RawSkillTreeReader;
   now?: () => Date;
 }
 
 export type CreateRoleResult =
   | { ok: true; role: RoleAdminDto }
-  | {
-      ok: false;
-      error: AuthRefusal | "forbidden" | "invalid_input" | "skill_not_found" | "cap_reached" | "persistence_failed";
-    };
+  | { ok: false; error: AuthRefusal | "forbidden" | "invalid_input" | "cap_reached" | "persistence_failed" };
 
 /**
- * Admin-only role creation (BR-1, BR-2, BR-7). Authorization runs first and writes nothing on any refusal.
- * Every referenced `treeId` must resolve to a valid SkillTree, otherwise nothing is written. The cap is
- * count-then-create: a `count()` of 50 or more refuses the create (BR-7). A small overshoot under concurrent
- * creates is accepted (same precedent as D1 goals). Persistence and read failures surface only as a neutral
- * `persistence_failed`, never as a missing tree.
+ * Admin-only role creation. Input is a title and an optional description only. Authorization runs first and writes
+ * nothing on any refusal. The cap is count-then-create: a `count()` of 50 or more refuses the create. A small overshoot
+ * under concurrent creates is accepted (same precedent as D1 goals).
  */
 export async function createRole(idToken: string, input: unknown, deps: CreateRoleDeps = {}): Promise<CreateRoleResult> {
   const admin = await requireAppAdmin(idToken, { verifyToken: deps.verifyToken, isSuperadmin: deps.isSuperadmin });
@@ -38,31 +30,20 @@ export async function createRole(idToken: string, input: unknown, deps: CreateRo
   if (!validated.ok) {
     return { ok: false, error: "invalid_input" };
   }
-  const { draft } = validated;
 
   try {
     const store = deps.store ?? getDefaultRoleWriteStore(admin.identity.uid);
-    const references = await resolveSkillTreeReferences(
-      draft.expectations.map((expectation) => expectation.treeId),
-      deps.treeReader ?? getDefaultSkillTreeReader(),
-    );
-    const everyTreeValid = draft.expectations.every(
-      (expectation) => references.get(expectation.treeId)?.status === "valid",
-    );
-    if (!everyTreeValid) {
-      return { ok: false, error: "skill_not_found" };
-    }
     if ((await store.count()) >= ROLE_DEFINITION_LIMIT) {
       return { ok: false, error: "cap_reached" };
     }
 
     const stored: StoredRoleDefinition = {
-      ...draft,
+      ...validated.draft,
       createdAt: (deps.now ?? (() => new Date()))(),
       createdBy: admin.identity.uid,
     };
     const roleId = await store.create(stored);
-    return { ok: true, role: toAdminRoleDto(roleId, stored, references) };
+    return { ok: true, role: toAdminRoleDto(roleId, stored) };
   } catch (error) {
     return { ok: false, error: writeRefusalFor(error) };
   }

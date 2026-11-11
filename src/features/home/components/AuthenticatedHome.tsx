@@ -6,7 +6,6 @@ import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource"
 import { fetchGoals } from "../../personal-goals/client/goals-gateway";
 import type { GoalDto } from "../../personal-goals/domain/goal";
 import { fetchConversationList, type OwnerSummaryWire } from "../../development-conversations/client/conversations-gateway";
-import { fetchOwnRoleTarget, type RoleTargetView } from "../../role-profiles/client/role-target-gateway";
 import { fetchOwnProfile } from "../../profiles/client/profile-gateway";
 import { fetchTeamResults, type SurveyResultSummary } from "../../results/client/team-results-gateway";
 import { fetchTeamsOverview } from "../../teams/client/teams-overview-gateway";
@@ -19,7 +18,6 @@ import {
   NextStepsPanel,
   QuickLinks,
   Read,
-  RolePanel,
   TeamDevelopmentPanel,
   TeamEntryTile,
   TeamPulseTile,
@@ -41,7 +39,6 @@ export function AuthenticatedHome() {
   const [displayName, setDisplayName] = useState<Read<string | null>>(LOADING);
   const [goals, setGoals] = useState<Read<GoalDto[]>>(LOADING);
   const [conversations, setConversations] = useState<Read<OwnerSummaryWire[]>>(LOADING);
-  const [role, setRole] = useState<Read<RoleTargetView>>(LOADING);
   const [teams, setTeams] = useState<Read<TeamOverviewEntry[]>>(LOADING);
   const [teamResults, setTeamResults] = useState<Read<SurveyResultSummary[]>>(LOADING);
   // Re-runs the teams read for the current auth generation; set by the auth callback below.
@@ -62,7 +59,6 @@ export function AuthenticatedHome() {
     setDisplayName(LOADING);
     setGoals(LOADING);
     setConversations(LOADING);
-    setRole(LOADING);
     setTeams(LOADING);
 
     void fetchOwnProfile(token).then((result) => {
@@ -87,12 +83,6 @@ export function AuthenticatedHome() {
       setConversations({ phase: "ok", value: owned });
     }, () => {
       if (isCurrentGeneration(generation)) setConversations({ phase: "error" });
-    });
-    void fetchOwnRoleTarget(token).then((result) => {
-      if (!isCurrentGeneration(generation)) return;
-      setRole(result.status === "ok" ? { phase: "ok", value: result.view } : { phase: "error" });
-    }, () => {
-      if (isCurrentGeneration(generation)) setRole({ phase: "error" });
     });
     // Shared by the initial load and the post-request-access refresh; neither adds a read beyond this one.
     const loadTeams = () => {
@@ -148,7 +138,6 @@ export function AuthenticatedHome() {
       <div className="mt-6 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <GoalsPanel goals={goals} />
         <NextConversationPanel conversations={conversations} />
-        <RolePanel role={role} />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">

@@ -11,6 +11,10 @@ vi.mock("../../../../src/features/skill-profiles/components/SkillProfilePage", (
   SkillProfilePage: () => <div data-testid="skill-profile-page" />,
 }));
 
+vi.mock("../../../../src/features/team-owned-skills/components/OwnTeamSkillsSection", () => ({
+  OwnTeamSkillsSection: () => <div data-testid="own-team-skills" />,
+}));
+
 vi.mock("../../../../src/features/team-skills/components/OwnCompetenceSharing", () => ({
   OwnCompetenceSharing: () => <div data-testid="own-competence-sharing" />,
 }));

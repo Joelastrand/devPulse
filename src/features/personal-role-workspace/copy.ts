@@ -6,8 +6,9 @@ export const workspaceCopy = {
   heading: "Min rolle og mine bidrag",
   privacy: "Dette er privat for deg. Ingen andre i DevPulse kan se det, og det brukes ikke i team- eller statistikkvisninger.",
   formalRole: {
-    heading: "Formell rolle i selskapet",
-    none: "Ingen formell rolle er tildelt deg. Rollen du velger under er din egen målrolle for utvikling. Den er ikke tildelt av arbeidsgiver.",
+    heading: "Min rolle",
+    none: "Du har ikke fått tildelt en rolle ennå.",
+    explanation: "Organisatoriske roller tildeles av en administrator.",
   },
   relationLabel: "Relasjon til rollen",
   relationOptions: {
