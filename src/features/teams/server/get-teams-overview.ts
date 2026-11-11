@@ -35,6 +35,12 @@ export interface TeamOverviewEntry {
   teamId: string;
   name: string;
   relationship: TeamRelationship;
+  /**
+   * True only when the caller holds a genuine `teamMemberships` document for this team. Independent of
+   * `relationship`: an app admin's `relationship` is `"admin"` on every team, even where they are also a member.
+   * Gates per-team participation (`/me/skills` sharing), which must never be implied by admin status.
+   */
+  isMember: boolean;
 }
 
 /**
@@ -207,6 +213,7 @@ export async function getTeamsOverview(
     teamId: team.teamId,
     name: team.name,
     relationship: relationshipFor(team.teamId),
+    isMember: membershipTeamIds.has(team.teamId),
   }));
 
   const extraTeamIds = new Set<string>();
@@ -240,7 +247,12 @@ export async function getTeamsOverview(
       continue;
     }
 
-    entries.push({ teamId, name: data.name, relationship: relationshipFor(teamId) });
+    entries.push({
+      teamId,
+      name: data.name,
+      relationship: relationshipFor(teamId),
+      isMember: membershipTeamIds.has(teamId),
+    });
   }
 
   return { ok: true, teams: entries };

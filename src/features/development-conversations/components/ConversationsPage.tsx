@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
 import { EmptyState } from "../../../components/ui/EmptyState";
@@ -12,7 +12,6 @@ import { fetchConversationList, type ConversationListResponse } from "../client/
 import { conversationsCopy } from "../copy";
 import { CreateConversationForm } from "./CreateConversationForm";
 import { OwnedConversationList, ParticipationList } from "./ConversationList";
-import { ConversationDetail } from "./ConversationDetail";
 
 import { RecoveryRegion } from "./RecoveryRegion";
 
@@ -29,7 +28,8 @@ type ViewState =
 /**
  * The caller's own owner list and participation list (SPEC BR-33, BR-34, BR-44). One `GET /api/me/conversations` per
  * auth state through the browser gateway. The server order and truncation flags are rendered as given. A successful
- * recovery delete re-reads this same `GET` instead of editing local state.
+ * recovery delete re-reads this same `GET` instead of editing local state. The overview only links to a conversation's
+ * own page; it never shows a detail beside the list.
  */
 export function ConversationsPage() {
   const [state, setState] = useState<ViewState>({ phase: "loading" });
@@ -112,21 +112,25 @@ function ReadyView({ data, token, onUnauthenticated, onChanged }: ReadyViewProps
   const recoveryItems = data.owned.items.flatMap((item) => (item.kind === "recovery" ? [item.item] : []));
   const participations = data.participating.items;
   const [filter, setFilter] = useState<ConversationFilter>("all");
-  const wide = useWideConversationPane();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const showOpen = filter === "all" || filter === "open" || filter === "mine";
   const showCompleted = filter === "all" || filter === "completed" || filter === "mine";
   const showParticipating = filter === "all" || filter === "participating";
+  const showRecovery = recoveryItems.length > 0 && filter !== "participating";
   const openSummaries = summaries.filter((conversation) => conversation.status === "open");
   const completedSummaries = summaries.filter((conversation) => conversation.status === "completed");
   const invitations = participations.filter((participation) => participation.state === "pending");
   const acceptedParticipations = participations.filter((participation) => participation.state === "accepted");
   const empty = data.owned.items.length === 0 && participations.length === 0;
   const truncated = data.owned.truncated || data.participating.truncated;
+  const visibleCount =
+    (showOpen ? openSummaries.length : 0) +
+    (showCompleted ? completedSummaries.length : 0) +
+    (showParticipating ? participations.length : 0) +
+    (showRecovery ? recoveryItems.length : 0);
 
   return (
     <div className="flex flex-col gap-6">
-      <p className="text-sm text-zinc-700 dark:text-zinc-300">{conversationsCopy.privacyNotice}</p>
+      <p className="max-w-prose text-sm text-text-secondary">{conversationsCopy.privacyNotice}</p>
 
       {/* Outside the empty/non-empty branch, so the form stays in place while a create re-reads the list. */}
       <CreateConversationForm token={token} onUnauthenticated={onUnauthenticated} onChanged={onChanged} />
@@ -141,10 +145,10 @@ function ReadyView({ data, token, onUnauthenticated, onChanged }: ReadyViewProps
               type="button"
               aria-pressed={filter === option}
               onClick={() => setFilter(option)}
-              className={`rounded-full border px-3 py-1 text-sm ${
+              className={`min-h-9 rounded-full border px-3 py-1 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
                 filter === option
-                  ? "border-primary bg-primary-subtle text-text-primary"
-                  : "border-border-subtle text-text-secondary"
+                  ? "border-primary bg-primary-subtle font-medium text-text-primary"
+                  : "border-border-subtle text-text-secondary hover:text-text-primary"
               }`}
             >
               {conversationsCopy.filters[option]}
@@ -153,31 +157,30 @@ function ReadyView({ data, token, onUnauthenticated, onChanged }: ReadyViewProps
         </div>
       )}
 
-      <div className={wide && !empty ? "grid items-start gap-6 xl:grid-cols-[minmax(320px,400px)_minmax(0,1fr)]" : "flex flex-col gap-6"}>
-      {/* BR-20: beside the detail, the list is its own scroll region; the page itself does not scroll horizontally. */}
-      <div data-testid="conversation-list-column" className={wide && !empty ? "flex min-w-0 flex-col gap-6 xl:max-h-[calc(100dvh-10rem)] xl:overflow-y-auto xl:pr-1" : "flex min-w-0 flex-col gap-6"}>
       {empty ? (
         <div className="flex flex-col items-start gap-3">
           <ConversationsIllustration />
           <EmptyState>{conversationsCopy.empty}</EmptyState>
         </div>
+      ) : visibleCount === 0 ? (
+        <p className="text-text-secondary">{conversationsCopy.filterEmpty}</p>
       ) : (
-        <>
+        <div className="flex min-w-0 flex-col gap-8">
           {/* A recovery-only owner list has no "you have no conversations" line: the recovery region below shows those items. */}
           {showOpen && (openSummaries.length > 0 || recoveryItems.length === 0) && (
             <section aria-labelledby="owned-heading" className="flex flex-col gap-3">
-              <h2 id="owned-heading" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+              <h2 id="owned-heading" className="text-section-title font-semibold text-text-primary">
                 {conversationsCopy.ownedHeading}
               </h2>
               {openSummaries.length === 0 ? (
-                <p className="text-zinc-600 dark:text-zinc-400">{conversationsCopy.ownedEmpty}</p>
+                <p className="text-text-secondary">{conversationsCopy.ownedEmpty}</p>
               ) : (
-                <OwnedConversationList items={openSummaries} selectable={wide} selectedId={selectedId} onSelect={setSelectedId} />
+                <OwnedConversationList items={openSummaries} />
               )}
             </section>
           )}
 
-          {recoveryItems.length > 0 && filter !== "participating" && (
+          {showRecovery && (
             <RecoveryRegion
               items={recoveryItems}
               token={token}
@@ -188,62 +191,36 @@ function ReadyView({ data, token, onUnauthenticated, onChanged }: ReadyViewProps
 
           {showCompleted && completedSummaries.length > 0 && (
             <section aria-labelledby="completed-heading" className="flex flex-col gap-3">
-              <h2 id="completed-heading" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+              <h2 id="completed-heading" className="text-section-title font-semibold text-text-primary">
                 {conversationsCopy.completedHeading}
               </h2>
-              <OwnedConversationList items={completedSummaries} selectable={wide} selectedId={selectedId} onSelect={setSelectedId} />
+              <OwnedConversationList items={completedSummaries} />
             </section>
           )}
 
           {showParticipating && invitations.length > 0 && (
             <section aria-labelledby="invitations-heading" className="flex flex-col gap-3">
-              <h2 id="invitations-heading" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+              <h2 id="invitations-heading" className="text-section-title font-semibold text-text-primary">
                 {conversationsCopy.invitationsHeading}
               </h2>
               <ParticipationList items={invitations} />
             </section>
           )}
 
-          {showParticipating && <section aria-labelledby="participating-heading" className="flex flex-col gap-3">
-            <h2 id="participating-heading" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-              {conversationsCopy.participatingHeading}
-            </h2>
-            {acceptedParticipations.length === 0 ? (
-              <p className="text-zinc-600 dark:text-zinc-400">{conversationsCopy.participatingEmpty}</p>
-            ) : (
-              <ParticipationList items={acceptedParticipations} />
-            )}
-          </section>}
-        </>
-      )}
-      </div>
-      {wide && !empty && (
-        <aside aria-label={conversationsCopy.selectedPaneLabel} data-testid="conversation-detail-pane" className="min-w-0 self-start">
-          {selectedId !== null ? (
-            <ConversationDetail key={selectedId} conversationId={selectedId} />
-          ) : (
-            <p className="text-help text-text-secondary">{conversationsCopy.selectPrompt}</p>
+          {showParticipating && (
+            <section aria-labelledby="participating-heading" className="flex flex-col gap-3">
+              <h2 id="participating-heading" className="text-section-title font-semibold text-text-primary">
+                {conversationsCopy.participatingHeading}
+              </h2>
+              {acceptedParticipations.length === 0 ? (
+                <p className="text-text-secondary">{conversationsCopy.participatingEmpty}</p>
+              ) : (
+                <ParticipationList items={acceptedParticipations} />
+              )}
+            </section>
           )}
-        </aside>
+        </div>
       )}
-      </div>
     </div>
   );
-}
-
-/** True from the xl breakpoint (1280 px) up, where the selected conversation sits beside the list. False without matchMedia. */
-export function useWideConversationPane(): boolean {
-  const [wide, setWide] = useState(false);
-  useEffect(() => {
-    const query =
-      typeof window !== "undefined" && typeof window.matchMedia === "function"
-        ? window.matchMedia("(min-width: 1280px)")
-        : null;
-    if (!query) return;
-    const update = () => setWide(query.matches);
-    update();
-    query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
-  }, []);
-  return wide;
 }

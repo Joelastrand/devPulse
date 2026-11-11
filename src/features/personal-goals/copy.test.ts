@@ -24,7 +24,7 @@ function allCopy(): string[] {
 
 describe("goals copy (BR-49, BR-50)", () => {
   it("uses the approved page title", () => {
-    expect(goalsCopy.pageTitle).toBe("Mål");
+    expect(goalsCopy.pageTitle).toBe("Mine mål");
   });
 
   it("states that goals are personal, that teammates and team leads have no access, and discourages sensitive titles", () => {

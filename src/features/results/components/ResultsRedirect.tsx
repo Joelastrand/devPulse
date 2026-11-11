@@ -12,8 +12,8 @@ import { resultsCopy } from "../copy";
  * from (SPEC → Architecture decisions → "No server-side session"), so this
  * resolves auth state client-side and reuses the existing, unchanged
  * TASK-007 "my teams" overview — no new server logic. Exactly one
- * `"member"` relationship (the SPEC's precise "team membership" vocabulary,
- * distinct from `"admin"` — see Key Concepts) redirects to that team's
+ * genuine membership (`isMember`, the SPEC's "team membership" vocabulary, distinct from app-admin
+ * status) redirects to that team's
  * `/teams/[teamId]`; every other state (signed out, zero or more than one
  * membership, an app admin with no plain membership, or a read failure)
  * redirects to the general `/teams` overview.
@@ -38,7 +38,7 @@ export function ResultsRedirect() {
       }
 
       if (result.status === "ok") {
-        const memberships = result.teams.filter((team) => team.relationship === "member");
+        const memberships = result.teams.filter((team) => team.isMember);
         if (memberships.length === 1) {
           router.replace(`/teams/${encodeURIComponent(memberships[0].teamId)}`);
           return;

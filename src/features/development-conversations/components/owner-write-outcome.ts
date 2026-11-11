@@ -26,8 +26,13 @@ export function writeOutcome(result: UpdateConversationResult): WriteOutcome {
       return { kind: "rejected", message: conversationsCopy.writeInvalid };
     case "invalid_goal_selection":
       return { kind: "rejected", message: conversationsCopy.goalSelectionInvalid };
+    case "invalid_evidence_selection":
+      return { kind: "rejected", message: conversationsCopy.evidenceSelectionInvalid };
     case "conversation_completed":
       return { kind: "reread", message: conversationsCopy.writeCompleted };
+    // E-1: another change landed since the owner's read. Nothing was written; the owner re-reads and chooses again.
+    case "conversation_changed":
+      return { kind: "reread", message: conversationsCopy.writeChanged };
     case "conversation_not_found":
       return { kind: "reread", message: conversationsCopy.writeNotFound };
     // A refused selection is neutral, and the owner's team list is read again with the conversation (TASK-029).

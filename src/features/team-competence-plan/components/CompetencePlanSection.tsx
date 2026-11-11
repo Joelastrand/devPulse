@@ -1,39 +1,52 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { Alert } from "../../../components/ui/Alert";
 import { Badge } from "../../../components/ui/Badge";
+import { Icon } from "../../../components/ui/Icon";
 import { Button } from "../../../components/ui/Button";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { LoadingState } from "../../../components/ui/LoadingState";
 import { Select } from "../../../components/ui/Select";
 import { SELF_ASSESSED_LEVEL_COPY } from "../../skill-profiles/copy";
-import { PLAN_CARD_STATUS_LABEL, PRIORITY_LABEL, MILESTONE_STATUS_LABEL, competencePlanCopy } from "../copy";
-import { planProgress, type MilestoneStatus } from "../domain/competence-plan";
-import { formatPlanDate, planCardStatus } from "../domain/plan-presentation";
+import { PLAN_CARD_STATUS_LABEL, PRIORITY_LABEL, competencePlanCopy } from "../copy";
+import { planProgress, type PlanMilestone } from "../domain/competence-plan";
+import { planCardStatus } from "../domain/plan-presentation";
 import { useCompetencePlans } from "../client/use-competence-plans";
 import type { ClientCompetenceArea, ClientCompetencePlan, CompetencePlanInput, CompetencePlanWriteResult } from "../client/competence-plan-gateway";
 import { CompetencePlanEditor } from "./CompetencePlanEditor";
 import { CompetencePlanOverview } from "./CompetencePlanOverview";
-import { roadmapCopy } from "../../roadmap/copy";
-import type { RoadmapItemView } from "../../roadmap/server/list-roadmap-items";
-
-/** Checklist glyph per milestone status. The status is also spelled out in text (screen-reader and badge), never colour alone. */
-const CHECKLIST_GLYPH: Readonly<Record<MilestoneStatus, string>> = { planned: "", in_progress: "◐", completed: "✓" };
+import { PlanMilestoneChecklist } from "./PlanMilestoneChecklist";
+import { AREA_TONE_CLASSES, areaVisualFor } from "../domain/area-visual";
 
 export interface CompetencePlanSectionProps {
   teamId: string;
+  /** Area to preselect in the creation form, from Teamkompetanse ("Opprett kompetanseplan"). Ignored unless it is unplanned. */
+  initialAreaTreeId?: string | null;
 }
 
+const todayUtc = (): string => new Date().toISOString().slice(0, 10);
+
 /**
- * Team Kompetanseplan (TASK-006, BR-15–BR-17). Members see plans read-only; a lead can create, edit and archive plans.
- * Progress is the count of completed milestones only. No member assessment is read or shown.
+ * Team Kompetanseplan (TASK-006, BR-15–BR-17). Shows development plans and their steps. Members see everything
+ * read-only; a lead can create, edit and archive plans and complete or reopen steps. Progress is the count of completed
+ * steps only. No member assessment is read or shown. Team competence needs and coverage live on Teamkompetanse, and
+ * roadmap competence steps are managed in Roadmap; both are linked, not repeated here.
  */
-export function CompetencePlanSection({ teamId }: CompetencePlanSectionProps) {
-  const { data, save, reload } = useCompetencePlans(teamId);
+export function CompetencePlanSection({ teamId, initialAreaTreeId = null }: CompetencePlanSectionProps) {
+  const { data, save, saveMilestoneCompletion, reload } = useCompetencePlans(teamId);
   const [openTree, setOpenTree] = useState<string | null>(null);
-  const [editing, setEditing] = useState<string | "new" | null>(null);
-  const [newTreeId, setNewTreeId] = useState("");
+  // A preselected area opens the same creation form as "Ny kompetanseplan", with that area chosen. NewPlan ignores it
+  // when the area is not an unplanned, assigned area.
+  const [editing, setEditing] = useState<string | "new" | null>(initialAreaTreeId ? "new" : null);
+  const [newTreeId, setNewTreeId] = useState(initialAreaTreeId ?? "");
+  const [today] = useState<string>(todayUtc);
+  // One milestone save at a time, page-wide. The ref closes the window before React re-renders with the pending state.
+  const [pending, setPending] = useState<{ treeId: string; milestoneId: string } | null>(null);
+  const [saveResult, setSaveResult] = useState<{ treeId: string; outcome: "saved" | "failed" } | null>(null);
+  const inFlight = useRef(false);
 
   if (data.phase === "loading") {
     return <LoadingState label={competencePlanCopy.loading} />;
@@ -59,71 +72,111 @@ export function CompetencePlanSection({ teamId }: CompetencePlanSectionProps) {
   const plannedTreeIds = new Set(data.plans.map((plan) => plan.treeId));
   const candidateAreas = data.areas.filter((area) => !plannedTreeIds.has(area.treeId));
   const visiblePlans = [...data.plans].sort((a, b) => (areaName(a.treeId) ?? "").localeCompare(areaName(b.treeId) ?? "", "nb"));
+  const base = `/teams/${encodeURIComponent(teamId)}`;
 
   async function handleSave(treeId: string, input: CompetencePlanInput): Promise<CompetencePlanWriteResult> {
     return save(treeId, input);
   }
 
+  async function toggleMilestone(treeId: string, milestone: PlanMilestone) {
+    if (inFlight.current || data.phase !== "loaded") return;
+    inFlight.current = true;
+    setPending({ treeId, milestoneId: milestone.id });
+    setSaveResult(null);
+    const outcome = await saveMilestoneCompletion(treeId, milestone.id, milestone.status !== "completed");
+    inFlight.current = false;
+    setPending(null);
+    // The card and the overview both derive from the saved plan, so they update only on a confirmed write.
+    setSaveResult({ treeId, outcome: outcome.status === "ok" ? "saved" : "failed" });
+  }
+
+  function openPlan(treeId: string) {
+    setOpenTree(treeId);
+    const card = document.getElementById(`plan-card-${treeId}`);
+    card?.scrollIntoView?.({ block: "start", behavior: "smooth" });
+  }
+
   return (
-    <section aria-labelledby="competence-plan-heading" className="flex flex-col gap-5">
-      <div className="flex flex-col gap-1">
+    <section aria-labelledby="competence-plan-heading" className="flex flex-col gap-8">
+      <div className="flex flex-col gap-2">
         <h2 id="competence-plan-heading" className="text-lg font-semibold text-text-primary">
           {competencePlanCopy.heading}
         </h2>
         <p className="text-sm text-text-secondary">{competencePlanCopy.intro}</p>
         {data.canEdit ? null : <p className="text-sm text-text-secondary">{competencePlanCopy.readOnlyNotice}</p>}
+        <nav aria-label={competencePlanCopy.heading} className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
+          <span className="text-text-secondary">{competencePlanCopy.teamkompetanseLinkHint}</span>
+          <Link href={`${base}/competence`} className="font-medium text-primary underline underline-offset-2 hover:text-text-primary">
+            {competencePlanCopy.teamkompetanseLink}
+          </Link>
+          <Link href={`${base}/roadmap`} className="font-medium text-primary underline underline-offset-2 hover:text-text-primary">
+            {competencePlanCopy.roadmapLink}
+          </Link>
+        </nav>
       </div>
 
       {data.truncated ? <Alert variant="info">{competencePlanCopy.truncated}</Alert> : null}
 
-      {data.plans.length > 0 ? <CompetencePlanOverview plans={data.plans} nameOf={areaName} /> : null}
+      {data.plans.length > 0 ? <CompetencePlanOverview plans={data.plans} nameOf={areaName} today={today} onOpenPlan={openPlan} /> : null}
 
-      {visiblePlans.length === 0 ? (
-        <EmptyState>
-          <span className="block font-medium text-text-primary">{competencePlanCopy.emptyTitle}</span>
-          {data.canEdit ? competencePlanCopy.emptyHint : null}
-        </EmptyState>
-      ) : (
-        <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3">
         <h3 className="text-base font-semibold text-text-primary">{competencePlanCopy.details}</h3>
-        <ul className="flex flex-col gap-3" aria-label={competencePlanCopy.details}>
-          {visiblePlans.map((plan) => {
-            const name = areaName(plan.treeId);
-            const expanded = openTree === plan.treeId;
-            const isEditing = editing === plan.treeId;
-            return (
-              <li key={plan.treeId} className="rounded-field border border-border-subtle bg-surface p-4">
-                {isEditing ? (
-                  <CompetencePlanEditor
-                    idPrefix={`plan-${plan.treeId}`}
-                    areaName={name ?? plan.treeId}
-                    initial={plan}
-                    onSave={(input) => handleSave(plan.treeId, input)}
-                    onCancel={() => setEditing(null)}
-                    onSaved={() => setEditing(null)}
-                  />
-                ) : (
-                  <PlanSummary
-                    plan={plan}
-                    areaName={name}
-                    expanded={expanded}
-                    canEdit={data.canEdit}
-                    onToggle={() => setOpenTree(expanded ? null : plan.treeId)}
-                    onEdit={() => setEditing(plan.treeId)}
-                  />
-                )}
-              </li>
-            );
-          })}
-        </ul>
-        </div>
-      )}
-
-      <LegacyItems items={data.legacyItems} failed={data.legacyFailed} />
+        {visiblePlans.length === 0 ? (
+          <EmptyState>
+            <span className="block font-medium text-text-primary">{competencePlanCopy.emptyTitle}</span>
+            {data.canEdit ? competencePlanCopy.emptyHint : null}
+          </EmptyState>
+        ) : (
+          <ul className="flex flex-col gap-3" aria-label={competencePlanCopy.details}>
+            {visiblePlans.map((plan) => {
+              const name = areaName(plan.treeId);
+              const expanded = openTree === plan.treeId;
+              const isEditing = editing === plan.treeId;
+              const planPending = pending?.treeId === plan.treeId ? pending.milestoneId : null;
+              return (
+                <li key={plan.treeId} id={`plan-card-${plan.treeId}`} className="scroll-mt-6 rounded-surface border border-border-subtle bg-surface p-4">
+                  {isEditing ? (
+                    <CompetencePlanEditor
+                      idPrefix={`plan-${plan.treeId}`}
+                      areaName={name ?? plan.treeId}
+                      initial={plan}
+                      onSave={(input) => handleSave(plan.treeId, input)}
+                      onCancel={() => setEditing(null)}
+                      onSaved={() => setEditing(null)}
+                    />
+                  ) : (
+                    <PlanCard
+                      plan={plan}
+                      areaName={name}
+                      today={today}
+                      expanded={expanded}
+                      canEdit={data.canEdit}
+                      onToggle={() => setOpenTree(expanded ? null : plan.treeId)}
+                      onEdit={() => setEditing(plan.treeId)}
+                      checklist={{
+                        pendingMilestoneId: planPending,
+                        busy: pending !== null,
+                        saveFailed: saveResult?.treeId === plan.treeId && saveResult.outcome === "failed",
+                        onToggle: (milestone) => void toggleMilestone(plan.treeId, milestone),
+                      }}
+                    />
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {saveResult?.outcome === "saved" ? (
+          <p role="status" className="text-sm text-text-secondary">
+            {competencePlanCopy.milestoneSaved}
+          </p>
+        ) : null}
+      </div>
 
       {data.canEdit ? (
         <NewPlan
           areas={candidateAreas}
+          assignHref={`${base}/competence`}
           open={editing === "new"}
           treeId={newTreeId}
           onOpen={() => setEditing("new")}
@@ -140,47 +193,60 @@ export function CompetencePlanSection({ teamId }: CompetencePlanSectionProps) {
   );
 }
 
-function PlanSummary({
+interface PlanChecklistProps {
+  pendingMilestoneId: string | null;
+  busy: boolean;
+  saveFailed: boolean;
+  onToggle: (milestone: PlanMilestone) => void;
+}
+
+/** One competence plan's card: the area, its status and progress, and (expanded) the milestone checklist. */
+function PlanCard({
   plan,
   areaName,
+  today,
   expanded,
   canEdit,
   onToggle,
   onEdit,
+  checklist,
 }: {
   plan: ClientCompetencePlan;
   areaName: string | null;
+  today: string;
   expanded: boolean;
   canEdit: boolean;
   onToggle: () => void;
   onEdit: () => void;
+  checklist: PlanChecklistProps;
 }) {
   const progress = planProgress(plan.milestones);
-  const percent = progress.total === 0 ? 0 : Math.round((progress.completed / progress.total) * 100);
+  const percent = progress.total === 0 ? 0 : (progress.completed / progress.total) * 100;
   const title = areaName ?? competencePlanCopy.areaUnavailable;
+  const visual = areaVisualFor(areaName, plan.treeId);
+  const tone = AREA_TONE_CLASSES[visual.tone];
   const progressText = progress.total === 0 ? competencePlanCopy.progressNone : competencePlanCopy.progress(progress.completed, progress.total);
+  const controlsId = `plan-milestones-${plan.treeId}`;
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="flex flex-col gap-1">
-          <h3 className="text-base font-semibold text-text-primary">{title}</h3>
-          <div className="flex flex-wrap gap-2">
+      <div className="flex items-start gap-3">
+        <span aria-hidden="true" className={"flex size-9 shrink-0 items-center justify-center rounded-field " + tone.subtle}>
+          <Icon icon={visual.icon} size="inline" className={tone.text} />
+        </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-base font-semibold text-text-primary">{title}</h3>
+            <Badge>{PLAN_CARD_STATUS_LABEL[planCardStatus(plan.milestones)]}</Badge>
             <Badge>{`${competencePlanCopy.priorityLabel}: ${PRIORITY_LABEL[plan.priority]}`}</Badge>
-            <Badge>{`${competencePlanCopy.targetStageLabel}: ${SELF_ASSESSED_LEVEL_COPY[plan.targetStage].name}`}</Badge>
-            <Badge>{`${competencePlanCopy.cardStatusHeading}: ${PLAN_CARD_STATUS_LABEL[planCardStatus(plan.milestones)]}`}</Badge>
             {plan.archived ? <Badge>{competencePlanCopy.archivedNotice}</Badge> : null}
           </div>
+          <p className="text-sm text-text-secondary">{competencePlanCopy.goalDescription(SELF_ASSESSED_LEVEL_COPY[plan.targetStage].name)}</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="tertiary" size="sm" aria-expanded={expanded} aria-controls={expanded ? `plan-milestones-${plan.treeId}` : undefined} onClick={onToggle}>
-            {expanded ? competencePlanCopy.hideDetails : competencePlanCopy.showDetails}
+        {canEdit ? (
+          <Button variant="secondary" size="sm" onClick={onEdit} aria-label={`${competencePlanCopy.edit}: ${title}`} className="shrink-0">
+            {competencePlanCopy.edit}
           </Button>
-          {canEdit ? (
-            <Button variant="secondary" size="sm" onClick={onEdit} aria-label={`${competencePlanCopy.edit}: ${title}`}>
-              {competencePlanCopy.edit}
-            </Button>
-          ) : null}
-        </div>
+        ) : null}
       </div>
 
       <div className="flex items-center gap-3">
@@ -191,74 +257,50 @@ function PlanSummary({
           aria-valuemax={progress.total}
           aria-valuenow={progress.completed}
           aria-valuetext={progressText}
-          className="h-2 flex-1 overflow-hidden rounded-full bg-surface-subtle"
+          className="h-2 flex-1 overflow-hidden rounded-full bg-border-strong/40"
         >
-          <div className="h-full bg-primary" style={{ width: `${percent}%` }} />
+          <div className={"h-full rounded-full motion-safe:transition-[width] motion-safe:duration-progress " + tone.fill} style={{ width: `${percent}%` }} />
         </div>
         <span className="whitespace-nowrap text-sm text-text-secondary">{progressText}</span>
+        <Button
+          variant="tertiary"
+          size="sm"
+          aria-expanded={expanded}
+          aria-controls={controlsId}
+          aria-label={`${expanded ? competencePlanCopy.hideDetails : competencePlanCopy.showDetails}: ${title}`}
+          onClick={onToggle}
+          className="shrink-0"
+        >
+          <Icon icon={ChevronDown} size="inline" className={"transition-transform motion-reduce:transition-none " + (expanded ? "rotate-180" : "")} />
+          <span aria-hidden="true" className="hidden sm:inline">{expanded ? competencePlanCopy.hideDetails : competencePlanCopy.showDetails}</span>
+        </Button>
       </div>
 
       {expanded ? (
-        plan.milestones.length === 0 ? (
-          <p id={`plan-milestones-${plan.treeId}`} className="text-sm text-text-secondary">{competencePlanCopy.milestonesEmpty}</p>
-        ) : (
-          <div id={`plan-milestones-${plan.treeId}`} className="flex flex-col gap-2">
-            <h4 className="text-sm font-semibold text-text-primary">{competencePlanCopy.checklistHeading}</h4>
-            <ul aria-label={competencePlanCopy.checklistHeading} className="flex flex-col gap-2">
-              {plan.milestones.map((milestone) => (
-                <li key={milestone.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                  <span className="flex min-w-0 items-center gap-2">
-                    <span aria-hidden="true" className={"flex size-5 shrink-0 items-center justify-center rounded-full border text-xs font-semibold " + (milestone.status === "completed" ? "border-success-text bg-success-text text-surface" : "border-border-strong text-text-secondary")}>
-                      {CHECKLIST_GLYPH[milestone.status]}
-                    </span>
-                    <span className="text-text-primary">{milestone.title}</span>
-                    <span className="sr-only">{`(${MILESTONE_STATUS_LABEL[milestone.status]})`}</span>
-                  </span>
-                  <span className="flex gap-2 text-text-secondary">
-                    {formatPlanDate(milestone.targetDate) ? <span>{formatPlanDate(milestone.targetDate)}</span> : null}
-                    <Badge>{MILESTONE_STATUS_LABEL[milestone.status]}</Badge>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )
+        <div id={controlsId}>
+          <PlanMilestoneChecklist
+            areaName={title}
+            milestones={plan.milestones}
+            today={today}
+            canEdit={canEdit}
+            pendingMilestoneId={checklist.pendingMilestoneId}
+            busy={checklist.busy}
+            saveFailed={checklist.saveFailed}
+            onToggle={checklist.onToggle}
+          />
+        </div>
       ) : null}
     </div>
   );
 }
 
-/** Existing roadmap competence-stage records (BR-17): read-only, shown as recorded. */
-function LegacyItems({ items, failed }: { items: RoadmapItemView[]; failed: boolean }) {
-  return (
-    <section aria-labelledby="legacy-competence-heading" className="flex flex-col gap-2">
-      <h3 id="legacy-competence-heading" className="text-base font-semibold text-text-primary">
-        {competencePlanCopy.legacyHeading}
-      </h3>
-      <p className="text-sm text-text-secondary">{competencePlanCopy.legacyHint}</p>
-      {failed ? (
-        <Alert variant="error" role="alert">{competencePlanCopy.legacyFailed}</Alert>
-      ) : items.length === 0 ? (
-        <p className="text-sm text-text-secondary">{competencePlanCopy.legacyEmpty}</p>
-      ) : (
-        <ul className="flex flex-col gap-2">
-          {items.map((item) => (
-            <li key={item.treeId + item.targetNodeId} className="flex flex-wrap items-center justify-between gap-2 rounded-field border border-border-subtle p-3 text-sm">
-              <span className="text-text-primary">{item.areaName ?? competencePlanCopy.areaUnavailable}</span>
-              <span className="flex flex-wrap gap-2 text-text-secondary">
-                {item.targetLabel ? <span>{item.targetLabel}</span> : null}
-                <Badge>{roadmapCopy.status[item.status]}</Badge>
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
+/**
+ * The single plan-creation entry point and form. Teamkompetanse links here with the area preselected, so both entry
+ * points share this form, its validation and the same save path.
+ */
 function NewPlan({
   areas,
+  assignHref,
   open,
   treeId,
   onOpen,
@@ -268,6 +310,7 @@ function NewPlan({
   onSaved,
 }: {
   areas: ClientCompetenceArea[];
+  assignHref: string;
   open: boolean;
   treeId: string;
   onOpen: () => void;
@@ -277,7 +320,16 @@ function NewPlan({
   onSaved: () => void;
 }) {
   if (areas.length === 0) {
-    return <p className="text-sm text-text-secondary">{competencePlanCopy.noAreasAvailable}</p>;
+    return (
+      <div className="flex flex-col gap-2 rounded-field border border-border-subtle bg-surface p-4">
+        <p className="text-sm text-text-secondary">{competencePlanCopy.noAreasAvailable}</p>
+        <div>
+          <Link href={assignHref} className="text-sm font-medium text-primary underline underline-offset-2 hover:text-text-primary">
+            {competencePlanCopy.assignAreasLink}
+          </Link>
+        </div>
+      </div>
+    );
   }
   if (!open) {
     return (

@@ -35,7 +35,9 @@ function buildAppOptions() {
     return { credential: cert({ projectId, clientEmail, privateKey }) };
   }
 
-  return { credential: applicationDefault() };
+  // No cert credentials (local emulator or platform default credentials): still pass the configured project id,
+  // so the SDK does not depend on a Google project being detected from the environment.
+  return { projectId: projectId || undefined, credential: applicationDefault() };
 }
 
 export function getFirestoreDb(): Firestore {

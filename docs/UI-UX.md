@@ -567,7 +567,10 @@ As-built. Terminology: the personal surface says *Ferdigheter*; the team surface
 - **Filters and overview.** Local, non-persisted filters *Alle · Vurdert · Ikke vurdert*
   (no request). The overview is text counts only ("Du har vurdert N av M ferdigheter." plus
   per-level counts) over the visible skills. There is no chart, radar, percentage, average,
-  overall score or comparison.
+  overall score or comparison in the editing list. *Amended 2026-11-10 (C1 SPEC dated pointer):* the
+  Oversikt view of `/me/skills` may show one personal radar of the person's own levels (and the owner's
+  own target-role expectations as a second series when complete); it is the only permitted chart there,
+  and it never shows team, aggregate or other-person data.
 - **Unreadable recovery.** If the stored profile cannot be read, the page shows skill
   names only plus a notice. Assessment controls are unavailable while the profile is
   unreadable, and assessment values are never interpreted or shown. (Names only, rather
@@ -671,7 +674,7 @@ or placeholder entry and no `/me` index exist; `/me/skills` behaviour is unchang
 - **Privacy copy.** A persistent notice says goals are personal, that teammates and team leads get no
   access through DevPulse, and that sensitive or confidential information should not be written in a
   title. It never claims encryption, anonymity or that operators cannot access data.
-- **Forbidden UI.** No chart, percentage, score, ranking, overdue wording or styling, performance
+- **Forbidden UI.** No chart (except the approved personal radar on `/me/skills`, C1 SPEC 2026-11-10), percentage, score, ranking, overdue wording or styling, performance
   language, lead/admin view or *Samtaler* placeholder; a copy test enforces a forbidden-term list.
 - **Accessibility.** Native, keyboard-operable controls; visible labels; no meaning by colour alone;
   existing `PageShell`/`Card`/`Button`/`TextField`/`Select`/`Alert`/`EmptyState`/`LoadingState` primitives.
@@ -688,6 +691,8 @@ participant selector shows only what the owner-only read offers, states when the
 shows a uid, e-mail or member reference. No score, rating, progress, read receipt or last-viewed state appears.
 Controls are native and keyboard-operable with visible labels. Copy and forbidden-term checks are in the D2
 test suite (TASK-033).
+
+**Evidence selection (Amendment 2026-11-11, TASK-008 UI).** The owner section has three areas: the currently shared snapshots (kind, title, relation and period, no ids), a separate list of the owner's own records to choose from (kind and title only, limits 5 + 5 with a per-type notice), and a preview of the selection. Nothing is preselected: a shared snapshot cannot be linked to a record, so titles are never used to match them. Saving replaces the whole shared set. When that set is not empty, a replacement or clear first shows an inline confirmation that states how many shared items will be removed; nothing is sent until the owner confirms or cancels. If the conversation changed since the owner read it, the owner sees "Samtalen er endret siden du åpnet den, så ingenting ble lagret" and the page is read again. The participant view shows evidence as read-only copies, with no source link or id.
 
 ## Results UX
 
@@ -957,3 +962,13 @@ third-party or competitor artwork and no external resource. They are React SVG c
 token colours only. Each is `aria-hidden`, and none contains text. Origin: DevPulse, licence:
 the repository's own licence. Used only in: goals with no goals yet (`GoalsPage`), conversations
 with none yet (`ConversationsPage`) and survey completion (`SurveyResponseForm`).
+
+
+## Personal role workspace (`/me/skills?vy=rolle`, label "Min rolle og mine bidrag")
+
+- The route id `rolle` is kept for compatibility; only the tab label changed.
+- The workspace states that no formal role is assigned, and explains that the target role is the employee’s own choice, never an assigned role.
+- Responsibilities: list (active first), status filter (Alle / Aktive / Fullførte), create, edit, complete/reopen, delete with confirmation. Recovery items are delete-only.
+- Achievements: chronological list, relation and period filters, linked responsibility and goal names, and the BR-22 marker `Koblet element er ikke lenger tilgjengelig` when a link no longer resolves. The list never fails because of a missing link.
+- Relationship labels use the self-reported copy: Innenfor rollen, Utover rollen, Ikke angitt.
+- Every state is explicit: loading, signed out, error with retry, empty, filtered-empty, and success notices.

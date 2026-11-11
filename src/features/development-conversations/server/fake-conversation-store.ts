@@ -63,6 +63,9 @@ export function emptyTeamFixtures(): FakeTeamEligibilityState {
 
 const keyOf = (segments: readonly string[]) => segments.join("/");
 
+/** Attempts before a transaction that keeps losing to concurrent commits gives up, as Firestore's retry limit does. */
+const MAX_FAKE_TRANSACTION_ATTEMPTS = 5;
+
 /** Copies a record shallowly, copying each `Date` so later mutation of the caller's value cannot reach stored state. */
 function copyRecord(record: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(record).map(([key, value]) => [key, value instanceof Date ? new Date(value) : value]));
@@ -203,12 +206,19 @@ export function createFakeConversationStore(
     async runTransaction(work) {
       // Each attempt runs `work` against a fresh draft. The draft is committed only when `work` resolves and no
       // scheduled conflict discards it, as a Firestore transaction does. A discarded attempt is re-run from the start.
+      // Firestore also re-runs an attempt whose read document was changed by another commit before this one commits.
+      // The check compares the stored object each read saw; writes always replace the object, so identity is the version.
       for (let attempt = 1; ; attempt += 1) {
         const draft: Records = new Map(records);
-        const result = await work(transactionOver(draft));
+        const reads = new Map<string, unknown>();
+        const result = await work(transactionOver(draft, reads));
         if (conflictsLeft > 0) {
           conflictsLeft -= 1;
           await beforeRetryHook?.(attempt);
+          continue;
+        }
+        if ([...reads].some(([key, seen]) => records.get(key) !== seen)) {
+          if (attempt >= MAX_FAKE_TRANSACTION_ATTEMPTS) throw new Error("transaction contention");
           continue;
         }
         records = draft;
@@ -248,14 +258,20 @@ export function createFakeConversationStore(
   };
 
   /** One attempt's transaction over `draft`. Reads must precede writes, as in Firestore. */
-  function transactionOver(draft: Records): ConversationTransaction {
+  function transactionOver(draft: Records, reads: Map<string, unknown>): ConversationTransaction {
     let wrote = false;
     const readAfterWrite = () => new Error("reads must precede writes in a transaction");
+    /** Remembers the stored object a read saw, so the commit can detect a concurrent change to that document. */
+    const seen = (key: string) => {
+      if (!reads.has(key)) reads.set(key, draft.get(key));
+    };
     return {
       teamEligibility: createFakeTeamEligibilityReader(teams),
       async getOwner(ownerUid, conversationId) {
         if (wrote) throw readAfterWrite();
-        const stored = draft.get(keyOf(ownerDocumentPath(ownerUid, conversationId)));
+        const key = keyOf(ownerDocumentPath(ownerUid, conversationId));
+        seen(key);
+        const stored = draft.get(key);
         return stored === undefined ? undefined : copyRecord(stored);
       },
       createOwner(ownerUid, conversationId, doc: OwnerDocumentWrite) {
@@ -281,7 +297,9 @@ export function createFakeConversationStore(
       },
       async getParticipation(callerUid, conversationId) {
         if (wrote) throw readAfterWrite();
-        const stored = draft.get(keyOf(participationDocumentPath(callerUid, conversationId)));
+        const key = keyOf(participationDocumentPath(callerUid, conversationId));
+        seen(key);
+        const stored = draft.get(key);
         return stored === undefined ? undefined : copyRecord(stored);
       },
       touchMembership() {

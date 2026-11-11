@@ -1247,3 +1247,17 @@ collection.
   paths) and A-14 per membership (deferred, like A-5). The actor-audit target list grows by five closed entries.
 - **Known limitation, unchanged by this decision.** A team with more than 501 memberships can have a valid knowledge ref outside the
   read slice. See `docs/features/team-system-overview/SPEC.md`, "Known limitations".
+
+## Decision log: personal role workspace inventory, I-17 and I-18 (approved 2026-11-10, first increment)
+
+Source: `docs/features/personal-role-workspace/SECURITY-REVIEW.md` §11.3 and `docs/SECURITY.md` (PR-SI-1, PR-SI-5, PR-SI-7).
+
+- **I-17** `userDevelopment/{uid}/responsibilities/*` (owner subtree, DELETE, paged). **I-18** `userDevelopment/{uid}/achievements/*`
+  (owner subtree, DELETE, paged). Both run in the `personal_data` step, after the goal subtree. They are path-only deletions: no
+  decryption and no `ENCRYPTION_KEY`, so a key failure cannot block or change them.
+- Identifiers: the earlier draft proposed I-16 and I-17. I-16 is already the superadmin registry row, so the personal records use I-17
+  and I-18. The W-rows for the write fence are W-19 to W-21 (personal responsibilities, achievements and evidence selection).
+- Evidence snapshots are covered by the existing I-5 row (they live in the owner conversation document). No new row. The I-7
+  re-encryption must preserve `sharedEvidence` byte-for-byte and fail closed on a key error. This is a required test for the evidence
+  step, which is not yet implemented.
+- Not covered by this log, and blocked: `roleAssignments/{uid}`, its history, and the `assignedBy` actor row. See §11.3 of the packet.

@@ -1,6 +1,7 @@
 import "server-only";
 import { isConversationId } from "../domain/conversation-id";
 import type { ConversationStatus } from "../domain/conversation-status";
+import type { SharedEvidenceSnapshot } from "../domain/shared-evidence-snapshot";
 import type { StoredConversation } from "../domain/stored-owner-conversation";
 import { resolveAreaNames, type SkillTreeNameReader } from "./area-names";
 import {
@@ -44,6 +45,8 @@ export interface OwnerConversationDto {
   nextSteps: string[];
   participantNotes: string;
   sharedGoals: OwnerSharedGoalDto[];
+  /** Owner-selected evidence snapshots (SPEC BR-43). Stored copies only: no source id or link. */
+  sharedEvidence: SharedEvidenceSnapshot[];
   createdAt: Date;
   updatedAt: Date;
   completedAt: Date | null;
@@ -109,6 +112,7 @@ export async function readOwnerConversation(
           status: goal.status,
           capturedAt: goal.capturedAt,
         })),
+        sharedEvidence: record.content.sharedEvidence,
         createdAt: record.createdAt,
         updatedAt: record.updatedAt,
         completedAt: record.completedAt,

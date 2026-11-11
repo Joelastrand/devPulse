@@ -57,6 +57,7 @@ const CONVERSATIONS: Array<{ id: string; plannedFor: string; status: "open" | "c
       nextSteps: ["Velge pilottjeneste", "Booke workshop med teamet bak Kontroll"],
       participantNotes: "",
       sharedGoals: [],
+      sharedEvidence: [],
     },
   },
   {
@@ -72,6 +73,7 @@ const CONVERSATIONS: Array<{ id: string; plannedFor: string; status: "open" | "c
       nextSteps: ["Skrive runbook for varslingskø", "Sette opp alarm for kølengde"],
       participantNotes: "",
       sharedGoals: [],
+      sharedEvidence: [],
     },
   },
   {
@@ -86,6 +88,7 @@ const CONVERSATIONS: Array<{ id: string; plannedFor: string; status: "open" | "c
       nextSteps: ["Gå gjennom logg-standarden", "Velge en mentee i teamet"],
       participantNotes: "",
       sharedGoals: [],
+      sharedEvidence: [],
     },
   },
 ];

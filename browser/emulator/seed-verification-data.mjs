@@ -177,4 +177,10 @@ for (const [treeId, level] of Object.entries(collaborativeLevels)) {
   await db.collection("teamCollaborativeLevels").doc(`${TEAM_ID}__${treeId}`).set({ teamId: TEAM_ID, treeId, level, updatedAt: planUpdated });
 }
 
+// Synthetic team skill needs (target level per area, coverage 1). Targets give the overview statuses meets, near and under.
+const needTargets = { "verify-tree-testing": 3, "verify-tree-observability": 3, "verify-tree-systemdesign": 3, "verify-tree-integrations": 3, "verify-tree-delivery": 2, "verify-tree-secure-dev": 2 };
+for (const [treeId, requiredLevel] of Object.entries(needTargets)) {
+  await db.collection("skillNeeds").doc(`${TEAM_ID}__${treeId}`).set({ teamId: TEAM_ID, treeId, requiredLevel, requiredCoverage: 1, createdAt: planUpdated, updatedAt: planUpdated });
+}
+
 console.log(`Seeded synthetic emulator data for ${PROJECT_ID}: ${USERS.length} users, 1 team, ${projects.length} projects, ${participations.length} participations, ${trees.length} skill trees, ${areaTreeIds.length} competence areas, ${plans.length} plans, ${Object.keys(collaborativeLevels).length} collaborative levels.`);

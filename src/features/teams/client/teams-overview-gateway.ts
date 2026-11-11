@@ -19,10 +19,11 @@ function isTeamOverviewEntry(value: unknown): value is TeamOverviewEntry {
   if (typeof value !== "object" || value === null) {
     return false;
   }
-  const { teamId, name, relationship } = value as Record<string, unknown>;
+  const { teamId, name, relationship, isMember } = value as Record<string, unknown>;
   return (
     typeof teamId === "string" &&
     typeof name === "string" &&
+    typeof isMember === "boolean" &&
     typeof relationship === "string" &&
     RELATIONSHIPS.has(relationship)
   );

@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { CalendarDays, ChartPie, GraduationCap, House, Layers3, type LucideIcon } from "lucide-react";
+import { Icon } from "../../../components/ui/Icon";
 import { teamsCopy } from "../copy";
 
 /** Strips a single trailing slash so `/teams/x/` and `/teams/x` compare equal. */
@@ -18,17 +20,17 @@ function normalizePathname(pathname: string | null): string | null {
  * `Oversikt · Roadmap · Kompetanseplan · Teamkompetanse · Systemoversikt`.
  * `aria-current="page"` is set on an exact pathname match only — no prefix
  * matching, so other sub-routes (e.g. the forum thread page) and unknown
- * paths mark nothing.
+ * paths mark nothing. Each tab has a decorative icon; the text label is the accessible name.
  */
 export function TeamRouteNav({ teamId }: { teamId: string }) {
   const pathname = normalizePathname(usePathname());
   const base = `/teams/${encodeURIComponent(teamId)}`;
-  const links = [
-    { href: base, label: teamsCopy.nav.overview },
-    { href: `${base}/roadmap`, label: teamsCopy.nav.roadmap },
-    { href: `${base}/competence-plan`, label: teamsCopy.nav.competencePlan },
-    { href: `${base}/competence`, label: teamsCopy.nav.competence },
-    { href: `${base}/systems`, label: teamsCopy.nav.systems },
+  const links: readonly { href: string; label: string; icon: LucideIcon }[] = [
+    { href: base, label: teamsCopy.nav.overview, icon: House },
+    { href: `${base}/roadmap`, label: teamsCopy.nav.roadmap, icon: CalendarDays },
+    { href: `${base}/competence-plan`, label: teamsCopy.nav.competencePlan, icon: GraduationCap },
+    { href: `${base}/competence`, label: teamsCopy.nav.competence, icon: ChartPie },
+    { href: `${base}/systems`, label: teamsCopy.nav.systems, icon: Layers3 },
   ];
 
   return (
@@ -37,16 +39,18 @@ export function TeamRouteNav({ teamId }: { teamId: string }) {
         {links.map((link) => {
           const current = pathname === link.href;
           return (
-            <li key={link.href}>
+            <li key={link.href} className="shrink-0">
               <Link
                 href={link.href}
                 aria-current={current ? "page" : undefined}
                 className={
-                  current
-                    ? "-mb-px block border-b-2 border-primary px-4 py-3 text-label font-semibold text-text-primary"
-                    : "-mb-px block border-b-2 border-transparent px-4 py-3 text-label font-medium text-text-secondary hover:text-text-primary"
+                  "-mb-px flex items-center gap-2 border-b-2 px-3 py-3 text-label focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary sm:px-4 " +
+                  (current
+                    ? "border-primary font-semibold text-primary"
+                    : "border-transparent font-medium text-text-secondary hover:border-border-strong hover:text-text-primary")
                 }
               >
+                <Icon icon={link.icon} size="action" className="shrink-0" />
                 {link.label}
               </Link>
             </li>

@@ -17,14 +17,11 @@ async function renderPage(searchParams: Record<string, string | string[] | undef
 }
 
 describe("/me/goals page", () => {
-  it("renders the Mål heading, the goals feature component and the shared personal navigation with Mål current", async () => {
+  it("renders the Mål heading and the goals feature component, without a duplicate page-level nav", async () => {
     await renderPage();
-    expect(screen.getByRole("heading", { level: 1, name: "Mål" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1, name: "Mine mål" })).toBeTruthy();
     expect(screen.getByTestId("goals-page")).toBeTruthy();
-    const nav = screen.getByRole("navigation", { name: "Personlig utvikling" });
-    const current = nav.querySelectorAll('a[aria-current="page"]');
-    expect(current).toHaveLength(1);
-    expect(current[0]?.textContent).toBe("Mål");
+    expect(screen.queryByRole("navigation", { name: "Personlig utvikling" })).toBeNull();
   });
 
   it("passes the treeId parameter to the goals component (PG-11)", async () => {

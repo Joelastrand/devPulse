@@ -11,7 +11,7 @@ describe("fetchTeamsOverview", () => {
   it("forwards the id token as a bearer token and returns the parsed result", async () => {
     const expected: TeamsOverviewFetchResult = {
       status: "ok",
-      teams: [{ teamId: "team-1", name: "Team One", relationship: "member" }],
+      teams: [{ teamId: "team-1", name: "Team One", relationship: "member", isMember: true }],
     };
     const gateway: TeamsOverviewGateway = {
       fetchTeamsOverview: vi.fn(async () => expected),
@@ -29,7 +29,7 @@ describe("fetchTeamsOverview default gateway", () => {
     const fetchMock = vi.fn(async () => ({
       json: async () => ({
         status: "ok",
-        teams: [{ teamId: "team-1", name: "Team One", relationship: "none" }],
+        teams: [{ teamId: "team-1", name: "Team One", relationship: "none", isMember: false }],
       }),
     }));
     vi.stubGlobal("fetch", fetchMock);
@@ -41,7 +41,7 @@ describe("fetchTeamsOverview default gateway", () => {
     });
     expect(result).toEqual({
       status: "ok",
-      teams: [{ teamId: "team-1", name: "Team One", relationship: "none" }],
+      teams: [{ teamId: "team-1", name: "Team One", relationship: "none", isMember: false }],
     });
 
     vi.unstubAllGlobals();
@@ -68,7 +68,7 @@ describe("fetchTeamsOverview default gateway", () => {
       vi.fn(async () => ({
         json: async () => ({
           status: "ok",
-          teams: [{ teamId: "team-1", name: "Team One", relationship: "totally_unexpected" }],
+          teams: [{ teamId: "team-1", name: "Team One", relationship: "totally_unexpected", isMember: false }],
         }),
       })),
     );

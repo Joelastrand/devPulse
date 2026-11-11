@@ -36,6 +36,7 @@ function conversation(overrides: Partial<ParticipantConversationWire> = {}): Par
     ownerNotes: "Eierens notat om gjennomgangen",
     nextSteps: ["Les kapittel to"],
     participantNotes: "Mine egne ord",
+    sharedEvidence: [],
     sharedGoals: [
       { goalTitle: "Lær Rust (syntetisk)", areaName: "Programmering", targetDate: "2026-12-01", status: "active", capturedAt: ISO },
       { goalTitle: "Gammelt mål (syntetisk)", areaName: null, targetDate: null, status: "completed", capturedAt: ISO } as SharedGoalWire,
@@ -308,5 +309,38 @@ describe("ParticipantConversation: copy and notices", () => {
   it("uses no forbidden term and no evaluation framing", () => {
     const { container } = renderView();
     expect(container.textContent ?? "").not.toMatch(/score|rating|rangering|vurdering|prestasjon|ytelse|på sporet|avlys|skjult|privat notat/i);
+  });
+});
+
+describe("ParticipantConversation: shared evidence is read-only (SPEC BR-46, BR-47, Amendment C2)", () => {
+  const evidence = {
+    kind: "achievement" as const,
+    title: "Synthetic bidrag",
+    description: "Synthetic beskrivelse",
+    outcome: null,
+    relationToRole: "beyond" as const,
+    period: { start: "2026-01-01", end: null },
+    capturedAt: ISO,
+  };
+
+  it("shows the owner's evidence snapshots as text, with no selector and no source control", () => {
+    renderView({ conversation: conversation({ sharedEvidence: [evidence] }) });
+
+    expect(screen.getByRole("heading", { name: conversationsCopy.evidenceSection })).toBeTruthy();
+    expect(screen.getByText("Synthetic bidrag")).toBeTruthy();
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    expect(screen.queryByRole("button", { name: conversationsCopy.saveEvidence })).toBeNull();
+    expect(screen.queryByRole("button", { name: conversationsCopy.clearEvidence })).toBeNull();
+  });
+
+  it("says that no evidence is shared when the owner has selected none", () => {
+    renderView({ conversation: conversation({ sharedEvidence: [] }) });
+    expect(screen.getByText(conversationsCopy.noSharedEvidence)).toBeTruthy();
+  });
+
+  it("renders no source id, owner id or record link for an evidence snapshot", () => {
+    renderView({ conversation: conversation({ sharedEvidence: [evidence] }) });
+    const text = document.body.textContent ?? "";
+    expect(text).not.toMatch(/resp-|ach-|goalIds|responsibilityIds|ownerUid/);
   });
 });

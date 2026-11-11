@@ -49,6 +49,7 @@ const CONTENT: ConversationContent = {
       capturedAt: new Date("2026-10-01T08:00:00.000Z"),
     },
   ],
+  sharedEvidence: [],
 };
 
 function independentKeyCheck(keyBytes: Buffer): string {

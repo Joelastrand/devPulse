@@ -17,6 +17,7 @@ const observeIdTokenMock = vi.fn();
 const fetchConversationMock = vi.fn();
 const updateConversationMock = vi.fn();
 const fetchOwnGoalsMock = vi.fn();
+const fetchEvidenceSourcesMock = vi.fn();
 const fetchSelectableMembersMock = vi.fn();
 const acceptInvitationMock = vi.fn();
 const endParticipationMock = vi.fn();
@@ -31,6 +32,7 @@ vi.mock("../client/conversations-gateway", () => ({
   updateConversation: updateConversationMock,
   deleteConversation: deleteConversationMock,
   fetchOwnGoals: fetchOwnGoalsMock,
+  fetchEvidenceSources: fetchEvidenceSourcesMock,
   fetchSelectableMembers: fetchSelectableMembersMock,
   acceptInvitation: acceptInvitationMock,
   endParticipation: endParticipationMock,
@@ -54,6 +56,7 @@ function owner(overrides: Partial<OwnerConversationWire> = {}): OwnerConversatio
     nextSteps: ["Les kapittel to"],
     participantNotes: "Deltakerens egne ord",
     sharedGoals: [],
+    sharedEvidence: [],
     createdAt: ISO,
     updatedAt: ISO,
     completedAt: null,
@@ -93,6 +96,8 @@ beforeEach(() => {
   updateConversationMock.mockReset();
   fetchConversationMock.mockReset();
   fetchOwnGoalsMock.mockReset();
+  fetchEvidenceSourcesMock.mockReset();
+  fetchEvidenceSourcesMock.mockResolvedValue({ status: "ok", response: { items: [], truncated: false } });
   fetchOwnGoalsMock.mockResolvedValue({ status: "ok", response: { goals: [], truncated: false } });
   fetchSelectableMembersMock.mockReset();
   fetchSelectableMembersMock.mockResolvedValue({ status: "ok", response: { members: [], truncated: false } });
@@ -177,6 +182,7 @@ function participant(overrides: Partial<ParticipantConversationWire> = {}): Part
     nextSteps: [],
     participantNotes: "",
     sharedGoals: [],
+    sharedEvidence: [],
     createdAt: ISO_NOW,
     updatedAt: ISO_NOW,
     completedAt: null,

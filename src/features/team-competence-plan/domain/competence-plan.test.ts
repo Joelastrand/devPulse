@@ -3,6 +3,7 @@ import {
   competencePlanDocId,
   parseStoredCompetencePlan,
   planProgress,
+  progressFillPercent,
   resolveMilestones,
   validatePlanInput,
   type PlanMilestone,
@@ -163,5 +164,22 @@ describe("resolveMilestones", () => {
       },
     );
     expect(result).toEqual({ ok: false });
+  });
+});
+
+describe("progressFillPercent", () => {
+  it.each([
+    [0, 4, 0],
+    [1, 4, 25],
+    [2, 4, 50],
+    [3, 4, 75],
+    [4, 4, 100],
+    [1, 3, 100 / 3],
+  ])("maps %i of %i completed to %s%%", (completed, total, expected) => {
+    expect(progressFillPercent({ completed, total })).toBeCloseTo(expected, 10);
+  });
+
+  it("is zero when a plan has no milestones, never complete", () => {
+    expect(progressFillPercent({ completed: 0, total: 0 })).toBe(0);
   });
 });

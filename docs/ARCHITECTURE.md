@@ -252,6 +252,11 @@ C1 (`docs/features/individual-skill-self-assessment/SPEC.md`) adds a person-owne
 Development work that stores per-person skill data; team aggregation was added later by C2 (see
 "Team skill needs and privacy-thresholded coverage" below). Boundaries as delivered by C1:
 
+- **Amendment 2026-11-10 (personal radar).** The `/me/skills` Oversikt view renders one personal radar
+  (`components/PersonalRadar.tsx`, the only C1 UI module importing `recharts`) from the signed-in person's own
+  levels and the owner-only role comparison. The page is one server route with four `?vy=` views; the editing list,
+  role section and sharing control are unchanged. No API, field, index, rule or data flow is added, and no team
+  or aggregate data enters the chart. The view/overview logic is pure (`domain/overview-model.ts`, `domain/personal-radar.ts`).
 - **Slice and dependency direction.** `src/features/skill-profiles/` holds `domain/`
   (the 1–4 ordinal scale, record guard, sort and count helpers), `server/` (store
   seam over `skillProfiles/{uid}`, bounded catalog reader, own-profile operations),
@@ -445,9 +450,10 @@ goals. It is independent of C1 and C2 data. Boundaries as delivered:
   `select`-only recovery scan finds malformed documents lacking `createdAt`. A malformed document
   with an addressable id is returned to the owner only as a delete-only `{ goalId }` item with no
   stored content; documents whose id is not addressable cannot be recovered in-product.
-- **Shared personal navigation.** `src/components/nav/PersonalNav` renders `Ferdigheter` (`/me/skills`)
-  and `Mål` (`/me/goals`) on both pages; the header entry `Min utvikling` replaces `Mine ferdigheter`
-  and is active on both routes. `/me/goals` stays a static route; there is no `/me` index.
+- **Personal navigation.** The sidebar (`AppShell`, group `Min utvikling`) is the only navigation between
+  `/me/skills`, `/me/goals` and `/me/conversations`. The former page-level `PersonalNav` links were removed
+  (personal-experience redesign, Phase 1, approved). `/me/skills` keeps its own view navigation
+  (Oversikt, Kompetansekart, Rollesammenligning, Deling med team). There is no `/me` index.
 - **Static privacy guard.** `personal-goals-scope-guard.test.ts` pins the collection-name allow-list,
   importer allow-lists, forbidden imports and concepts, and DTO/persisted key sets. It is change
   detection, **not a security boundary** (same limits as the C1/C2 guards), and no C1/C2 allow-list
@@ -487,8 +493,8 @@ Spec: `docs/features/development-conversations/SPEC.md`. Invariants: `docs/SECUR
 - **D1 interaction.** Snapshot selection reads D1 goals only through `getDefaultGoalStore().get(ownerUid,
   goalId)`. Area names come from the SkillTree catalog. Membership is read only for eligibility. D2 writes no
   goal, `skillProfiles`, `roadmapItems`, `skillProgress`, `userProfiles` or membership document.
-- **Navigation.** `PersonalNav` renders `Ferdigheter · Mål · Samtaler`. The header entry `Min utvikling` is
-  unchanged.
+- **Navigation.** Page-level `PersonalNav` links were removed in the Phase 1 personal-experience redesign;
+  the sidebar provides `Ferdigheter · Mål · Samtaler`. The header entry `Min utvikling` is unchanged.
 - **Known limitations.** See `docs/SECURITY.md` (after invariant 72).
 
 ## Submission and dashboard boundaries (decided, implemented)

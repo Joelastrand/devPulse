@@ -48,6 +48,8 @@ export const ROW_OWNING_STEP: Readonly<Record<string, ErasureStep>> = {
   "I-13": "forum",
   "I-14": "forum",
   "I-16": "personal_data",
+  "I-17": "personal_data",
+  "I-18": "personal_data",
   "A-1": "actor_audit",
   "A-16": "actor_audit",
   "A-2": "actor_audit",

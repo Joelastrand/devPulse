@@ -20,7 +20,6 @@ import {
   type SkillNeedWriteError,
 } from "../client/team-skills-gateway";
 import { needDescription, teamSkillsCopy } from "../copy";
-import { SkillContributionPanel } from "./SkillContributionPanel";
 import { NEED_AREA_FIELD_ID, NEED_LEVEL_FIELD_ID, SkillNeedEditor } from "./SkillNeedEditor";
 
 const HEADING_ID = "team-skill-needs-heading";
@@ -46,8 +45,11 @@ interface Settled {
  * authority: every write is re-authorized by the server. It also hosts the caller's own participation panel
  * (TASK-010), which is independent of need management and of this section's load state. Self-loading like `TeamRosterSection`; remount
  * with a new `key` when the auth generation changes.
+ *
+ * The caller's own participation is NOT shown here. It lives on `/me/skills` under "Deling med team" (TASK-009), so this
+ * team-level section holds only administrative configuration and needs.
  */
-export function TeamSkillNeedsSection({ teamId, token, teamName }: { teamId: string; token: string; teamName?: string }) {
+export function TeamSkillNeedsSection({ teamId, token }: { teamId: string; token: string }) {
   const requestKey = `${teamId}\n${token}`;
   const [attempt, setAttempt] = useState(0);
   const [settled, setSettled] = useState<Settled | null>(null);
@@ -87,7 +89,6 @@ export function TeamSkillNeedsSection({ teamId, token, teamName }: { teamId: str
         {copy.heading}
       </h3>
       <p className="text-zinc-600 dark:text-zinc-400">{copy.intro}</p>
-      <SkillContributionPanel key={`panel:${requestKey}`} teamId={teamId} token={token} teamName={teamName} />
       {current === null ? (
         <LoadingState label={copy.loading} />
       ) : current.status === "ok" ? (

@@ -1,6 +1,4 @@
 "use client";
-import { StatTile } from "../../../components/ui/dashboard/DashboardPrimitives";
-
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
@@ -127,6 +125,46 @@ function mutationMessage(error: GoalMutationError): string {
   }
 }
 
+/** A goal counts as due soon when its target date is today or within this many days (presentation only). */
+const DUE_SOON_DAYS = 30;
+
+/** Today's date as `YYYY-MM-DD` in the local calendar, which is how the target date is shown to the person. */
+function todayIso(): string {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+/**
+ * Whole days from `today` to a `YYYY-MM-DD` target date, or `null` when there is no date. Negative when overdue.
+ * Both dates are calendar dates at UTC midnight, so daylight-saving changes never shift the count.
+ */
+function daysUntil(targetDate: string | null, today: string): number | null {
+  if (targetDate === null) return null;
+  const ms = Date.parse(`${targetDate}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`);
+  return Math.round(ms / 86_400_000);
+}
+
+/**
+ * Returns focus to a row's control after an edit or a cancelled delete. The disclosure remounts closed in that case, so it
+ * is opened first; otherwise the control would be hidden and the focus would be lost.
+ */
+function reopenActionsAndFocus(details: HTMLDetailsElement | null, selector: string) {
+  if (!details) return;
+  details.open = true;
+  details.querySelector<HTMLButtonElement>(selector)?.focus();
+}
+
+/** A labelled count in the summary strip. */
+function SummaryTile({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg border border-border-subtle bg-surface p-3">
+      <dt className="text-help text-text-secondary">{label}</dt>
+      <dd className="text-section-title font-semibold text-text-primary">{value}</dd>
+    </div>
+  );
+}
+
 type OpenForm = { kind: "create" } | { kind: "edit"; goalId: string } | null;
 /** The one open delete confirmation: a valid goal or a recovery item (BR-52, BR-61). */
 type DeleteTarget = { kind: "goal" | "recovery"; goalId: string } | null;
@@ -153,6 +191,12 @@ function ReadyView({ data, token, initialTreeId, onUnauthenticated, onChanged }:
   // Linked skill areas only (BR-19): distinct existing area names, never a computed goal progress.
   const linkedAreas = [...new Set(data.goals.flatMap((goal) => (goal.areaName ? [goal.areaName] : [])))].sort();
   const empty = data.goals.length === 0 && data.recoveryItems.length === 0;
+  const today = todayIso();
+  // Today or later, within the window. Overdue goals are not counted here, so the label stays accurate.
+  const dueSoon = active.filter((goal) => {
+    const days = daysUntil(goal.targetDate, today);
+    return days !== null && days >= 0 && days <= DUE_SOON_DAYS;
+  });
 
   /** Runs one mutation. Resolves to an error message, or `undefined` once the change succeeded and was refetched. */
   async function mutate<E>(
@@ -251,29 +295,32 @@ function ReadyView({ data, token, initialTreeId, onUnauthenticated, onChanged }:
       {data.goals.length > 0 && (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_16rem]">
           <div className="flex min-w-0 flex-col gap-6">
-            {/* Summary strip (visual-redesign BR-19): existing counts only, no progress ring or percentage. */}
-            <div className="grid grid-cols-2 gap-3">
-              <StatTile label={goalsCopy.tabs.active} value={String(active.length)} />
-              <StatTile label={goalsCopy.tabs.completed} value={String(completed.length)} />
-            </div>
-            <div className="flex flex-wrap gap-2">
+            {/* Summary strip: counts and due dates only, no progress ring or percentage. Filters below carry no counts. */}
+            <dl aria-label={goalsCopy.summary.label} className="grid grid-cols-3 gap-3">
+              <SummaryTile label={goalsCopy.summary.active} value={active.length} />
+              <SummaryTile label={goalsCopy.summary.completed} value={completed.length} />
+              <SummaryTile label={goalsCopy.summary.dueSoon} value={dueSoon.length} />
+            </dl>
+            <div role="group" aria-label={goalsCopy.tabs.label} className="flex flex-wrap gap-2">
               {(
                 [
-                  ["active", goalsCopy.tabs.active, active.length],
-                  ["completed", goalsCopy.tabs.completed, completed.length],
-                  ["all", goalsCopy.tabs.all, data.goals.length],
+                  ["active", goalsCopy.tabs.active],
+                  ["completed", goalsCopy.tabs.completed],
+                  ["all", goalsCopy.tabs.all],
                 ] as const
-              ).map(([value, label, count]) => (
+              ).map(([value, label]) => (
                 <button
                   key={value}
                   type="button"
                   aria-pressed={tab === value}
                   onClick={() => setTab(value)}
-                  className={`rounded-full border px-3 py-1 text-sm ${
-                    tab === value ? "border-primary bg-primary-subtle text-text-primary" : "border-border-subtle text-text-secondary"
+                  className={`min-h-9 rounded-full border px-3 py-1 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
+                    tab === value
+                      ? "border-primary bg-primary-subtle font-medium text-text-primary"
+                      : "border-border-subtle text-text-secondary hover:text-text-primary"
                   }`}
                 >
-                  {`${label} (${count})`}
+                  {label}
                 </button>
               ))}
             </div>
@@ -432,25 +479,26 @@ function GoalItem({
   onChangeStatus,
 }: GoalItemProps) {
   const editHeading = useRef<HTMLHeadingElement>(null);
-  const actions = useRef<HTMLDivElement>(null);
+  const actions = useRef<HTMLDetailsElement>(null);
   const wasEditing = useRef(false);
 
   const wasConfirming = useRef(false);
 
   useEffect(() => {
     if (editing) editHeading.current?.focus();
-    else if (wasEditing.current) actions.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    else if (wasEditing.current) reopenActionsAndFocus(actions.current, "button");
     wasEditing.current = editing;
   }, [editing]);
 
   useEffect(() => {
-    if (!confirmingDelete && wasConfirming.current) {
-      actions.current?.querySelector<HTMLButtonElement>("[data-delete-trigger]")?.focus();
-    }
+    if (!confirmingDelete && wasConfirming.current) reopenActionsAndFocus(actions.current, "[data-delete-trigger]");
     wasConfirming.current = confirmingDelete;
   }, [confirmingDelete]);
 
   const pending = lifecycle?.pending === true;
+  // Only an active goal's date is worth a due note; a completed goal's date is history.
+  const days = goal.status === "active" ? daysUntil(goal.targetDate, todayIso()) : null;
+  const dueNote = days !== null && days >= 0 && days <= DUE_SOON_DAYS ? goalsCopy.dueInDays(days) : null;
 
   if (editing) {
     return (
@@ -472,14 +520,17 @@ function GoalItem({
         </span>
         <StatusBadge tone={goal.status === "completed" ? "success" : "neutral"}>{goal.status === "completed" ? goalsCopy.statusCompleted : goalsCopy.statusActive}</StatusBadge>
       </div>
-      {goal.treeId !== null && (
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          {goal.areaAvailable ? `${goalsCopy.areaLabel}: ${goal.areaName}` : goalsCopy.areaUnavailable}
-        </p>
-      )}
-      {goal.targetDate !== null && (
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          {goalsCopy.targetDateLabel}: {goal.targetDate}
+      {(goal.treeId !== null || goal.targetDate !== null) && (
+        <p className="flex flex-wrap gap-x-3 gap-y-1 text-help text-text-secondary">
+          {goal.treeId !== null && (
+            <span>{goal.areaAvailable ? `${goalsCopy.areaLabel}: ${goal.areaName}` : goalsCopy.areaUnavailable}</span>
+          )}
+          {goal.targetDate !== null && (
+            <span>
+              {goalsCopy.targetDateLabel}: {goal.targetDate}
+              {dueNote !== null && ` (${dueNote})`}
+            </span>
+          )}
         </p>
       )}
       {confirmingDelete ? (
@@ -489,7 +540,11 @@ function GoalItem({
           onCancel={onCancelDelete}
         />
       ) : (
-        <div ref={actions} className="mt-2 flex flex-wrap gap-2">
+        <details ref={actions} className="mt-2">
+          <summary className="inline-flex min-h-9 cursor-pointer items-center text-sm font-medium text-text-secondary hover:text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">
+            {goalsCopy.actionsSummary}
+          </summary>
+          <div className="mt-2 flex flex-wrap gap-2">
           <Button variant="secondary" size="sm" aria-label={goalsCopy.editButtonName(goal.title)} onClick={onEdit}>
             {goalsCopy.editButton}
           </Button>
@@ -524,7 +579,8 @@ function GoalItem({
           >
             {goalsCopy.deleteButton}
           </Button>
-        </div>
+          </div>
+        </details>
       )}
       {lifecycle?.pending === false && <Alert variant="error">{lifecycle.error}</Alert>}
     </Card>

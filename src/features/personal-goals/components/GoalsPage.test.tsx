@@ -48,8 +48,9 @@ function response(overrides: Partial<GoalListResponse> = {}): { status: "ok"; re
   };
 }
 
-const active = `${goalsCopy.editButton}${goalsCopy.completeButton}${goalsCopy.deleteButton}`;
-const done = `${goalsCopy.editButton}${goalsCopy.reopenButton}${goalsCopy.deleteButton}`;
+// Each row's secondary actions sit in a disclosure whose summary is part of the row text.
+const active = `${goalsCopy.actionsSummary}${goalsCopy.editButton}${goalsCopy.completeButton}${goalsCopy.deleteButton}`;
+const done = `${goalsCopy.actionsSummary}${goalsCopy.editButton}${goalsCopy.reopenButton}${goalsCopy.deleteButton}`;
 
 function signedInWith(result: unknown) {
   observeIdTokenMock.mockImplementation((callback: (token: string | null) => void) => {
@@ -190,7 +191,10 @@ describe("GoalsPage", () => {
     expect(screen.getByText(goalsCopy.noActiveGoals)).toBeTruthy();
     cleanup();
     await renderReady({ goals: [goal()] });
-    expect(document.querySelector("details")).toBeNull();
+    // Only the row's own actions disclosure exists; there is no completed-goals group.
+    expect(Array.from(document.querySelectorAll("details > summary")).map((summary) => summary.textContent)).toEqual([
+      goalsCopy.actionsSummary,
+    ]);
   });
 
   it("renders titles as inert text", async () => {
@@ -276,18 +280,40 @@ describe("GoalsPage composition (visual-redesign TASK-011)", () => {
     });
     const user = userEvent.setup();
 
-    expect(screen.getByRole("button", { name: `${goalsCopy.tabs.active} (1)` }).getAttribute("aria-pressed")).toBe("false");
-    await user.click(screen.getByRole("button", { name: `${goalsCopy.tabs.completed} (1)` }));
+    // Filters carry no counts; the summary strip is the only place a count appears.
+    expect(screen.getByRole("button", { name: goalsCopy.tabs.active }).getAttribute("aria-pressed")).toBe("false");
+    await user.click(screen.getByRole("button", { name: goalsCopy.tabs.completed }));
+    expect(screen.getByRole("button", { name: goalsCopy.tabs.completed }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByText("Ferdig mål")).toBeTruthy();
     expect(screen.queryByText("Aktivt mål")).toBeNull();
 
-    await user.click(screen.getByRole("button", { name: `${goalsCopy.tabs.active} (1)` }));
+    await user.click(screen.getByRole("button", { name: goalsCopy.tabs.active }));
     expect(screen.getByText("Aktivt mål")).toBeTruthy();
     expect(screen.queryByText("Ferdig mål")).toBeNull();
 
-    await user.click(screen.getByRole("button", { name: `${goalsCopy.tabs.all} (2)` }));
+    await user.click(screen.getByRole("button", { name: goalsCopy.tabs.all }));
     expect(screen.getByText("Aktivt mål")).toBeTruthy();
     expect(screen.getByText(goalsCopy.completedSummary(1))).toBeTruthy();
+  });
+
+  it("counts only active goals due today or within 30 days in the due-soon tile, never overdue, completed or later goals", async () => {
+    const now = new Date();
+    const at = (days: number) => {
+      const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + days);
+      const pad = (value: number) => String(value).padStart(2, "0");
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+    };
+    await renderReady({
+      goals: [
+        goal({ id: "today", title: "I dag", targetDate: at(0) }),
+        goal({ id: "soon", title: "Om tjue dager", targetDate: at(20) }),
+        goal({ id: "later", title: "Om seksti dager", targetDate: at(60) }),
+        goal({ id: "overdue", title: "Forfalt", targetDate: at(-3) }),
+        goal({ id: "done", title: "Ferdig", status: "completed", targetDate: at(5), completedAt: "2026-02-01T00:00:00.000Z" }),
+      ],
+    });
+
+    expect(screen.getByLabelText(goalsCopy.summary.label).textContent).toContain(`${goalsCopy.summary.dueSoon}2`);
   });
 
   it("shows the summary counts as stat tiles, with no progress indicator or percentage", async () => {
@@ -298,8 +324,10 @@ describe("GoalsPage composition (visual-redesign TASK-011)", () => {
       ],
     });
 
-    expect(within(screen.getByRole("region", { name: goalsCopy.tabs.active })).getByText("1")).toBeTruthy();
-    expect(within(screen.getByRole("region", { name: goalsCopy.tabs.completed })).getByText("1")).toBeTruthy();
+    // Label and value pairs, in order: active, completed, and due within 30 days (none here, the goals have no date).
+    expect(screen.getByLabelText(goalsCopy.summary.label).textContent).toBe(
+      `${goalsCopy.summary.active}1${goalsCopy.summary.completed}1${goalsCopy.summary.dueSoon}0`,
+    );
     expect(screen.queryByRole("progressbar")).toBeNull();
     expect(document.body.textContent ?? "").not.toMatch(/\d+\s?%/);
   });

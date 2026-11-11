@@ -139,6 +139,9 @@ const PERSON_OWNED: readonly InventoryRow[] = [
   // control count), never by a bare delete. The erasure adapter for this row is required before cutover (see the
   // superadmin cutover document).
   { id: "I-16", collection: "superadmins", locator: "docIdIsUid", class: "DELETE", fields: [] },
+  // Personal role workspace, first increment (SECURITY-REVIEW §11.3). Owner subtrees; encrypted content; no key needed to delete.
+  { id: "I-17", collection: "userDevelopment/{uid}/responsibilities", locator: "subtree", class: "DELETE", fields: [] },
+  { id: "I-18", collection: "userDevelopment/{uid}/achievements", locator: "subtree", class: "DELETE", fields: [] },
 ];
 
 /** A-rows: actor and audit identities on preserved records (D5). Each field is set to null or to the erased marker. */

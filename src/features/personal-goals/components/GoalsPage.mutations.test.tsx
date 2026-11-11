@@ -366,7 +366,8 @@ describe("GoalsPage complete and reopen", () => {
     const details = screen.getByText(goalsCopy.completedSummary(1)).closest("details") as HTMLElement;
     await userEvent.click(within(details).getByText(goalsCopy.completedSummary(1)));
     await userEvent.click(within(details).getByRole("button", { name: goalsCopy.reopenButtonName("Ferdig") }));
-    await waitFor(() => expect(document.querySelector("details")).toBeNull());
+    // The completed-goals group disappears once the goal is active again; the row's own actions disclosure remains.
+    await waitFor(() => expect(screen.queryByText(goalsCopy.completedSummary(1))).toBeNull());
     expect(updateGoalMock).toHaveBeenCalledWith("a-token", "done-1", { status: "active" });
     expect(screen.getByText(goalsCopy.statusActive)).toBeTruthy();
   });

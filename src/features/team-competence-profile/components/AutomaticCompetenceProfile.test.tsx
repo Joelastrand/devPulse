@@ -52,7 +52,8 @@ describe("AutomaticCompetenceProfile", () => {
       { axis: "Område 2", team: null, target: 3 },
       { axis: "Område 3", team: 4, target: 3 },
     ]);
-    expect(screen.getAllByText(KOMPETANSEPROFIL_COPY.unset)).toHaveLength(1);
+    // The overview list is the one text alternative; the radar does not repeat its own table.
+    expect(within(container).queryByRole("table")).toBeNull();
   });
 
   it("shows the invalid message and draws no chart when a level is malformed", () => {

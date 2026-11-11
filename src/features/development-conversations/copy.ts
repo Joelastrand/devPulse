@@ -1,7 +1,20 @@
 /** Norwegian UI copy for the `/me/conversations` list (SPEC BR-33, BR-34, BR-38, BR-44, D2-SI-13). Labels are the SPEC's. */
 export const conversationsCopy = {
   /** Visual-redesign TASK-013 (decision A): section tabs over the existing detail sections. */
-  sectionTabs: { label: "Seksjoner", overview: "Oversikt", notes: "Notater", followUp: "Oppfølging" },
+  sectionTabs: {
+    label: "Seksjoner",
+    overview: "Oversikt",
+    notes: "Notater",
+    participants: "Deltaker og mål",
+    followUp: "Oppfølging",
+  },
+  /** Shown when a filter hides every entry while the list itself is not empty. */
+  filterEmpty: "Ingen samtaler vises med dette filteret.",
+  /** Unsaved-edit guard on the detail page: the in-app back link and the browser's own leave prompt. */
+  unsavedChanges: "Du har ulagrede endringer som ikke er lagret. Vil du forlate siden uten å lagre?",
+  unsavedBadge: "Ulagrede endringer",
+  /** The conversation-level save is per section, so the copy tells the person which section is unsaved. */
+  unsavedSection: "Ikke lagret",
   /** Visual-redesign TASK-012: filter chips over the existing sections (domain statuses and the created/participating split). */
   filters: {
     label: "Filtrer samtaler",
@@ -11,8 +24,6 @@ export const conversationsCopy = {
     mine: "Opprettet av meg",
     participating: "Deltar i",
   },
-  selectedPaneLabel: "Valgt samtale",
-  selectPrompt: "Velg en samtale i listen for å se den her.",
   pageTitle: "Samtaler",
   pageDescription: "Personlige utviklingssamtaler du har startet, eller som du er invitert til.",
   privacyNotice:
@@ -97,7 +108,7 @@ export const conversationsCopy = {
   detailLoadError: "Kunne ikke laste samtalen. Prøv igjen.",
   /** Forbidden, absent and wrong-view cases share this copy, so the page never reveals which one applies. */
   detailNotFound: "Samtalen finnes ikke, eller du har ikke tilgang til den.",
-  backToList: "Tilbake til samtalene",
+  backToList: "Tilbake til samtaler",
   detailPrivacy:
     "Bare du kan redigere denne samtalen. Feltene merket «synlige for deltakeren» blir synlige for deltakeren når deltakeren godtar invitasjonen.",
   /** TASK-029: removing the participant stays available after completion (BR-16), so the notice names it too. */
@@ -178,9 +189,51 @@ export const conversationsCopy = {
   goalsSaved: "De delte målene er lagret.",
   goalsCleared: "Alle delte mål er fjernet.",
   goalSelectionInvalid: "Ett eller flere valgte mål kan ikke deles. Oppdater valget og prøv igjen.",
+  /* Shared evidence (SPEC Amendment 2026-11-11, TASK-008). Achievements are labelled "Bidrag" in this feature's copy. */
+  evidenceSection: "Delte ansvar og bidrag",
+  evidenceVisibility:
+    "Delte ansvar og bidrag er kopier som tas nå. Deltakeren ser dem etter aksept. Endringer i dine egne ansvar og bidrag endrer ikke det som er delt.",
+  noSharedEvidence: "Ingen ansvar eller bidrag er delt.",
+  evidenceKindLabel: { responsibility: "Ansvar", achievement: "Bidrag" },
+  evidenceRelationLabel: { within: "Innenfor rollen", beyond: "Utover rollen", unspecified: "Ikke angitt" },
+  evidencePeriodLabel: "Periode",
+  evidenceOutcomeLabel: "Resultat",
+  evidenceSelectorHeading: "Velg ansvar og bidrag å dele",
+  evidenceSelectorCopy: "Valget erstatter de delte postene. Hver valgt post blir en kopi som tas nå.",
+  evidenceLoading: "Laster dine ansvar og bidrag…",
+  evidenceError: "Dine ansvar og bidrag kan ikke vises nå. Prøv igjen senere.",
+  evidenceEmpty: "Du har ingen ansvar eller bidrag å dele ennå.",
+  evidenceTruncated:
+    "Ikke alle postene dine vises her. Lagring erstatter hele settet, så delte poster som ikke vises her, fjernes fra samtalen.",
+  evidenceLimit: "Du kan dele høyst 5 ansvar og 5 bidrag.",
+  evidenceCountLabel: (responsibilities: number, achievements: number) => `Ansvar valgt: ${responsibilities} av 5. Bidrag valgt: ${achievements} av 5.`,
+  evidenceLimitReached: "Du har nådd grensen for denne typen.",
+  evidencePreviewHeading: "Dette får deltakeren se",
+  evidencePreviewEmpty: "Ingen poster er valgt.",
+  evidenceNeedsItem: "Velg minst én post for å lagre. Vil du fjerne alle delte poster, bruk knappen under.",
+  saveEvidence: "Lagre delte ansvar og bidrag",
+  clearEvidence: "Fjern alle delte ansvar og bidrag",
+  clearEvidenceCopy:
+    "Deltakeren ser ingen delte poster etter at du fjerner dem. Det påvirker ikke dine egne ansvar og bidrag. Deltakeren kan allerede ha sett innholdet.",
+  evidenceReplaceConfirmHeading: "Bekreft at delte poster skal erstattes",
+  evidenceReplaceConsequence: (removed: number, added: number) =>
+    `${removed} nåværende delt(e) post(er) fjernes, og ${added} valgt(e) post(er) deles i stedet. Deltakeren kan allerede ha sett innholdet som fjernes.`,
+  evidenceClearConfirmHeading: "Bekreft at alle delte poster skal fjernes",
+  evidenceClearConsequence: (removed: number) =>
+    `${removed} delt(e) post(er) fjernes for deltakeren. Deltakeren kan allerede ha sett innholdet.`,
+  evidenceConfirmReplace: "Ja, erstatt delte poster",
+  evidenceConfirmClear: "Ja, fjern alle delte poster",
+  evidenceCancelConfirm: "Avbryt",
+  evidencePreviewReplaces: (count: number) => `Lagring erstatter de ${count} nåværende delte postene i sin helhet.`,
+  evidenceSaved: "De delte ansvarene og bidragene er lagret.",
+  evidenceCleared: "Alle delte ansvar og bidrag er fjernet.",
+  evidenceSelectionInvalid: "En eller flere valgte poster kan ikke deles. Oppdater valget og prøv igjen.",
+  evidenceCompletedNote: "Samtalen er fullført. Du kan bare fjerne alle delte ansvar og bidrag.",
+  participantEvidenceNote: "Dette er kopier som eieren har valgt. De endres ikke når din egen kilde endres.",
   /** Shown when a write may or may not have been applied. The copy never says it failed. */
   writeAmbiguous: "Vi kunne ikke bekrefte at endringen ble lagret. Innholdet er hentet på nytt. Kontroller det før du lagrer igjen.",
   writeCompleted: "Samtalen er fullført, så endringen ble ikke lagret.",
+  writeChanged: "Samtalen er endret siden du åpnet den, så ingenting ble lagret. Les siden på nytt og velg på nytt.",
   writeNotFound: "Samtalen finnes ikke lenger.",
   writeInvalid: "Kontroller opplysningene og prøv igjen.",
   /** TASK-029 owner participant panel (SPEC BR-8, BR-10, BR-16, BR-18, BR-38, CL-19 to CL-21, D2-SI-4). */

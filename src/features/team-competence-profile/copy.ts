@@ -55,7 +55,7 @@ export const COLLABORATIVE_PANEL_COPY = {
   levelUnset: "Ikke satt",
   levelLabel: (area: string) => `Felles nivå for ${area}`,
   levelSave: "Lagre nivå",
-  areasHeading: "Kompetanseområder",
+  areasHeading: "Tildelte kompetanseområder",
   areasIntro: "Områdene teamet arbeider med. Inaktive og arkiverte områder vises ikke i radaren.",
   statusLabel: (area: string) => `Status for ${area}`,
   areaSave: "Lagre status",

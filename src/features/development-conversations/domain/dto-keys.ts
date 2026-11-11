@@ -26,6 +26,15 @@ export const SHARED_GOAL_DTO_KEYS = [
   "capturedAt",
 ] as const;
 
+/**
+ * Evidence snapshot DTOs (SPEC BR-43, Amendment C2). The public keys are the snapshot's own allow-lists, with no id, goal link,
+ * responsibility link, owner uid or record timestamp. A responsibility and an achievement each carry only their own keys.
+ */
+export const EVIDENCE_PERIOD_DTO_KEYS = ["start", "end"] as const;
+
+/** One owner-only selectable source record (SPEC "owner selection list"). Never sent to a participant. */
+export const EVIDENCE_SOURCE_DTO_KEYS = ["kind", "id", "title", "status"] as const;
+
 export const OWNER_DTO_KEYS = [
   "conversationId",
   "title",
@@ -37,6 +46,7 @@ export const OWNER_DTO_KEYS = [
   "nextSteps",
   "participantNotes",
   "sharedGoals",
+  "sharedEvidence",
   "createdAt",
   "updatedAt",
   "completedAt",
@@ -53,6 +63,7 @@ export const PARTICIPANT_DTO_KEYS = [
   "nextSteps",
   "participantNotes",
   "sharedGoals",
+  "sharedEvidence",
   "createdAt",
   "updatedAt",
   "completedAt",

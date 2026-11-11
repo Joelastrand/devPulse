@@ -16,6 +16,37 @@ role expectations = a separate unscheduled future feature. D1 renamed the header
 shared personal nav `Ferdigheter · Mål` to `/me/skills`. C1 behaviour, storage and privacy are
 unchanged, and D1 never reads `skillProfiles`.
 
+### Dated pointer (2026-11-10, owner-approved personal competence chart; amends BR-29, A5, D12, D13)
+The product owner explicitly approved a **personal** competence visualization on `/me/skills`. This supersedes the
+"no chart" restriction (BR-29, A5, D12, D13, the matching out-of-scope bullet and acceptance criterion) **for the
+signed-in person's own assessments only**. The historical text is not rewritten; the scope below is authoritative.
+
+- **Permitted (new):** one radar chart of the signed-in person's own levels on the Oversikt view of `/me/skills`. When a
+  target role is selected and it has an expectation for **every** plotted skill, the role's expectation is a second,
+  dashed series. The scale is the canonical 1–4 scale (BR-4), with a text legend, a visually hidden table of the exact level
+  names, and the editable list stays the canonical representation (BR-31).
+- **Axes:** only the person's **assessed** skills, in canonical list order, at most 12 (more are listed, not drawn, and
+  the page says so). An unassessed skill is never drawn as zero or as a gap that implies a value. With fewer than three
+  assessed skills there is no chart. No area of the polygon, no overall figure and no average is shown (BR-22, BR-26).
+- **Implementation:** the existing `recharts` dependency only (no new dependency, D13 amended). The chart lives in one
+  file, `src/features/skill-profiles/components/PersonalRadar.tsx`, the only C1 UI module that imports a chart library.
+  The cross-cutting guard (`skill-profiles-cross-cutting.test.ts`) enforces that file list.
+- **Views:** `/me/skills` is one route with four route-backed views selected by `?vy=`: **Oversikt** (default, the compact
+  dashboard), **Kompetansekart** (the full editable list, BR-25–BR-32 unchanged), **Rollesammenligning** (the existing
+  role section, unchanged) and **Deling med team** (the existing C2 participation control, unchanged). Only one view is
+  rendered at a time. Tabs are links with `aria-current`. Editing saves per row, so switching views never holds unsaved state.
+- **Oversikt content:** three summary counts (assessed skills at level 3 or higher; assessed of visible skills; assessed
+  skills at level 1 or 2), the personal radar, a short list of competence areas with a link to Kompetansekart, the role
+  summary with the owner's own comparison counts and a link to the role view, up to three development suggestions (the
+  comparison's development rows when a target is selected, otherwise assessed level 1–2 skills), and a banner linking to
+  `Min utvikling`. No mean, percentage, score or ranking is computed or shown; the overview uses no new data source.
+- **Privacy boundaries (unchanged):** the radar reads only the signed-in person's own `skillProfiles` through the existing
+  owner-only API and the owner's own role comparison. It receives no team, membership, aggregate, threshold or other person's
+  data, and it adds no API, field, index, rule or sharing flag. Team-level charts and any numeric team publication remain
+  separate product decisions and are **not** approved by this amendment. C2 thresholds, consent and team membership are unaffected.
+- **Tests:** the cross-cutting guard now permits the chart library only in the approved file, and still forbids hand-written
+  SVG/canvas and other chart libraries in every C1 UI file. The wording guard still scans all overview copy.
+
 ### Closeout clarifications (2026-10-05)
 - **"Controls disabled" wording (BR-30 unreadable profile, TASK-009).** The text below says
   the catalog is shown read-only with "all controls disabled". As built, the unreadable
@@ -81,7 +112,7 @@ person's own current self-report.
 - Manager/lead/admin assessments; any sharing ("del med leder/team"), sharing flag
   or consent flag.
 - Assessment history, per-skill timestamps, notes/free text, evidence links.
-- A radar/radial chart or any chart (BR-29).
+- A radar/radial chart or any chart (BR-29), except the personal radar of the person's own assessments approved 2026-11-10 (dated pointer). Team, aggregate and other-person charts stay out of scope.
 - A separate skill-definition concept, user-selected skill subsets, suggestions
   from team data.
 - An account-deletion framework (none existed when this SPEC was written; superseded 2026-11-02 by docs/features/account-erasure/SPEC.md; see BR-33).
@@ -246,8 +277,8 @@ modified by this specification work.
 | D9 | Admin / lead access | None to profile content (BR-18). |
 | D10 | Sharing | None. No flag, no placeholder field. |
 | D11 | Route/nav | `/me/skills`; one header link **"Mine ferdigheter"**; no shell (BR-2). |
-| D12 | Visualization | Canonical = list with per-row control and non-colour indicator; **no chart** (BR-29). |
-| D13 | New chart dependency | None. |
+| D12 | Visualization | Canonical = list with per-row control and non-colour indicator; **no chart** (BR-29). *Amended 2026-11-10: one personal radar of the person's own levels is permitted on Oversikt; the list stays canonical (see dated pointer).* |
+| D13 | New chart dependency | None. *Amended 2026-11-10: the existing `recharts` dependency is used for the personal radar; nothing new is added.* |
 | D14 | Index | None. |
 | D15 | Migration/backfill | None. Absent document = empty profile. |
 | D16 | Firestore rules | **A behavior-neutral, explicit deny-only `skillProfiles` block is added to `firestore.rules`, with a pinned deployment-config test and a "no composite index" assertion**, following the existing per-collection convention (BR-36). It grants nothing; clients still have no Firestore access. |
@@ -562,7 +593,7 @@ modified by this specification work.
 - **BR-28** Filter: local, client-side only, no request: segmented/radio filter "Alle ·
   Vurdert · Ikke vurdert", default "Alle", no persisted view state. A filter with no rows
   shows a neutral empty message.
-- **BR-29** **No chart.** Reasons (recorded so the decision is not reopened casually):
+- **BR-29** **No chart** *(amended 2026-11-10: one personal radar of the person's own assessments is permitted on Oversikt; see the dated pointer. The reasons below still apply to any team, aggregate or other-person chart, and the personal radar must never be read as an overall score.)* Reasons (recorded so the decision is not reopened casually):
   skill count is admin-defined with no C1 cap (the list window alone is up to 500 documents; a radar is usable at roughly
   5–12 axes); axis order is arbitrary (creation order), so polygon shape and area carry
   no meaning and would read as an overall score (BR-22); sparse assessments render as
@@ -824,7 +855,7 @@ existing catalog read (BR-11), not a new product cap.
 | **Static privacy/scope guard** (style of `roadmap-scope-guard.test.ts`; claims only what BR-18 says it proves): approved reference set for `skillProfiles` under `src/`/`app/`; module-import allow-list for the `skill-profiles` server/store modules (a fixture import from an unapproved route/module must fail the guard); persisted key-set exhaustiveness (`levels`, `createdAt`, `updatedAt`); no import of team-authorization, `skillProgress`, roadmap, membership code from skill-profiles sources; no `app/api/admin|teams/**` reference; route-method surface; anti-surveillance token scan of `copy.ts` | BR-6, BR-18–BR-24 |
 | Firestore config guard (`firestore-deployment-config.test.ts`): explicit `skillProfiles` deny-only block precedes the catch-all; no composite index for `skillProfiles`; indexes file otherwise unchanged | BR-36 |
 | Independence: writing a level leaves `skillProgress`/`roadmapItems`/`teamMemberships` fakes untouched, and vice versa | BR-23, BR-24 |
-| Component/user behavior (`/me/skills`): states table, save/revert/row serialization, filter, reset-all confirmation, unreadable profile, truncated notice and visible-only counts, 401 handling, no team text, no score/percentage/rank wording, keyboard operation, labels, text-plus-segment indicator, level descriptions, no chart | BR-1, BR-5, BR-25–BR-32 |
+| Component/user behavior (`/me/skills`): states table, save/revert/row serialization, filter, reset-all confirmation, unreadable profile, truncated notice and visible-only counts, 401 handling, no team text, no score/percentage/rank wording, keyboard operation, labels, text-plus-segment indicator, level descriptions, the personal radar only where approved (no other chart, no team data in it; dated pointer 2026-11-10) | BR-1, BR-5, BR-25–BR-32 |
 | Header: link visible only when signed in, `aria-current`; no other new entries | BR-2 |
 | C1/C2 boundary: no `teamSkillNeeds`, matrix, aggregate endpoint, threshold configuration, sharing flag or history field exists | C1/C2 boundary, BR-19 |
 | Regression: Feature A/B and admin skill behavior unchanged (`listSkillTrees` authorization, `skillProgress`, roadmap tests untouched) | BR-3, BR-23, BR-24 |
@@ -867,7 +898,7 @@ existing catalog read (BR-11), not a new product cap.
 - [ ] **No Demo seeding:** no Demo Team fixture or seed writes a personal skill profile (BR-35).
 - [ ] **No C2 artifacts:** no `teamSkillNeeds`, matrix, gap view, aggregate endpoint or threshold configuration exists, and no C2 aggregate read of `skillProfiles` exists (C1/C2 boundary).
 - [ ] **Static guard with truthful boundary:** the guard test exists, enforces the approved collection-reference set, the module-import allow-list and the key set, and its description states what it does not prove (BR-18).
-- [ ] **No chart:** the page renders no chart, radar or radial visualization and adds no dependency (BR-29).
+- [ ] **No chart except the approved personal radar (amended 2026-11-10):** `/me/skills` renders no chart other than the personal radar of the signed-in person's own assessments; no team, aggregate or other-person visualization; no new dependency (BR-29, dated pointer).
 - [ ] **Accessible text representation:** every skill and level is available as text with a labelled control; the indicator never conveys level by fill or colour alone; keyboard and screen-reader operable; no horizontal scroll at phone width (BR-27, BR-31, BR-32).
 - [ ] **Privacy copy scoped:** the on-page notice states the C1-scoped privacy (BR-5) and no text promises the data can never be used elsewhere (BR-5).
 - [ ] **No `emailVerified` requirement:** own-profile skill access succeeds for a valid token regardless of `emailVerified` (BR-17).
@@ -903,7 +934,7 @@ Status of every item: **approved** (A1–A6, Revision 2).
 - **A4** Reuse of SkillTree `treeId` (identity) and `name` (display) as the personal
   skill-area catalog, accepting the permanence/naming/double-coupling trade-offs in
   "SkillTree catalog trade-offs".
-- **A5** No chart in C1 (BR-29).
+- **A5** No chart in C1 (BR-29). *Amended 2026-11-10 (product owner approval): a personal competence chart of the signed-in person's own assessments is approved on `/me/skills`; team and aggregate charts are not.*
 - **A6** `/me/skills` plus one current header link, no `/me` shell; future tab name and a
   future `/me` nav left undecided (BR-2).
 

@@ -149,13 +149,14 @@ export async function updateOwnerSections(
       // BR-28: a completed conversation freezes every key this task writes.
       if (record.status === "completed") return { ok: false, error: "conversation_completed" };
 
-      // Only the supplied owner fields change. `participantNotes` and `sharedGoals` are carried over unchanged (BR-49).
+      // Only the supplied owner fields change. `participantNotes`, `sharedGoals` and `sharedEvidence` are carried over unchanged (BR-49).
       const content: ConversationContent = {
         title: fields.title ?? record.content.title,
         ownerNotes: fields.ownerNotes ?? record.content.ownerNotes,
         nextSteps: fields.nextSteps ?? record.content.nextSteps,
         participantNotes: record.content.participantNotes,
         sharedGoals: record.content.sharedGoals,
+        sharedEvidence: record.content.sharedEvidence,
       };
       const encoded = deps.codec.encodeContent(content);
       if (!encoded.ok) return FAILED;

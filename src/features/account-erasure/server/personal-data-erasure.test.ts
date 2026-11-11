@@ -9,7 +9,14 @@ import { runPersonalDataBatch, type PersonalDataErasurePort } from "./personal-d
 const UID = "erased-uid";
 const OTHER = "other-uid";
 
-type Seed = { skill?: string[]; profiles?: string[]; roleTargets?: Record<string, string[]>; goals?: Record<string, string[]> };
+type Seed = {
+  skill?: string[];
+  profiles?: string[];
+  roleTargets?: Record<string, string[]>;
+  goals?: Record<string, string[]>;
+  responsibilities?: Record<string, string[]>;
+  achievements?: Record<string, string[]>;
+};
 
 function fakeData(seed: Seed = {}) {
   const skill = new Set(seed.skill ?? []);
@@ -18,6 +25,10 @@ function fakeData(seed: Seed = {}) {
     Object.entries(seed.roleTargets ?? {}).map(([uid, ids]) => [uid, new Set(ids)]),
   );
   const goals = new Map<string, Set<string>>(Object.entries(seed.goals ?? {}).map(([uid, ids]) => [uid, new Set(ids)]));
+  const responsibilities = new Map<string, Set<string>>(
+    Object.entries(seed.responsibilities ?? {}).map(([uid, ids]) => [uid, new Set(ids)]),
+  );
+  const achievements = new Map<string, Set<string>>(Object.entries(seed.achievements ?? {}).map(([uid, ids]) => [uid, new Set(ids)]));
   const log: string[] = [];
 
   const port: PersonalDataErasurePort = {
@@ -49,9 +60,23 @@ function fakeData(seed: Seed = {}) {
       log.push(`goal:${uid}:${goalId}`);
       goals.get(uid)?.delete(goalId);
     },
+    async responsibilityIds(uid, limit) {
+      return [...(responsibilities.get(uid) ?? [])].slice(0, limit);
+    },
+    async deleteResponsibility(uid, responsibilityId) {
+      log.push(`responsibility:${uid}:${responsibilityId}`);
+      responsibilities.get(uid)?.delete(responsibilityId);
+    },
+    async achievementIds(uid, limit) {
+      return [...(achievements.get(uid) ?? [])].slice(0, limit);
+    },
+    async deleteAchievement(uid, achievementId) {
+      log.push(`achievement:${uid}:${achievementId}`);
+      achievements.get(uid)?.delete(achievementId);
+    },
   };
 
-  return { port, skill, profiles, roleTargets, goals, log };
+  return { port, skill, profiles, roleTargets, goals, responsibilities, achievements, log };
 }
 
 async function runToDone(port: PersonalDataErasurePort, uid: string, maxWrites = 100): Promise<number> {
@@ -142,5 +167,29 @@ describe("personal data erasure step (TASK-022)", () => {
   it("refuses a zero write budget as a programming error", async () => {
     const store = fakeData();
     await expect(runPersonalDataBatch({ port: store.port }, UID, 0)).rejects.toBeInstanceOf(ErasureStepFailure);
+  });
+
+  it("removes every responsibility and achievement of the erased person (I-17, I-18), paged, and keeps other people's", async () => {
+    const store = fakeData({
+      responsibilities: { [UID]: ["r1", "r2", "r3"], [OTHER]: ["keep-r"] },
+      achievements: { [UID]: ["a1", "a2"], [OTHER]: ["keep-a"] },
+    });
+    await runToDone(store.port, UID, 2);
+    expect(store.responsibilities.get(UID)?.size ?? 0).toBe(0);
+    expect(store.achievements.get(UID)?.size ?? 0).toBe(0);
+    expect(store.responsibilities.get(OTHER)).toEqual(new Set(["keep-r"]));
+    expect(store.achievements.get(OTHER)).toEqual(new Set(["keep-a"]));
+  });
+
+  it("the personal records step needs no encryption key: it only deletes by path", async () => {
+    const store = fakeData({ responsibilities: { [UID]: ["r1"] } });
+    const keyBefore = process.env.ENCRYPTION_KEY;
+    delete process.env.ENCRYPTION_KEY;
+    try {
+      await runToDone(store.port, UID);
+    } finally {
+      if (keyBefore !== undefined) process.env.ENCRYPTION_KEY = keyBefore;
+    }
+    expect(store.log).toContain(`responsibility:${UID}:r1`);
   });
 });

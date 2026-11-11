@@ -1,4 +1,5 @@
 "use client";
+import { ChartColumn, Sprout, Target } from "lucide-react";
 import { StatTile } from "../../../components/ui/dashboard/DashboardPrimitives";
 
 import Link from "next/link";
@@ -10,7 +11,6 @@ import { EmptyState } from "../../../components/ui/EmptyState";
 import { LoadingState } from "../../../components/ui/LoadingState";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import { Select } from "../../../components/ui/Select";
-import { Badge } from "../../../components/ui/Badge";
 import { DeleteConfirmation, type DeleteActionState } from "../../forum/components/DeleteConfirmation";
 import {
   clearOwnSkillLevel,
@@ -20,7 +20,7 @@ import {
 } from "../client/skill-profile-gateway";
 import { isSelfAssessedLevel, SELF_ASSESSED_LEVELS, type SelfAssessedLevel } from "../domain/self-assessed-level";
 import { deriveOverview, type OwnSkillsDto } from "../domain/skill-profile-view";
-import { SELF_ASSESSED_LEVEL_COPY, skillProfileCopy } from "../copy";
+import { SELF_ASSESSED_LEVEL_COPY, skillDashboardCopy, skillProfileCopy } from "../copy";
 
 type ViewState =
   | { phase: "loading" }
@@ -49,7 +49,7 @@ type SkillFilter = "all" | "assessed" | "unassessed";
  * pending, and it is blocked while a row save is pending, so no stale row
  * response can resurrect a level after a reset.
  */
-export function SkillProfilePage({ sidePanel }: { sidePanel?: ReactNode }) {
+export function SkillProfilePage() {
   const [state, setState] = useState<ViewState>({ phase: "loading" });
   const [rowStatus, setRowStatus] = useState<RowStatusMap>({});
   const [resetState, setResetState] = useState<DeleteActionState>({ status: "idle" });
@@ -206,12 +206,12 @@ export function SkillProfilePage({ sidePanel }: { sidePanel?: ReactNode }) {
   }
 
   if (state.phase === "loading") {
-    return <StackedWithSide sidePanel={sidePanel}><LoadingState label={skillProfileCopy.loading} /></StackedWithSide>;
+    return <StackedWithSide><LoadingState label={skillProfileCopy.loading} /></StackedWithSide>;
   }
 
   if (state.phase === "signed_out") {
     return (
-      <StackedWithSide sidePanel={sidePanel}>
+      <StackedWithSide>
         <p className="text-zinc-600 dark:text-zinc-400">
           <Link href="/sign-in" className="font-medium text-zinc-900 underline dark:text-zinc-50">
             {skillProfileCopy.signInLink}
@@ -225,7 +225,7 @@ export function SkillProfilePage({ sidePanel }: { sidePanel?: ReactNode }) {
   if (state.phase === "load_error") {
     const { token, generation } = state;
     return (
-      <StackedWithSide sidePanel={sidePanel}>
+      <StackedWithSide>
         <div className="flex flex-col items-start gap-3">
           <Alert variant="error">{skillProfileCopy.loadError}</Alert>
           <Button variant="secondary" size="sm" onClick={() => handleRetry(token, generation)}>
@@ -239,7 +239,6 @@ export function SkillProfilePage({ sidePanel }: { sidePanel?: ReactNode }) {
   const { token, generation } = state;
   return (
     <ReadyView
-      sidePanel={sidePanel}
       dto={state.dto}
       rowStatus={rowStatus}
       resetState={resetState}
@@ -264,18 +263,11 @@ function onlyPending(statuses: RowStatusMap): RowStatusMap {
   return Object.fromEntries(Object.entries(statuses).filter(([, status]) => status?.kind === "pending"));
 }
 
-/** Non-ready states stack their content above the side panel, so the role comparison stays available in every state. */
-function StackedWithSide({ sidePanel, children }: { sidePanel?: ReactNode; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-6">
-      {children}
-      {sidePanel ?? null}
-    </div>
-  );
+function StackedWithSide({ children }: { children: ReactNode }) {
+  return <div className="flex flex-col gap-6">{children}</div>;
 }
 
 function ReadyView({
-  sidePanel,
   dto,
   rowStatus,
   resetState,
@@ -285,7 +277,6 @@ function ReadyView({
   onCancelReset,
   onConfirmReset,
 }: {
-  sidePanel?: ReactNode;
   dto: OwnSkillsDto;
   rowStatus: RowStatusMap;
   resetState: DeleteActionState;
@@ -314,58 +305,33 @@ function ReadyView({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* The private summary leads the page (Product Experience TASK-030); the notices follow it. */}
-      {readable && dto.skills.length > 0 ? <Overview dto={dto} /> : null}
-      <Card variant="nested" padding="sm" className="flex flex-col gap-2 text-sm text-text-secondary">
-        <p>{skillProfileCopy.privacyNotice}</p>
-        <p>{skillProfileCopy.roleComparisonNotice}</p>
-      </Card>
+      {readable && dto.skills.length > 0 ? <SummaryCards dto={dto} /> : null}
 
       {!readable && <Alert variant="error">{skillProfileCopy.unreadableNotice}</Alert>}
       {dto.truncated && <Alert variant="info">{skillProfileCopy.truncatedNotice}</Alert>}
 
-      {/* Three-panel row at lg (ref 07): level legend, competency areas, then the role comparison and next steps. */}
-      <div
-        className={
-          sidePanel
-            ? "grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1fr)]"
-            : "grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]"
-        }
-      >
-        <Card as="section" padding="sm" aria-labelledby="skill-legend-heading">
-          <h2 id="skill-legend-heading" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-            {skillProfileCopy.legendHeading}
-          </h2>
-          <dl className="mt-2 flex flex-col gap-2 text-sm">
-            {SELF_ASSESSED_LEVELS.map((level) => (
-              <div key={level}>
-                <dt className="font-medium text-zinc-900 dark:text-zinc-50">{SELF_ASSESSED_LEVEL_COPY[level].name}</dt>
-                <dd className="text-zinc-600 dark:text-zinc-400">{SELF_ASSESSED_LEVEL_COPY[level].description}</dd>
-              </div>
-            ))}
-          </dl>
-        </Card>
-
-        {dto.skills.length === 0 ? (
-          <EmptyState>{skillProfileCopy.noSkillsDefined}</EmptyState>
-        ) : (
-          <Card as="section" padding="sm" aria-labelledby="skill-list-heading">
-            <h2 id="skill-list-heading" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-              {skillProfileCopy.skillsHeading}
-            </h2>
-            {readable && <FilterControl value={filter} onChange={setFilter} />}
+      {dto.skills.length === 0 ? (
+        <EmptyState>{skillProfileCopy.noSkillsDefined}</EmptyState>
+      ) : (
+        /* One canonical list (BR-29): level bars, text level and the level control per skill. */
+        <div className="flex flex-col gap-6">
+          <Card as="section" padding="sm" id="rediger" aria-labelledby="skill-list-heading" className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <h2 id="skill-list-heading" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                {skillProfileCopy.skillsHeading}
+              </h2>
+              {readable && <FilterControl value={filter} onChange={setFilter} />}
+            </div>
+            <LevelLegend />
+            {readable && dto.skills.every((skill) => skill.level === null) ? (
+              <p className="text-sm text-text-secondary">{skillProfileCopy.noAssessmentsYet}</p>
+            ) : null}
             {visibleSkills.length === 0 ? (
-              <p className="mt-2 text-zinc-600 dark:text-zinc-400">{skillProfileCopy.noFilterMatches}</p>
+              <p className="text-zinc-600 dark:text-zinc-400">{skillProfileCopy.noFilterMatches}</p>
             ) : (
-              <ul className="mt-2 flex flex-col gap-2">
+              <ul className="flex flex-col divide-y divide-border-subtle">
                 {visibleSkills.map((skill) => (
-                  <Card
-                    as="li"
-                    key={skill.treeId}
-                    variant="bordered"
-                    padding="sm"
-                    className="flex flex-col gap-2"
-                  >
+                  <li key={skill.treeId} className="flex flex-col gap-2 py-3">
                     {readable ? (
                       <SkillRow
                         skill={skill}
@@ -376,14 +342,18 @@ function ReadyView({
                     ) : (
                       <span className="min-w-0 break-words font-medium text-zinc-900 dark:text-zinc-50">{skill.name}</span>
                     )}
-                  </Card>
+                  </li>
                 ))}
               </ul>
             )}
           </Card>
-        )}
-        {sidePanel ? <div className="flex flex-col gap-6">{sidePanel}</div> : null}
-      </div>
+        </div>
+      )}
+
+      <Card variant="nested" padding="sm" className="flex flex-col gap-1 text-sm text-text-secondary">
+        <p>{skillProfileCopy.privacyNotice}</p>
+        <p>{skillProfileCopy.roleComparisonNotice}</p>
+      </Card>
 
       <p ref={resetStatus} role="status" tabIndex={-1} className="text-sm text-zinc-700 outline-none empty:hidden dark:text-zinc-300">
         {resetState.status === "pending" ? skillProfileCopy.resettingButton : resetDone ? skillProfileCopy.resetDone : null}
@@ -524,45 +494,65 @@ function SkillRow({
   );
 }
 
-function Overview({ dto }: { dto: OwnSkillsDto }) {
+/**
+ * Three summary figures (ref 07). Every value is a count over the caller's own assessments. No averages, sums or scores:
+ * levels are ordinal (SECURITY invariant 31). "Utviklingsområder" is defined here as assessed at the two lowest levels.
+ */
+function SummaryCards({ dto }: { dto: OwnSkillsDto }) {
   const overview = deriveOverview(dto.skills);
+  const atOrAboveThree = dto.skills.filter((skill) => skill.level !== null && skill.level >= 3).length;
+  const developmentAreas = dto.skills.filter((skill) => skill.level !== null && skill.level <= 2).length;
 
-  if (overview.assessedCount === 0) {
-    return <p className="text-zinc-700 dark:text-zinc-300">{skillProfileCopy.noAssessmentsYet}</p>;
-  }
-
-  const levelsWithCounts = SELF_ASSESSED_LEVELS.filter((level) => overview.perLevelCounts[level] > 0);
-
-  // Existing counts only, presented as stat tiles (visual-redesign BR-18). No averages or scores.
   return (
-    <section aria-labelledby="skill-overview-heading" className="flex flex-col gap-3">
-      <h2 id="skill-overview-heading" className="sr-only">
-        {skillProfileCopy.overviewHeading}
+    <section aria-labelledby="skill-summary-heading" className="flex flex-col gap-3">
+      <h2 id="skill-summary-heading" className="sr-only">
+        {skillDashboardCopy.summaryHeading}
       </h2>
-      {/* Assessment status pill (ref 22). The text carries the meaning; the tone only reinforces it. */}
-      <div>
-        <Badge
-          className={
-            !dto.truncated && overview.assessedCount === overview.totalCount
-              ? "border-transparent bg-success-subtle text-success-text"
-              : "border-transparent bg-info-subtle text-info-text"
-          }
-        >
-          {dto.truncated
-            ? skillProfileCopy.assessedOfShown(overview.assessedCount)
-            : skillProfileCopy.assessedOfAll(overview.assessedCount, overview.totalCount)}
-        </Badge>
-      </div>
-      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <ul className="grid gap-3 sm:grid-cols-3">
         <li>
-          <StatTile label={skillProfileCopy.overviewHeading} value={String(overview.assessedCount)} />
+          <StatTile
+            icon={Target}
+            label={skillDashboardCopy.developmentLabel}
+            value={String(atOrAboveThree)}
+            detail={skillDashboardCopy.developmentDetail}
+          />
         </li>
-        {levelsWithCounts.map((level) => (
-          <li key={level}>
-            <StatTile label={SELF_ASSESSED_LEVEL_COPY[level].name} value={String(overview.perLevelCounts[level])} />
-          </li>
-        ))}
+        <li>
+          <StatTile
+            icon={ChartColumn}
+            label={skillDashboardCopy.assessedLabel}
+            value={dto.truncated ? String(overview.assessedCount) : `${overview.assessedCount} av ${overview.totalCount}`}
+            detail={dto.truncated ? skillDashboardCopy.shownDetail : undefined}
+          />
+        </li>
+        <li>
+          <StatTile
+            icon={Sprout}
+            label={skillDashboardCopy.areasLabel}
+            value={String(developmentAreas)}
+            detail={skillDashboardCopy.areasDetail}
+          />
+        </li>
       </ul>
+    </section>
+  );
+}
+
+/** The four canonical levels with their wording (BR-30 "level descriptions"). Shown once, above the list. */
+function LevelLegend() {
+  return (
+    <section aria-labelledby="skill-legend-heading" className="rounded-md border border-border-subtle p-3">
+      <p id="skill-legend-heading" className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+        {skillProfileCopy.legendHeading}
+      </p>
+      <dl className="mt-2 grid gap-x-4 gap-y-2 text-xs sm:grid-cols-2">
+        {SELF_ASSESSED_LEVELS.map((level) => (
+          <div key={level}>
+            <dt className="font-medium text-zinc-900 dark:text-zinc-50">{SELF_ASSESSED_LEVEL_COPY[level].name}</dt>
+            <dd className="text-zinc-600 dark:text-zinc-400">{SELF_ASSESSED_LEVEL_COPY[level].description}</dd>
+          </div>
+        ))}
+      </dl>
     </section>
   );
 }

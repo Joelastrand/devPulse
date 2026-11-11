@@ -86,8 +86,8 @@ describe("getTeamsOverview", () => {
     expect(result).toEqual({
       ok: true,
       teams: [
-        { teamId: "team-1", name: "Team One", relationship: "none" },
-        { teamId: "team-2", name: "Team Two", relationship: "none" },
+        { teamId: "team-1", name: "Team One", relationship: "none", isMember: false },
+        { teamId: "team-2", name: "Team Two", relationship: "none", isMember: false },
       ],
     });
   });
@@ -105,7 +105,7 @@ describe("getTeamsOverview", () => {
 
     expect(result).toEqual({
       ok: true,
-      teams: [{ teamId: "team-1", name: "Team One", relationship: "member" }],
+      teams: [{ teamId: "team-1", name: "Team One", relationship: "member", isMember: true }],
     });
   });
 
@@ -120,7 +120,30 @@ describe("getTeamsOverview", () => {
 
     expect(result).toEqual({
       ok: true,
-      teams: [{ teamId: "team-1", name: "Team One", relationship: "admin" }],
+      teams: [{ teamId: "team-1", name: "Team One", relationship: "admin", isMember: false }],
+    });
+  });
+
+  it("keeps relationship 'admin' for an app admin who is also a member, and flags the genuine membership", async () => {
+    const result = await getTeamsOverview(TOKEN, {
+      verifyToken: verifyToken({ uid: "admin-1", email: "admin@example.com" }),
+      activeTeamsCollection: fakeActiveTeams([
+        { teamId: "team-1", name: "Team One" },
+        { teamId: "team-2", name: "Team Two" },
+      ]),
+      resolveInvitationsCollection: noopResolveInvitations(),
+      collection: fakeOverviewCollection({
+        memberships: [{ uid: "admin-1", teamId: "team-1" }],
+      }),
+      isSuperadmin: async (uid: string) => uid === "admin-1",
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      teams: [
+        { teamId: "team-1", name: "Team One", relationship: "admin", isMember: true },
+        { teamId: "team-2", name: "Team Two", relationship: "admin", isMember: false },
+      ],
     });
   });
 
@@ -137,7 +160,7 @@ describe("getTeamsOverview", () => {
 
     expect(result).toEqual({
       ok: true,
-      teams: [{ teamId: "team-1", name: "Team One", relationship: "request_pending" }],
+      teams: [{ teamId: "team-1", name: "Team One", relationship: "request_pending", isMember: false }],
     });
   });
 
@@ -154,7 +177,7 @@ describe("getTeamsOverview", () => {
 
     expect(result).toEqual({
       ok: true,
-      teams: [{ teamId: "team-1", name: "Team One", relationship: "request_rejected" }],
+      teams: [{ teamId: "team-1", name: "Team One", relationship: "request_rejected", isMember: false }],
     });
   });
 
@@ -177,9 +200,9 @@ describe("getTeamsOverview", () => {
     expect(result).toEqual({
       ok: true,
       teams: [
-        { teamId: "team-1", name: "Team One", relationship: "member" },
-        { teamId: "team-2", name: "Team Two", relationship: "request_pending" },
-        { teamId: "team-3", name: "Team Three", relationship: "none" },
+        { teamId: "team-1", name: "Team One", relationship: "member", isMember: true },
+        { teamId: "team-2", name: "Team Two", relationship: "request_pending", isMember: false },
+        { teamId: "team-3", name: "Team Three", relationship: "none", isMember: false },
       ],
     });
   });
@@ -220,8 +243,8 @@ describe("getTeamsOverview", () => {
     expect(result).toEqual({
       ok: true,
       teams: [
-        { teamId: "team-1", name: "Team One", relationship: "none" },
-        { teamId: "team-2", name: "Team Two", relationship: "member" },
+        { teamId: "team-1", name: "Team One", relationship: "none", isMember: false },
+        { teamId: "team-2", name: "Team Two", relationship: "member", isMember: true },
       ],
     });
   });
@@ -239,7 +262,7 @@ describe("getTeamsOverview", () => {
 
     expect(result).toEqual({
       ok: true,
-      teams: [{ teamId: "team-1", name: "Team One", relationship: "none" }],
+      teams: [{ teamId: "team-1", name: "Team One", relationship: "none", isMember: false }],
     });
   });
 
@@ -362,7 +385,7 @@ describe("getTeamsOverview", () => {
 
     expect(result).toEqual({
       ok: true,
-      teams: [{ teamId: "team-1", name: "Team One", relationship: "member" }],
+      teams: [{ teamId: "team-1", name: "Team One", relationship: "member", isMember: true }],
     });
   });
 
@@ -380,7 +403,7 @@ describe("getTeamsOverview", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       for (const entry of result.teams) {
-        expect(Object.keys(entry).sort()).toEqual(["name", "relationship", "teamId"]);
+        expect(Object.keys(entry).sort()).toEqual(["isMember", "name", "relationship", "teamId"]);
       }
       expect(JSON.stringify(result)).not.toContain("user-1");
       expect(JSON.stringify(result)).not.toContain("dev@example.com");

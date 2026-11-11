@@ -16,8 +16,16 @@ import { readOwnerConversation } from "../../../../../src/features/development-c
 import type { ParticipantConversationDto } from "../../../../../src/features/development-conversations/server/read-participant-conversation";
 import {
   productionOwnerReadDeps,
+  productionSetSharedEvidenceDeps,
   productionSetSharedGoalsDeps,
 } from "../../../../../src/features/development-conversations/server/owner-route-deps";
+import { setSharedEvidence } from "../../../../../src/features/development-conversations/server/set-shared-evidence";
+import { EVIDENCE_PERIOD_DTO_KEYS } from "../../../../../src/features/development-conversations/domain/dto-keys";
+import {
+  ACHIEVEMENT_SNAPSHOT_KEYS,
+  RESPONSIBILITY_SNAPSHOT_KEYS,
+  type SharedEvidenceSnapshot,
+} from "../../../../../src/features/development-conversations/domain/shared-evidence-snapshot";
 import { productionConversationViewDeps } from "../../../../../src/features/development-conversations/server/conversation-view-route-deps";
 import { setSharedGoals } from "../../../../../src/features/development-conversations/server/set-shared-goals";
 import { updateOwnerSections } from "../../../../../src/features/development-conversations/server/update-owner-sections";
@@ -30,7 +38,7 @@ const NO_STORE = { "Cache-Control": "no-store" };
 type RouteContext = { params: Promise<{ conversationId: string }> };
 
 /** Which operation a PATCH key belongs to. A body may name keys from one operation only (one operation per request). */
-type PatchGroup = "sections" | "goals" | "participant" | "status";
+type PatchGroup = "sections" | "goals" | "evidence" | "participant" | "status";
 
 const PATCH_GROUPS: ReadonlyMap<string, PatchGroup> = new Map<string, PatchGroup>([
   ["title", "sections"],
@@ -38,6 +46,8 @@ const PATCH_GROUPS: ReadonlyMap<string, PatchGroup> = new Map<string, PatchGroup
   ["ownerNotes", "sections"],
   ["nextSteps", "sections"],
   ["sharedGoalIds", "goals"],
+  ["sharedEvidence", "evidence"],
+  ["expectedUpdatedAt", "evidence"],
   ["participantMemberRef", "participant"],
   ["status", "status"],
 ]);
@@ -46,6 +56,7 @@ const PATCH_KEYS: ReadonlySet<string> = new Set(PATCH_GROUPS.keys());
 type PatchPlan =
   | { kind: "sections"; fields: Record<string, unknown> }
   | { kind: "goals"; goalIds: unknown }
+  | { kind: "evidence"; selection: unknown; expectedUpdatedAt: unknown }
   | { kind: "participant"; memberRef: unknown }
   | { kind: "complete" }
   | { kind: "invalid" };
@@ -89,6 +100,10 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       return outcome(await updateOwnerSections(subject, conversationId, plan.fields));
     case "goals":
       return outcome(await setSharedGoals(subject, conversationId, plan.goalIds, productionSetSharedGoalsDeps()));
+    case "evidence":
+      return outcome(
+        await setSharedEvidence(subject, conversationId, plan.selection, plan.expectedUpdatedAt, productionSetSharedEvidenceDeps()),
+      );
     case "participant": {
       const result = await changeParticipant(subject, conversationId, { participantMemberRef: plan.memberRef });
       // SPEC Stable errors: a removal with no participant is an idempotent no-op that returns the current owner DTO.
@@ -120,6 +135,10 @@ function planPatch(body: Record<string, unknown>): PatchPlan {
       return { kind: "sections", fields: pick(body, keys) };
     case "goals":
       return { kind: "goals", goalIds: body.sharedGoalIds };
+    case "evidence":
+      // The evidence write needs both its selection and its version precondition (E-1); a partial body is invalid input.
+      if (!("sharedEvidence" in body) || !("expectedUpdatedAt" in body)) return INVALID_PLAN;
+      return { kind: "evidence", selection: body.sharedEvidence, expectedUpdatedAt: body.expectedUpdatedAt };
     case "participant":
       return { kind: "participant", memberRef: body.participantMemberRef };
     case "status":
@@ -147,6 +166,7 @@ function pickOwnerDto(dto: OwnerConversationDto): Record<string, unknown> {
     ...pick(dto, OWNER_DTO_KEYS),
     participant: pick(dto.participant, OWNER_PARTICIPANT_KEYS),
     sharedGoals: dto.sharedGoals.map((goal) => pick(goal, SHARED_GOAL_DTO_KEYS)),
+    sharedEvidence: dto.sharedEvidence.map(pickEvidence),
   };
 }
 
@@ -155,7 +175,14 @@ function pickParticipantDto(dto: ParticipantConversationDto): Record<string, unk
   return {
     ...pick(dto, PARTICIPANT_DTO_KEYS),
     sharedGoals: dto.sharedGoals.map((goal) => pick(goal, SHARED_GOAL_DTO_KEYS)),
+    sharedEvidence: dto.sharedEvidence.map(pickEvidence),
   };
+}
+
+/** One evidence snapshot with its own kind's allow-list (SPEC "Participant-facing field allow-lists"). */
+function pickEvidence(snapshot: SharedEvidenceSnapshot): Record<string, unknown> {
+  const keys = snapshot.kind === "responsibility" ? RESPONSIBILITY_SNAPSHOT_KEYS : ACHIEVEMENT_SNAPSHOT_KEYS;
+  return { ...pick(snapshot, keys), period: pick(snapshot.period, EVIDENCE_PERIOD_DTO_KEYS) };
 }
 
 /** Copies exactly `keys` from `source`. Nothing else is ever spread into a response. */

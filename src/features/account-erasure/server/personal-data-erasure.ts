@@ -24,6 +24,12 @@ export interface PersonalDataErasurePort {
   /** Goal document ids of the uid, at most `limit`. */
   goalIds(uid: string, limit: number): Promise<string[]>;
   deleteGoal(uid: string, goalId: string): Promise<void>;
+  /** Responsibility document ids of the uid's whole `responsibilities` subtree (I-17), at most `limit`. */
+  responsibilityIds(uid: string, limit: number): Promise<string[]>;
+  deleteResponsibility(uid: string, responsibilityId: string): Promise<void>;
+  /** Achievement document ids of the uid's whole `achievements` subtree (I-18), at most `limit`. */
+  achievementIds(uid: string, limit: number): Promise<string[]>;
+  deleteAchievement(uid: string, achievementId: string): Promise<void>;
 }
 
 export interface PersonalDataStepDeps {
@@ -61,6 +67,23 @@ export async function runPersonalDataBatch(deps: PersonalDataStepDeps, uid: stri
   if (goals.length > 0) {
     for (const goalId of goals) {
       await port.deleteGoal(uid, goalId);
+    }
+    return "more";
+  }
+
+  // I-17 and I-18 (SECURITY-REVIEW §11.3): path-only deletion, no decryption, so no key is needed.
+  const responsibilities = await port.responsibilityIds(uid, maxWrites);
+  if (responsibilities.length > 0) {
+    for (const responsibilityId of responsibilities) {
+      await port.deleteResponsibility(uid, responsibilityId);
+    }
+    return "more";
+  }
+
+  const achievements = await port.achievementIds(uid, maxWrites);
+  if (achievements.length > 0) {
+    for (const achievementId of achievements) {
+      await port.deleteAchievement(uid, achievementId);
     }
     return "more";
   }

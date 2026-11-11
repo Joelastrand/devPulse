@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import type { SharedEvidenceSnapshot } from "../../development-conversations/domain/shared-evidence-snapshot";
 
 vi.mock("server-only", () => ({}));
 
@@ -60,7 +61,7 @@ function fake(): { store: FakeConversationStore; codec: FakeContentCodec } {
 async function seedBound(
   store: FakeConversationStore,
   codec: FakeContentCodec,
-  options: { status?: "open" | "completed"; participantNotes?: string; participantUid?: string; state?: "pending" | "accepted" } = {},
+  options: { status?: "open" | "completed"; participantNotes?: string; participantUid?: string; state?: "pending" | "accepted"; sharedEvidence?: SharedEvidenceSnapshot[] } = {},
 ): Promise<void> {
   await seedOwnerConversation(store, codec, {
     conversationId: CONVERSATION,
@@ -70,6 +71,7 @@ async function seedBound(
     participantNotes: options.participantNotes ?? "Participant's private note",
     participant: { uid: options.participantUid ?? PARTICIPANT_UID, state: options.state ?? "accepted" },
     status: options.status ?? "open",
+    sharedEvidence: options.sharedEvidence ?? [],
   });
   store.seedRawParticipation(options.participantUid ?? PARTICIPANT_UID, CONVERSATION, { ownerUid: OWNER_UID, invitedAt: NOW });
 }
@@ -119,6 +121,27 @@ describe("participant binding cleanup on a conversation owned by someone else (T
     expect(after.nextSteps).toEqual(before.nextSteps);
     expect(after.sharedGoals).toEqual(before.sharedGoals);
     expect(await store.getParticipation(PARTICIPANT_UID, CONVERSATION)).toBeUndefined();
+  });
+
+  it("preserves the owner's sharedEvidence exactly through the I-7 re-encryption (E-6)", async () => {
+    const { store, codec } = fake();
+    const snapshot: SharedEvidenceSnapshot = {
+      kind: "achievement",
+      title: "Synthetic achievement",
+      description: "Synthetic description",
+      outcome: null,
+      period: { start: "2026-01-01", end: null },
+      relationToRole: "within",
+      capturedAt: NOW,
+    };
+    await seedBound(store, codec, { sharedEvidence: [snapshot] });
+    const before = decodedOf(codec, await ownerRaw(store));
+
+    expect(await eraseParticipantBinding(deps(store, codec), TARGET, PARTICIPANT_UID)).toEqual({ ok: true, outcome: "cleaned" });
+    const after = decodedOf(codec, await ownerRaw(store));
+    expect(after.sharedEvidence).toEqual(before.sharedEvidence);
+    expect(after.sharedEvidence).toEqual([snapshot]);
+    expect(after.participantNotes).toBe("");
   });
 
   it("cleans a COMPLETED conversation too, and keeps it completed (the approved erasure-only exception)", async () => {

@@ -1,11 +1,12 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { posix } from "node:path";
 import { describe, expect, it } from "vitest";
-import { CONTENT_PAYLOAD_KEYS } from "./domain/content-payload";
+import { CONTENT_PAYLOAD_KEYS_V1, CONTENT_PAYLOAD_KEYS_V2 } from "./domain/content-payload";
 import * as dtoKeys from "./domain/dto-keys";
 import { STORED_OWNER_PLAIN_KEYS } from "./domain/stored-owner-conversation";
 import { PARTICIPATION_INDEX_KEYS } from "./domain/stored-participation-index";
 import { SHARED_GOAL_SNAPSHOT_KEYS } from "./domain/shared-goal-snapshot";
+import { ACHIEVEMENT_SNAPSHOT_KEYS, RESPONSIBILITY_SNAPSHOT_KEYS } from "./domain/shared-evidence-snapshot";
 
 /**
  * Static scope guard for Development Conversations (D2, TASK-004; SPEC D2-SI-16, D2-SI-18, CL-12, CL-14 to CL-16,
@@ -93,7 +94,12 @@ const APPROVED_COLLECTION_REFERENCES: readonly string[] = [
  * Its own test imports the helper to pin `STORED_KEY_VERSION` against the helper's output and to compute the
  * `keyCheck` vector independently (TASK-003 handoff items 10 and 3). No other D2 file may import the helper.
  */
-const APPROVED_ENCRYPTION_IMPORTERS: readonly string[] = [CODEC_MODULE + ".ts", `${D2_SERVER_DIR}content-codec.test.ts`];
+const APPROVED_ENCRYPTION_IMPORTERS: readonly string[] = [
+  CODEC_MODULE + ".ts",
+  `${D2_SERVER_DIR}content-codec.test.ts`,
+  // Evidence round trip (TASK-007): builds a legacy v1 ciphertext with the same helper. Test-only, never production.
+  `${D2_SERVER_DIR}content-codec-evidence.test.ts`,
+];
 
 /**
  * Dimension 3: D1 goal persistence is not readable by D2 except through the single snapshot seam that TASK-008 adds.
@@ -200,8 +206,11 @@ const EXPECTED_STORED_OWNER_PLAIN_KEYS = [
   "keyCheck",
 ];
 const EXPECTED_PARTICIPATION_INDEX_KEYS = ["ownerUid", "invitedAt"];
-const EXPECTED_CONTENT_PAYLOAD_KEYS = ["title", "ownerNotes", "nextSteps", "participantNotes", "sharedGoals"];
+const EXPECTED_CONTENT_PAYLOAD_KEYS_V1 = ["title", "ownerNotes", "nextSteps", "participantNotes", "sharedGoals"];
+const EXPECTED_CONTENT_PAYLOAD_KEYS_V2 = [...EXPECTED_CONTENT_PAYLOAD_KEYS_V1, "sharedEvidence"];
 const EXPECTED_SHARED_GOAL_SNAPSHOT_KEYS = ["goalTitle", "treeId", "targetDate", "status", "capturedAt"];
+const EXPECTED_RESPONSIBILITY_SNAPSHOT_KEYS = ["kind", "title", "description", "status", "relationToRole", "period", "capturedAt"];
+const EXPECTED_ACHIEVEMENT_SNAPSHOT_KEYS = ["kind", "title", "description", "outcome", "period", "relationToRole", "capturedAt"];
 const EXPECTED_DTO_KEYS: Record<string, string[]> = {
   PENDING_DTO_KEYS: ["conversationId", "state", "teamName", "invitedAt", "ownerDisplayName"],
   OWNER_PARTICIPANT_KEYS: ["state", "displayName"],
@@ -217,10 +226,13 @@ const EXPECTED_DTO_KEYS: Record<string, string[]> = {
     "nextSteps",
     "participantNotes",
     "sharedGoals",
+    "sharedEvidence",
     "createdAt",
     "updatedAt",
     "completedAt",
   ],
+  EVIDENCE_PERIOD_DTO_KEYS: ["start", "end"],
+  EVIDENCE_SOURCE_DTO_KEYS: ["kind", "id", "title", "status"],
   PARTICIPANT_DTO_KEYS: [
     "conversationId",
     "title",
@@ -232,6 +244,7 @@ const EXPECTED_DTO_KEYS: Record<string, string[]> = {
     "nextSteps",
     "participantNotes",
     "sharedGoals",
+    "sharedEvidence",
     "createdAt",
     "updatedAt",
     "completedAt",
@@ -581,8 +594,11 @@ const keyMismatch = (actual: readonly string[], expected: readonly string[]): st
 const PERSISTED_PINS: Array<[string, readonly string[], readonly string[]]> = [
   ["STORED_OWNER_PLAIN_KEYS", STORED_OWNER_PLAIN_KEYS, EXPECTED_STORED_OWNER_PLAIN_KEYS],
   ["PARTICIPATION_INDEX_KEYS", PARTICIPATION_INDEX_KEYS, EXPECTED_PARTICIPATION_INDEX_KEYS],
-  ["CONTENT_PAYLOAD_KEYS", CONTENT_PAYLOAD_KEYS, EXPECTED_CONTENT_PAYLOAD_KEYS],
+  ["CONTENT_PAYLOAD_KEYS_V1", CONTENT_PAYLOAD_KEYS_V1, EXPECTED_CONTENT_PAYLOAD_KEYS_V1],
+  ["CONTENT_PAYLOAD_KEYS_V2", CONTENT_PAYLOAD_KEYS_V2, EXPECTED_CONTENT_PAYLOAD_KEYS_V2],
   ["SHARED_GOAL_SNAPSHOT_KEYS", SHARED_GOAL_SNAPSHOT_KEYS, EXPECTED_SHARED_GOAL_SNAPSHOT_KEYS],
+  ["RESPONSIBILITY_SNAPSHOT_KEYS", RESPONSIBILITY_SNAPSHOT_KEYS, EXPECTED_RESPONSIBILITY_SNAPSHOT_KEYS],
+  ["ACHIEVEMENT_SNAPSHOT_KEYS", ACHIEVEMENT_SNAPSHOT_KEYS, EXPECTED_ACHIEVEMENT_SNAPSHOT_KEYS],
 ];
 
 function persistedPinViolations(pins: ReadonlyArray<[string, readonly string[], readonly string[]]>): string[] {
@@ -1258,8 +1274,11 @@ const RUNTIME_DTO_LISTS: Record<string, readonly string[]> = Object.fromEntries(
 const REAL_PERSISTED_LISTS: Record<string, readonly string[]> = {
   STORED_OWNER_PLAIN_KEYS: [...STORED_OWNER_PLAIN_KEYS],
   PARTICIPATION_INDEX_KEYS: [...PARTICIPATION_INDEX_KEYS],
-  CONTENT_PAYLOAD_KEYS: [...CONTENT_PAYLOAD_KEYS],
+  CONTENT_PAYLOAD_KEYS_V1: [...CONTENT_PAYLOAD_KEYS_V1],
+  CONTENT_PAYLOAD_KEYS_V2: [...CONTENT_PAYLOAD_KEYS_V2],
   SHARED_GOAL_SNAPSHOT_KEYS: [...SHARED_GOAL_SNAPSHOT_KEYS],
+  RESPONSIBILITY_SNAPSHOT_KEYS: [...RESPONSIBILITY_SNAPSHOT_KEYS],
+  ACHIEVEMENT_SNAPSHOT_KEYS: [...ACHIEVEMENT_SNAPSHOT_KEYS],
 };
 
 /**

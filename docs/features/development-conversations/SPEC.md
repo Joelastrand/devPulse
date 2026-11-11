@@ -443,6 +443,14 @@ Code constants (never configurable by request, setting or environment variable):
 
 ### Presentation, validation and copy
 
+- **Phase 1 presentation (personal-experience redesign, approved).** `/me/conversations` is an overview: one column of compact
+  entries with filters, no side pane and no nested scroll region. Each entry links to its own detail page
+  (`/me/conversations/{id}`), and `Tilbake til samtaler` returns to the overview. The detail is one column at every width. Its
+  sections are tabs in this order: `Oversikt` (title, date, completion and deletion), `Notater`, `Deltaker og mål` (participant
+  and shared-goal controls, unchanged rules), and `Oppfølging`. Each editable section shows `Ikke lagret` while its draft
+  differs from the saved value. Leaving the detail through the back link asks for confirmation when any section is unsaved,
+  and the browser's leave prompt covers reloads. Sidebar navigation is not intercepted. Save semantics, participant and
+  snapshot rules, and the API are unchanged.
 - **BR-38 Privacy copy.** Before inviting, the UI states, in Norwegian: who can see
   the conversation; that the invitee sees only the invitation until accepting; that
   on acceptance everything in the conversation becomes visible, including notes
@@ -723,7 +731,7 @@ reads inside the single display-name call) and about two hundred query-returned 
 | AD-5 | Encrypted payload per BR-51, using the existing helper (CL-18), via one codec module: `encodeContent`, `decodeContent`, with explicit failure classes. | Locked |
 | AD-6 | Snapshot set replaced atomically on each `sharedGoalIds` write (BR-24/27). | Locked |
 | AD-7 | Name display via `getDisplayNames` only under the roster rule (BR-41…BR-43), in one new call site inside D2's server module. This is **not** a new by-uid endpoint; no route exposes it. | Locked (Approval; invariant 21 wording at closeout) |
-| AD-8 | Personal navigation gains `Samtaler` by an additive change to the shared `PersonalNav` component and its test; the header is unchanged. | Locked |
+| AD-8 | Personal navigation gains `Samtaler` by an additive change to the shared `PersonalNav` component and its test; the header is unchanged. | Locked. Superseded in part (Phase 1 personal-experience redesign): page-level `PersonalNav` links were removed; the sidebar carries `Samtaler`. |
 | AD-9 | Indexes: none (see Index impact). | Locked |
 | AD-10 | Rules: no change; recursive deny rule covers both subcollections. | Locked |
 | AD-11 | Selection and validation of a participant use a D2-owned, owner-only, discovery-only read (`GET /api/me/conversations/[conversationId]/selectable-members`, Amendment 2026-10-19) and the write path's `resolveMemberRef` re-check. Both read the same bounded `teamMemberships where teamId ==` window (no new query shape, index or rule). The generic team endpoint is not used. **Amended 2026-10-19 (TASK-029 I-1, Option B).** | Locked (amended) |
@@ -885,7 +893,9 @@ All errors are JSON `{ error: "<code>" }`. No stack, Firestore text or key detai
 | `payload_too_large` | 413 | Body over `CONVERSATION_BODY_MAX_BYTES` |
 | `invalid_goal_selection` | 400 | Any `sharedGoalIds` entry malformed, duplicated, absent or invalid; nothing written |
 | `invalid_participant` | 400 | Unknown, stale, cross-team, ineligible, self, duplicate, cap-exceeded or non-active-team ref (identical); on the selectable-member read, a conversation without `teamId` (Amendment 2026-10-19) |
+| `invalid_evidence_selection` | 400 | Any `sharedEvidence` id malformed, duplicated, foreign or unknown, a list over its limit, a snapshot that fails the parser, or a body with extra keys; nothing written (BR-42, N-E6, N-E7) |
 | `conversation_completed` | 409 | Write attempted on a completed conversation, except the allowed actions in BR-16, BR-17, BR-27, BR-29 |
+| `conversation_changed` | 409 | Owner evidence write (`sharedEvidence`) whose `expectedUpdatedAt` no longer equals the conversation `updatedAt` (another write landed since the owner read). Checked inside the write transaction; nothing written (E-1, Amendment 2026-11-11) |
 | `invalid_transition` | 409 | Completing an already completed conversation |
 | `conversation_limit` | 409 | Owner's total count at `CONVERSATION_LIMIT` |
 | `persistence_failed` | 500 | Firestore, encryption-key (missing, invalid, or mismatched with a stored `keyCheck`) or unexpected failure; no detail |
@@ -1350,3 +1360,43 @@ Dated record, added at closeout. The sections above are the planning-time text a
 The "no account erasure" and "no erasure flow" limitations in this SPEC are superseded. Account erasure is specified in
 `docs/features/account-erasure/SPEC.md`. Erasure-only override of BR-20 for participant data: the erasure owner cleanup may remove a participant's notes and binding through the erasure-only capability (TASK-019, TASK-027). No other path overrides BR-20.
 Erasure does not claim deletion from provider logs or provider backups (account-erasure BR-19, E-1 to E-3).
+
+## Amendment 2026-11-11: evidence snapshots (personal-role-workspace, TASK-006)
+
+Approved by the product owner on 2026-11-10 (G1, recorded in `docs/features/personal-role-workspace/SPEC.md`, Status). Applies
+`docs/SECURITY.md` Amendments A, B, C2 and D (D2-SI-5 as amended, D2-SI-16 as amended, D2-SI-19, D2-SI-9a). Source contract:
+`docs/features/personal-role-workspace/SECURITY-REVIEW.md` §11.2.
+
+- **Evidence snapshots (AD-2).** The owner may select up to 5 responsibility snapshots and up to 5 achievement snapshots per
+  conversation (BR-42, OD-5, provisionally approved). These limits are separate from `SHARED_GOALS_MAX`. Snapshot shapes are in
+  `personal-role-workspace/SPEC.md` "Evidence snapshot schema". Snapshots carry no source id, goal or responsibility link, owner
+  uid or record timestamps.
+- **BR-51 amended (payload v2).** The encrypted `content` payload has one of two exact key sets: v1 `{ title, ownerNotes,
+  nextSteps, participantNotes, sharedGoals }` (unchanged) and v2 which adds `sharedEvidence`. Absent `sharedEvidence` reads as `[]`.
+  Any other key set, or a non-array `sharedEvidence`, is malformed. Plain fields are unchanged; no plain field carries evidence.
+- **Writes.** Every successful write serializes v2. Existing writers (goal selection, owner sections, participant changes, leave,
+  create) carry `sharedEvidence` forward unchanged (BR-49).
+- **Completion (BR-48, OD-6).** After completion, evidence may only be cleared as a whole set. Adding, partial removal and
+  editing are rejected with `conversation_completed`. Completion never deletes snapshots.
+- **Deployment order and rollback (release gate N-E13).** Ship the v2 codec before any evidence route. A rollback disables
+  the routes only; the codec stays. Pre-v2 code must not be deployed while any conversation document contains `sharedEvidence`.
+- **Owner selection contract (TASK-007, implemented 2026-11-11).** `PATCH /api/me/conversations/[id]` takes exactly one
+  operation key `sharedEvidence: { responsibilityIds: string[], achievementIds: string[] }`. Each list is at most 5 distinct
+  addressable ids (`^[A-Za-z0-9_-]{1,128}$`, no `__`), validated before any source read. Any other key, including `uid` or
+  `ownerUid`, is refused. The server reads each source through the personal-record seam and stores allow-listed snapshots only.
+  Both lists empty is the whole-set clear. The same body also carries `expectedUpdatedAt` (see "Version precondition" below). A malformed, foreign or unknown selection returns the new stable code
+  `invalid_evidence_selection` (HTTP 400, the same shape as `invalid_goal_selection`), with no write.
+- **Owner selectable list.** `GET /api/me/conversations/[id]/evidence-sources` returns `{ items: [{ kind, id, title, status }],
+  truncated }` to the verified owner only. It is the one response that carries source ids. It is never sent to a participant.
+- **DTO.** `sharedEvidence` is added to the owner and participant DTOs (not to the pending or list DTOs). Each item carries
+  exactly its snapshot's allow-listed keys, and `period` carries only `start` and `end`.
+- **Version precondition (E-1, implemented).** Every evidence write must carry `expectedUpdatedAt`, the canonical ISO
+  `updatedAt` the owner last read (the value the owner DTO returns). It is a sibling of `sharedEvidence` in the same `PATCH`,
+  and the two keys are required together. A missing or non-canonical value is `invalid_input` before any read. The write
+  transaction compares it with the stored `updatedAt` before any other check, so a stale write returns `conversation_changed`
+  (409) and writes nothing. Any owner or participant write advances `updatedAt`, so a stale selection never overwrites a newer
+  one; two concurrent attempts with the same version result in exactly one success (unit and emulator tests). The fake store
+  now re-runs a transaction whose read document changed before commit, as Firestore does. The check has millisecond
+  granularity: two writes within the same millisecond would share a version. A stored snapshot has no source id, so the
+  owner UI always replaces the whole set and asks for confirmation (with the counts) before replacing or clearing a non-empty
+  shared set.

@@ -541,6 +541,81 @@ prefix, so the numbered invariants above are not renumbered. They do not weaken 
 - **RP-SI-12 (static guards are not authorization).** The scope guards are change detection. Authorization evidence is the
   actor × operation matrix (`role-profiles-authz-matrix.test.ts`) and the route suites.
 
+## Personal role workspace invariants (PR-SI, 2026-11-10)
+
+Source: `docs/features/personal-role-workspace/SPEC.md` and `SECURITY-REVIEW.md` §10–§11. Approved for the **first increment**
+(private responsibilities, private achievements, the personal role workspace, and explicitly selected encrypted conversation
+evidence) on 2026-11-10 (product owner, G1–G3). They do **not** approve formal role assignments, assignment history or any
+role-administration feature (TASK-010 stays deferred). They do not weaken any existing invariant. Invariants 59 and 70 are amended
+by this section: where the numbered text above differs from the "Now" text below, the "Now" text applies.
+
+- **PR-SI-1 (owner-only personal records).** Responsibilities (`userDevelopment/{uid}/responsibilities/{id}`) and achievements
+  (`userDevelopment/{uid}/achievements/{id}`) are read and written only by the verified token uid through server routes with the
+  Admin SDK. No admin, app-admin, superadmin, team admin, lead, member, participant or other user route, query, collection group
+  or export reads them. A `uid`, `ownerUid` or record id in a path, query or body never selects another person's record. The only
+  other read is the owner-initiated evidence selection (D2-SI-16 as amended below), which uses the verified owner uid and copies
+  allow-listed fields only. Client Firestore access is denied (the existing `userDevelopment` deny-only rule covers the subtree).
+- **PR-SI-2 (no aggregation; static import guard).** No team, org, admin, survey, coverage, roadmap, skill-progress, role-comparison,
+  ranking or analytics code reads or derives from responsibilities, achievements or evidence snapshots. The import allow-list of the
+  personal-record store is a **static architecture and regression guard**. It detects an unexpected importer at build time. It is
+  **not** runtime authorization and does not authorize any request. The enforceable boundaries are: the verified authenticated owner
+  identity; server-side authorization on every request; strict owner-scoped data access; Firestore client denial; minimal response
+  DTOs; and negative cross-user access tests. Documented guard exceptions are listed in SECURITY-REVIEW §11.4.
+- **PR-SI-4 (target role is never an assigned role).** No API, DTO, copy, UI label, stored field or log treats
+  `userDevelopment/{uid}/roleTarget/current` as an assignment or a registered role. Target-role copy is `Ditt utviklingsmål`; assigned-
+  role copy (deferred) is `Din registrerte rolle`. The two are never interchanged.
+- **PR-SI-5 (source records are encrypted; key failures are never data loss).** `title`, `description` and `outcome` of
+  responsibilities and achievements are stored only inside an encrypted payload, using the existing AES-256-GCM helper
+  (`src/lib/encryption`, invariants 3–5 and 65). The stored envelope is `{ ciphertext, iv, authTag, keyVersion, keyCheck }`.
+  `keyCheck` is HMAC-SHA-256 keyed with the configured 32-byte key over a context string distinct from the D2 context (domain
+  separation). The check order is: key valid, `keyCheck` match, authenticated decryption, schema parse. A missing, invalid or
+  mismatched key, and an authentication failure, are never classified as a malformed record, never produce a deletable item, never
+  cause a write (create, update or delete of content), and never cause deletion. Only a schema failure after successful
+  authenticated decryption is malformed, and it is delete-only for the owner (`{ id }`). Deleting a known record by explicit owner
+  action and account erasure work by path and do not require the key. Plaintext is never logged, returned, or stored in plain fields.
+- **PR-SI-6 (limits enforced on the server).** Request body at most 16 KiB, read as a bounded stream, so the cap holds whatever
+  `Content-Length` claims. Encrypted envelope at most 32 KiB, checked before the write. Caps of 100 responsibilities and 200
+  achievements per person, count-then-create. Ids are addressable under the D2 rule (`^[A-Za-z0-9_-]{1,128}$`, no `__`-wrapped id).
+  Oversized input fails with `payload_too_large` or `invalid_input` and writes nothing.
+- **PR-SI-7 (write fence).** Every write to a personal record reads `accountErasures/{uid}` inside its transaction and refuses with
+  `erasure_in_progress` if the record exists (the existing fence helper).
+
+**Amendments to D2 (first increment, approved 2026-11-10):**
+
+- **Amendment A (invariant 59).** *Previous:* participants see only owner-selected goal snapshots; no C1, skill, C2, roadmap or
+  `skillProgress` enters D2. *Now:* participants see only owner-selected snapshots: goal snapshots and evidence snapshots (the
+  responsibility and achievement copies with exactly the snapshot allow-list). They never read source records, source ids, goal ids,
+  responsibility ids, achievement ids, the target role, an assigned role, a comparison, a C1 level, a skill profile, C2 output, roadmap
+  items or `skillProgress`. D2 never writes them.
+- **Amendment B (invariant 70).** *Previous:* D2 writes no `userDevelopment` goal, `skillProfiles`, `teamSkillNeeds`, `roadmapItems`,
+  `skillProgress`, `userProfiles` or membership document, and reads D1 goals only for snapshot selection. *Now:* D2 additionally writes
+  no `userDevelopment` responsibility or achievement document, and reads responsibilities and achievements only for the owner's
+  snapshot selection, through the owner-scoped store with the verified owner uid. It never reads target roles, assigned roles, C1
+  levels or skill profiles.
+- **Amendment C2 (D2-SI-19, evidence storage; BR-51).** Evidence snapshots are stored only in the `sharedEvidence` array inside the
+  encrypted `content` payload. The BR-51 encrypted payload has one of two exact key sets: payload v1 `{ title, ownerNotes,
+  nextSteps, participantNotes, sharedGoals }` (unchanged), and payload v2 which adds `sharedEvidence`. The sixteen plain-field keys
+  are unchanged, and no plain field carries evidence. An absent `sharedEvidence` reads as `[]`. Any other key set, including a
+  non-array `sharedEvidence`, is `malformed_payload`. The v2 codec is deployed before any evidence route. Code that predates v2 must
+  not be deployed while any conversation holds `sharedEvidence` (release gate, SECURITY-REVIEW §11.2).
+- **Amendment D (D2-SI-9a, completion).** After completion, `sharedEvidence` may only be cleared as a whole set. A non-empty
+  selection is validated first, and then rejected with `conversation_completed` if valid. Partial removal, addition and editing are
+  rejected. Evidence text is never edited. Completion never deletes snapshots. This matches BR-27, BR-28 and CL-26 for goals.
+- **Evidence write precondition (E-1 of personal-role-workspace SPEC).** An owner evidence write carries the `updatedAt` it read as `expectedUpdatedAt`.
+  The comparison runs inside the write transaction before any status check, so a stale write cannot overwrite a newer conversation
+  state. The only response is `conversation_changed` (409), with no content. Verified by unit tests (two concurrent attempts with
+  one version, stale replace, stale clear) and by the Firestore emulator suite. The precondition is not a security control on its
+  own; authorization still comes from the verified owner uid.
+- **Participant binding re-encryption (I-7, verified).** Erasure re-encrypts the owner payload with the real encryption helper. Its
+  success path keeps `sharedEvidence` byte-identical in content and changes only the ciphertext. A failed encryption, a thrown
+  encryption and a key mismatch each write nothing: the owner document and the participant index are unchanged, and the response
+  is `store_unavailable` or `payload_unreadable` with no key or ciphertext detail (`participant-bindings-real-codec.test.ts`).
+
+**Residual risks, accepted and recorded.** Operator or Admin-SDK access to encrypted source records is an accepted residual risk, as
+for D2 (invariant 65). Records that fail authenticated decryption stay in place until erasure or an operator action; the product never
+deletes them. Erasure of another owner's conversation, in which the erased person is a participant, requires a working key for the
+re-encryption step (I-7), and it fails closed without one.
+
 ## Superadmin, teamadmin and team visibility (TA-SI, 2026-11-06)
 
 Source: `docs/features/teamadmin-and-team-visibility/SPEC.md`. These invariants supersede the stored team `lead` as

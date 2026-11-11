@@ -79,13 +79,14 @@ export async function setSharedGoals(
       // BR-27, CL-26: after completion the set may only be cleared. The status is read here, inside the transaction (BR-50 (4)).
       if (record.status === "completed" && snapshots.length > 0) return { ok: false, error: "conversation_completed" };
 
-      // Only `sharedGoals` changes. The other encrypted fields are carried over unchanged (BR-49).
+      // Only `sharedGoals` changes. The other encrypted fields, including `sharedEvidence`, are carried over unchanged (BR-49).
       const encoded = deps.codec.encodeContent({
         title: record.content.title,
         ownerNotes: record.content.ownerNotes,
         nextSteps: record.content.nextSteps,
         participantNotes: record.content.participantNotes,
         sharedGoals: snapshots,
+        sharedEvidence: record.content.sharedEvidence,
       });
       if (!encoded.ok) return FAILED;
 

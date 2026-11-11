@@ -4,6 +4,9 @@ import { getDefaultConversationStore } from "./conversation-store";
 import { createProductionParticipantStateResolver } from "./owner-participant-state";
 import type { OwnerReadDeps } from "./owner-read";
 import { productionOwnedGoalReader } from "./read-owned-goal-snapshots";
+import { productionOwnedEvidenceReader } from "./owned-evidence-seam";
+import type { SetSharedEvidenceDeps } from "./set-shared-evidence";
+import type { SelectableEvidenceDeps } from "./list-selectable-evidence";
 import { createFirestoreSelectableMembersReader, type SelectableMembersDeps } from "./read-selectable-members";
 import type { SetSharedGoalsDeps } from "./set-shared-goals";
 import { createFirestoreTeamEligibilityReader } from "./team-eligibility";
@@ -41,5 +44,24 @@ export function productionSetSharedGoalsDeps(): SetSharedGoalsDeps {
     codec: { probeKey, decryptForClassification, encodeContent },
     goalStore: productionOwnedGoalReader(),
     clock: () => new Date(),
+  };
+}
+
+/** Deps for the owner evidence-selection write (TASK-007). The personal source read comes from the evidence seam only. */
+export function productionSetSharedEvidenceDeps(): SetSharedEvidenceDeps {
+  return {
+    store: getDefaultConversationStore(),
+    codec: { probeKey, decryptForClassification, encodeContent },
+    reader: productionOwnedEvidenceReader(),
+    clock: () => new Date(),
+  };
+}
+
+/** Deps for the owner-only selectable evidence list (TASK-007). */
+export function productionSelectableEvidenceDeps(): SelectableEvidenceDeps {
+  return {
+    store: getDefaultConversationStore(),
+    codec: { probeKey, decryptForClassification },
+    reader: productionOwnedEvidenceReader(),
   };
 }

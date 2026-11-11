@@ -12,6 +12,7 @@ import { participantNotesOutcome } from "./participation-outcome";
 import type { WriteFeedbackState } from "./use-owner-write";
 import { useSingleFlight, type SingleFlight } from "./use-single-flight";
 import { WriteFeedbackRegion } from "./WriteFeedbackRegion";
+import { SharedEvidenceList } from "./SharedEvidenceList";
 
 interface ParticipantConversationProps {
   /** The approved participant DTO (SPEC BR-43). Owner content is read-only here. */
@@ -128,6 +129,11 @@ export function ParticipantConversation({
               ))}
             </ul>
           )}
+        </Section>
+
+        <Section id="participant-evidence-heading" heading={conversationsCopy.evidenceSection}>
+          <p className="text-sm text-text-secondary">{conversationsCopy.participantEvidenceNote}</p>
+          <SharedEvidenceList items={conversation.sharedEvidence} headingId="participant-evidence-heading" />
         </Section>
 
         <Section id="participant-goals-heading" heading={conversationsCopy.sharedGoalsSection}>

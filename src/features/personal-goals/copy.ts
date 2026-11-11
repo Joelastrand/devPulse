@@ -1,7 +1,7 @@
 /** Norwegian UI copy for `/me/goals` (SPEC BR-48…BR-50). Checked by the copy test, not by the scope-guard name scan. */
 export const goalsCopy = {
-  pageTitle: "Mål",
-  pageDescription: "Dine egne utviklingsmål.",
+  pageTitle: "Mine mål",
+  pageDescription: "Dine egne utviklingsmål, med frister og kompetanseområder.",
   privacyNotice:
     "Målene dine er personlige. Teamkolleger og teamledere får ikke tilgang til dem gjennom DevPulse. Ikke skriv sensitiv eller konfidensiell informasjon i en måltittel.",
   loading: "Laster målene dine…",
@@ -15,6 +15,12 @@ export const goalsCopy = {
   activeHeading: "Aktive mål",
   /** Visual-redesign TASK-011: summary tiles, status tabs and the linked-area panel. */
   tabs: { label: "Filtrer mål", active: "Aktive", completed: "Fullførte", all: "Alle" },
+  /** Summary strip: counts only, each one different from the filter labels (no counts repeated in the filters). */
+  summary: { label: "Oversikt over mål", active: "Aktive mål", completed: "Fullførte mål", dueSoon: "Frist innen 30 dager" },
+  /** The secondary actions of a goal row sit behind this disclosure. */
+  actionsSummary: "Handlinger",
+  /** Shown on a row with a target date, next to the date. */
+  dueInDays: (days: number) => (days === 0 ? "i dag" : days === 1 ? "i morgen" : `om ${days} dager`),
   noCompletedGoals: "Du har ingen fullførte mål ennå.",
   linkedAreasHeading: "Knyttet til kompetanseområder",
   linkedAreasEmpty: "Ingen mål er knyttet til et kompetanseområde ennå.",

@@ -370,7 +370,7 @@ describe("setSharedGoals: preservation (BR-49, D2-SI-7, D2-SI-8)", () => {
     }
     expect(after.updatedAt).toEqual(LATER);
     const content = await storedContent(store, codec);
-    expect({ ...content, sharedGoals: [] }).toEqual({ ...CONTENT, sharedGoals: [] });
+    expect({ ...content, sharedGoals: [] }).toEqual({ ...CONTENT, sharedGoals: [], sharedEvidence: [] });
   });
 
   it("leaves a completed conversation's frozen fields untouched when it clears the set", async () => {
@@ -457,6 +457,7 @@ describe("setSharedGoals: stored conversation classification (BR-33, BR-53)", ()
       nextSteps: Array.from({ length: 999 }, () => "step"),
       participantNotes: "",
       sharedGoals: [],
+      sharedEvidence: [],
     });
     if (!bad.ok) throw new Error("fixture key unavailable");
     await reseedRawOwner(store, { ...bad.content });

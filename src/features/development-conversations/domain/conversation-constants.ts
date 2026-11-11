@@ -14,5 +14,8 @@ export const NEXT_STEPS_MAX_ITEMS = 10;
 export const NEXT_STEP_MAX_CODE_POINTS = 200;
 export const NEXT_STEP_MAX_BYTES = 800;
 export const SHARED_GOALS_MAX = 5;
+/** Evidence snapshot limits per conversation (BR-42, OD-5, provisionally approved). Separate from `SHARED_GOALS_MAX`. */
+export const SHARED_EVIDENCE_MAX_RESPONSIBILITIES = 5;
+export const SHARED_EVIDENCE_MAX_ACHIEVEMENTS = 5;
 /** Streamed request-body cap for every conversation route (BR-40). Enforced by the route layer in TASK-023. */
 export const CONVERSATION_BODY_MAX_BYTES = 32768;

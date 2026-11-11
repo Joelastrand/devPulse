@@ -47,6 +47,9 @@ async function renderWith(result: unknown) {
   await screen.findByText(/egenvurderingen din er din egen/i);
 }
 
+const assessedCard = () => screen.getByRole("region", { name: "Vurderte ferdigheter" });
+const assessedCardText = () => assessedCard().textContent ?? "";
+
 describe("SkillProfilePage", () => {
   it("signed out: shows the sign-in prompt and makes no request", async () => {
     observeIdTokenMock.mockImplementation(subscribingWith(null));
@@ -82,7 +85,7 @@ describe("SkillProfilePage", () => {
     expect(terms).toEqual(["Grunnleggende kjennskap", "Kan med støtte", "Kan selvstendig", "Avansert"]);
     expect(document.querySelectorAll("dd")).toHaveLength(4);
 
-    const list = screen.getByRole("heading", { name: "Ferdigheter" }).parentElement!.querySelector("ul")!;
+    const list = screen.getByRole("heading", { name: "Ferdigheter" }).closest("section")!.querySelector("ul")!;
     const rows = within(list).getAllByRole("listitem");
     expect(rows[0].textContent).toContain("Testing");
     expect(rows[1].textContent).toContain("Arkitektur");
@@ -124,10 +127,10 @@ describe("SkillProfilePage", () => {
       ]),
     );
 
-    expect(screen.getByText("Du har vurdert 3 av 4 ferdigheter.")).toBeTruthy();
-    // Per-level counts are stat tiles labelled by the level name (visual-redesign BR-18).
-    expect(within(screen.getByRole("region", { name: "Grunnleggende kjennskap" })).getByText("2")).toBeTruthy();
-    expect(within(screen.getByRole("region", { name: "Avansert" })).getByText("1")).toBeTruthy();
+    expect(assessedCardText()).toContain("3 av 4");
+    // Per-level count tiles were removed with the dashboard redesign: the summary shows three counts only (visual-redesign BR-18).
+    expect(screen.queryByRole("region", { name: "Grunnleggende kjennskap" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Avansert" })).toBeNull();
     expect(screen.queryByText(/Kan med støtte: /)).toBeNull();
     expect(screen.queryByText(/Kan selvstendig: /)).toBeNull();
   });
@@ -143,7 +146,7 @@ describe("SkillProfilePage", () => {
       ),
     );
 
-    expect(screen.getByText("Du har vurdert 1 av de viste ferdighetene.")).toBeTruthy();
+    expect(assessedCardText()).toContain("av de viste ferdighetene");
     expect(screen.getByText("Listen kan være ufullstendig.")).toBeTruthy();
   });
 
@@ -165,7 +168,7 @@ describe("SkillProfilePage", () => {
     const skills = Array.from({ length: 60 }, (_, i) => ({ treeId: `t-${i}`, name: `Område ${i}`, level: null }));
     await renderWith(ok(skills));
 
-    expect(screen.getByRole("heading", { name: "Ferdigheter" }).parentElement!.querySelectorAll("li")).toHaveLength(60);
+    expect(screen.getByRole("heading", { name: "Ferdigheter" }).closest("section")!.querySelectorAll("li")).toHaveLength(60);
   });
 
   it("no skill areas defined: shows the empty state and no list", async () => {
@@ -253,7 +256,8 @@ describe("SkillProfilePage", () => {
     expect(text).not.toContain("other-id");
     expect(text).not.toMatch(/@|\buid\b|team(?!ledere)/i);
     expect(text).not.toMatch(/poeng|score|rangering|gjennomsnitt|prosent|%|snitt/i);
-    expect(document.querySelector("svg, canvas, img, [role='img'], [role='meter'], progress, meter")).toBeNull();
+    // Decorative icons are aria-hidden; any visible or labelled svg, canvas or image counts as a chart or graphic.
+    expect(document.querySelector("svg:not([aria-hidden='true']), canvas, img, [role='img'], [role='meter'], progress, meter")).toBeNull();
     expect(screen.queryByRole("textbox")).toBeNull();
   });
 

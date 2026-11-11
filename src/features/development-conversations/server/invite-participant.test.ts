@@ -331,6 +331,7 @@ describe("inviteParticipant: conversation state and owner namespace", () => {
       nextSteps: Array.from({ length: 999 }, () => "step"),
       participantNotes: "",
       sharedGoals: [],
+      sharedEvidence: [],
     });
     if (!bad.ok) throw new Error("fixture key unavailable");
     const raw = await rawOwner(store);

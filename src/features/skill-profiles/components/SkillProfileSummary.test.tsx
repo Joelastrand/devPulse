@@ -34,6 +34,9 @@ async function renderWithSkills(skills: { treeId: string; name: string; level: 1
   await screen.findByText(skillProfileCopy.privacyNotice);
 }
 
+const assessedCard = () => screen.getByRole("region", { name: "Vurderte ferdigheter" });
+const assessedCardText = () => assessedCard().textContent ?? "";
+
 describe("Ferdigheter private completion summary (TASK-030)", () => {
   it("leads the page with the summary, before both privacy notices", async () => {
     await renderWithSkills([
@@ -41,7 +44,7 @@ describe("Ferdigheter private completion summary (TASK-030)", () => {
       { treeId: "t-b", name: "Testing", level: null },
     ]);
 
-    const summary = screen.getByText("Du har vurdert 1 av 2 ferdigheter.");
+    const summary = assessedCard();
     const privacy = screen.getByText(skillProfileCopy.privacyNotice);
     const roleNotice = screen.getByText(skillProfileCopy.roleComparisonNotice);
     expect(summary.compareDocumentPosition(privacy) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -55,7 +58,7 @@ describe("Ferdigheter private completion summary (TASK-030)", () => {
       { treeId: "t-c", name: "Drift", level: null },
     ]);
 
-    expect(screen.getByText("Du har vurdert 2 av 3 ferdigheter.")).toBeTruthy();
+    expect(assessedCardText()).toContain("2 av 3");
     expect(screen.getAllByRole("listitem").filter((item) => item.textContent?.includes("Drift"))).toHaveLength(1);
   });
 
@@ -65,7 +68,7 @@ describe("Ferdigheter private completion summary (TASK-030)", () => {
       { treeId: "t-b", name: "Testing", level: null },
     ]);
 
-    const summary = screen.getByText("Du har vurdert 1 av 2 ferdigheter.").closest("section, div, p")?.textContent ?? "";
+    const summary = assessedCardText();
     expect(summary).not.toMatch(/%|poeng|score|rangering|ranking/i);
   });
 });

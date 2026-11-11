@@ -1,4 +1,3 @@
-import { PersonalNav } from "../../../../../src/components/nav/PersonalNav";
 import { PageHeader } from "../../../../../src/components/ui/PageHeader";
 import { PageShell } from "../../../../../src/components/ui/PageShell";
 import { ConversationDetail } from "../../../../../src/features/development-conversations/components/ConversationDetail";
@@ -10,7 +9,6 @@ export default async function MyConversationDetailPage({ params }: { params: Pro
 
   return (
     <PageShell width="2xl">
-      <PersonalNav />
       <PageHeader title={conversationsCopy.detailHeading} />
       <div className="mt-6">
         <ConversationDetail conversationId={conversationId} />

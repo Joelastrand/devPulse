@@ -1,20 +1,61 @@
 "use client";
 
+import { useEffect, useState, type ReactNode } from "react";
 import { buildCollaborativeAxes, type CompetenceAreaForProfile } from "../domain/collaborative-profile";
+import { automaticOverviewAreas, collaborativeOverviewAreas, type OverviewArea } from "../domain/overview-areas";
 import { COLLABORATIVE_PANEL_COPY } from "../copy";
+import { OVERVIEW_ADMIN_COPY } from "../overview-copy";
 import { useCollaborativeTeamData } from "../client/use-collaborative-team-data";
+import { fetchSkillNeeds } from "../../team-skills/client/team-skills-gateway";
+import { useCompetencePlans } from "../../team-competence-plan/client/use-competence-plans";
 import { KompetanseprofilRadar } from "./KompetanseprofilRadar";
-import { TeamCompetenceProfile } from "./TeamCompetenceProfile";
+import { AutomaticProfileView, availableAutomaticRows, useAutomaticTeamProfile } from "./TeamCompetenceProfile";
 import { CollaborativeLevelEditor, type LevelEditorRow } from "./CollaborativeLevelEditor";
 import { CompetenceAreaManager } from "./CompetenceAreaManager";
+import { TeamCompetenceOverview } from "./TeamCompetenceOverview";
 
 /**
- * Teamkompetanse panel that follows the team's stored mode. Automatic mode shows the existing automatic panel. Collaborative
- * mode shows the radar of the teamadmin-entered levels, and, for a teamadmin, the level editor and area management. Every
- * write is re-checked by the server; `canEdit` only decides which controls are shown.
+ * Team's need target per competence tree, from the existing skill-needs read. `null` until loaded or when the read fails:
+ * an area then shows no target rather than a made-up one.
  */
-export function CollaborativeCompetenceProfile({ teamId }: { readonly teamId: string }) {
+function useNeedTargets(token: string | null, teamId: string): Map<string, number> | null {
+  const key = token === null ? null : `${teamId}|${token}`;
+  const [loaded, setLoaded] = useState<{ key: string; targets: Map<string, number> } | null>(null);
+
+  useEffect(() => {
+    if (token === null || key === null) return;
+    let cancelled = false;
+    void fetchSkillNeeds(token, teamId).then((result) => {
+      if (cancelled) return;
+      const targets = new Map<string, number>();
+      if (result.status === "ok") {
+        for (const need of result.needs) {
+          if (need.areaAvailable) targets.set(need.treeId, need.requiredLevel);
+        }
+      }
+      setLoaded({ key, targets });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, teamId, key]);
+
+  return loaded !== null && loaded.key === key ? loaded.targets : null;
+}
+
+/**
+ * Teamkompetanse panel. One collection per mode drives every figure on the page:
+ * - collaborative: the team's active assigned areas, with the teamadmin-entered levels;
+ * - automatic: the numeric rows for the team's needs, which are also the radar's axes.
+ * Administration and the detailed sections live in one collapsed container below the overview. Every write is re-checked
+ * by the server; `canEdit` only decides which controls are shown.
+ */
+export function CollaborativeCompetenceProfile({ teamId, detailSections }: { readonly teamId: string; readonly detailSections?: ReactNode }) {
   const { phase, token, current, reload } = useCollaborativeTeamData(teamId);
+  const targets = useNeedTargets(token, teamId);
+  const plans = useCompetencePlans(teamId);
+  const automaticToken = current !== null && current.profile.status === "ok" && current.profile.mode === "automatic" ? token : null;
+  const automatic = useAutomaticTeamProfile(teamId, automaticToken);
 
   if (phase === "loading" || (token !== null && current === null)) {
     return <p className="text-sm text-text-secondary">{COLLABORATIVE_PANEL_COPY.loading}</p>;
@@ -29,97 +70,65 @@ export function CollaborativeCompetenceProfile({ teamId }: { readonly teamId: st
 
   const { mode, levels } = current.profile;
   const { areas, canEdit } = current.areas;
-  if (mode === "automatic") {
-    return (
-      <section className="flex flex-col gap-4">
-        <p className="text-sm text-text-secondary">{COLLABORATIVE_PANEL_COPY.automaticHint}</p>
-        <TeamCompetenceProfile teamId={teamId} />
-      </section>
-    );
+  const levelByTree = new Map(levels.map((entry) => [entry.treeId, entry.level]));
+  const activeAreas = areas.filter((area) => area.status === "active");
+  const plannedTreeIds = new Set(plans.data.phase === "loaded" ? plans.data.plans.map((plan) => plan.treeId) : []);
+  const namedActiveAreas = activeAreas.map((area) => ({ treeId: area.treeId, name: area.name }));
+
+  const automaticRows = mode === "automatic" ? availableAutomaticRows(automatic.current) : null;
+  let overviewAreas: OverviewArea[];
+  if (mode === "automatic" && automaticRows !== null) {
+    overviewAreas = automaticOverviewAreas(automaticRows, plannedTreeIds);
+  } else {
+    overviewAreas = collaborativeOverviewAreas({
+      activeAreas: namedActiveAreas,
+      levelByTree: mode === "collaborative" ? levelByTree : new Map(),
+      levelsAvailable: mode === "collaborative",
+      targets,
+      plannedTreeIds,
+    });
   }
 
-  const levelByTree = new Map(levels.map((entry) => [entry.treeId, entry.level]));
-  const profileAreas: CompetenceAreaForProfile[] = areas.map((area) => ({
+  const profileAreas: CompetenceAreaForProfile[] = activeAreas.map((area) => ({
     treeId: area.treeId,
     label: area.name ?? COLLABORATIVE_PANEL_COPY.unnamedArea,
     status: area.status,
     teamLevel: levelByTree.get(area.treeId) ?? null,
   }));
-  const axes = buildCollaborativeAxes(profileAreas, []);
-  const activeAreas = profileAreas.filter((area) => area.status === "active");
-  const editorRows: LevelEditorRow[] = areas
-    .filter((area) => area.status === "active")
-    .map((area) => ({
-      treeId: area.treeId,
-      label: area.name ?? COLLABORATIVE_PANEL_COPY.unnamedArea,
-      teamLevel: levelByTree.get(area.treeId) ?? null,
-    }));
-  const anyLevelSet = activeAreas.some((area) => area.teamLevel !== null);
+  const editorRows: LevelEditorRow[] = activeAreas.map((area) => ({
+    treeId: area.treeId,
+    label: area.name ?? COLLABORATIVE_PANEL_COPY.unnamedArea,
+    teamLevel: levelByTree.get(area.treeId) ?? null,
+  }));
 
-  const setLevels = activeAreas.flatMap((area) => (area.teamLevel === null ? [] : [area.teamLevel]));
-  const averageLevel = setLevels.length === 0 ? null : setLevels.reduce((sum, level) => sum + level, 0) / setLevels.length;
+  const anyLevelSet = profileAreas.some((area) => area.teamLevel !== null);
+  const radar =
+    mode === "automatic" ? (
+      <AutomaticProfileView current={automatic.current} signedOut={false} onRetry={automatic.retry} />
+    ) : (
+      <div className="flex flex-col gap-4">
+        {anyLevelSet ? null : <p className="text-sm text-text-secondary">{COLLABORATIVE_PANEL_COPY.radarEmpty}</p>}
+        <KompetanseprofilRadar axes={buildCollaborativeAxes(profileAreas, [])} showTable={false} />
+      </div>
+    );
 
   return (
     <section className="flex flex-col gap-8">
-      {anyLevelSet ? null : <p className="text-sm text-text-secondary">{COLLABORATIVE_PANEL_COPY.radarEmpty}</p>}
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-        <div className="min-w-0 rounded-surface border border-border-subtle bg-surface p-6 shadow-card">
-          <KompetanseprofilRadar axes={axes} showTable={false} />
+      {mode === "automatic" ? <p className="text-sm text-text-secondary">{COLLABORATIVE_PANEL_COPY.automaticHint}</p> : null}
+      <TeamCompetenceOverview teamId={teamId} areas={overviewAreas} canEdit={canEdit} mode={mode} radar={radar} />
+      <details className="rounded-surface border border-border-subtle bg-surface p-6 shadow-card">
+        <summary className="cursor-pointer text-base font-semibold text-text-primary">{OVERVIEW_ADMIN_COPY.heading}</summary>
+        <div className="mt-6 flex flex-col gap-8">
+          {canEdit ? (
+            <>
+              <p className="text-sm text-text-secondary">{OVERVIEW_ADMIN_COPY.intro}</p>
+              {mode === "collaborative" ? <CollaborativeLevelEditor teamId={teamId} token={token} rows={editorRows} onSaved={reload} /> : null}
+              <CompetenceAreaManager teamId={teamId} token={token} areas={areas} onChanged={reload} />
+            </>
+          ) : null}
+          {detailSections}
         </div>
-        <div className="flex min-w-0 flex-col gap-4 lg:self-start rounded-surface border border-border-subtle bg-surface p-6 shadow-card">
-          <h2 className="text-lg font-semibold text-text-primary">{COLLABORATIVE_PANEL_COPY.keyFiguresHeading}</h2>
-          <dl className="flex flex-col gap-4">
-            <div>
-              <dt className="text-2xl font-semibold text-text-primary">
-                {COLLABORATIVE_PANEL_COPY.areasSetLabel(setLevels.length, activeAreas.length)}
-              </dt>
-              <dd className="text-sm text-text-secondary">{COLLABORATIVE_PANEL_COPY.areasSetDescription}</dd>
-            </div>
-            <div>
-              <dt className="text-2xl font-semibold text-text-primary">
-                {averageLevel === null ? COLLABORATIVE_PANEL_COPY.perAreaUnset : COLLABORATIVE_PANEL_COPY.averageLabel(averageLevel.toFixed(1))}
-              </dt>
-              <dd className="text-sm text-text-secondary">{COLLABORATIVE_PANEL_COPY.averageDescription}</dd>
-            </div>
-          </dl>
-        </div>
-      </div>
-      <div className="flex flex-col gap-3 rounded-surface border border-border-subtle bg-surface p-6 shadow-card">
-        <h2 className="text-lg font-semibold text-text-primary">{COLLABORATIVE_PANEL_COPY.perAreaHeading}</h2>
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-border-subtle text-text-secondary">
-              <th scope="col" className="py-2 font-medium">{COLLABORATIVE_PANEL_COPY.perAreaColumnArea}</th>
-              <th scope="col" className="py-2 font-medium">{COLLABORATIVE_PANEL_COPY.perAreaColumnLevel}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {activeAreas.map((area) => (
-              <tr key={area.treeId} className="border-b border-border-subtle last:border-b-0">
-                <td className="py-3 pr-4 text-text-primary">{area.label}</td>
-                <td className="py-3 text-text-secondary">
-                  {area.teamLevel === null ? (
-                    COLLABORATIVE_PANEL_COPY.perAreaUnset
-                  ) : (
-                    <div className="flex items-center gap-3">
-                      <span aria-hidden="true" className="h-2 w-12 shrink-0 overflow-hidden rounded-full bg-surface-subtle sm:w-40">
-                        <span className="block h-full bg-primary" style={{ width: `${(area.teamLevel / 4) * 100}%` }} />
-                      </span>
-                      <span className="whitespace-nowrap">{COLLABORATIVE_PANEL_COPY.perAreaLevel(area.teamLevel)}</span>
-                    </div>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {canEdit ? (
-        <>
-          <CollaborativeLevelEditor teamId={teamId} token={token} rows={editorRows} onSaved={reload} />
-          <CompetenceAreaManager teamId={teamId} token={token} areas={areas} onChanged={reload} />
-        </>
-      ) : null}
+      </details>
     </section>
   );
 }

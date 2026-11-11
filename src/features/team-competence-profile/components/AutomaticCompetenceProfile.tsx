@@ -2,12 +2,10 @@ import { buildAutomaticAxes, type AutomaticSkillLevelRow } from "../domain/autom
 import { KompetanseprofilRadar } from "./KompetanseprofilRadar";
 
 /**
- * Inactive integration boundary between the numeric automatic team rows and the existing Kompetanseprofil radar.
- *
- * It is not rendered by any page. The caller supplies the rows, so the source is the caller's responsibility: this
- * component never fetches, never reads member data, and never invents a level. Connecting it to a real GET endpoint is
- * an activation step gated by G1, G2, G3, G4 and G5 (docs/features/team-experience-redesign/AMENDMENT-A-DRAFT.md §A.14; BLK-5 in TASKS.md).
+ * Automatic numeric team radar. It never fetches and never reads member data: the caller supplies the server's rows and
+ * the same rows feed the team overview, so the radar and the overview cannot disagree. The per-area table is omitted
+ * because the overview list shows the same values beside the plan actions.
  */
 export function AutomaticCompetenceProfile({ rows }: { readonly rows: readonly AutomaticSkillLevelRow[] }) {
-  return <KompetanseprofilRadar axes={buildAutomaticAxes(rows)} />;
+  return <KompetanseprofilRadar axes={buildAutomaticAxes(rows)} showTable={false} />;
 }

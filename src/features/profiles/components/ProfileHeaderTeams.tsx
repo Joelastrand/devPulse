@@ -9,7 +9,8 @@ type TeamsState = { phase: "loading" } | { phase: "ok"; teams: TeamOverviewEntry
 
 /**
  * Team membership in the profile header band (visual-fidelity TASK-018, reference 13). It reads the existing `/teams`
- * overview through `fetchTeamsOverview` and shows only teams the viewer belongs to or administers. Pending requests and
+ * overview through `fetchTeamsOverview` and shows only teams the viewer is a genuine member of (`isMember`). App-admin
+ * status is not membership, so an admin sees no team here unless they also hold a membership. Pending requests and
  * invitations are not membership and are not shown here. No new endpoint or field.
  */
 export function ProfileHeaderTeams() {
@@ -28,7 +29,7 @@ export function ProfileHeaderTeams() {
   });
 
   if (state.phase !== "ok") return null;
-  const memberships = state.teams.filter((team) => team.relationship === "member" || team.relationship === "admin");
+  const memberships = state.teams.filter((team) => team.isMember);
   // No new copy for an empty membership: the band simply shows no team line.
   if (memberships.length === 0) return null;
   return (

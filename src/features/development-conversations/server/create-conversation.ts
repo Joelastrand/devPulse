@@ -104,6 +104,7 @@ export async function createConversation(
     nextSteps: [],
     participantNotes: "",
     sharedGoals: [],
+    sharedEvidence: [],
   };
   const encoded = deps.codec.encodeContent(content);
   if (!encoded.ok) return { ok: false, error: "persistence_failed" };

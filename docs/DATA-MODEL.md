@@ -199,3 +199,26 @@ Source: `docs/SECURITY.md` (SR-SI-1…11); `docs/features/superadmin-registry/BO
 - No e-mail address is stored in either document. Targets are resolved through Firebase Auth at grant time only.
 - Erasure: the start revokes an active superadmin in the same transaction as the erasure fence; the erasure step deletes the
   record and keeps `activeCount` exact (`docs/features/account-erasure/SPEC.md`).
+
+## Personal role workspace (personal-role-workspace, first increment, 2026-11-10)
+
+Source: `docs/features/personal-role-workspace/SPEC.md`; `docs/SECURITY.md` (PR-SI-1…7, Amendments A–D, C2). Only the first increment
+is described here. Formal role assignments and assignment history are **not** implemented and have no collection.
+
+- `userDevelopment/{uid}/responsibilities/{id}` — one person's responsibility. Persisted keys exactly: `ciphertext`, `iv`,
+  `authTag`, `keyVersion` (`v1`), `keyCheck` (base64 HMAC over the source-record context, plain), `status` (`active` / `completed`),
+  `relationToRole` (`within` / `beyond` / `unspecified`), optional `startDate` and `endDate` (`YYYY-MM-DD`, `endDate` not before
+  `startDate`), `goalIds` (≤ 5 unique ids of the owner's own goals), `createdAt`, `updatedAt`. The encrypted payload holds `title`
+  and `description` (optional). Owner-only, server-only (Admin SDK). No uid, team, e-mail or actor field.
+- `userDevelopment/{uid}/achievements/{id}` — one person's achievement. Persisted keys exactly: the envelope keys above, plus
+  `relationToRole`, optional `periodStart` and `periodEnd`, `goalIds` (≤ 5), `responsibilityIds` (≤ 5 ids of the owner's own
+  responsibilities), `createdAt`, `updatedAt`. The encrypted payload holds `title`, `description` and optional `outcome`.
+- Encrypted payload and key policy: the AES-256-GCM helper in `src/lib/encryption` with `ENCRYPTION_KEY`. Failure classes and the
+  check order are in SECURITY-REVIEW §11.1. Free text is never stored in plain fields and never logged.
+- Limits: 100 responsibilities and 200 achievements per person; request body ≤ 16 KiB; encrypted envelope ≤ 32 KiB.
+- Evidence (`DevelopmentConversation`, see above): `sharedEvidence` is an encrypted array inside the `content` payload, payload v2.
+  It is absent or `[]` for conversations created before the evidence feature. Snapshot shapes are in the feature SPEC.
+  The owner's evidence write is checked against the document's plain `updatedAt` (sent by the client as `expectedUpdatedAt`,
+  E-1). No new stored field is added for it; any owner or participant write advances `updatedAt`.
+- Client Firestore access is denied by the existing `userDevelopment` deny-only rule. Account erasure: inventory rows I-17
+  (responsibilities) and I-18 (achievements), step `personal_data`, see `docs/features/account-erasure/SPEC.md` (dated amendment).

@@ -35,14 +35,8 @@ function signedInWithOneSkill() {
   });
 }
 
-function gridOf(element: HTMLElement): HTMLElement {
-  const grid = element.closest("div.grid");
-  if (!(grid instanceof HTMLElement)) throw new Error("expected the panel to sit in the three-panel grid");
-  return grid;
-}
-
 describe("SkillProfilePage assessment status and filter chips (TASK-009, ref 22)", () => {
-  it("shows the assessed count as a success pill only when every skill is assessed, and an info pill otherwise", async () => {
+  it("shows the assessed count in the summary card, with no separate status pill", async () => {
     observeIdTokenMock.mockImplementation((callback: (token: string | null) => void) => {
       callback("a-token");
       return () => {};
@@ -60,9 +54,9 @@ describe("SkillProfilePage assessment status and filter chips (TASK-009, ref 22)
     });
     render(<SkillProfilePage />);
 
-    const pill = await screen.findByText(skillProfileCopy.assessedOfAll(1, 2));
-    expect(pill.className).toContain("text-info-text");
-    expect(pill.className).not.toContain("text-success-text");
+    const card = await screen.findByRole("region", { name: "Vurderte ferdigheter" });
+    expect(card.textContent).toContain("1 av 2");
+    expect(card.textContent).not.toMatch(/%/);
   });
 
   it("marks the selected filter option as a chip without relying on colour alone (checked radio)", async () => {
@@ -78,36 +72,16 @@ describe("SkillProfilePage assessment status and filter chips (TASK-009, ref 22)
   });
 });
 
-describe("SkillProfilePage three-panel layout (TASK-012)", () => {
-  it("lays the legend, competency list and side panel in one lg three-column grid, in that order", async () => {
-    signedInWithOneSkill();
-    render(<SkillProfilePage sidePanel={<section aria-label="Sidepanel-test">Rolleforventninger-test</section>} />);
-    await screen.findByText("API-design");
-
-    const legend = screen.getByRole("heading", { name: skillProfileCopy.legendHeading });
-    const list = screen.getByRole("heading", { name: skillProfileCopy.skillsHeading });
-    const side = screen.getByLabelText("Sidepanel-test");
-    const grid = gridOf(legend);
-
-    expect(gridOf(list)).toBe(grid);
-    expect(gridOf(side)).toBe(grid);
-    expect(grid.className).toContain("xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1fr)]");
-    expect(grid.children.length).toBe(3);
-    const following = (a: Node, b: Node) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(following(legend, list)).toBe(true);
-    expect(following(list, side)).toBe(true);
-  });
-
-  it("keeps the same grid with two panels when no side panel is passed, so no empty column is rendered as content", async () => {
+describe("SkillProfilePage editing view layout (ref 07 redesign: editing is its own view)", () => {
+  it("renders the single skill list in one column, with no side panel and no dashboard grid", async () => {
     signedInWithOneSkill();
     render(<SkillProfilePage />);
     await screen.findByText("API-design");
 
-    const grid = gridOf(screen.getByRole("heading", { name: skillProfileCopy.legendHeading }));
-
-    expect(grid.children.length).toBe(2);
-    expect(grid.className).toContain("lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]");
-    expect(grid.className).not.toContain("minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1fr)");
-    expect(screen.queryByLabelText("Sidepanel-test")).toBeNull();
+    const list = screen.getByRole("heading", { name: skillProfileCopy.skillsHeading });
+    const section = list.closest("section");
+    expect(section?.id).toBe("rediger");
+    expect(section?.parentElement?.className).not.toContain("grid-cols");
+    expect(document.querySelector("#rolle")).toBeNull();
   });
 });

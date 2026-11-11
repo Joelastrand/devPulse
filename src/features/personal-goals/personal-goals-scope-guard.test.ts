@@ -62,6 +62,11 @@ const APPROVED_COLLECTION_REFERENCES = [
   // D1 goal access; the snapshot seam (TASK-008) is a separate, importer-and-module-exact amendment.
   "src/features/development-conversations/server/conversation-store-types.ts",
   "src/features/development-conversations/server/conversation-store.test.ts",
+  // Personal role workspace (first increment, SECURITY-REVIEW §11.4): the only file of that feature that builds `userDevelopment` paths for responsibilities and achievements. It grants no D1 goal access.
+  "src/features/personal-role-workspace/server/personal-record-store.ts",
+  // Personal role workspace (first increment): test-only pins. Each names the personal collection to assert a path or a rule; neither grants any production access.
+  "src/features/personal-role-workspace/personal-role-workspace-scope-guard.test.ts",
+  "src/features/personal-role-workspace/server/personal-records.emulator.test.ts",
   // PG-12 (role profiles): test-only pin. The role-profiles guard names `userDevelopment` as its approved
   // role-target collection path; it grants no production access and no D1 goal access.
   "src/features/role-profiles/role-profiles-scope-guard.test.ts",
@@ -113,6 +118,7 @@ const APPROVED_SERVER_IMPORTERS = [
   "app/(app)/me/goals/page.tsx",
   // TASK-008 (D2 snapshot seam): the one D2 module that reads D1 goals, by the verified owner uid (SPEC CL-5, BR-24).
   "src/features/development-conversations/server/read-owned-goal-snapshots.ts",
+  "src/features/personal-role-workspace/server/owned-goal-reader.ts",
 ];
 
 const STORE_MODULE = "src/features/personal-goals/server/goal-store";
@@ -130,6 +136,8 @@ const APPROVED_STORE_IMPORTERS = [
   "src/features/personal-goals/personal-goals-cross-cutting.test.ts",
   // TASK-008 (D2 snapshot seam): the D2 snapshot module is the only non-D1 importer of the store module.
   "src/features/development-conversations/server/read-owned-goal-snapshots.ts",
+  // Personal role workspace (first increment): an existence check of the owner's own goal for link validation (BR-60). No content is read.
+  "src/features/personal-role-workspace/server/owned-goal-reader.ts",
 ];
 /** Sibling test files of exactly the four operations: `<op>.test.ts` or `<op>-<suffix>.test.ts`. */
 const OPERATION_TEST =

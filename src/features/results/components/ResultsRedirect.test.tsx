@@ -63,7 +63,7 @@ describe("ResultsRedirect", () => {
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
       teams: [
-        { teamId: "team-1", name: "Platform", relationship: "member" },
+        { teamId: "team-1", name: "Platform", relationship: "member", isMember: true },
         { teamId: "team-2", name: "Mobile", relationship: "none" },
       ],
     });
@@ -90,8 +90,8 @@ describe("ResultsRedirect", () => {
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
       teams: [
-        { teamId: "team-1", name: "Platform", relationship: "member" },
-        { teamId: "team-2", name: "Mobile", relationship: "member" },
+        { teamId: "team-1", name: "Platform", relationship: "member", isMember: true },
+        { teamId: "team-2", name: "Mobile", relationship: "member", isMember: true },
       ],
     });
 
@@ -100,11 +100,26 @@ describe("ResultsRedirect", () => {
     await waitFor(() => expect(replaceMock).toHaveBeenCalledWith("/teams"));
   });
 
-  it("treats an app admin (relationship 'admin', not 'member') as not having a single membership, redirecting to /teams", async () => {
+  it("redirects a superadmin who holds one real membership to that team, not to /teams", async () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform", relationship: "admin" }],
+      teams: [
+        { teamId: "team-1", name: "Platform", relationship: "admin", isMember: true },
+        { teamId: "team-2", name: "Mobile", relationship: "admin", isMember: false },
+      ],
+    });
+
+    render(<ResultsRedirect />);
+
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith("/teams/team-1"));
+  });
+
+  it("treats an app admin with no real membership as not having a single membership, redirecting to /teams", async () => {
+    observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "admin", isMember: false }],
     });
 
     render(<ResultsRedirect />);
@@ -142,7 +157,7 @@ describe("ResultsRedirect", () => {
       )
       .mockResolvedValueOnce({
         status: "ok",
-        teams: [{ teamId: "team-b", name: "Mobile", relationship: "member" }],
+        teams: [{ teamId: "team-b", name: "Mobile", relationship: "member", isMember: true }],
       });
 
     render(<ResultsRedirect />);
@@ -154,7 +169,7 @@ describe("ResultsRedirect", () => {
 
     resolveFirst({
       status: "ok",
-      teams: [{ teamId: "team-a", name: "Platform", relationship: "member" }],
+      teams: [{ teamId: "team-a", name: "Platform", relationship: "member", isMember: true }],
     });
     await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1));
 

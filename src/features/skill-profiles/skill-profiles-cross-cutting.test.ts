@@ -243,9 +243,25 @@ describe("C1 scope on all C1 surfaces including the page route (BR-19, BR-29, BR
     expect(APPROVED_C2_COMPOSITION.identifier).toBe("OwnCompetenceSharing");
   });
 
-  it("no chart/canvas/svg element or chart library is used by C1 UI", () => {
+  /**
+   * Owner-approved product decision (2026-11-10; C1 SPEC BR-29 and A5 as amended): the signed-in person's own competence
+   * radar is permitted on `/me/skills`. The exception is exactly one file, which uses the existing `recharts` dependency and
+   * nothing else. Every other C1 UI file keeps the no-chart rule, and no hand-written SVG/canvas or other chart library may
+   * appear anywhere in C1 UI. This guard proves the file list, not what the chart renders.
+   */
+  const PERSONAL_RADAR_FILE = "src/features/skill-profiles/components/PersonalRadar.tsx";
+  const importsOf = (text: string) => [...stripComments(text).matchAll(/(?:from|import)\s*\(?\s*["']([^"']+)["']/g)].map((m) => m[1]);
+
+  it("allows the recharts chart library only in the approved personal radar file, which imports no team module", () => {
     const ui = C1_PRODUCTION.filter((p) => p.endsWith(".tsx") && !p.startsWith("app/api/"));
-    const hits = ui.filter((p) => /<(svg|canvas)\b|recharts|chart\.js|d3/i.test(stripComments(read(p))));
+    const withChartLibrary = ui.filter((p) => importsOf(read(p)).includes("recharts"));
+    expect(withChartLibrary).toEqual([PERSONAL_RADAR_FILE]);
+    expect(importsOf(read(PERSONAL_RADAR_FILE)).filter((specifier) => /team/i.test(specifier))).toEqual([]);
+  });
+
+  it("no hand-written svg/canvas element or other chart library is used by C1 UI", () => {
+    const ui = C1_PRODUCTION.filter((p) => p.endsWith(".tsx") && !p.startsWith("app/api/"));
+    const hits = ui.filter((p) => /<(svg|canvas)\b|chart\.js|d3/i.test(stripComments(read(p))));
     expect(hits).toEqual([]);
   });
 

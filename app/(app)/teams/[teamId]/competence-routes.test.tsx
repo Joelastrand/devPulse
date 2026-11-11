@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { competenceRouteCopy } from "../../../../src/features/teams/competence-route-copy";
 
 const headerMock = vi.fn<(props: { teamId: string }) => ReactElement>(() => <div data-testid="team-header" />);
@@ -11,7 +11,11 @@ vi.mock("../../../../src/features/teams/components/TeamPageHeader", () => ({
 }));
 
 vi.mock("../../../../src/features/team-competence-profile/components/CollaborativeCompetenceProfile", () => ({
-  CollaborativeCompetenceProfile: ({ teamId }: { teamId: string }) => <div data-testid="team-competence-profile" data-team={teamId} />,
+  CollaborativeCompetenceProfile: ({ teamId, detailSections }: { teamId: string; detailSections?: ReactNode }) => (
+    <div data-testid="team-competence-profile" data-team={teamId}>
+      {detailSections}
+    </div>
+  ),
 }));
 
 vi.mock("../../../../src/features/team-skills/components/TeamCompetenceCoverage", () => ({
@@ -37,7 +41,7 @@ describe("competence route entry points (TASK-001)", () => {
   });
 
   it("competence-plan renders the shared team header for the awaited teamId", async () => {
-    render(await CompetencePlanPage({ params: Promise.resolve({ teamId: "team-1" }) }));
+    render(await CompetencePlanPage({ params: Promise.resolve({ teamId: "team-1" }), searchParams: Promise.resolve({}) }));
 
     expect(screen.getByRole("main")).toBeTruthy();
     expect(screen.getByTestId("team-header")).toBeTruthy();

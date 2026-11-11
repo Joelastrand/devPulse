@@ -81,7 +81,8 @@ describe("GoalsPage delete: valid goals", () => {
     expect(document.body.textContent).not.toContain("secret-id");
     // The other goal keeps its actions; only one confirmation exists.
     expect(screen.getByRole("button", { name: goalsCopy.deleteButtonName("Andre") })).toBeTruthy();
-    expect(screen.getAllByRole("group")).toHaveLength(1);
+    // Each goal's disclosure is also a group role, so only the confirmation (a non-disclosure group) is counted.
+    expect(document.querySelectorAll("#delete-confirmation-message")).toHaveLength(1);
   });
 
   it("Avbryt sends no DELETE, closes the confirmation and returns focus to the delete control", async () => {
@@ -89,7 +90,8 @@ describe("GoalsPage delete: valid goals", () => {
     await userEvent.click(deleteButton("Lær Rust"));
     await userEvent.click(cancelButton());
     expect(deleteGoalMock).not.toHaveBeenCalled();
-    expect(screen.queryByRole("group")).toBeNull();
+    // No confirmation is open. A goal's own disclosure is also a group role, so it is excluded here.
+    expect(document.getElementById("delete-confirmation-message")).toBeNull();
     expect(document.activeElement).toBe(deleteButton("Lær Rust"));
   });
 
@@ -106,7 +108,8 @@ describe("GoalsPage delete: valid goals", () => {
     expect(screen.getByText("Andre")).toBeTruthy();
     // The notice follows the new response, not a local guess.
     expect(screen.queryByText(goalsCopy.truncatedNotice)).toBeNull();
-    expect(screen.queryByRole("group")).toBeNull();
+    // No confirmation is open. A goal's own disclosure is also a group role, so it is excluded here.
+    expect(document.getElementById("delete-confirmation-message")).toBeNull();
   });
 
   it("keeps showing a truncation notice when the refetch still reports truncated", async () => {
@@ -173,7 +176,8 @@ describe("GoalsPage delete: valid goals", () => {
     await userEvent.click(deleteButton("Lær Rust"));
     await userEvent.click(deleteButton("Andre"));
     // Opening a confirmation for another goal replaces the first one.
-    expect(screen.getAllByRole("group")).toHaveLength(1);
+    // Each goal's disclosure is also a group role, so only the confirmation (a non-disclosure group) is counted.
+    expect(document.querySelectorAll("#delete-confirmation-message")).toHaveLength(1);
     expect(screen.getByText(goalsCopy.deleteConfirmGoal("Andre"))).toBeTruthy();
     await userEvent.click(cancelButton());
     await userEvent.click(screen.getByRole("button", { name: goalsCopy.editButtonName("Lær Rust") }));
@@ -241,7 +245,8 @@ describe("GoalsPage delete: recovery items", () => {
     await userEvent.click(confirmButton());
     await waitFor(() => expect(deleteGoalMock).toHaveBeenCalledWith("a-token", "raw-id/b"));
     await waitFor(() => expect(screen.getByText(goalsCopy.recoveryNotice(1))).toBeTruthy());
-    expect(screen.queryByRole("group")).toBeNull();
+    // No confirmation is open. A goal's own disclosure is also a group role, so it is excluded here.
+    expect(document.getElementById("delete-confirmation-message")).toBeNull();
     expect(recoveryDelete(1, 1)).toBeTruthy();
     expect(fetchGoalsMock).toHaveBeenCalledTimes(2);
     expect(screen.queryByText(goalsCopy.truncatedNotice)).toBeNull();

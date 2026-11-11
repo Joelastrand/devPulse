@@ -15,8 +15,10 @@ import { normalizeNextSteps, normalizeNote, normalizeTitle } from "../domain/tex
 import { CompleteConversationDialog } from "./CompleteConversationDialog";
 import { DeleteConversationDialog } from "./DeleteConversationDialog";
 import { GoalSnapshotSelector } from "./GoalSnapshotSelector";
+import { EvidenceSelector } from "./EvidenceSelector";
 import { ParticipantPanel } from "./ParticipantPanel";
 import { useOwnerWrite, type OwnerWriteContext } from "./use-owner-write";
+import { useReportUnsaved } from "./unsaved-changes";
 import { WriteFeedbackRegion } from "./WriteFeedbackRegion";
 
 interface OwnerConversationEditorProps {
@@ -30,18 +32,18 @@ interface OwnerConversationEditorProps {
 
 /**
  * The owner's view of one conversation (SPEC BR-19, BR-22, BR-24 to BR-28, BR-38, D2-SI-6; TASK-028). Owner sections are
- * edited one at a time, and each section saves on its own button. After completion every section is read-only, and only
- * the shared goal set can be cleared. The owner's participant controls (invite, replace, remove; TASK-029) sit above the
- * sections. Completion and delete (TASK-031) sit at the end, in their own section. Acceptance, decline and leave are
- * participant controls, and they never appear here.
+ * edited one at a time, and each section saves on its own button. The sections are grouped in tabs, in this order:
+ * overview, notes, participant and shared goals, and follow-up. Every tab stays mounted, so an unsaved draft survives a
+ * tab switch. After completion every section is read-only, and only the shared goal set can be cleared.
+ * Acceptance, decline and leave are participant controls, and they never appear here.
  */
 export function OwnerConversationEditor({ conversation, token, onUnauthenticated, onChanged }: OwnerConversationEditorProps) {
   const completed = conversation.status === "completed";
   const context: OwnerWriteContext = { token, conversationId: conversation.conversationId, onUnauthenticated, onChanged };
 
   return (
-    <div className="flex flex-col gap-6">
-      <p className="text-sm text-zinc-700 dark:text-zinc-300">{conversationsCopy.detailPrivacy}</p>
+    <div className="flex min-w-0 flex-col gap-6">
+      <p className="max-w-prose text-sm text-text-secondary">{conversationsCopy.detailPrivacy}</p>
       {/* Header facts from the owner read already in hand (SPEC 10 criterion; BR-23): status, start date and participant. */}
       <div className="flex min-w-0 flex-col gap-2 text-sm text-text-muted">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -61,82 +63,90 @@ export function OwnerConversationEditor({ conversation, token, onUnauthenticated
       </div>
       {completed && <Alert variant="info">{conversationsCopy.detailCompleted}</Alert>}
 
-      {/* The aside sits beside the content only at 2xl (1536 px): inside the 1280 px split pane it would leave the tabs ~184 px wide. */}
-      <div className="flex flex-col gap-6 2xl:grid 2xl:grid-cols-[minmax(0,1fr)_20rem] 2xl:items-start 2xl:gap-6">
-        <div className="flex min-w-0 flex-col gap-6">
-          <ConversationSectionTabs label={conversationsCopy.sectionTabs.label}
-            tabs={[
-              {
-                id: "overview",
-                label: conversationsCopy.sectionTabs.overview,
-                children: (
-                  <>
-                    <TitleSection title={conversation.title} completed={completed} context={context} />
-                    <PlannedForSection plannedFor={conversation.plannedFor} completed={completed} context={context} />
-                    <section aria-labelledby="lifecycle-heading" className="flex flex-col gap-4">
-                            <h2 id="lifecycle-heading" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-                              {conversationsCopy.lifecycleSection}
-                            </h2>
-                            {!completed && (
-                              <CompleteConversationDialog
-                                conversationId={conversation.conversationId}
-                                token={token}
-                                participantState={conversation.participant.state}
-                                onUnauthenticated={onUnauthenticated}
-                                onChanged={onChanged}
-                              />
-                            )}
-                            <DeleteConversationDialog
-                              conversationId={conversation.conversationId}
-                              token={token}
-                              onUnauthenticated={onUnauthenticated}
-                              onChanged={onChanged}
-                            />
-                          </section>
-                  </>
-                ),
-              },
-              {
-                id: "notes",
-                label: conversationsCopy.sectionTabs.notes,
-                children: (
-                  <>
-                    <NotesSection ownerNotes={conversation.ownerNotes} completed={completed} context={context} />
-                    <ParticipantNotesSection participantNotes={conversation.participantNotes} />
-                  </>
-                ),
-              },
-              {
-                id: "follow-up",
-                label: conversationsCopy.sectionTabs.followUp,
-                children: (
-                  <NextStepsSection nextSteps={conversation.nextSteps} completed={completed} context={context} />
-                ),
-              },
-            ]}
-          />
-        </div>
-        <aside className="flex min-w-0 flex-col gap-6">
-        <ParticipantPanel
-          conversationId={conversation.conversationId}
-          token={token}
-          teamId={conversation.teamId}
-          completed={completed}
-          participant={conversation.participant}
-          onUnauthenticated={onUnauthenticated}
-          onChanged={onChanged}
-        />
-  
-          <GoalSnapshotSelector
-          conversationId={conversation.conversationId}
-          token={token}
-          completed={completed}
-          sharedGoals={conversation.sharedGoals}
-          onUnauthenticated={onUnauthenticated}
-          onChanged={onChanged}
-        />
-          </aside>
-      </div>
+      <ConversationSectionTabs
+        label={conversationsCopy.sectionTabs.label}
+        tabs={[
+          {
+            id: "overview",
+            label: conversationsCopy.sectionTabs.overview,
+            children: (
+              <>
+                <TitleSection title={conversation.title} completed={completed} context={context} />
+                <PlannedForSection plannedFor={conversation.plannedFor} completed={completed} context={context} />
+                <section aria-labelledby="lifecycle-heading" className="flex flex-col gap-4">
+                  <h2 id="lifecycle-heading" className="text-section-title font-semibold text-text-primary">
+                    {conversationsCopy.lifecycleSection}
+                  </h2>
+                  {!completed && (
+                    <CompleteConversationDialog
+                      conversationId={conversation.conversationId}
+                      token={token}
+                      participantState={conversation.participant.state}
+                      onUnauthenticated={onUnauthenticated}
+                      onChanged={onChanged}
+                    />
+                  )}
+                  <DeleteConversationDialog
+                    conversationId={conversation.conversationId}
+                    token={token}
+                    onUnauthenticated={onUnauthenticated}
+                    onChanged={onChanged}
+                  />
+                </section>
+              </>
+            ),
+          },
+          {
+            id: "notes",
+            label: conversationsCopy.sectionTabs.notes,
+            children: (
+              <>
+                <NotesSection ownerNotes={conversation.ownerNotes} completed={completed} context={context} />
+                <ParticipantNotesSection participantNotes={conversation.participantNotes} />
+              </>
+            ),
+          },
+          {
+            id: "participants",
+            label: conversationsCopy.sectionTabs.participants,
+            children: (
+              <>
+                <ParticipantPanel
+                  conversationId={conversation.conversationId}
+                  token={token}
+                  teamId={conversation.teamId}
+                  completed={completed}
+                  participant={conversation.participant}
+                  onUnauthenticated={onUnauthenticated}
+                  onChanged={onChanged}
+                />
+                <GoalSnapshotSelector
+                  conversationId={conversation.conversationId}
+                  token={token}
+                  completed={completed}
+                  sharedGoals={conversation.sharedGoals}
+                  onUnauthenticated={onUnauthenticated}
+                  onChanged={onChanged}
+                />
+                <EvidenceSelector
+                  conversationId={conversation.conversationId}
+                  token={token}
+                  completed={completed}
+                  sharedEvidence={conversation.sharedEvidence}
+                  expectedUpdatedAt={conversation.updatedAt}
+                  onUnauthenticated={onUnauthenticated}
+                  onChanged={onChanged}
+                />
+              </>
+            ),
+          },
+          {
+            id: "follow-up",
+            label: conversationsCopy.sectionTabs.followUp,
+            children: <NextStepsSection nextSteps={conversation.nextSteps} completed={completed} context={context} />,
+          },
+        ]}
+      />
     </div>
   );
 }
@@ -147,13 +157,25 @@ export function OwnerConversationEditor({ conversation, token, onUnauthenticated
  */
 function Section({ id, heading, shared = true, children }: { id: string; heading: string; shared?: boolean; children: ReactNode }) {
   return (
-    <section aria-labelledby={id} className="flex flex-col gap-4">
-      <h2 id={id} className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+    <section aria-labelledby={id} className="flex min-w-0 flex-col gap-4">
+      <h2 id={id} className="text-section-title font-semibold text-text-primary">
         {heading}
       </h2>
-      {shared && <p className="text-sm text-zinc-700 dark:text-zinc-300">{conversationsCopy.visibleToParticipant}</p>}
+      {shared && <p className="text-sm text-text-secondary">{conversationsCopy.visibleToParticipant}</p>}
       {children}
     </section>
+  );
+}
+
+/** Save row: the section's own save button, plus a visible "not saved" marker while the draft differs from the saved value. */
+function SaveRow({ pending, label, dirty, pendingLabel }: { pending: boolean; label: string; dirty: boolean; pendingLabel: string }) {
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <Button type="submit" pending={pending}>
+        {pending ? pendingLabel : label}
+      </Button>
+      {dirty && !pending && <span className="text-help text-text-secondary">{conversationsCopy.unsavedSection}</span>}
+    </div>
   );
 }
 
@@ -161,11 +183,13 @@ function TitleSection({ title, completed, context }: { title: string; completed:
   const { pending, feedback, feedbackRef, write } = useOwnerWrite(context);
   const [draft, setDraft] = useState(title);
   const [error, setError] = useState<string>();
+  const dirty = !completed && draft !== title;
+  useReportUnsaved("title", dirty);
 
   if (completed) {
     return (
       <Section id="title-heading" heading={conversationsCopy.titleSection}>
-        <p className="break-words text-zinc-900 dark:text-zinc-50">{title}</p>
+        <p className="break-words text-text-primary">{title}</p>
         <WriteFeedbackRegion feedback={feedback} regionRef={feedbackRef} />
       </Section>
     );
@@ -195,11 +219,7 @@ function TitleSection({ title, completed, context }: { title: string; completed:
           onChange={(event) => setDraft(event.target.value)}
           error={error}
         />
-        <div>
-          <Button type="submit" pending={pending}>
-            {pending ? conversationsCopy.saving : conversationsCopy.saveTitle}
-          </Button>
-        </div>
+        <SaveRow pending={pending} label={conversationsCopy.saveTitle} dirty={dirty} pendingLabel={conversationsCopy.saving} />
         <WriteFeedbackRegion feedback={feedback} regionRef={feedbackRef} />
       </form>
     </Section>
@@ -210,11 +230,13 @@ function PlannedForSection({ plannedFor, completed, context }: { plannedFor: str
   const { pending, feedback, feedbackRef, write } = useOwnerWrite(context);
   const [draft, setDraft] = useState(plannedFor ?? "");
   const [error, setError] = useState<string>();
+  const dirty = !completed && draft !== (plannedFor ?? "");
+  useReportUnsaved("planned-for", dirty);
 
   if (completed) {
     return (
       <Section id="planned-for-heading" heading={conversationsCopy.plannedForSection}>
-        <p className="text-zinc-900 dark:text-zinc-50">{plannedFor ?? conversationsCopy.noPlannedFor}</p>
+        <p className="text-text-primary">{plannedFor ?? conversationsCopy.noPlannedFor}</p>
         <WriteFeedbackRegion feedback={feedback} regionRef={feedbackRef} />
       </Section>
     );
@@ -227,9 +249,9 @@ function PlannedForSection({ plannedFor, completed, context }: { plannedFor: str
       return;
     }
     setError(undefined);
-    const plannedFor = draft === "" ? null : draft;
-    void write({ plannedFor }, conversationsCopy.saved).then((saved) => {
-      if (saved) setDraft(plannedFor ?? "");
+    const nextPlannedFor = draft === "" ? null : draft;
+    void write({ plannedFor: nextPlannedFor }, conversationsCopy.saved).then((saved) => {
+      if (saved) setDraft(nextPlannedFor ?? "");
     });
   }
 
@@ -245,11 +267,7 @@ function PlannedForSection({ plannedFor, completed, context }: { plannedFor: str
           onChange={(event) => setDraft(event.target.value)}
           error={error}
         />
-        <div>
-          <Button type="submit" pending={pending}>
-            {pending ? conversationsCopy.saving : conversationsCopy.savePlannedFor}
-          </Button>
-        </div>
+        <SaveRow pending={pending} label={conversationsCopy.savePlannedFor} dirty={dirty} pendingLabel={conversationsCopy.saving} />
         <WriteFeedbackRegion feedback={feedback} regionRef={feedbackRef} />
       </form>
     </Section>
@@ -260,11 +278,13 @@ function NotesSection({ ownerNotes, completed, context }: { ownerNotes: string; 
   const { pending, feedback, feedbackRef, write } = useOwnerWrite(context);
   const [draft, setDraft] = useState(ownerNotes);
   const [error, setError] = useState<string>();
+  const dirty = !completed && draft !== ownerNotes;
+  useReportUnsaved("notes", dirty);
 
   if (completed) {
     return (
       <Section id="notes-heading" heading={conversationsCopy.notesSection}>
-        <p className="whitespace-pre-line break-words text-zinc-900 dark:text-zinc-50">{ownerNotes || conversationsCopy.noNotes}</p>
+        <p className="whitespace-pre-line break-words text-text-primary">{ownerNotes || conversationsCopy.noNotes}</p>
         <WriteFeedbackRegion feedback={feedback} regionRef={feedbackRef} />
       </Section>
     );
@@ -295,11 +315,7 @@ function NotesSection({ ownerNotes, completed, context }: { ownerNotes: string; 
           onChange={(event) => setDraft(event.target.value)}
           error={error}
         />
-        <div>
-          <Button type="submit" pending={pending}>
-            {pending ? conversationsCopy.saving : conversationsCopy.saveNotes}
-          </Button>
-        </div>
+        <SaveRow pending={pending} label={conversationsCopy.saveNotes} dirty={dirty} pendingLabel={conversationsCopy.saving} />
         <WriteFeedbackRegion feedback={feedback} regionRef={feedbackRef} />
       </form>
     </Section>
@@ -321,14 +337,16 @@ function NextStepsSection({ nextSteps, completed, context }: { nextSteps: string
   const { pending, feedback, feedbackRef, write } = useOwnerWrite(context);
   const [draft, setDraft] = useState(nextSteps.join("\n"));
   const [error, setError] = useState<string>();
+  const dirty = !completed && draft !== nextSteps.join("\n");
+  useReportUnsaved("next-steps", dirty);
 
   if (completed) {
     return (
       <Section id="next-steps-heading" heading={conversationsCopy.nextStepsSection}>
         {nextSteps.length === 0 ? (
-          <p className="text-zinc-600 dark:text-zinc-400">{conversationsCopy.noNextSteps}</p>
+          <p className="text-text-secondary">{conversationsCopy.noNextSteps}</p>
         ) : (
-          <ul className="flex list-disc flex-col gap-1 pl-5 text-zinc-900 dark:text-zinc-50">
+          <ul className="flex list-disc flex-col gap-1 pl-5 text-text-primary">
             {nextSteps.map((step, index) => (
               <li key={index} className="break-words">
                 {step}
@@ -366,11 +384,7 @@ function NextStepsSection({ nextSteps, completed, context }: { nextSteps: string
           onChange={(event) => setDraft(event.target.value)}
           error={error}
         />
-        <div>
-          <Button type="submit" pending={pending}>
-            {pending ? conversationsCopy.saving : conversationsCopy.saveNextSteps}
-          </Button>
-        </div>
+        <SaveRow pending={pending} label={conversationsCopy.saveNextSteps} dirty={dirty} pendingLabel={conversationsCopy.saving} />
         <WriteFeedbackRegion feedback={feedback} regionRef={feedbackRef} />
       </form>
     </Section>
@@ -381,8 +395,8 @@ function NextStepsSection({ nextSteps, completed, context }: { nextSteps: string
 function ParticipantNotesSection({ participantNotes }: { participantNotes: string }) {
   return (
     <Section id="participant-notes-heading" heading={conversationsCopy.participantNotesSection} shared={false}>
-      <p className="text-sm text-zinc-700 dark:text-zinc-300">{conversationsCopy.participantNotesHint}</p>
-      <p className="whitespace-pre-line break-words text-zinc-900 dark:text-zinc-50">
+      <p className="text-sm text-text-secondary">{conversationsCopy.participantNotesHint}</p>
+      <p className="whitespace-pre-line break-words text-text-primary">
         {participantNotes || conversationsCopy.noParticipantNotes}
       </p>
     </Section>

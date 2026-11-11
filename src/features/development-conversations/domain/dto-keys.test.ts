@@ -39,6 +39,7 @@ describe("DTO key allow-lists (BR-41…BR-44)", () => {
       "nextSteps",
       "participantNotes",
       "sharedGoals",
+      "sharedEvidence",
       "createdAt",
       "updatedAt",
       "completedAt",

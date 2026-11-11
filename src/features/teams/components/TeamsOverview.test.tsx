@@ -119,9 +119,9 @@ describe("TeamsOverview", () => {
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
       teams: [
-        { teamId: "team-1", name: "Platform", relationship: "member" },
+        { teamId: "team-1", name: "Platform", relationship: "member", isMember: true },
         { teamId: "team-2", name: "Mobile", relationship: "admin" },
-        { teamId: "team-3", name: "Data", relationship: "none" },
+        { teamId: "team-3", name: "Data", relationship: "none", isMember: false },
       ],
     });
 
@@ -139,7 +139,7 @@ describe("TeamsOverview", () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform", relationship: "member" }],
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "member", isMember: true }],
     });
 
     render(<TeamsOverview />);
@@ -153,9 +153,9 @@ describe("TeamsOverview", () => {
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
       teams: [
-        { teamId: "team-1", name: "Platform", relationship: "member" },
+        { teamId: "team-1", name: "Platform", relationship: "member", isMember: true },
         { teamId: "team-2", name: "Mobile", relationship: "admin" },
-        { teamId: "team-3", name: "Data", relationship: "none" },
+        { teamId: "team-3", name: "Data", relationship: "none", isMember: false },
       ],
     });
 
@@ -185,7 +185,7 @@ describe("TeamsOverview", () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform", relationship: "none" }],
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false }],
     });
 
     render(<TeamsOverview />);
@@ -211,7 +211,7 @@ describe("TeamsOverview", () => {
     fetchTeamsOverviewMock
       .mockResolvedValueOnce({
         status: "ok",
-        teams: [{ teamId: "team-1", name: "Platform", relationship: "none" }],
+        teams: [{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false }],
       })
       .mockResolvedValueOnce({
         status: "ok",
@@ -235,7 +235,7 @@ describe("TeamsOverview", () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform", relationship: "none" }],
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false }],
     });
     requestTeamAccessMock.mockImplementation(
       () =>
@@ -261,7 +261,7 @@ describe("TeamsOverview", () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform", relationship: "none" }],
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false }],
     });
     requestTeamAccessMock.mockResolvedValue({ ok: false, error: "team_disabled" });
 
@@ -278,7 +278,7 @@ describe("TeamsOverview", () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform", relationship: "member" }],
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "member", isMember: true }],
     });
 
     const { container } = render(<TeamsOverview />);
@@ -318,7 +318,7 @@ describe("TeamsOverview", () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform", relationship: "none" }],
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false }],
     });
 
     render(<TeamsOverview />);
@@ -351,7 +351,7 @@ describe("TeamsOverview auth-state races", () => {
 
     calls.resolve(0, {
       status: "ok",
-      teams: [{ teamId: "team-a", name: "Team A", relationship: "member" }],
+      teams: [{ teamId: "team-a", name: "Team A", relationship: "member", isMember: true }],
     });
     await flushMicrotasks();
 
@@ -372,13 +372,13 @@ describe("TeamsOverview auth-state races", () => {
 
     calls.resolve(1, {
       status: "ok",
-      teams: [{ teamId: "team-b", name: "Team B", relationship: "member" }],
+      teams: [{ teamId: "team-b", name: "Team B", relationship: "member", isMember: true }],
     });
     await screen.findByText("Team B");
 
     calls.resolve(0, {
       status: "ok",
-      teams: [{ teamId: "team-a", name: "Team A", relationship: "member" }],
+      teams: [{ teamId: "team-a", name: "Team A", relationship: "member", isMember: true }],
     });
     await flushMicrotasks();
 
@@ -399,7 +399,7 @@ describe("TeamsOverview auth-state races", () => {
 
     calls.resolve(0, {
       status: "ok",
-      teams: [{ teamId: "team-a", name: "Team A", relationship: "member" }],
+      teams: [{ teamId: "team-a", name: "Team A", relationship: "member", isMember: true }],
     });
     await flushMicrotasks();
 
@@ -408,7 +408,7 @@ describe("TeamsOverview auth-state races", () => {
 
     calls.resolve(1, {
       status: "ok",
-      teams: [{ teamId: "team-b", name: "Team B", relationship: "member" }],
+      teams: [{ teamId: "team-b", name: "Team B", relationship: "member", isMember: true }],
     });
     await screen.findByText("Team B");
   });
@@ -426,13 +426,13 @@ describe("TeamsOverview auth-state races", () => {
 
     calls.resolve(1, {
       status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform", relationship: "member" }],
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "member", isMember: true }],
     });
     await screen.findByText("Medlem");
 
     calls.resolve(0, {
       status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform (stale)", relationship: "none" }],
+      teams: [{ teamId: "team-1", name: "Platform (stale)", relationship: "none", isMember: false }],
     });
     await flushMicrotasks();
 
@@ -452,7 +452,7 @@ describe("TeamsOverview auth-state races", () => {
 
     calls.resolve(0, {
       status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform", relationship: "none" }],
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false }],
     });
     const button = await screen.findByRole("button", { name: /be om tilgang/i });
     await user.click(button);
@@ -486,7 +486,7 @@ describe("TeamsOverview auth-state races", () => {
 
     calls.resolve(0, {
       status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform", relationship: "none" }],
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false }],
     });
     const button = await screen.findByRole("button", { name: /be om tilgang/i });
     await user.click(button);
@@ -497,7 +497,7 @@ describe("TeamsOverview auth-state races", () => {
 
     calls.resolve(2, {
       status: "ok",
-      teams: [{ teamId: "team-2", name: "Mobile", relationship: "member" }],
+      teams: [{ teamId: "team-2", name: "Mobile", relationship: "member", isMember: true }],
     });
     await screen.findByText("Mobile");
 
@@ -525,7 +525,7 @@ describe("TeamsOverview auth-state races", () => {
     expect(() =>
       calls.resolve(0, {
         status: "ok",
-        teams: [{ teamId: "team-1", name: "Platform", relationship: "member" }],
+        teams: [{ teamId: "team-1", name: "Platform", relationship: "member", isMember: true }],
       }),
     ).not.toThrow();
     await flushMicrotasks();
@@ -547,8 +547,8 @@ describe("TeamsOverview directory composition (visual-redesign TASK-006)", () =>
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
       teams: [
-        { teamId: "t-1", name: "Demo Team", relationship: "member" },
-        { teamId: "t-2", name: "Plattform", relationship: "none" },
+        { teamId: "t-1", name: "Demo Team", relationship: "member", isMember: true },
+        { teamId: "t-2", name: "Plattform", relationship: "none", isMember: false },
       ],
     });
 
@@ -566,7 +566,7 @@ describe("TeamsOverview directory composition (visual-redesign TASK-006)", () =>
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
-      teams: [{ teamId: "t-1", name: "Demo Team", relationship: "member" }],
+      teams: [{ teamId: "t-1", name: "Demo Team", relationship: "member", isMember: true }],
     });
 
     render(<TeamsOverview />);
@@ -582,7 +582,7 @@ describe("TeamsOverview directory composition (visual-redesign TASK-006)", () =>
   it("renders the teams the parent supplies and makes no fetch", async () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
 
-    render(<TeamsOverview initialTeams={[{ teamId: "t-1", name: "Supplied Team", relationship: "member" }]} />);
+    render(<TeamsOverview initialTeams={[{ teamId: "t-1", name: "Supplied Team", relationship: "member", isMember: true }]} />);
 
     await screen.findByText("Supplied Team");
     expect(fetchTeamsOverviewMock).not.toHaveBeenCalled();
@@ -601,7 +601,7 @@ describe("TeamsOverview directory composition (visual-redesign TASK-006)", () =>
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
-      teams: [{ teamId: "t-1", name: "Fetched Team", relationship: "member" }],
+      teams: [{ teamId: "t-1", name: "Fetched Team", relationship: "member", isMember: true }],
     });
 
     render(<TeamsOverview />);
@@ -618,7 +618,7 @@ describe("TeamsOverview directory composition (visual-redesign TASK-006)", () =>
 
     render(
       <TeamsOverview
-        initialTeams={[{ teamId: "team-1", name: "Platform", relationship: "none" }]}
+        initialTeams={[{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false }]}
         onTeamsChanged={onTeamsChanged}
       />,
     );
@@ -638,7 +638,7 @@ describe("TeamsOverview directory composition (visual-redesign TASK-006)", () =>
 
     render(
       <TeamsOverview
-        initialTeams={[{ teamId: "team-1", name: "Platform", relationship: "none" }]}
+        initialTeams={[{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false }]}
         onTeamsChanged={onTeamsChanged}
       />,
     );
@@ -656,7 +656,7 @@ describe("TeamsOverview directory composition (visual-redesign TASK-006)", () =>
     fetchTeamsOverviewMock
       .mockResolvedValueOnce({
         status: "ok",
-        teams: [{ teamId: "team-1", name: "Platform", relationship: "none" }],
+        teams: [{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false }],
       })
       .mockResolvedValueOnce({
         status: "ok",

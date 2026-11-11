@@ -53,6 +53,10 @@ const COUNTERS: ReadonlyMap<string, Counter> = new Map<string, Counter>([
   ["userDevelopment/{uid}/goals|subtree|", async (db, b) => (await db.collection("userDevelopment").doc(b.uid).collection("goals").get()).size],
   ["userDevelopment/{uid}/roleTarget|subtree|", async (db, b) =>
     (await db.collection("userDevelopment").doc(b.uid).collection("roleTarget").get()).size],
+  ["userDevelopment/{uid}/responsibilities|subtree|", async (db, b) =>
+    (await db.collection("userDevelopment").doc(b.uid).collection("responsibilities").get()).size],
+  ["userDevelopment/{uid}/achievements|subtree|", async (db, b) =>
+    (await db.collection("userDevelopment").doc(b.uid).collection("achievements").get()).size],
   ["userDevelopment/{uid}/conversations|subtree|", async (db, b) =>
     (await db.collection("userDevelopment").doc(b.uid).collection("conversations").get()).size],
   ["userDevelopment/{uid}/conversationParticipations|subtree|", async (db, b) =>

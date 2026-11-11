@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
+import Link from "next/link";
 import { Button } from "../../../components/ui/Button";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import { fetchTeamsOverview } from "../../teams/client/teams-overview-gateway";
 import type { TeamOverviewEntry } from "../../teams/client/teams-overview-gateway";
-import { sharingExplanationCopy } from "../copy";
+import { adminWithoutMembershipCopy, sharingExplanationCopy } from "../copy";
 import { SharingExplanationDialog } from "./SharingExplanationDialog";
 import { SkillContributionPanel } from "./SkillContributionPanel";
 
@@ -46,7 +47,7 @@ export function OwnCompetenceSharing() {
     return (
       <section aria-labelledby="own-sharing-heading" className="flex flex-col gap-2">
         <h2 id="own-sharing-heading" className="text-lg font-semibold text-text-primary">
-          Del kompetanse med teamet
+          Deling med team
         </h2>
         <p className="text-text-secondary">Laster delingsvalgene dine…</p>
       </section>
@@ -57,20 +58,22 @@ export function OwnCompetenceSharing() {
     return (
       <section aria-labelledby="own-sharing-heading" className="flex flex-col gap-2">
         <h2 id="own-sharing-heading" className="text-lg font-semibold text-text-primary">
-          Del kompetanse med teamet
+          Deling med team
         </h2>
         <Alert variant="error">Delingsvalgene dine kunne ikke lastes akkurat nå.</Alert>
       </section>
     );
   }
 
-  const memberTeams = teams.teams.filter((team) => team.relationship === "member");
+  // Gated on the genuine membership flag, not on `relationship`: an app admin's relationship is "admin" on every team,
+  // which must never be read as participation (SECURITY invariants 32–33).
+  const memberTeams = teams.teams.filter((team) => team.isMember);
 
   return (
     <section aria-labelledby="own-sharing-heading" className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
         <h2 id="own-sharing-heading" className="text-lg font-semibold text-text-primary">
-          Del kompetanse med teamet
+          Deling med team
         </h2>
         <p className="text-sm text-text-secondary">
           Av som standard. Du velger selv per team om dine egne vurderinger skal inngå i teamets kompetanseoversikt. Du kan
@@ -78,7 +81,18 @@ export function OwnCompetenceSharing() {
         </p>
       </div>
       {memberTeams.length === 0 ? (
-        <p className="text-text-secondary">Du er ikke medlem av et team, så det finnes ingen deling å styre.</p>
+        teams.teams.some((team) => team.relationship === "admin") ? (
+          <div className="flex flex-col gap-2 text-text-secondary">
+            <p>{adminWithoutMembershipCopy.body}</p>
+            <p>
+              <Link href="/admin/teams" className="font-medium text-text-primary underline">
+                {adminWithoutMembershipCopy.linkLabel}
+              </Link>
+            </p>
+          </div>
+        ) : (
+          <p className="text-text-secondary">Du er ikke medlem av et team, så det finnes ingen deling å styre.</p>
+        )
       ) : (
         memberTeams.map((team) => (
           <div key={team.teamId} className="flex flex-col gap-2">

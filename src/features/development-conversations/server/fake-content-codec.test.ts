@@ -9,6 +9,7 @@ const CONTENT: ConversationContent = {
   nextSteps: [],
   participantNotes: "",
   sharedGoals: [],
+  sharedEvidence: [],
 };
 
 /** A handle that was never stored, which the fake treats as tampering. */

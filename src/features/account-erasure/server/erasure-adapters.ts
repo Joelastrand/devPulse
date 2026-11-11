@@ -57,6 +57,21 @@ export function createPersonalDataPort(): PersonalDataErasurePort {
     async deleteGoal(uid, goalId) {
       await owned(uid).collection("goals").doc(goalId).delete();
     },
+    // I-17, I-18: path-only, no decryption (SECURITY-REVIEW §11.3). Deleting an absent document succeeds.
+    async responsibilityIds(uid, limit) {
+      const snapshot = await owned(uid).collection("responsibilities").select().limit(limit).get();
+      return snapshot.docs.map((doc) => doc.id);
+    },
+    async deleteResponsibility(uid, responsibilityId) {
+      await owned(uid).collection("responsibilities").doc(responsibilityId).delete();
+    },
+    async achievementIds(uid, limit) {
+      const snapshot = await owned(uid).collection("achievements").select().limit(limit).get();
+      return snapshot.docs.map((doc) => doc.id);
+    },
+    async deleteAchievement(uid, achievementId) {
+      await owned(uid).collection("achievements").doc(achievementId).delete();
+    },
   };
 }
 

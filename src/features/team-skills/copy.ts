@@ -95,6 +95,15 @@ export const sharingCopy = {
   withdrawButton: "Slutt å dele kompetanse med teamet",
 } as const;
 
+/**
+ * Shown on `/me/skills` to an app admin who is not a member of any team. Admin status is never participation, so the
+ * copy says so and points to team administration, where an explicit membership can be granted.
+ */
+export const adminWithoutMembershipCopy = {
+  body: "Du er administrator, men ikke medlem av et team. Administratorrettigheter gir ikke deling av egne vurderinger. Hvis du vil delta i et team, må du legges til som medlem der.",
+  linkLabel: "Gå til teamadministrasjon",
+} as const;
+
 export const sharingExplanationCopy = {
   title: "Om deling av kompetanse",
   close: "Lukk",

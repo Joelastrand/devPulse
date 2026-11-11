@@ -8,6 +8,7 @@ import {
   type EncryptedPayload,
 } from "../../../lib/encryption/encryption";
 import { parseConversationContent, type ConversationContent } from "../domain/content-payload";
+import { serializeSharedEvidenceSnapshot } from "../domain/shared-evidence-snapshot";
 import {
   KEY_CHECK_BYTES,
   KEY_CHECK_CONTEXT,
@@ -111,6 +112,8 @@ function serializeContent(content: ConversationContent): unknown {
       status: goal.status,
       capturedAt: goal.capturedAt.toISOString(),
     })),
+    // Amendment C2: every successful write serializes payload v2, so `sharedEvidence` is present, possibly empty.
+    sharedEvidence: content.sharedEvidence.map(serializeSharedEvidenceSnapshot),
   };
 }
 

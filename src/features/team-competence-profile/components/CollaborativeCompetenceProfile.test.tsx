@@ -10,6 +10,9 @@ const radarAxes = vi.hoisted(() => vi.fn());
 vi.mock("../client/use-collaborative-team-data", () => ({
   useCollaborativeTeamData: () => hook.state,
 }));
+vi.mock("../../team-competence-plan/client/use-competence-plans", () => ({
+  useCompetencePlans: () => ({ data: { phase: "loading" } }),
+}));
 vi.mock("../client/collaborative-gateway", () => ({
   saveCollaborativeLevel: saveLevel,
   saveCollaborativeMode: vi.fn(),
@@ -26,7 +29,9 @@ vi.mock("./KompetanseprofilRadar", () => ({
   },
 }));
 vi.mock("./TeamCompetenceProfile", () => ({
-  TeamCompetenceProfile: () => <div data-testid="automatic-profile" />,
+  useAutomaticTeamProfile: () => ({ current: null, retry: () => undefined }),
+  availableAutomaticRows: () => null,
+  AutomaticProfileView: () => <div data-testid="automatic-profile" />,
 }));
 
 const { CollaborativeCompetenceProfile } = await import("./CollaborativeCompetenceProfile");
@@ -78,7 +83,7 @@ describe("CollaborativeCompetenceProfile", () => {
     render(<CollaborativeCompetenceProfile teamId="team-1" />);
     expect(screen.getByTestId("radar")).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Felles nivå per område" })).toBeNull();
-    expect(screen.queryByRole("heading", { name: "Kompetanseområder" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Tildelte kompetanseområder" })).toBeNull();
   });
 
   it("gives a teamadmin the level editor, and saves a chosen level", async () => {

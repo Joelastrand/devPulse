@@ -20,10 +20,10 @@ afterEach(() => {
 });
 
 describe("/me/conversations/[conversationId] page", () => {
-  it("renders the Samtale heading, the shared personal navigation, and passes only the route id to the client view", async () => {
+  it("renders the Samtale heading without a duplicate page-level nav, and passes only the route id to the client view", async () => {
     render(await MyConversationDetailPage({ params: Promise.resolve({ conversationId: "conv-1" }) }));
     expect(screen.getByRole("heading", { level: 1, name: "Samtale" })).toBeTruthy();
-    expect(screen.getByRole("navigation", { name: "Personlig utvikling" })).toBeTruthy();
+    expect(screen.queryByRole("navigation", { name: "Personlig utvikling" })).toBeNull();
     expect(screen.getByTestId("conversation-detail")).toBeTruthy();
     expect(detailProps).toEqual([{ conversationId: "conv-1" }]);
   });

@@ -8,8 +8,11 @@ import {
   PENDING_DTO_KEYS,
   RECOVERY_ITEM_KEYS,
   SHARED_GOAL_DTO_KEYS,
+  EVIDENCE_PERIOD_DTO_KEYS,
+  EVIDENCE_SOURCE_DTO_KEYS,
 } from "../domain/dto-keys";
 import { SNAPSHOT_GOAL_STATUSES, type SnapshotGoalStatus } from "../domain/shared-goal-snapshot";
+import { ACHIEVEMENT_SNAPSHOT_KEYS, RESPONSIBILITY_SNAPSHOT_KEYS } from "../domain/shared-evidence-snapshot";
 import { hasExactKeys, isNonEmptyString, isPlainObject } from "../domain/stored-shape";
 
 /**
@@ -73,6 +76,7 @@ export interface OwnerConversationWire {
   nextSteps: string[];
   participantNotes: string;
   sharedGoals: SharedGoalWire[];
+  sharedEvidence: SharedEvidenceWire[];
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
@@ -90,6 +94,7 @@ export interface ParticipantConversationWire {
   nextSteps: string[];
   participantNotes: string;
   sharedGoals: SharedGoalWire[];
+  sharedEvidence: SharedEvidenceWire[];
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
@@ -196,6 +201,7 @@ export interface CreateConversationInput {
 export type OwnerPatchInput =
   | { title?: string; plannedFor?: string | null; ownerNotes?: string; nextSteps?: string[] }
   | { sharedGoalIds: string[] }
+  | { sharedEvidence: { responsibilityIds: string[]; achievementIds: string[] }; expectedUpdatedAt: string }
   | { participantMemberRef: string | null }
   | { status: "completed" };
 
@@ -228,9 +234,11 @@ const UPDATE_ERRORS = [
   "payload_too_large",
   "conversation_not_found",
   "conversation_completed",
+  "conversation_changed",
   "invalid_transition",
   "invalid_participant",
   "invalid_goal_selection",
+  "invalid_evidence_selection",
   "persistence_failed",
 ] as const;
 const DELETE_ERRORS = ["conversation_not_found", "persistence_failed"] as const;
@@ -271,6 +279,21 @@ export type AcceptInvitationResult = GatewayResult<AcceptInvitationSuccess, Know
 export type EndParticipationResult = GatewayResult<EndParticipationSuccess, Known<typeof PARTICIPATION_ERRORS>>;
 export type FetchOwnGoalsResult = GatewayResult<FetchOwnGoalsSuccess, Known<typeof OWN_GOALS_ERRORS>>;
 export type FetchSelectableMembersResult = GatewayResult<FetchSelectableMembersSuccess, Known<typeof SELECTABLE_MEMBERS_ERRORS>>;
+
+/** One selectable source record for the owner's picker (owner-only; carries the source id). */
+export interface EvidenceSourceWire {
+  kind: "responsibility" | "achievement";
+  id: string;
+  title: string;
+  status: "active" | "completed" | null;
+}
+export interface EvidenceSourcesResponse {
+  items: EvidenceSourceWire[];
+  truncated: boolean;
+}
+export type FetchEvidenceSourcesSuccess = { status: "ok"; response: EvidenceSourcesResponse };
+const EVIDENCE_SOURCES_ERRORS = ["conversation_not_found", "persistence_failed"] as const;
+export type FetchEvidenceSourcesResult = GatewayResult<FetchEvidenceSourcesSuccess, Known<typeof EVIDENCE_SOURCES_ERRORS>>;
 
 /* ----------------------------------- transport ------------------------------------ */
 
@@ -354,6 +377,65 @@ const isOneOf = <T extends string>(values: readonly T[], value: unknown): value 
 /** `{ ok: true }` and nothing else. */
 function isOkBody(body: unknown): boolean {
   return isPlainObject(body) && hasExactKeys(body, ["ok"]) && body.ok === true;
+}
+
+/** Relation values of an evidence snapshot (BR-15 vocabulary, mirrored from the snapshot schema). */
+export type EvidenceRelationWire = "within" | "beyond" | "unspecified";
+
+/** One evidence snapshot as the API returns it: the allow-listed keys of its kind, with no id (SPEC Amendment C2). */
+export type SharedEvidenceWire =
+  | {
+      kind: "responsibility";
+      title: string;
+      description: string | null;
+      status: "active" | "completed";
+      relationToRole: EvidenceRelationWire;
+      period: { start: string | null; end: string | null };
+      capturedAt: string;
+    }
+  | {
+      kind: "achievement";
+      title: string;
+      description: string;
+      outcome: string | null;
+      relationToRole: EvidenceRelationWire;
+      period: { start: string | null; end: string | null };
+      capturedAt: string;
+    };
+
+const RELATION_WIRE_VALUES = ["within", "beyond", "unspecified"] as const;
+
+function parseEvidencePeriod(value: unknown): { start: string | null; end: string | null } | undefined {
+  if (!isPlainObject(value) || !hasExactKeys(value, EVIDENCE_PERIOD_DTO_KEYS)) return undefined;
+  const { start, end } = value;
+  if (!isNullableText(start) || !isNullableText(end)) return undefined;
+  return { start, end };
+}
+
+function parseSharedEvidenceItem(value: unknown): SharedEvidenceWire | undefined {
+  if (!isPlainObject(value)) return undefined;
+  const keys = value.kind === "responsibility" ? RESPONSIBILITY_SNAPSHOT_KEYS : value.kind === "achievement" ? ACHIEVEMENT_SNAPSHOT_KEYS : undefined;
+  if (keys === undefined || !hasExactKeys(value, keys)) return undefined;
+  const period = parseEvidencePeriod(value.period);
+  const { title, description, relationToRole, capturedAt } = value;
+  if (!isText(title) || !isNullableText(description) || !isOneOf(RELATION_WIRE_VALUES, relationToRole) || !isText(capturedAt) || !period) return undefined;
+  if (value.kind === "responsibility") {
+    if (!isOneOf(["active", "completed"] as const, value.status)) return undefined;
+    return { kind: "responsibility", title, description, status: value.status, relationToRole, period, capturedAt };
+  }
+  if (!isNullableText(value.outcome) || description === null) return undefined;
+  return { kind: "achievement", title, description, outcome: value.outcome, relationToRole, period, capturedAt };
+}
+
+function parseSharedEvidence(value: unknown): SharedEvidenceWire[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const items: SharedEvidenceWire[] = [];
+  for (const raw of value) {
+    const item = parseSharedEvidenceItem(raw);
+    if (!item) return undefined;
+    items.push(item);
+  }
+  return items;
 }
 
 function parseOwnerParticipant(value: unknown): OwnerParticipantWire | undefined {
@@ -459,13 +541,14 @@ function toListResponse(body: unknown): ConversationListResponse | undefined {
 function parseOwnerConversation(value: unknown): OwnerConversationWire | undefined {
   if (!isPlainObject(value) || !hasExactKeys(value, OWNER_DTO_KEYS)) return undefined;
   const { conversationId, title, status, plannedFor, teamId, participant, ownerNotes, nextSteps } = value;
-  const { participantNotes, sharedGoals, createdAt, updatedAt, completedAt } = value;
+  const { participantNotes, sharedGoals, sharedEvidence, createdAt, updatedAt, completedAt } = value;
   const parsedParticipant = parseOwnerParticipant(participant);
   const parsedGoals = parseSharedGoals(sharedGoals);
+  const parsedEvidence = parseSharedEvidence(sharedEvidence);
   if (!isNonEmptyString(conversationId) || !isText(title) || !isConversationStatus(status)) return undefined;
   if (!isNullableText(plannedFor) || !isNullableText(teamId) || !parsedParticipant) return undefined;
   if (!isText(ownerNotes) || !isText(participantNotes) || !Array.isArray(nextSteps) || !nextSteps.every(isText)) return undefined;
-  if (!parsedGoals || !isText(createdAt) || !isText(updatedAt) || !isNullableText(completedAt)) return undefined;
+  if (!parsedGoals || !parsedEvidence || !isText(createdAt) || !isText(updatedAt) || !isNullableText(completedAt)) return undefined;
   return {
     conversationId,
     title,
@@ -477,6 +560,7 @@ function parseOwnerConversation(value: unknown): OwnerConversationWire | undefin
     nextSteps,
     participantNotes,
     sharedGoals: parsedGoals,
+    sharedEvidence: parsedEvidence,
     createdAt,
     updatedAt,
     completedAt,
@@ -486,12 +570,13 @@ function parseOwnerConversation(value: unknown): OwnerConversationWire | undefin
 function parseParticipantConversation(value: unknown): ParticipantConversationWire | undefined {
   if (!isPlainObject(value) || !hasExactKeys(value, PARTICIPANT_DTO_KEYS)) return undefined;
   const { conversationId, title, status, plannedFor, teamName, ownerDisplayName, ownerNotes, nextSteps } = value;
-  const { participantNotes, sharedGoals, createdAt, updatedAt, completedAt } = value;
+  const { participantNotes, sharedGoals, sharedEvidence, createdAt, updatedAt, completedAt } = value;
   const parsedGoals = parseSharedGoals(sharedGoals);
+  const parsedEvidence = parseSharedEvidence(sharedEvidence);
   if (!isNonEmptyString(conversationId) || !isText(title) || !isConversationStatus(status)) return undefined;
   if (!isNullableText(plannedFor) || !isText(teamName) || !isNullableText(ownerDisplayName)) return undefined;
   if (!isText(ownerNotes) || !isText(participantNotes) || !Array.isArray(nextSteps) || !nextSteps.every(isText)) return undefined;
-  if (!parsedGoals || !isText(createdAt) || !isText(updatedAt) || !isNullableText(completedAt)) return undefined;
+  if (!parsedGoals || !parsedEvidence || !isText(createdAt) || !isText(updatedAt) || !isNullableText(completedAt)) return undefined;
   return {
     conversationId,
     title,
@@ -503,6 +588,7 @@ function parseParticipantConversation(value: unknown): ParticipantConversationWi
     nextSteps,
     participantNotes,
     sharedGoals: parsedGoals,
+    sharedEvidence: parsedEvidence,
     createdAt,
     updatedAt,
     completedAt,
@@ -633,8 +719,47 @@ export function fetchConversation(idToken: string, conversationId: string): Prom
   );
 }
 
+/**
+ * The owner's selectable evidence records (`GET .../evidence-sources`, 200). Owner-only: a participant or foreign caller gets
+ * `conversation_not_found`. Read only. Each item carries exactly the source keys, and a bad body is `read_failed`.
+ */
+export function fetchEvidenceSources(idToken: string, conversationId: string): Promise<FetchEvidenceSourcesResult> {
+  return exchange(
+    idToken,
+    { method: "GET", path: `${conversationPath(conversationId)}/evidence-sources` },
+    { status: 200, read: jsonBody(toEvidenceSources) },
+    EVIDENCE_SOURCES_ERRORS,
+    "read_failed",
+  );
+}
+
+function toEvidenceSources(body: unknown): FetchEvidenceSourcesSuccess | undefined {
+  if (!isPlainObject(body) || !hasExactKeys(body, ["items", "truncated"]) || typeof body.truncated !== "boolean") return undefined;
+  if (!Array.isArray(body.items)) return undefined;
+  const items: EvidenceSourceWire[] = [];
+  for (const entry of body.items) {
+    if (!isPlainObject(entry) || !hasExactKeys(entry, EVIDENCE_SOURCE_DTO_KEYS)) return undefined;
+    const { kind, id, title, status } = entry;
+    if (!isOneOf(["responsibility", "achievement"] as const, kind) || !isNonEmptyString(id) || !isText(title)) return undefined;
+    if (status !== null && !isOneOf(["active", "completed"] as const, status)) return undefined;
+    if (kind === "achievement" && status !== null) return undefined;
+    items.push({ kind, id, title, status });
+  }
+  return { status: "ok", response: { items, truncated: body.truncated } };
+}
+
 /** Builds the owner `PATCH` body from the allow-list only. Any other property on the input is never sent. */
-const OWNER_PATCH_KEYS = ["title", "plannedFor", "ownerNotes", "nextSteps", "sharedGoalIds", "participantMemberRef", "status"] as const;
+const OWNER_PATCH_KEYS = [
+  "title",
+  "plannedFor",
+  "ownerNotes",
+  "nextSteps",
+  "sharedGoalIds",
+  "sharedEvidence",
+  "expectedUpdatedAt",
+  "participantMemberRef",
+  "status",
+] as const;
 
 function ownerPatchBody(input: OwnerPatchInput): Record<string, unknown> {
   const source: Partial<Record<(typeof OWNER_PATCH_KEYS)[number], unknown>> = input;

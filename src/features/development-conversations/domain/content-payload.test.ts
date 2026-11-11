@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CONTENT_PAYLOAD_KEYS, parseConversationContent } from "./content-payload";
+import { CONTENT_PAYLOAD_KEYS_V1, CONTENT_PAYLOAD_KEYS_V2, parseConversationContent } from "./content-payload";
 
 /** Synthetic test data only (invariant 15). */
 function validGoal(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -26,7 +26,8 @@ function validPayload(overrides: Record<string, unknown> = {}): Record<string, u
 
 describe("decrypted content payload (BR-51, BR-39, BR-40 limits)", () => {
   it("has exactly the five encrypted content keys", () => {
-    expect([...CONTENT_PAYLOAD_KEYS]).toEqual(["title", "ownerNotes", "nextSteps", "participantNotes", "sharedGoals"]);
+    expect([...CONTENT_PAYLOAD_KEYS_V1]).toEqual(["title", "ownerNotes", "nextSteps", "participantNotes", "sharedGoals"]);
+    expect([...CONTENT_PAYLOAD_KEYS_V2]).toEqual([...CONTENT_PAYLOAD_KEYS_V1, "sharedEvidence"]);
   });
 
   it("accepts a canonical payload with empty notes and no goals", () => {
@@ -52,6 +53,7 @@ describe("decrypted content payload (BR-51, BR-39, BR-40 limits)", () => {
             capturedAt: new Date("2026-10-14T08:30:00.000Z"),
           },
         ],
+        sharedEvidence: [],
       },
     });
   });

@@ -16,6 +16,9 @@ export interface MonthRef {
 
 export interface TimelineMarker {
   id: string;
+  title: string;
+  /** ISO calendar date of the step. Only dated steps get a marker. */
+  targetDate: string;
   /** Position in percent of the window width. */
   pct: number;
   status: MilestoneStatus;
@@ -64,11 +67,18 @@ export function buildPlanTimeline(
 
   const rows = plans.map((plan): TimelineRow => {
     const dated = plan.milestones.flatMap((milestone) => {
-      if (milestone.targetDate === null || !isValidPlanDate(milestone.targetDate)) return [];
-      return [{ milestone, day: utcDay(milestone.targetDate) }];
+      const targetDate = milestone.targetDate;
+      if (targetDate === null || !isValidPlanDate(targetDate)) return [];
+      return [{ milestone, targetDate, day: utcDay(targetDate) }];
     });
     const inWindow = dated.filter(({ day }) => day >= windowStart && day < windowEnd);
-    const markers = inWindow.map(({ milestone, day }) => ({ id: milestone.id, pct: pctOf(day), status: milestone.status }));
+    const markers: TimelineMarker[] = inWindow.map(({ milestone, targetDate, day }) => ({
+      id: milestone.id,
+      title: milestone.title,
+      targetDate,
+      pct: pctOf(day),
+      status: milestone.status,
+    }));
 
     const first = dated.length === 0 ? null : Math.min(...dated.map(({ day }) => day));
     const last = dated.length === 0 ? null : Math.max(...dated.map(({ day }) => day));

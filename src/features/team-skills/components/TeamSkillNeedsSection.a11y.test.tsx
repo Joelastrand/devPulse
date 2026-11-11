@@ -20,7 +20,8 @@ vi.mock("../client/team-skills-gateway", () => ({
 const { TeamSkillNeedsSection } = await import("./TeamSkillNeedsSection");
 
 /**
- * Accessibility sweep over the whole C2 section with the real panel, table and editor (TASK-019, BR-28):
+ * Accessibility sweep over the team needs section with the real table and editor (TASK-019, BR-28). The personal
+ * participation panel is now on /me/skills and is covered by its own tests:
  * heading order, table semantics, labelled controls, a keyboard path, live regions and text-only meaning.
  */
 
@@ -56,10 +57,9 @@ async function renderSection(canManageNeeds: boolean) {
   });
   fetchContributionMock.mockResolvedValue({ status: "ok", contributing: false, canOptIn: true });
   const user = userEvent.setup();
-  render(<TeamSkillNeedsSection teamId="team-1" token="tok" teamName="Alfa" />);
+  render(<TeamSkillNeedsSection teamId="team-1" token="tok" />);
   await screen.findByRole("heading", { name: "Kompetansebehov og dekning" });
   await screen.findAllByText("Behovet er dekket");
-  await screen.findByRole("button", { name: "Bidra til teamets kompetanseoversikt" });
   return { user };
 }
 
@@ -115,20 +115,8 @@ describe("C2 section accessibility sweep", () => {
     for (const svg of document.querySelectorAll("svg")) expect(svg.getAttribute("aria-hidden")).toBe("true");
   });
 
-  it("lets a keyboard user reach the opt-in control, the disclosure and the editor controls and operate them", async () => {
+  it("lets a keyboard user reach and operate the editor controls", async () => {
     const { user } = await renderSection(true);
-    const optIn = screen.getByRole("button", { name: "Bidra til teamets kompetanseoversikt" });
-    optIn.focus();
-    expect(document.activeElement).toBe(optIn);
-
-    const summary = screen.getByText("Slik fungerer personvernet");
-    const details = summary.closest("details") as HTMLDetailsElement;
-    expect(details.open).toBe(false);
-    summary.focus();
-    expect(summary.tagName).toBe("SUMMARY"); // native control: Enter/Space toggle it in browsers (jsdom lacks that behaviour)
-    await user.click(summary);
-    expect(details.open).toBe(true);
-
     const area = screen.getByLabelText("Kompetanseområde", { selector: "select" });
     await user.selectOptions(area, "t-c");
     expect((area as HTMLSelectElement).value).toBe("t-c");
@@ -147,7 +135,7 @@ describe("C2 section accessibility sweep", () => {
   it("announces a failed read through role=alert, in text, with a native retry button", async () => {
     fetchSkillNeedsMock.mockResolvedValue({ status: "error" });
     fetchContributionMock.mockResolvedValue({ status: "ok", contributing: false, canOptIn: true });
-    render(<TeamSkillNeedsSection teamId="team-1" token="tok" teamName="Alfa" />);
+    render(<TeamSkillNeedsSection teamId="team-1" token="tok" />);
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("Kompetansebehovene kunne ikke lastes akkurat nå.");
     const retry = await screen.findByRole("button", { name: "Prøv igjen" });

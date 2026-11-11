@@ -1,6 +1,7 @@
 import "server-only";
 import { isConversationId } from "../domain/conversation-id";
 import type { ConversationStatus } from "../domain/conversation-status";
+import type { SharedEvidenceSnapshot } from "../domain/shared-evidence-snapshot";
 import { isNonEmptyString } from "../domain/stored-shape";
 import { classifyStoredShape } from "../domain/stored-owner-conversation";
 import { resolveAreaNames, type SkillTreeNameReader } from "./area-names";
@@ -46,6 +47,8 @@ export interface ParticipantConversationDto {
   /** The caller's own text (BR-20, BR-43). */
   participantNotes: string;
   sharedGoals: OwnerSharedGoalDto[];
+  /** Owner-selected evidence snapshots, visible after acceptance only (BR-46). Stored copies only. */
+  sharedEvidence: SharedEvidenceSnapshot[];
   createdAt: Date;
   updatedAt: Date;
   completedAt: Date | null;
@@ -127,6 +130,7 @@ export async function readParticipantConversation(
           status: goal.status,
           capturedAt: goal.capturedAt,
         })),
+        sharedEvidence: record.content.sharedEvidence,
         createdAt: record.createdAt,
         updatedAt: record.updatedAt,
         completedAt: record.completedAt,

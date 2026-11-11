@@ -644,13 +644,12 @@ delete-only DTO, never a `GoalDto`.
   `/me/goals`. `Min profil` (`/me/profile`) remains a separate entry (account
   settings, not development navigation), active only on `/me/profile`. No
   separate global link for goals. Signed-out/loading headers are unchanged.
-- **BR-47 Page-level nav.** `/me/skills` and `/me/goals` render one shared
-  component: `<nav aria-label="Personlig utvikling">` containing a list of
-  exactly `Ferdigheter` (`/me/skills`) and `Mål` (`/me/goals`). The entry whose
-  href equals the current pathname **exactly** carries `aria-current="page"`;
-  the other carries none. No `Samtaler`, role or placeholder entries. No `/me`
-  index route.
-- **BR-48 Goals page `/me/goals`** (title `Mål`) covers these states, each
+- **BR-47 Page-level nav (superseded, Phase 1 personal-experience redesign).** The shared
+  page-level `Personlig utvikling` nav with `Ferdigheter` and `Mål` was removed from `/me/skills`,
+  `/me/goals` and `/me/conversations`, because the sidebar already provides these entries with active
+  states. The `/me/skills` view navigation (Oversikt, Kompetansekart, Rollesammenligning, Deling med
+  team) is unchanged. No `/me` index route.
+- **BR-48 Goals page `/me/goals`** (title `Mine mål`, Phase 1 personal-experience redesign; the former title was `Mål`) covers these states, each
   with accessible semantics:
   1. **Loading** — a status region (`role="status"`) with loading text.
   2. **Empty** — (no goals and no recovery items) empty state with a create

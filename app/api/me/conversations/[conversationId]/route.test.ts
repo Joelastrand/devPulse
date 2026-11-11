@@ -8,6 +8,7 @@ import {
   PENDING_DTO_KEYS,
   SHARED_GOAL_DTO_KEYS,
 } from "../../../../../src/features/development-conversations/domain/dto-keys";
+import { RESPONSIBILITY_SNAPSHOT_KEYS } from "../../../../../src/features/development-conversations/domain/shared-evidence-snapshot";
 
 const verifyIdTokenMock = vi.fn();
 const readOwnerConversationMock = vi.fn();
@@ -114,6 +115,7 @@ const ownerDtoFromOperation = {
   ownerNotes: "Notat",
   nextSteps: ["Steg"],
   participantNotes: "Deltakerens notat",
+  sharedEvidence: [],
   sharedGoals: [
     {
       goalTitle: "Synthetic goal",
@@ -419,6 +421,20 @@ describe("GET /api/me/conversations/[conversationId]: participant and pending vi
               memberRef: "leaked-ref",
             },
           ],
+          sharedEvidence: [
+            {
+              kind: "responsibility",
+              title: "Synthetic responsibility",
+              description: null,
+              status: "active",
+              relationToRole: "within",
+              period: { start: null, end: null, id: "leaked-period-id" },
+              capturedAt: new Date("2026-10-10T08:00:00.000Z"),
+              id: "leaked-source-id",
+              goalIds: ["leaked-goal-id"],
+              responsibilityIds: ["leaked-responsibility-id"],
+            },
+          ],
           createdAt: new Date("2026-10-01T08:00:00.000Z"),
           updatedAt: new Date("2026-10-02T08:00:00.000Z"),
           completedAt: null,
@@ -442,8 +458,13 @@ describe("GET /api/me/conversations/[conversationId]: participant and pending vi
 
     expect(Object.keys(body)).toEqual([...PARTICIPANT_DTO_KEYS]);
     expect(Object.keys(body.sharedGoals[0])).toEqual([...SHARED_GOAL_DTO_KEYS]);
+    // N-E2: the evidence snapshot carries only its kind's allow-list, and its period only start and end.
+    expect(Object.keys(body.sharedEvidence[0])).toEqual([...RESPONSIBILITY_SNAPSHOT_KEYS]);
+    expect(Object.keys(body.sharedEvidence[0].period)).toEqual(["start", "end"]);
     const text = JSON.stringify(body);
     for (const leaked of LEAKED) expect(text).not.toContain(leaked);
+    expect(text).not.toContain("leaked-source-id");
+    expect(text).not.toContain("leaked-goal-id");
   });
 
   it("returns exactly the pending DTO keys and no content, identifier or key field for a pending invitee", async () => {

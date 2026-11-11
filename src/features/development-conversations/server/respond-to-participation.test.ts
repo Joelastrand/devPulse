@@ -468,6 +468,7 @@ describe("leaveParticipation: decline and leave share one path (BR-17, IMPL-1)",
       nextSteps: ["Synthetic step"],
       participantNotes: "",
       sharedGoals: [SNAPSHOT_GOAL],
+      sharedEvidence: [],
     });
   });
 

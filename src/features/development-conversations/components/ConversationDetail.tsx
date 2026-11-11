@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
 import { LoadingState } from "../../../components/ui/LoadingState";
@@ -21,6 +21,7 @@ import { OwnerConversationEditor } from "./OwnerConversationEditor";
 import { ParticipantConversation } from "./ParticipantConversation";
 import { PendingInvitation } from "./PendingInvitation";
 import { acceptOutcome, endOutcome, type ParticipationOutcome } from "./participation-outcome";
+import { UnsavedChangesContext, type UnsavedChangesReporter } from "./unsaved-changes";
 
 type ViewState =
   | { phase: "loading" }
@@ -108,6 +109,22 @@ function keepsDraft(state: ViewState): state is Extract<ViewState, { phase: "own
  */
 export function ConversationDetail({ conversationId }: { conversationId: string }) {
   const [state, setState] = useState<ViewState>({ phase: "loading" });
+  const [dirtyKeys, setDirtyKeys] = useState<ReadonlySet<string>>(() => new Set());
+  // Stable, so a section's effect that reports through it does not re-run on every render of the detail.
+  const reporter = useMemo<UnsavedChangesReporter>(
+    () => ({
+      report(key, dirty) {
+        setDirtyKeys((previous) => {
+          if (previous.has(key) === dirty) return previous;
+          const next = new Set(previous);
+          if (dirty) next.add(key);
+          else next.delete(key);
+          return next;
+        });
+      },
+    }),
+    [],
+  );
 
   const { isCurrentGeneration } = useAuthGatedResource((token, generation) => {
     if (!token) {
@@ -198,24 +215,44 @@ export function ConversationDetail({ conversationId }: { conversationId: string 
     });
   }
 
+  const hasUnsaved = dirtyKeys.size > 0;
+  useEffect(() => {
+    if (!hasUnsaved) return;
+    // The browser's own leave prompt covers reloads and typed-in URLs. In-app navigation is guarded by the back link.
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [hasUnsaved]);
+
   return (
-    <div className="flex flex-col gap-6">
-      <p>
-        <Link href="/me/conversations" className="text-sm font-medium text-zinc-900 underline dark:text-zinc-50">
+    <div className="flex min-w-0 flex-col gap-6">
+      <div>
+        <Link
+          href="/me/conversations"
+          onClick={(event) => {
+            if (hasUnsaved && !window.confirm(conversationsCopy.unsavedChanges)) event.preventDefault();
+          }}
+          className="inline-flex min-h-9 items-center text-sm font-medium text-text-primary underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+        >
           {conversationsCopy.backToList}
         </Link>
-      </p>
-      <DetailBody
-        state={state}
-        actions={{
-          onUnauthenticated,
-          onRetry: retry,
-          onChanged: refresh,
-          onAccept: acceptPending,
-          onDecline: declinePending,
-          onLeave: leaveParticipation,
-        }}
-      />
+      </div>
+      <UnsavedChangesContext.Provider value={reporter}>
+        <DetailBody
+          state={state}
+          actions={{
+            onUnauthenticated,
+            onRetry: retry,
+            onChanged: refresh,
+            onAccept: acceptPending,
+            onDecline: declinePending,
+            onLeave: leaveParticipation,
+          }}
+        />
+      </UnsavedChangesContext.Provider>
     </div>
   );
 }

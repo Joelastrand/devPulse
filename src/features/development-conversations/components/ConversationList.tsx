@@ -10,55 +10,41 @@ function conversationHref(conversationId: string): string {
   return `/me/conversations/${id}`;
 }
 
-/** The owner's own summaries, in the server order. Recovery items are rendered by `RecoveryRegion`, not here. */
-export function OwnedConversationList({
-  items,
-  selectable = false,
-  selectedId = null,
-  onSelect,
-}: {
-  items: readonly OwnerSummaryWire[];
-  /** Wide layout: a click selects the conversation beside the list instead of navigating. */
-  selectable?: boolean;
-  selectedId?: string | null;
-  onSelect?: (conversationId: string) => void;
-}) {
+/**
+ * The owner's own summaries, in the server order. Each entry links to its own detail page; the list has no selection
+ * state. Recovery items are rendered by `RecoveryRegion`, not here.
+ */
+export function OwnedConversationList({ items }: { items: readonly OwnerSummaryWire[] }) {
   return (
-    <ul className="flex flex-col gap-2">
+    <ul className="flex flex-col divide-y divide-border-subtle overflow-hidden rounded-lg border border-border-subtle bg-surface">
       {items.map((conversation) => (
-        <Card as="li" key={conversation.conversationId} padding="sm" className="flex flex-col gap-1">
+        <li key={conversation.conversationId} className="flex flex-col gap-1 p-4">
           <div className="flex flex-wrap items-start justify-between gap-2">
-            {/* The owner detail page exists from TASK-028. Accepted participant titles stay plain text until TASK-030. */}
             <Link
               href={conversationHref(conversation.conversationId)}
-              aria-current={selectable && selectedId === conversation.conversationId ? "true" : undefined}
-              onClick={(event) => {
-                // Modified or non-primary clicks keep the browser default (for example, open in a new tab).
-                if (!selectable || !onSelect || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
-                event.preventDefault();
-                onSelect(conversation.conversationId);
-              }}
-              className="min-w-0 break-words font-medium text-zinc-900 underline dark:text-zinc-50"
+              className="min-w-0 break-words font-medium text-text-primary underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
             >
               {conversation.title}
             </Link>
             <StatusBadge>{conversationsCopy.statusLabel[conversation.status]}</StatusBadge>
           </div>
-          {conversation.plannedFor !== null && (
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              {conversationsCopy.plannedForLabel}: {conversation.plannedFor}
-            </p>
-          )}
-          <p className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-            {conversation.participant.displayName !== null && (
-              <InitialsAvatar name={conversation.participant.displayName} />
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-help text-text-secondary">
+            {conversation.plannedFor !== null && (
+              <span>
+                {conversationsCopy.plannedForLabel}: {conversation.plannedFor}
+              </span>
             )}
-            {conversationsCopy.participantStateLabel[conversation.participant.state]}
-            {conversation.participant.state !== "none" && (
-              <> · {conversation.participant.displayName ?? conversationsCopy.anonymousColleague}</>
-            )}
+            <span className="inline-flex items-center gap-2">
+              {conversation.participant.displayName !== null && (
+                <InitialsAvatar name={conversation.participant.displayName} />
+              )}
+              {conversationsCopy.participantStateLabel[conversation.participant.state]}
+              {conversation.participant.state !== "none" && (
+                <> · {conversation.participant.displayName ?? conversationsCopy.anonymousColleague}</>
+              )}
+            </span>
           </p>
-        </Card>
+        </li>
       ))}
     </ul>
   );

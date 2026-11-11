@@ -77,7 +77,8 @@ Requirement IDs `BR-n` are stable. The REQ section is noted for traceability.
 **Kompetanseplan**
 - BR-15: A team can create, edit and archive competence development plans for a team competence area. Plans have a priority, a target stage and an ordered list of milestones (REQ §5.2).
 - BR-16: Progress is the count of completed milestones out of the total. It is plan-step completion only and is never a person's skill level (REQ §5.2).
-- BR-17: Existing competence-stage records remain readable and are shown in the Kompetanseplan, unchanged (REQ §9.2).
+- BR-17: Existing competence-stage records remain readable and unchanged (REQ §9.2). They are managed and shown on Roadmap; the Kompetanseplan links to Roadmap rather than repeating them (redesign, 2026-11).
+- BR-17a: Team competence needs and coverage (`Kompetansebehov og dekning`) belong to Teamkompetanse, not the Kompetanseplan. The Kompetanseplan shows plans and their steps only; its milestone completion stays teamadmin-only writes through the existing plan save (redesign, 2026-11).
 
 **Catalog and ratings**
 - BR-18: Team admins can create, rename, reorder, activate, deactivate and archive team competence areas. Areas referenced by a rating are archived, not deleted (REQ §6.1).

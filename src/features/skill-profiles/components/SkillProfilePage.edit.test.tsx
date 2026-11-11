@@ -60,6 +60,9 @@ function selectFor(name: string) {
   return screen.getByRole("combobox", { name }) as HTMLSelectElement;
 }
 
+const assessedCard = () => screen.getByRole("region", { name: "Vurderte ferdigheter" });
+const assessedCardText = () => assessedCard().textContent ?? "";
+
 describe("SkillProfilePage — level select (TASK-008)", () => {
   it("offers exactly 'Ikke vurdert' plus the four canonical levels, level 4 being 'Avansert'", async () => {
     await renderWith(ok(skills));
@@ -91,8 +94,7 @@ describe("SkillProfilePage — level select (TASK-008)", () => {
     const row = selectFor("Arkitektur").closest("li")!;
     expect(within(row).getByRole("status").textContent).toBe("");
     expect(row.textContent).toContain("Avansert");
-    expect(screen.getByText("Du har vurdert 2 av 2 ferdigheter.")).toBeTruthy();
-    expect(within(screen.getByRole("region", { name: "Avansert" })).getByText("1")).toBeTruthy();
+    expect(assessedCardText()).toContain("2 av 2");
   });
 
   it("applies the server's canonical level, not the chosen one", async () => {
@@ -139,7 +141,7 @@ describe("SkillProfilePage — level select (TASK-008)", () => {
     expect(select.disabled).toBe(true);
     expect(select.value).toBe("");
     expect(within(select.closest("li")!).getByRole("status").textContent).toBe("Lagrer…");
-    expect(screen.getByText("Du har vurdert 1 av 2 ferdigheter.")).toBeTruthy();
+    expect(assessedCardText()).toContain("1 av 2");
     expect(selectFor("Testing").disabled).toBe(false);
 
     pending.resolve({ ok: true, level: 3 });
@@ -178,7 +180,7 @@ describe("SkillProfilePage — level select (TASK-008)", () => {
     expect(selectFor("Arkitektur").value).toBe("");
     expect(selectFor("Arkitektur").disabled).toBe(false);
     expect(selectFor("Testing").closest("li")!.querySelector('[role="alert"]')).toBeNull();
-    expect(screen.getByText("Du har vurdert 1 av 2 ferdigheter.")).toBeTruthy();
+    expect(assessedCardText()).toContain("1 av 2");
 
     setOwnSkillLevelMock.mockResolvedValueOnce({ ok: true, level: 3 });
     await userEvent.selectOptions(selectFor("Arkitektur"), "3");
@@ -197,7 +199,7 @@ describe("SkillProfilePage — level select (TASK-008)", () => {
       const row = selectFor("Arkitektur").closest("li")!;
       expect((await within(row).findByRole("alert")).textContent).toBe("Vurderingen ble ikke lagret. Prøv igjen.");
       expect(selectFor("Testing").value).toBe("2");
-      expect(screen.getByText("Du har vurdert 1 av 2 ferdigheter.")).toBeTruthy();
+      expect(assessedCardText()).toContain("1 av 2");
     },
   );
 
@@ -234,7 +236,7 @@ describe("SkillProfilePage — level select (TASK-008)", () => {
 
     await waitFor(() => expect(screen.queryByRole("combobox", { name: "Arkitektur" })).toBeNull());
     expect(fetchOwnSkillsMock).toHaveBeenCalledTimes(2);
-    expect(screen.getByText("Du har vurdert 1 av 1 ferdigheter.")).toBeTruthy();
+    expect(assessedCardText()).toContain("1 av 1");
   });
 
   it("401 on save: sign-in prompt, no data rendered, no refetch, no saved wording", async () => {

@@ -25,21 +25,38 @@ function signedInWith(token: string | null) {
 }
 
 describe("ProfileHeaderTeams", () => {
-  it("shows only teams the viewer is a member or admin of, not pending requests", async () => {
+  it("shows only genuine memberships: an admin-only team and pending requests are not shown", async () => {
     signedInWith("token");
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
       teams: [
-        { teamId: "t1", name: "Plattform", relationship: "member" },
-        { teamId: "t2", name: "Design", relationship: "admin" },
+        { teamId: "t1", name: "Plattform", relationship: "member", isMember: true },
+        { teamId: "t2", name: "Design", relationship: "admin", isMember: false },
         { teamId: "t3", name: "Data", relationship: "request_pending" },
       ],
     });
 
     render(<ProfileHeaderTeams />);
 
-    expect(await screen.findByText("Plattform, Design")).toBeTruthy();
+    expect(await screen.findByText("Plattform")).toBeTruthy();
+    expect(screen.queryByText(/Design/)).toBeNull();
     expect(screen.queryByText(/Data/)).toBeNull();
+  });
+
+  it("shows a superadmin only the teams where they hold a real membership", async () => {
+    signedInWith("token");
+    fetchTeamsOverviewMock.mockResolvedValue({
+      status: "ok",
+      teams: [
+        { teamId: "t1", name: "Plattform", relationship: "admin", isMember: true },
+        { teamId: "t2", name: "Design", relationship: "admin", isMember: false },
+      ],
+    });
+
+    render(<ProfileHeaderTeams />);
+
+    expect(await screen.findByText("Plattform")).toBeTruthy();
+    expect(screen.queryByText(/Design/)).toBeNull();
   });
 
   it("renders nothing when the viewer has no team membership", async () => {

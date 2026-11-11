@@ -4,6 +4,7 @@ import "server-only";
 import type { ConversationContent } from "../domain/content-payload";
 import type { ConversationStatus } from "../domain/conversation-status";
 import type { SharedGoalSnapshot } from "../domain/shared-goal-snapshot";
+import type { SharedEvidenceSnapshot } from "../domain/shared-evidence-snapshot";
 import type { FakeContentCodec } from "./fake-content-codec";
 import type { FakeTeamEligibilityState } from "./fake-team-eligibility";
 
@@ -42,6 +43,7 @@ export interface SeedOwnerConversationOptions {
   plannedFor?: string | null;
   participant?: { uid: string; state: "pending" | "accepted" };
   sharedGoals?: SharedGoalSnapshot[];
+  sharedEvidence?: SharedEvidenceSnapshot[];
   ownerNotes?: string;
   nextSteps?: string[];
   participantNotes?: string;
@@ -62,6 +64,7 @@ export async function seedOwnerConversation(
     nextSteps: options.nextSteps ?? [],
     participantNotes: options.participantNotes ?? "",
     sharedGoals: options.sharedGoals ?? [],
+    sharedEvidence: options.sharedEvidence ?? [],
   };
   const encoded = codec.encodeContent(content);
   if (!encoded.ok) throw new Error("fixture key unavailable");

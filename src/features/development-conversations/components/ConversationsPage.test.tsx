@@ -389,34 +389,7 @@ describe("ConversationsPage composition (visual-redesign TASK-012)", () => {
     expect(container.querySelector("img")).toBeNull();
   });
 
-  it("on wide screens selects a conversation into the side pane instead of navigating", async () => {
-    vi.stubGlobal("matchMedia", (query: string) => ({
-      matches: query === "(min-width: 1280px)",
-      media: query,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    }));
-    await renderReady(
-      list({
-        owned: { items: [summary({ conversationId: "conv-1", title: "Valgt samtale" })], truncated: false },
-      }),
-    );
-    const user = userEvent.setup();
-
-    await waitFor(() => expect(document.querySelector("aside")?.textContent).toContain(conversationsCopy.selectPrompt));
-    const link = screen.getByRole("link", { name: "Valgt samtale" });
-    await user.click(link);
-    expect(link.getAttribute("aria-current")).toBe("true");
-    await waitFor(() => expect(document.querySelector("aside")?.textContent).not.toContain(conversationsCopy.selectPrompt));
-  });
-it("switching the selection loads the newly selected conversation and moves the selected marker", async () => {
-    vi.stubGlobal("matchMedia", (query: string) => ({
-      matches: query === "(min-width: 1280px)",
-      media: query,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    }));
-    fetchConversationMock.mockClear();
+  it("every conversation title links to its own detail page, with no side pane and no selection marker", async () => {
     await renderReady(
       list({
         owned: {
@@ -428,33 +401,30 @@ it("switching the selection loads the newly selected conversation and moves the 
         },
       }),
     );
-    const user = userEvent.setup();
 
-    await user.click(screen.getByRole("link", { name: "Samtale A" }));
-    await waitFor(() => expect(fetchConversationMock).toHaveBeenLastCalledWith(expect.any(String), "conv-a"));
-    await user.click(screen.getByRole("link", { name: "Samtale B" }));
-    await waitFor(() => expect(fetchConversationMock).toHaveBeenLastCalledWith(expect.any(String), "conv-b"));
-
-    expect(screen.getByRole("link", { name: "Samtale B" }).getAttribute("aria-current")).toBe("true");
-    expect(screen.getByRole("link", { name: "Samtale A" }).getAttribute("aria-current")).toBeNull();
+    expect(screen.getByRole("link", { name: "Samtale A" }).getAttribute("href")).toBe("/me/conversations/conv-a");
+    expect(screen.getByRole("link", { name: "Samtale B" }).getAttribute("href")).toBe("/me/conversations/conv-b");
+    expect(document.querySelector("aside")).toBeNull();
+    expect(document.querySelector('[aria-current="true"]')).toBeNull();
   });
 
-  it("below xl the title link keeps its default navigation (the click is not default-prevented)", async () => {
-    vi.stubGlobal("matchMedia", (query: string) => ({
-      matches: false,
-      media: query,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    }));
+  it("does not prevent the default navigation of a title link, so the detail opens as a normal page", async () => {
     await renderReady(
-      list({
-        owned: { items: [summary({ conversationId: "conv-1", title: "Smal skjerm" })], truncated: false },
-      }),
+      list({ owned: { items: [summary({ conversationId: "conv-1", title: "Vanlig lenke" })], truncated: false } }),
     );
 
-    const notPrevented = fireEvent.click(screen.getByRole("link", { name: "Smal skjerm" }));
-    expect(notPrevented).toBe(true);
-    expect(document.querySelector("aside")).toBeNull();
+    expect(fireEvent.click(screen.getByRole("link", { name: "Vanlig lenke" }))).toBe(true);
+  });
+
+  it("a filter that hides every entry says so, instead of showing an empty list", async () => {
+    await renderReady(
+      list({ owned: { items: [summary({ conversationId: "conv-1", title: "Åpen samtale" })], truncated: false } }),
+    );
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: conversationsCopy.filters.completed }));
+    expect(screen.getByText(conversationsCopy.filterEmpty)).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Åpen samtale" })).toBeNull();
   });
 });
 

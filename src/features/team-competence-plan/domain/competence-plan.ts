@@ -129,6 +129,15 @@ export function planProgress(milestones: readonly PlanMilestone[]): PlanProgress
   };
 }
 
+/**
+ * Width of the completed fill as a percent of a bar's track: completed / total, exact (no rounding). Zero when there are
+ * no milestones, so an empty plan never reads as complete. Timeline length is never an input.
+ */
+export function progressFillPercent(progress: PlanProgress): number {
+  if (progress.total <= 0) return 0;
+  return Math.min(100, Math.max(0, (progress.completed / progress.total) * 100));
+}
+
 export interface MilestoneInput {
   /** Present for an existing milestone; absent for a new one. */
   id?: string;

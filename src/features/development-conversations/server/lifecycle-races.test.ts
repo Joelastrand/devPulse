@@ -455,6 +455,7 @@ describe("BR-50 (2): revoke vs participant write (BR-16, BR-20)", () => {
       nextSteps: [STEP],
       participantNotes: "",
       sharedGoals: [],
+      sharedEvidence: [],
     });
   });
 
@@ -790,6 +791,7 @@ describe("leave vs owner update, leave vs leave, and notes vs section writes (BR
       nextSteps: [STEP],
       participantNotes: "",
       sharedGoals: [],
+      sharedEvidence: [],
     });
   });
 
@@ -813,6 +815,7 @@ describe("leave vs owner update, leave vs leave, and notes vs section writes (BR
       nextSteps: [STEP],
       participantNotes: "",
       sharedGoals: [],
+      sharedEvidence: [],
     });
   });
 
@@ -855,6 +858,7 @@ describe("leave vs owner update, leave vs leave, and notes vs section writes (BR
       nextSteps: ["Late step"],
       participantNotes: "Committed note",
       sharedGoals: [],
+      sharedEvidence: [],
     });
   });
 
@@ -875,6 +879,7 @@ describe("leave vs owner update, leave vs leave, and notes vs section writes (BR
       nextSteps: [STEP],
       participantNotes: "Committed note",
       sharedGoals: [],
+      sharedEvidence: [],
     });
   });
 });

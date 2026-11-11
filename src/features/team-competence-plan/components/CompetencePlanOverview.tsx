@@ -1,29 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Circle, FlaskConical, Layers, Monitor, Network, ShieldCheck, type LucideIcon } from "lucide-react";
+import { CircleCheck, CircleDashed, ListChecks, Target, type LucideIcon } from "lucide-react";
 import { Badge } from "../../../components/ui/Badge";
+import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { Icon } from "../../../components/ui/Icon";
-import { formatPlanDate, planCardStatus } from "../domain/plan-presentation";
+import { formatPlanDate, isMilestoneOverdue, planSummaryMetrics } from "../domain/plan-presentation";
 import { buildPlanTimeline, nextPlanSteps, type MonthRef, type TimelineSpan } from "../domain/plan-timeline";
-import { PLAN_CARD_STATUS_LABEL, PRIORITY_LABEL, MILESTONE_STATUS_LABEL, competencePlanCopy, planOverviewCopy } from "../copy";
+import { MILESTONE_STATUS_LABEL, competencePlanCopy, planOverviewCopy } from "../copy";
 import type { ClientCompetencePlan } from "../client/competence-plan-gateway";
-import { planProgress } from "../domain/competence-plan";
-import type { RoadmapPriority } from "../../roadmap/domain/roadmap-item";
+import { AREA_TONE_CLASSES, areaVisualFor } from "../domain/area-visual";
+import { PlanTimeline } from "./PlanTimeline";
 
-const PRIORITY_RANK: Readonly<Record<RoadmapPriority, number>> = { high: 0, medium: 1, low: 2 };
-
-const MONTH_FORMAT = new Intl.DateTimeFormat("nb-NO", { month: "short", year: "numeric", timeZone: "UTC" });
-
-const AREA_ICONS: readonly LucideIcon[] = [FlaskConical, Monitor, Layers, Network, ShieldCheck];
-
-/** Decorative area icon, chosen deterministically from the tree id. It carries no meaning, so the name stays the label. */
-export function areaIconFor(treeId: string): LucideIcon {
-  let sum = 0;
-  for (const char of treeId) sum += char.charCodeAt(0);
-  return AREA_ICONS[sum % AREA_ICONS.length] ?? Layers;
-}
+const todayUtc = (now: Date): string => now.toISOString().slice(0, 10);
 
 export function currentMonth(now: Date = new Date()): MonthRef {
   return { year: now.getUTCFullYear(), month: now.getUTCMonth() + 1 };
@@ -35,29 +25,31 @@ export interface CompetencePlanOverviewProps {
   nameOf: (treeId: string) => string | null;
   /** Injected for tests; defaults to the current UTC month. */
   start?: MonthRef;
+  /** Injected for tests; an ISO day (`YYYY-MM-DD`). Defaults to today (UTC). */
+  today?: string;
+  /** Scrolls to and expands a plan's card in "Detaljer og tiltak". */
+  onOpenPlan: (treeId: string) => void;
 }
 
 /**
- * Overview of the team's plans (reference 20): a 3/6-month timeline of dated milestones, the next open steps and the
- * team's priorities. Only plan data is used. No member rating, skill average or invented metric is shown.
+ * Overview of the team's plans (reference 20): a 3/6-month timeline on the left, and on the right a compact progress
+ * summary and the next open steps. The milestone checklist itself lives in each plan's card, not here, so no step is
+ * repeated. Only plan data is used; no member rating or invented metric is shown.
  */
-export function CompetencePlanOverview({ plans, nameOf, start }: CompetencePlanOverviewProps) {
+export function CompetencePlanOverview({ plans, nameOf, start, today, onOpenPlan }: CompetencePlanOverviewProps) {
   const [span, setSpan] = useState<TimelineSpan>(6);
   const [fallbackStart] = useState<MonthRef>(() => currentMonth());
+  const [fallbackToday] = useState<string>(() => todayUtc(new Date()));
   const windowStart = start ?? fallbackStart;
+  const todayIso = today ?? fallbackToday;
   const active = plans.filter((plan) => !plan.archived);
   const timeline = buildPlanTimeline(active, windowStart, span);
-  const timelineRows = active.map((plan) => ({ plan, row: timeline.rows.find((row) => row.treeId === plan.treeId) }));
   const hasAnyBar = timeline.rows.some((row) => row.bar !== null);
   const steps = nextPlanSteps(active, 4);
-  // Goals are the plans' own milestones, checked when completed. Capped to keep the card short.
-  const goals = active
-    .flatMap((plan) => plan.milestones.map((milestone) => ({ key: `${plan.treeId}-${milestone.id}`, title: milestone.title, done: milestone.status === "completed" })))
-    .slice(0, 6);
-  const needs = [...active].sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]);
+  const metrics = planSummaryMetrics(active);
 
   return (
-    <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,7fr)_minmax(16rem,3fr)]">
       <Card as="section" variant="bordered" padding="md" aria-labelledby="plan-timeline-heading" className="flex min-w-0 flex-col gap-4 self-start">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-col gap-1">
@@ -84,90 +76,37 @@ export function CompetencePlanOverview({ plans, nameOf, start }: CompetencePlanO
           </div>
         </div>
 
-        {timeline.rows.length === 0 ? null : (
-          <>
-            <p className="text-sm text-text-secondary lg:hidden">{planOverviewCopy.mobileNotice}</p>
-            <div className="hidden min-w-0 lg:block">
-              <div className="grid" style={{ gridTemplateColumns: `minmax(9rem,13rem) repeat(${span}, minmax(0,1fr))` }}>
-                <div className="border-b border-border-subtle py-2 text-sm font-medium text-text-secondary">
-                  {planOverviewCopy.areaColumn}
-                </div>
-                {timeline.months.map((month) => (
-                  <div
-                    key={`${month.year}-${month.month}`}
-                    className="border-b border-l border-border-subtle py-2 pl-2 text-sm text-text-secondary"
-                  >
-                    {MONTH_FORMAT.format(new Date(Date.UTC(month.year, month.month - 1, 1)))}
-                  </div>
-                ))}
-                {timelineRows.map(({ plan, row }) => {
-                  const name = nameOf(plan.treeId) ?? competencePlanCopy.areaUnavailable;
-                  const progress = planProgress(plan.milestones);
-                  const label = `${PLAN_CARD_STATUS_LABEL[planCardStatus(plan.milestones)]} (${competencePlanCopy.progress(progress.completed, progress.total)})`;
-                  return (
-                    <div key={plan.treeId} className="contents">
-                      <div className="flex min-h-14 items-center border-b border-border-subtle py-2 pr-3 text-sm font-medium text-text-primary">
-                        <span className="flex min-w-0 items-center gap-2">
-                          <Icon icon={areaIconFor(plan.treeId)} size="inline" className="shrink-0 text-primary" />
-                          <span className="truncate">{name}</span>
-                        </span>
-                      </div>
-                      <div
-                        className="relative border-b border-border-subtle"
-                        style={{ gridColumn: `2 / span ${span}` }}
-                        data-testid={`timeline-row-${plan.treeId}`}
-                      >
-                        {row?.bar ? (
-                          <div
-                            className="absolute top-1/2 flex h-7 -translate-y-1/2 items-center overflow-hidden rounded-full bg-primary px-3 text-xs font-medium whitespace-nowrap text-primary-text"
-                            style={{ left: `${row.bar.startPct}%`, width: `${row.bar.widthPct}%` }}
-                          >
-                            <span className="truncate">{label}</span>
-                          </div>
-                        ) : (
-                          <p className="flex min-h-14 items-center px-2 text-xs text-text-secondary">{planOverviewCopy.noDatesInWindow}</p>
-                        )}
-                        {row?.markers.map((marker) => (
-                          <span
-                            key={marker.id}
-                            aria-hidden="true"
-                            className={
-                              "absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-surface " +
-                              (marker.status === "completed" ? "bg-success-text" : "bg-text-secondary")
-                            }
-                            style={{ left: `${marker.pct}%` }}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </>
-        )}
-
+        {active.length === 0 ? null : <PlanTimeline plans={active} nameOf={nameOf} model={timeline} span={span} />}
         {hasAnyBar ? null : <p className="text-sm text-text-secondary">{planOverviewCopy.timelineEmpty}</p>}
       </Card>
 
       <div className="flex flex-col gap-5">
-        <Card as="section" variant="bordered" padding="md" aria-labelledby="plan-goals-heading" className="flex flex-col gap-3">
+        <Card as="section" variant="bordered" padding="md" aria-labelledby="plan-goals-heading" className="flex flex-col gap-4">
           <h3 id="plan-goals-heading" className="text-base font-semibold text-text-primary">
             {planOverviewCopy.goalsHeading}
           </h3>
-          <p className="text-sm text-text-secondary">{planOverviewCopy.goalsHint}</p>
-          {goals.length === 0 ? (
+          {metrics.activePlans === 0 ? (
             <p className="text-sm text-text-secondary">{planOverviewCopy.goalsEmpty}</p>
           ) : (
-            <ul className="flex flex-col gap-2">
-              {goals.map((goal) => (
-                <li key={goal.key} className="flex items-start gap-3 text-sm">
-                  <Icon icon={goal.done ? Check : Circle} size="inline" className={goal.done ? "mt-0.5 text-success-text" : "mt-0.5 text-text-secondary"} />
-                  <span className={goal.done ? "text-text-secondary line-through" : "text-text-primary"}>{goal.title}</span>
-                  <span className="sr-only">{goal.done ? planOverviewCopy.goalDone : planOverviewCopy.goalOpen}</span>
-                </li>
-              ))}
-            </ul>
+            <>
+              <dl className="grid grid-cols-2 gap-3">
+                <Metric icon={ListChecks} tone="info" label={planOverviewCopy.metricPlans} value={String(metrics.activePlans)} />
+                <Metric icon={CircleCheck} tone="success" label={planOverviewCopy.metricCompleted} value={String(metrics.completedSteps)} />
+                <Metric icon={CircleDashed} tone="warning" label={planOverviewCopy.metricRemaining} value={String(metrics.remainingSteps)} />
+                <Metric icon={Target} tone="info" label={planOverviewCopy.metricPercent} value={metrics.percent === null ? "–" : `${metrics.percent} %`} />
+              </dl>
+              <div
+                role="progressbar"
+                aria-label={planOverviewCopy.metricPercent}
+                aria-valuemin={0}
+                aria-valuemax={metrics.totalSteps}
+                aria-valuenow={metrics.completedSteps}
+                aria-valuetext={metrics.percent === null ? planOverviewCopy.metricNoSteps : `${metrics.percent} %`}
+                className="h-2 overflow-hidden rounded-full bg-border-strong/40"
+              >
+                <div className="h-full rounded-full bg-primary motion-safe:transition-[width] motion-safe:duration-progress" style={{ width: `${metrics.percent ?? 0}%` }} />
+              </div>
+            </>
           )}
         </Card>
 
@@ -178,45 +117,65 @@ export function CompetencePlanOverview({ plans, nameOf, start }: CompetencePlanO
           {steps.length === 0 ? (
             <p className="text-sm text-text-secondary">{planOverviewCopy.nextStepsEmpty}</p>
           ) : (
-            <ol className="flex flex-col gap-3">
-              {steps.map((step) => (
-                <li key={`${step.treeId}-${step.milestone.id}`} className="flex flex-col gap-1">
-                  <span className="text-sm font-medium text-text-primary">{step.milestone.title}</span>
-                  <span className="flex flex-wrap items-center gap-2 text-xs text-text-secondary">
-                    <span>{nameOf(step.treeId) ?? competencePlanCopy.areaUnavailable}</span>
-                    {formatPlanDate(step.milestone.targetDate) ? <span>· {formatPlanDate(step.milestone.targetDate)}</span> : null}
-                    <Badge>{MILESTONE_STATUS_LABEL[step.milestone.status]}</Badge>
-                  </span>
-                </li>
-              ))}
-            </ol>
-          )}
-        </Card>
-
-        <Card as="section" variant="bordered" padding="md" aria-labelledby="plan-needs-heading" className="flex flex-col gap-3">
-          <h3 id="plan-needs-heading" className="text-base font-semibold text-text-primary">
-            {planOverviewCopy.needsHeading}
-          </h3>
-          <p className="text-sm text-text-secondary">{planOverviewCopy.needsHint}</p>
-          {needs.length === 0 ? (
-            <p className="text-sm text-text-secondary">{planOverviewCopy.needsEmpty}</p>
-          ) : (
-            <ol className="flex flex-col gap-2">
-              {needs.map((plan, index) => (
-                <li key={plan.treeId} className="flex items-center justify-between gap-3 text-sm">
-                  <span className="flex min-w-0 items-center gap-2">
-                    <span aria-hidden="true" className="flex size-6 shrink-0 items-center justify-center rounded-full bg-surface-subtle text-xs font-semibold text-text-primary">
-                      {index + 1}
-                    </span>
-                    <span className="truncate text-text-primary">{nameOf(plan.treeId) ?? competencePlanCopy.areaUnavailable}</span>
-                  </span>
-                  <Badge>{PRIORITY_LABEL[plan.priority]}</Badge>
-                </li>
-              ))}
-            </ol>
+            <>
+              <p className="text-xs text-text-secondary">{planOverviewCopy.nextStepsHint}</p>
+              <ul className="flex flex-col divide-y divide-border-subtle">
+                {steps.map((step) => {
+                  const areaName = nameOf(step.treeId) ?? competencePlanCopy.areaUnavailable;
+                  const visual = areaVisualFor(nameOf(step.treeId), step.treeId);
+                  const tone = AREA_TONE_CLASSES[visual.tone];
+                  const overdue = isMilestoneOverdue(step.milestone, todayIso);
+                  const date = formatPlanDate(step.milestone.targetDate);
+                  return (
+                    <li key={`${step.treeId}-${step.milestone.id}`} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+                      <span aria-hidden="true" className={"flex size-8 shrink-0 items-center justify-center rounded-field " + tone.subtle}>
+                        <Icon icon={visual.icon} size="inline" className={tone.text} />
+                      </span>
+                      <div className="flex min-w-0 flex-1 flex-col gap-1">
+                        <span className="text-sm font-medium text-text-primary">{step.milestone.title}</span>
+                        <span className="text-xs text-text-secondary">
+                          {areaName} · {date ?? competencePlanCopy.milestoneNoDate}
+                        </span>
+                        <span className="flex flex-wrap gap-1">
+                          <Badge>{overdue ? planOverviewCopy.overdue : MILESTONE_STATUS_LABEL[step.milestone.status]}</Badge>
+                        </span>
+                      </div>
+                      <Button
+                        variant="tertiary"
+                        size="sm"
+                        className="shrink-0"
+                        aria-label={planOverviewCopy.openPlanFor(areaName, step.milestone.title)}
+                        onClick={() => onOpenPlan(step.treeId)}
+                      >
+                        {planOverviewCopy.openPlan}
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
           )}
         </Card>
       </div>
     </div>
   );
 }
+
+const METRIC_TONE: Record<"info" | "success" | "warning", { text: string; subtle: string }> = {
+  info: { text: "text-info-text", subtle: "bg-info-subtle" },
+  success: { text: "text-success-text", subtle: "bg-success-subtle" },
+  warning: { text: "text-warning-text", subtle: "bg-warning-subtle" },
+};
+
+function Metric({ icon, tone, label, value }: { icon: LucideIcon; tone: keyof typeof METRIC_TONE; label: string; value: string }) {
+  return (
+    <div className="flex flex-col gap-2 rounded-field border border-border-subtle p-3">
+      <span className={"flex size-8 items-center justify-center rounded-field " + METRIC_TONE[tone].subtle}>
+        <Icon icon={icon} size="inline" className={METRIC_TONE[tone].text} />
+      </span>
+      <dt className="text-xs text-text-secondary">{label}</dt>
+      <dd className="text-xl font-semibold text-text-primary">{value}</dd>
+    </div>
+  );
+}
+

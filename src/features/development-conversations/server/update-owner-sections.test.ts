@@ -459,6 +459,7 @@ describe("updateOwnerSections: transactional read on retry (BR-49, no stale-payl
           nextSteps: [],
           participantNotes: "",
           sharedGoals: [],
+          sharedEvidence: [],
         });
         if (!concurrent.ok) throw new Error("fixture key unavailable");
         await store.runTransaction(async (tx) => {

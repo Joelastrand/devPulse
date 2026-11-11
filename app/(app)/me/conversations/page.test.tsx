@@ -13,14 +13,11 @@ const { default: MyConversationsPage } = await import("./page");
 afterEach(cleanup);
 
 describe("/me/conversations page", () => {
-  it("renders the Samtaler heading, the conversations feature component and the shared personal navigation with only Samtaler current", () => {
+  it("renders the Samtaler heading and the conversations feature component, without a duplicate page-level nav", () => {
     render(<MyConversationsPage />);
     expect(screen.getByRole("heading", { level: 1, name: "Samtaler" })).toBeTruthy();
     expect(screen.getByTestId("conversations-page")).toBeTruthy();
-    const nav = screen.getByRole("navigation", { name: "Personlig utvikling" });
-    const current = nav.querySelectorAll('a[aria-current="page"]');
-    expect(current).toHaveLength(1);
-    expect(current[0]?.textContent).toBe("Samtaler");
+    expect(screen.queryByRole("navigation", { name: "Personlig utvikling" })).toBeNull();
   });
 });
 
