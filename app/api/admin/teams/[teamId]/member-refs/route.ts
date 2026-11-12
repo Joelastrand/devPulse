@@ -4,7 +4,7 @@ import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
- * Admin-only member-ref preparation endpoint (docs/features/team-skill-
+ * Admin-only member-ref preparation endpoint (docs/archive/features/team-skill-
  * planning/SPEC.md — BR-3). Kept thin — authorization, the transaction and
  * every rule live in `materializeMemberRefs`. The request takes no body (none
  * is ever read) and `teamId` comes from the path but is never authorization

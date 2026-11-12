@@ -1,11 +1,11 @@
 import "server-only";
-import { encrypt } from "../../../lib/encryption/encryption";
+import { encryptRecord } from "../../../lib/encryption/record-envelope";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import { runFencedTransaction, writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import { isValidTeamStatus } from "../../teams/domain/team";
 import { isValidMembershipFor, membershipDocId } from "../../teams/domain/team-membership";
-import type { ForumThreadRecord } from "../domain/forum-thread";
+import { forumThreadContext, type ForumThreadRecord } from "../domain/forum-thread";
 import { validateThreadBody, validateThreadTitle } from "../domain/thread-content";
 import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 
@@ -14,11 +14,13 @@ const TEAMS_COLLECTION = "teams";
 const MEMBERSHIPS_COLLECTION = "teamMemberships";
 
 /**
- * The write seam this operation depends on. Inside the transaction `add` creates the document with a pre-generated id and
- * returns that id, so the id is returned only from the attempt that commits (TASK-029).
+ * The write seam this operation depends on. `reserveId` yields the document id before encryption, because the thread is
+ * sealed with AAD `forum-thread:<teamId>:<threadId>`. `create` writes inside the transaction, so the id is returned only
+ * from the attempt that commits (TASK-029). Firestore may re-run the work; each attempt reserves its own id.
  */
 export interface ForumThreadsCollection {
-  add(record: ForumThreadRecord): Promise<{ id: string }>;
+  reserveId(): string;
+  create(threadId: string, record: ForumThreadRecord): void;
 }
 
 /** The read seam for a real `teamMemberships/{uid}__{teamId}` record. Returns raw data; `createThread` validates it. */
@@ -62,10 +64,11 @@ function runThreadTransaction<T>(uid: string, work: (scope: ThreadTransactionSco
         },
       },
       collection: {
-        async add(record) {
-          const ref = db.collection(FORUM_THREADS_COLLECTION).doc();
-          tx.create(ref, record);
-          return { id: ref.id };
+        reserveId() {
+          return db.collection(FORUM_THREADS_COLLECTION).doc().id;
+        },
+        create(threadId, record) {
+          tx.create(db.collection(FORUM_THREADS_COLLECTION).doc(threadId), record);
         },
       },
     }),
@@ -95,7 +98,7 @@ export interface CreateThreadDeps {
 }
 
 /**
- * Creates one thread for `teamId` (docs/features/team-forum/SPEC.md — "Server operations" → `createThread`; BR-1 through BR-7,
+ * Creates one thread for `teamId` (docs/archive/features/team-forum/SPEC.md — "Server operations" → `createThread`; BR-1 through BR-7,
  * BR-9, BR-47). `teamId` is the caller's trusted route scope; `authorUid` is always the verified caller's own `uid`.
  *
  * Order: verify the ID token (`sign_in_required`) → validate `rawTitle` and `rawBody` (`invalid_input`, nothing read yet) → one
@@ -172,9 +175,10 @@ async function createThreadInTransaction(
     return { ok: false, error: "team_disabled" };
   }
 
+  const threadId = scope.collection.reserveId();
   let encrypted;
   try {
-    encrypted = encrypt(JSON.stringify({ title, body }));
+    encrypted = encryptRecord(JSON.stringify({ title, body }), forumThreadContext(teamId, threadId));
   } catch {
     return { ok: false, error: "encryption_failed" };
   }
@@ -186,9 +190,10 @@ async function createThreadInTransaction(
     iv: encrypted.iv,
     authTag: encrypted.authTag,
     keyVersion: encrypted.keyVersion,
+    keyId: encrypted.keyId,
     createdAt,
   };
 
-  const { id } = await scope.collection.add(record);
-  return { ok: true, threadId: id };
+  scope.collection.create(threadId, record);
+  return { ok: true, threadId };
 }

@@ -3,7 +3,7 @@ import type { RequiredLevel } from "./domain/skill-need";
 import { SKILL_COVERAGE_MIN_CONTRIBUTORS } from "./domain/skill-coverage-policy";
 
 /**
- * Norwegian copy for the team skill needs section (docs/features/team-skill-needs-and-matrix/
+ * Norwegian copy for the team skill needs section (docs/archive/features/team-skill-needs-and-matrix/
  * SPEC.md — BR-26, BR-27). A need is a team-level plan, never a requirement on a person; there are
  * no counts, evaluative words or unqualified "anonym" here (BR-34 #8). Level names are the C1 labels.
  */

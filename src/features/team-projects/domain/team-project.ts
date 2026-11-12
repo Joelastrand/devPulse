@@ -2,7 +2,7 @@ import { isRoadmapPriority, ROADMAP_PRIORITIES, type RoadmapPriority } from "../
 import { isValidPlanDate, planningToday } from "../../roadmap/domain/roadmap-dates";
 
 /**
- * Team project domain (docs/features/team-experience-redesign SPEC — BR-6, BR-7, BR-9).
+ * Team project domain (docs/archive/features/team-experience-redesign SPEC — BR-6, BR-7, BR-9).
  *
  * Projects are delivery items, separate from competence-stage roadmap records
  * (AD-1, BR-14). Pure: no Firestore, no clock reads, no I/O.

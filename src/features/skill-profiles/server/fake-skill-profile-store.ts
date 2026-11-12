@@ -1,4 +1,8 @@
 import type { SkillProfileStore, SkillProfileTransaction } from "./skill-profile-store";
+import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../../skill-trees/domain/skill-tree-test-fixtures";
+
+// Trees are read sealed, as in production; the test key is set once when this test double loads.
+stubSkillTreeEncryptionKey();
 
 type Doc = Record<string, unknown>;
 
@@ -36,7 +40,7 @@ export function createFakeSkillProfileStore(
         },
         async readSkillTree(treeId) {
           treeReads.push(treeId);
-          return skillTrees[treeId];
+          return sealedSkillTreeFixture(treeId, skillTrees[treeId]);
         },
         setLevel(treeId, level, stamps) {
           pending.push(() => {

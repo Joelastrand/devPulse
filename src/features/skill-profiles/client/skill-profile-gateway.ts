@@ -3,7 +3,7 @@ import type { OwnSkillsDto } from "../domain/skill-profile-view";
 
 /**
  * Browser gateway for the signed-in user's own skill self-assessment
- * (docs/features/individual-skill-self-assessment/SPEC.md — BR-8, BR-12–BR-15,
+ * (docs/archive/features/individual-skill-self-assessment/SPEC.md — BR-8, BR-12–BR-15,
  * BR-17): thin `fetch` wrappers around `GET`/`DELETE /api/me/skills` and
  * `PUT`/`DELETE /api/me/skills/{treeId}`. The subject is only the token's own
  * identity — no uid, e-mail or team is ever sent; the only resource

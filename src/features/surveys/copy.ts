@@ -1,10 +1,10 @@
 /**
  * Norwegian user-facing copy for `/survey/[surveyId]`
  * (`SurveyParticipationView`, `SurveyResponseForm`), per the copy-module
- * convention established in `docs/features/product-ux-shell/SPEC.md` BR-2.
+ * convention established in `docs/archive/features/product-ux-shell/SPEC.md` BR-2.
  * Internal/technical outcome values (`"scheduled"`, `"forbidden"`, etc.)
  * are never shown to a user — each is mapped to plain Norwegian text here
- * (docs/features/managed-surveys/SPEC.md — "UI/UX requirements").
+ * (docs/archive/features/managed-surveys/SPEC.md — "UI/UX requirements").
  *
  * The three question labels intentionally repeat `pulse-survey/copy.ts`'s
  * exact wording (the fixed question set is unchanged by this feature,
@@ -13,7 +13,7 @@
  */
 export const surveysCopy = {
   /**
-   * Intro screen before the first question (docs/features/product-experience/
+   * Intro screen before the first question (docs/archive/features/product-experience/
    * SPEC.md — Locked privacy notice for the survey page, class A). The notice
    * is mode-neutral and names no threshold. `notice` is the verbatim text, and
    * its lead is shown in bold.
@@ -66,7 +66,7 @@ export const surveysCopy = {
   },
   /**
    * Norwegian copy for `/admin/teams/[teamId]`'s survey-management section
-   * (`AdminTeamDetail.tsx`'s "Undersøkelser" section, docs/features/
+   * (`AdminTeamDetail.tsx`'s "Undersøkelser" section, docs/archive/features/
    * managed-surveys/SPEC.md — TASK-009). Internal/technical values
    * (`"public"`, `"authenticated"`, `"scheduled"`, `"open"`, `"closed"`) are
    * never shown — every one is mapped to plain Norwegian text here.
@@ -91,7 +91,7 @@ export const surveysCopy = {
       authenticated: "Kun medlemmer av teamet",
     },
     create: {
-      /** Accessible name for the progressive-disclosure toggle that reveals this form (docs/features/ui-refresh/SPEC.md — BR-12), mirroring `adminCopy.teams.newTeamButton`'s "Nytt X" convention. */
+      /** Accessible name for the progressive-disclosure toggle that reveals this form (docs/archive/features/ui-refresh/SPEC.md — BR-12), mirroring `adminCopy.teams.newTeamButton`'s "Nytt X" convention. */
       toggleButton: "Ny undersøkelse",
       sectionTitle: "Opprett ny undersøkelse",
       accessModeLegend: "Hvem kan svare?",
@@ -104,16 +104,16 @@ export const surveysCopy = {
       endAtLabel: "Slutt (valgfritt)",
       submit: "Opprett undersøkelse",
       submitting: "Oppretter…",
-      /** Closes the form without creating anything (docs/features/ui-refresh/SPEC.md — BR-14). */
+      /** Closes the form without creating anything (docs/archive/features/ui-refresh/SPEC.md — BR-14). */
       cancelButton: "Avbryt",
       error: "Noe gikk galt under opprettelsen av undersøkelsen. Prøv igjen.",
     },
-    /** e.g. "Minst 5 svar" — the configured threshold is not sensitive (docs/features/managed-surveys/SPEC.md — "Per-survey result threshold"). */
+    /** e.g. "Minst 5 svar" — the configured threshold is not sensitive (docs/archive/features/managed-surveys/SPEC.md — "Per-survey result threshold"). */
     minimumResponsesSummary: (minimumResponses: number) => `Minst ${minimumResponses} svar`,
     linkLabel: "Lenke:",
     copyLinkButton: "Kopier lenke",
     linkCopied: "Lenke kopiert",
-    /** Shown when `navigator.clipboard.writeText` rejects (docs/features/ui-refresh/SPEC.md — BR-22) — never exposes the underlying clipboard-API error detail, and the user can simply try again. */
+    /** Shown when `navigator.clipboard.writeText` rejects (docs/archive/features/ui-refresh/SPEC.md — BR-22) — never exposes the underlying clipboard-API error detail, and the user can simply try again. */
     linkCopyError: "Kunne ikke kopiere lenken. Prøv igjen.",
     openButton: "Åpne",
     openingButton: "Åpner…",
@@ -131,7 +131,7 @@ export const surveysCopy = {
   },
   /**
    * Norwegian copy for `/teams/[teamId]`'s "Pågående undersøkelse" section
-   * (`TeamDetail.tsx`, docs/features/managed-surveys/SPEC.md — TASK-010,
+   * (`TeamDetail.tsx`, docs/archive/features/managed-surveys/SPEC.md — TASK-010,
    * BR-30/BR-31). Lifecycle (`"scheduled"`/`"open"`) and access-mode labels
    * are deliberately shared with `admin.lifecycleLabels`/
    * `admin.accessModeLabels` rather than duplicated — the same Norwegian

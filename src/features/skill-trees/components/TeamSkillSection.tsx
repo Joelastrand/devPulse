@@ -25,13 +25,13 @@ export interface TeamSkillSectionProps {
    * Invoked after a successful self-report so the caller can refresh the
    * tracked-skill list through the existing, unchanged `getTeamSkillProgress`
    * read path (`fetchTeamSkills`) — this component never locally mutates
-   * `state.skills` or fabricates a `TeamSkillView` of its own (docs/features/
+   * `state.skills` or fabricates a `TeamSkillView` of its own (docs/archive/features/
    * skill-progress-self-report/SPEC.md — TASK-002, "No optimistic local
    * update").
    */
   onReported: () => void;
   /**
-   * Optional read-only plan presentation (docs/features/team-skill-planning/
+   * Optional read-only plan presentation (docs/archive/features/team-skill-planning/
    * SPEC.md — BR-29/30): each row shows its plan summary, matched by
    * `treeId`, and the rows follow the planning order. Absent ⇒ unchanged.
    */
@@ -39,19 +39,19 @@ export interface TeamSkillSectionProps {
 }
 
 /**
- * `/teams/[teamId]`'s "Kompetanseområder" section (docs/features/
+ * `/teams/[teamId]`'s "Kompetanseområder" section (docs/archive/features/
  * team-skill-tree/SPEC.md — TASK-007, BR-28 through BR-30; extended by
- * docs/features/skill-progress-self-report/SPEC.md — TASK-002, BR-10
+ * docs/archive/features/skill-progress-self-report/SPEC.md — TASK-002, BR-10
  * through BR-12). Renders exactly what `fetchTeamSkills` (→
  * `getTeamSkillProgress`) returned — every tree the team is tracking, its
  * full ordered stage list and the current stage, rendered by the shared,
- * presentational `SkillProgressPath` (docs/features/gamified-skill-tree/
+ * presentational `SkillProgressPath` (docs/archive/features/gamified-skill-tree/
  * SPEC.md — BR-7), which owns ordering, the earlier/current/upcoming
  * derivation, the summary line and the "ikke startet" state for
  * `currentNodeId: null`. The path is never a control.
  *
  * Each already-tracked tree also gets a stage-setting control — but **only
- * when `state.canReportProgress` is true** (docs/features/
+ * when `state.canReportProgress` is true** (docs/archive/features/
  * skill-progress-self-report/SPEC.md — "Permission-UI correction"): a
  * server-derived capability signal for whether *this* caller currently holds
  * genuine team membership on an active team, re-derived independently of

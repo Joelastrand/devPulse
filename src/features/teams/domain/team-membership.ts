@@ -2,7 +2,7 @@ export type MembershipSource = "invitation" | "access_request" | "admin_direct";
 
 /**
  * The team authorization role a membership carries: `"teamadmin"` or an
- * ordinary `"member"` (docs/features/teamadmin-and-team-visibility/SPEC.md).
+ * ordinary `"member"` (docs/archive/features/teamadmin-and-team-visibility/SPEC.md).
  * Only `"teamadmin"` is ever persisted (as `role`); `"member"` is represented
  * by the field being absent. This is a *team role*, never a professional role.
  * It replaces the former `"lead"` editing authority: a stored legacy
@@ -11,7 +11,7 @@ export type MembershipSource = "invitation" | "access_request" | "admin_direct";
 export type MembershipRole = "teamadmin" | "member";
 
 /**
- * A Firestore `teamMemberships` document (docs/features/team-management/
+ * A Firestore `teamMemberships` document (docs/archive/features/team-management/
  * SPEC.md — Architecture decisions → "Firestore collections"). Links one
  * Firebase `uid` to one `teamId` — never email-keyed.
  */

@@ -130,7 +130,7 @@ describe("SkillTreeCorrectionForm", () => {
     expect(correctAdminSkillTreeMock).not.toHaveBeenCalled();
   });
 
-  it("wires aria-invalid/aria-describedby on the name/stage fields to the validation alert (docs/features/ui-refresh/SPEC.md — BR-9)", async () => {
+  it("wires aria-invalid/aria-describedby on the name/stage fields to the validation alert (docs/archive/features/ui-refresh/SPEC.md — BR-9)", async () => {
     const user = userEvent.setup();
     render(<SkillTreeCorrectionForm tree={TREE} token="a-token" onSuccess={vi.fn()} onCancel={vi.fn()} />);
 

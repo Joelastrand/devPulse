@@ -7,6 +7,7 @@ import type { UpdateOwnerSectionsCodec } from "./update-owner-sections";
 import type { ConversationStore } from "./conversation-store-types";
 import { classifyOwnerDocument } from "./owner-read";
 import { readOwnedGoalSnapshots, type OwnedGoalReader } from "./read-owned-goal-snapshots";
+import { conversationContext } from "../domain/stored-owner-conversation";
 
 /**
  * Owner goal-snapshot set write (SPEC BR-24 to BR-27, BR-48, BR-50 (4), AD-6, CL-26, D2-SI-5, D2-SI-9; TASK-013).
@@ -72,7 +73,7 @@ export async function setSharedGoals(
       const raw = await tx.getOwner(ownerUid, conversationId);
       if (raw === undefined) return NOT_FOUND;
 
-      const classification = classifyOwnerDocument(raw, deps.codec);
+      const classification = classifyOwnerDocument(raw, deps.codec, { ownerUid, conversationId });
       if (classification.kind !== "valid") return NOT_FOUND;
       const record = classification.record;
 
@@ -87,7 +88,7 @@ export async function setSharedGoals(
         participantNotes: record.content.participantNotes,
         sharedGoals: snapshots,
         sharedEvidence: record.content.sharedEvidence,
-      });
+      }, conversationContext(ownerUid, conversationId));
       if (!encoded.ok) return FAILED;
 
       tx.updateOwner(ownerUid, conversationId, { updatedAt: new Date(now.getTime()), ...encoded.content });

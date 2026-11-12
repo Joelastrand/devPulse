@@ -5,7 +5,7 @@ const privacyNote =
  * Norwegian user-facing copy for the Home page (`app/page.tsx`).
  *
  * Establishes this repository's lightweight copy-module convention
- * (docs/features/product-ux-shell/SPEC.md — BR-2): a plain, page/feature-
+ * (docs/archive/features/product-ux-shell/SPEC.md — BR-2): a plain, page/feature-
  * scoped module of Norwegian string constants, imported directly by its
  * component — not an i18n library, not locale-routed. Home has no owning
  * `src/features/` slice, so its copy is colocated next to the route file

@@ -1,7 +1,7 @@
 /**
  * Organizational role definitions (role-profiles). A role is a title and a required description. It does not define
  * skill requirements, expected levels, competence mappings, targets or any assessment (see
- * docs/features/role-profiles/SPEC.md). Stored `name` is the user-facing title.
+ * docs/archive/features/role-profiles/SPEC.md). Stored `name` is the user-facing title.
  */
 
 /** Role limits. Code constants only, never configurable by request, setting or env var. */

@@ -1,3 +1,6 @@
+import { openSkillProgressDocument, toPersistedSkillProgress } from "./skill-progress-content-codec";
+import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../domain/skill-tree-test-fixtures";
+stubSkillTreeEncryptionKey();
 import { describe, expect, it, vi } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type { AuthorizeTeamAccessCollection } from "../../teams/server/authorize-team-access";
@@ -15,16 +18,17 @@ import { getTeamSkillProgress } from "./get-team-skill-progress";
  * yet) and TASK-003 partially covered (no `getTeamSkillProgress` yet);
  * TASK-004 is the first task where all four operations coexist.
  */
-function inMemoryCollection() {
+function inMemoryCollection(kind: "tree" | "progress") {
   const docs = new Map<string, Record<string, unknown>>();
   return {
     docs,
     async get(id: string) {
       const data = docs.get(id);
-      return { exists: data !== undefined, data: () => data };
+      // The production store opens progress documents; tree documents are opened by their own candidate mapper.
+      return { exists: data !== undefined, data: () => (kind === "progress" ? openSkillProgressDocument(data) : data) };
     },
     async set(id: string, record: unknown) {
-      docs.set(id, record as Record<string, unknown>);
+      docs.set(id, kind === "progress" ? toPersistedSkillProgress(record as Parameters<typeof toPersistedSkillProgress>[0]) : (record as Record<string, unknown>));
     },
     async update(id: string, patch: unknown) {
       const existing = docs.get(id);
@@ -72,8 +76,8 @@ function fakeAuthCollection(): AuthorizeTeamAccessCollection {
 
 describe("BR-35 full regression: startTeamSkillTracking -> updateTeamSkillProgress -> updateSkillTree -> getTeamSkillProgress", () => {
   it("a team's currentNodeId keeps resolving to the same stable node, with the corrected name/label reflected, after a cosmetic tree correction", async () => {
-    const trees = inMemoryCollection();
-    const progress = inMemoryCollection();
+    const trees = inMemoryCollection("tree");
+    const progress = inMemoryCollection("progress");
     trees.docs.set(TREE_ID, {
       name: "Container adoption",
       nodes: [
@@ -84,6 +88,7 @@ describe("BR-35 full regression: startTeamSkillTracking -> updateTeamSkillProgre
       createdAt: new Date("2025-01-01T00:00:00Z"),
       createdBy: "original-admin",
     });
+    trees.docs.set(TREE_ID, sealedSkillTreeFixture(TREE_ID, trees.docs.get(TREE_ID)) as Record<string, unknown>);
 
     const adminDeps = {
       verifyToken: verifyTokenReturning(adminIdentity()),
@@ -135,7 +140,7 @@ describe("BR-35 full regression: startTeamSkillTracking -> updateTeamSkillProgre
         async listRawForTeam(teamId) {
           return Array.from(progress.docs.entries())
             .filter(([, data]) => data.teamId === teamId)
-            .map(([id, data]) => ({ id, data }));
+            .map(([id, data]) => ({ id, data: openSkillProgressDocument(data) }));
         },
       },
       treeReader: trees,
@@ -156,7 +161,7 @@ describe("BR-35 full regression: startTeamSkillTracking -> updateTeamSkillProgre
         },
       ],
       // The reading member also holds real team membership on an active
-      // team (docs/features/skill-progress-self-report/SPEC.md —
+      // team (docs/archive/features/skill-progress-self-report/SPEC.md —
       // "Permission-UI correction").
       canReportProgress: true,
     });

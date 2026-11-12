@@ -22,11 +22,10 @@ export type RelationToRole = (typeof RELATION_TO_ROLE_VALUES)[number];
 export const RESPONSIBILITY_STATUS_VALUES = ["active", "completed"] as const;
 export type ResponsibilityStatus = (typeof RESPONSIBILITY_STATUS_VALUES)[number];
 
-/** Envelope version of the source-record codec. Distinct from the conversation codec (`v1` there as well, separate context). */
-export const SOURCE_KEY_VERSION = "v1";
-/** Domain separation for the source-record key check (CL-27 construction, own context). */
-export const SOURCE_KEY_CHECK_CONTEXT = "devpulse.personal-records.source-key-check.v1";
-export const SOURCE_KEY_CHECK_BYTES = 32;
+/** Envelope version of the source-record codec: the shared record envelope v2 (`src/lib/encryption/record-envelope.ts`). */
+export const SOURCE_KEY_VERSION = "v2";
+/** Key id of the source-record envelope (`CURRENT_RECORD_KEY_ID` in the record envelope module). */
+export const SOURCE_KEY_ID = "k1";
 
 /** D2-style addressable id (SECURITY.md PR-SI-6): safe as a Firestore path segment, never `__x__`. */
 const RECORD_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;

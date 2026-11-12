@@ -8,7 +8,7 @@ import { formatSurveyDate } from "../domain/format-survey-date";
  * — BR-28), never a fabricated row for a period with no survey. This
  * remains the authoritative accessible representation of the data —
  * `TrendChart` is `aria-hidden` and built from this exact same array
- * (docs/features/managed-surveys/SPEC.md — TASK-012).
+ * (docs/archive/features/managed-surveys/SPEC.md — TASK-012).
  */
 export function TrendTable({
   results,

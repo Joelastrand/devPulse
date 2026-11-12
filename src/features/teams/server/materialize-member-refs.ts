@@ -97,7 +97,7 @@ function isSafeId(value: unknown): value is string {
 
 /**
  * Gives every existing membership of one team that lacks a valid `memberRef`
- * a fresh one (docs/features/team-skill-planning/SPEC.md — BR-2, BR-3, D12).
+ * a fresh one (docs/archive/features/team-skill-planning/SPEC.md — BR-2, BR-3, D12).
  * App-admin-only via `requireAppAdmin`; any team status (`active` or
  * `disabled`) is allowed because this is infrastructure, not a roadmap write.
  *

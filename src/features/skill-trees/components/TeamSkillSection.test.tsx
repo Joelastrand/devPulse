@@ -260,7 +260,7 @@ describe("TeamSkillSection", () => {
   });
 });
 
-describe("TeamSkillSection self-report control (docs/features/skill-progress-self-report/SPEC.md — TASK-002)", () => {
+describe("TeamSkillSection self-report control (docs/archive/features/skill-progress-self-report/SPEC.md — TASK-002)", () => {
   it("renders a stage-select control and a save button for each already-tracked tree, for any authorized viewer (BR-10)", () => {
     const state: TeamSkillSectionState = { status: "loaded", skills: [CONTAINERS_SKILL, OBSERVABILITY_SKILL], canReportProgress: true };
     render(<TeamSkillSection idToken="token" teamId="team-1" state={state} onReported={() => {}} />);
@@ -456,7 +456,7 @@ describe("TeamSkillSection self-report control (docs/features/skill-progress-sel
     // pre-report persisted stage; a second, wholly separate mount (as a
     // fresh getTeamSkillProgress/fetchTeamSkills read would produce) shows
     // the post-report persisted stage — proving reconstruction comes from
-    // the `state` prop alone (docs/features/skill-progress-self-report/
+    // the `state` prop alone (docs/archive/features/skill-progress-self-report/
     // SPEC.md — TASK-002, "State/reload integration").
     const beforeReport: TeamSkillSectionState = {
       status: "loaded",

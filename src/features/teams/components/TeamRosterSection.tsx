@@ -21,7 +21,7 @@ const PANEL_ID = "team-roster-panel";
 const HEADING_ID = "team-roster-heading";
 
 /**
- * Collapsed, read-only team roster on `/teams/[teamId]` (docs/features/
+ * Collapsed, read-only team roster on `/teams/[teamId]` (docs/archive/features/
  * member-identity-and-team-roles/SPEC.md — BR-31). Self-contained: it adds no
  * request to `TeamDetail`'s initial load and fetches **lazily on the first
  * expand** only (later collapse/expand reuses the loaded list; a retry

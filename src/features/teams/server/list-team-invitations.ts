@@ -3,6 +3,7 @@ import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../domain/app-admin";
 import { isValidPendingInvitationForTeam } from "../domain/team-invitation";
+import { openStoredInvitation } from "../domain/team-invitation-content-codec";
 import { requireAppAdmin } from "./require-app-admin";
 import { type AuthRefusal } from "../../auth/server/auth-refusal";
 const INVITATIONS_COLLECTION = "teamInvitations";
@@ -38,8 +39,10 @@ function getDefaultCollection(): TeamInvitationsCollection {
         .get();
       return snapshot.docs.map((doc) => {
         const data = doc.data();
+        const opened = openStoredInvitation(data);
+        const base = typeof opened === "object" && opened !== null ? (opened as Record<string, unknown>) : {};
         return {
-          ...data,
+          ...base,
           createdAt: data.createdAt?.toDate?.() ?? data.createdAt,
         };
       });
@@ -59,7 +62,7 @@ export interface ListTeamInvitationsDeps {
 
 /**
  * Lists a team's pending invitations for an app admin
- * (docs/features/team-management/SPEC.md — BR-30). Filters to `"pending"`
+ * (docs/archive/features/team-management/SPEC.md — BR-30). Filters to `"pending"`
  * only — accepted/canceled invitations are historical, not part of the
  * admin's actionable pending view.
  */

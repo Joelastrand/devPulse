@@ -1,5 +1,5 @@
 /**
- * Bounds for a thread's title (docs/features/team-forum/SPEC.md — BR-3):
+ * Bounds for a thread's title (docs/archive/features/team-forum/SPEC.md — BR-3):
  * non-empty after trimming, and between these two lengths (inclusive),
  * measured on the trimmed text.
  */
@@ -7,7 +7,7 @@ export const THREAD_TITLE_MIN_LENGTH = 3;
 export const THREAD_TITLE_MAX_LENGTH = 150;
 
 /**
- * Bounds for a thread's body (docs/features/team-forum/SPEC.md — BR-3):
+ * Bounds for a thread's body (docs/archive/features/team-forum/SPEC.md — BR-3):
  * non-empty after trimming, and between these two lengths (inclusive),
  * measured on the trimmed text.
  */
@@ -23,7 +23,7 @@ export type ValidateThreadBodyResult =
   | { ok: false; error: "invalid_input" };
 
 /**
- * Validates and normalizes a raw, untrusted thread title (docs/features/
+ * Validates and normalizes a raw, untrusted thread title (docs/archive/features/
  * team-forum/SPEC.md — BR-3). This is the single canonical trim path for a
  * thread title — callers must use the returned `title`, not re-trim the
  * original input themselves.
@@ -52,7 +52,7 @@ export function validateThreadTitle(input: unknown): ValidateThreadTitleResult {
 }
 
 /**
- * Validates and normalizes a raw, untrusted thread body (docs/features/
+ * Validates and normalizes a raw, untrusted thread body (docs/archive/features/
  * team-forum/SPEC.md — BR-3). Same trimming/rejection contract as
  * `validateThreadTitle`, applied to `THREAD_BODY_MIN_LENGTH`/
  * `THREAD_BODY_MAX_LENGTH` instead.

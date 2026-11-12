@@ -44,7 +44,7 @@ export interface StopTeamSkillTrackingDeps {
 }
 
 /**
- * Stops tracking a SkillTree for a team (docs/features/team-skill-tree/
+ * Stops tracking a SkillTree for a team (docs/archive/features/team-skill-tree/
  * SPEC.md — BR-14 through BR-16). Only an app admin may call this
  * successfully. `teamId`/`treeId` are always the caller's trusted
  * server/route scope — this function accepts no body-shaped field capable

@@ -32,7 +32,7 @@ function isClientValid(name: string, labels: string[]): boolean {
 }
 
 /**
- * The TASK-005 SkillTree creation form (docs/features/team-skill-tree/
+ * The TASK-005 SkillTree creation form (docs/archive/features/team-skill-tree/
  * SPEC.md — BR-26): a name field plus a dynamic list of 2-20 ordered
  * stage-label inputs with keyboard-operable add/remove-row controls. Client-
  * side boundary validation is a UX aid only — `createAdminSkillTree` (and,
@@ -46,7 +46,7 @@ export function SkillTreeCreationForm({
 }: {
   token: string;
   onCreated: () => void;
-  /** Closes the form without creating anything (docs/features/ui-refresh/SPEC.md — BR-14). */
+  /** Closes the form without creating anything (docs/archive/features/ui-refresh/SPEC.md — BR-14). */
   onCancel: () => void;
 }) {
   const [name, setName] = useState("");

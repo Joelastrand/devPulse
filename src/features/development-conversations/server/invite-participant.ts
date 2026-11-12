@@ -66,7 +66,7 @@ export async function inviteParticipant(
   try {
     const before = await deps.store.getOwner(ownerUid, conversationId);
     if (before === undefined) return NOT_FOUND;
-    const classification = classifyOwnerDocument(before, deps.codec);
+    const classification = classifyOwnerDocument(before, deps.codec, { ownerUid, conversationId });
     if (classification.kind !== "valid") return NOT_FOUND;
 
     // BR-2: a conversation without a team can never have a participant, and there is no team to resolve against.
@@ -86,7 +86,7 @@ export async function inviteParticipant(
       async (tx): Promise<InviteParticipantResult> => {
       const raw = await tx.getOwner(ownerUid, conversationId);
       if (raw === undefined) return NOT_FOUND;
-      const classified = classifyOwnerDocument(raw, deps.codec);
+      const classified = classifyOwnerDocument(raw, deps.codec, { ownerUid, conversationId });
       if (classified.kind !== "valid") return NOT_FOUND;
       const record = classified.record;
 

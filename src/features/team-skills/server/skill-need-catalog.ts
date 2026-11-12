@@ -1,4 +1,5 @@
 import "server-only";
+import { openSkillTreeDocument } from "../../skill-trees/domain/skill-tree-content-codec";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { sortSkillRows } from "../../skill-profiles/domain/skill-profile-view";
 import { isValidSkillTree, type SkillTreeRecord } from "../../skill-trees/domain/skill-tree";
@@ -48,7 +49,8 @@ function toDateOrUndefined(value: unknown): unknown {
 }
 
 /** Minimal duplicate of the `listSkillTrees` candidate mapping; a parity test pins the two together. */
-export function toCandidateSkillTree(data: unknown): unknown {
+export function toCandidateSkillTree(treeId: string, raw: unknown): unknown {
+  const data = openSkillTreeDocument(treeId, raw);
   if (typeof data !== "object" || data === null) return undefined;
   const record = data as Record<string, unknown>;
   return {
@@ -63,7 +65,7 @@ export async function readValidSkillTree(
   reader: SkillNeedCatalogReader,
   treeId: string,
 ): Promise<SkillTreeRecord | null> {
-  const candidate = toCandidateSkillTree(await reader.getSkillTree(treeId));
+  const candidate = toCandidateSkillTree(treeId, await reader.getSkillTree(treeId));
   return isValidSkillTree(candidate) ? candidate : null;
 }
 
@@ -82,7 +84,7 @@ export async function readSkillNeedCatalog(reader: SkillNeedCatalogReader): Prom
   const raw = await reader.listOrderedByCreatedAt(SKILL_NEED_CATALOG_WINDOW + 1);
   const rows: SkillNeedCatalog["catalog"] = [];
   for (const { id, data } of raw.slice(0, SKILL_NEED_CATALOG_WINDOW)) {
-    const candidate = toCandidateSkillTree(data);
+    const candidate = toCandidateSkillTree(id, data);
     if (isValidSkillTree(candidate)) rows.push({ treeId: id, name: candidate.name });
   }
   return { catalog: sortSkillRows(rows), truncated: raw.length > SKILL_NEED_CATALOG_WINDOW };

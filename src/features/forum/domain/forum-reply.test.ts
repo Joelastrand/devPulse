@@ -9,7 +9,8 @@ describe("isValidForumReply", () => {
     ciphertext: "ciphertext-base64",
     iv: "iv-base64",
     authTag: "auth-tag-base64",
-    keyVersion: "v1",
+    keyVersion: "v2",
+    keyId: "k1",
     createdAt: new Date("2026-06-01T00:00:00.000Z"),
   };
 
@@ -42,7 +43,7 @@ describe("isValidForumReply", () => {
   });
 
   it("rejects an active candidate with a syntactically-valid-but-wrong keyVersion, not just any string", () => {
-    expect(isValidForumReply({ ...activeValid, keyVersion: "v2" })).toBe(false);
+    expect(isValidForumReply({ ...activeValid, keyVersion: "v1" })).toBe(false);
     expect(isValidForumReply({ ...activeValid, keyVersion: "" })).toBe(false);
   });
 
@@ -126,7 +127,8 @@ describe("isForumReplyDeleted", () => {
     ciphertext: "ciphertext-base64",
     iv: "iv-base64",
     authTag: "auth-tag-base64",
-    keyVersion: "v1" as const,
+    keyVersion: "v2" as const,
+    keyId: "k1" as const,
     createdAt: new Date("2026-06-01T00:00:00.000Z"),
   };
 

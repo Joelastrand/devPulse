@@ -1,3 +1,4 @@
+import { openSurveyDocument } from "./survey-content-codec";
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
@@ -75,7 +76,8 @@ export function getDefaultResponsesExistenceReader(): SurveyResponsesExistenceRe
 }
 
 /** Maps raw Firestore document data (Timestamp fields included) into the candidate shape `isValidSurvey` expects. */
-function toCandidateSurvey(surveyId: string, data: unknown): unknown {
+function toCandidateSurvey(surveyId: string, raw: unknown): unknown {
+  const data = openSurveyDocument(surveyId, raw);
   if (typeof data !== "object" || data === null) {
     return undefined;
   }
@@ -135,7 +137,7 @@ export interface DeleteOrArchiveSurveyDeps {
  * Permanently deletes a closed, zero-response survey, or archives a closed
  * survey that has one or more responses — the choice is always
  * server-determined by response count, never a free client choice
- * (docs/features/managed-surveys/SPEC.md — BR-35, BR-36, BR-37). Only an
+ * (docs/archive/features/managed-surveys/SPEC.md — BR-35, BR-36, BR-37). Only an
  * app admin may call this successfully — reuses `requireAppAdmin`
  * unchanged.
  *

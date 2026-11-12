@@ -1,18 +1,17 @@
-import { normalizeEmail } from "../../teams/domain/normalize-email";
+import { invitationEmailIndex } from "../../teams/domain/team-invitation-content-codec";
 
 /**
- * Whether a stored invitation belongs to the erased person (I-11, TASK-038 finding 2, 2026-11-02).
+ * Whether a stored invitation belongs to the erased person (I-11).
  *
- * - A stored `email` that is a string and normalizes to the erased address matches.
- * - A stored `email` that is a string but different never matches by its document id. An id can contain `__` inside an
- *   address, so a suffix is never trusted for a valid stored address.
- * - A stored `email` that is missing, blank, null, or any other non-string value (a malformed record, AE-SI-7) cannot be normalized,
- *   so it is attributed only by the exact deterministic id `${teamId}__${normalizedEmail}`. A malformed value never makes an
- *   otherwise exactly attributable invitation survive, and it never widens to a suffix match.
+ * The stored address is sealed, so ownership is decided by the blind index `emailIndex` (see
+ * `teams/domain/team-invitation-content-codec.ts`), never by a plaintext email or a document-id suffix.
+ *
+ * - A stored `emailIndex` that equals the index of the erased address matches.
+ * - A stored `emailIndex` that is missing, blank or not a string (a malformed record, AE-SI-7) is attributed only by the exact
+ *   deterministic id `${teamId}__${index}`. A malformed value never makes an exactly attributable invitation survive.
  * - A record resolved by this uid (`resolvedUid`) matches.
  *
- * Pure. The step, the adapter's candidate filter and the residual counter all use this one rule. No uid or e-mail is added to
- * any stored value; the rule reads the existing identity contract only.
+ * The step, the adapter and the residual counter all use this one rule. No uid or address is added to any stored value.
  */
 export function invitationBelongsToErasedPerson(
   id: string,
@@ -20,12 +19,12 @@ export function invitationBelongsToErasedPerson(
   normalizedEmail: string,
   uid: string,
 ): boolean {
-  // A usable stored address is a string that normalizes to something non-empty. Anything else is malformed and uses the exact id.
-  const stored = typeof record.email === "string" ? normalizeEmail(record.email) : "";
+  const expectedIndex = invitationEmailIndex(normalizedEmail);
+  const stored = typeof record.emailIndex === "string" ? record.emailIndex : "";
   if (stored.length > 0) {
-    if (stored === normalizedEmail) return true;
+    if (stored === expectedIndex) return true;
   } else if (typeof record.teamId === "string") {
-    if (id === `${record.teamId}__${normalizedEmail}`) return true;
+    if (id === `${record.teamId}__${expectedIndex}`) return true;
   }
   return record.resolvedUid === uid;
 }

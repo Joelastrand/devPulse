@@ -17,7 +17,7 @@ const CREATE_ERROR_STATUS: Record<string, number> = {
 };
 
 /**
- * Creates a reply to `threadId` (docs/features/team-forum/SPEC.md —
+ * Creates a reply to `threadId` (docs/archive/features/team-forum/SPEC.md —
  * TASK-005, "API/DTO contract"). Accepts only `body` from the request body —
  * no `teamId`/`threadId` override, no author identity, no lifecycle field of
  * any kind (BR-2, BR-47); `createReply` derives everything else

@@ -23,7 +23,7 @@ import { getFirestore } from "firebase-admin/firestore";
 
 // ---- Pure bootstrap core (also exercised by bootstrap-superadmin.test.ts) ----
 /**
- * Pure core of the one-time owner bootstrap (docs/features/superadmin-registry/SPEC.md, bootstrap). No Firebase import here:
+ * Pure core of the one-time owner bootstrap (docs/archive/features/superadmin-registry/SPEC.md, bootstrap). No Firebase import here:
  * the CLI (`bootstrap-superadmin.ts`) supplies the Auth lookup and the registry transaction through `BootstrapPorts`, so the
  * decision logic is unit-tested against an in-memory registry.
  *

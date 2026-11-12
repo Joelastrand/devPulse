@@ -15,7 +15,7 @@ function paramsOf(teamId: string) {
 }
 
 describe("AdminTeamDetailPage", () => {
-  it("renders at the wide PageShell width (docs/features/ui-refresh/SPEC.md — BR-5)", async () => {
+  it("renders at the wide PageShell width (docs/archive/features/ui-refresh/SPEC.md — BR-5)", async () => {
     render(await AdminTeamDetailPage({ params: paramsOf("team-1") }));
 
     expect(screen.getByRole("main").closest(".max-w-main")).not.toBeNull();

@@ -1,6 +1,6 @@
 /**
  * Aggregates and client-side filtering over an already-authorized system list
- * (docs/features/team-system-overview/SPEC.md — BR-11, BR-12, BR-13). Counts
+ * (docs/archive/features/team-system-overview/SPEC.md — BR-11, BR-12, BR-13). Counts
  * only; nothing is persisted, ranked, or attributed to a named person.
  */
 import { KNOWLEDGE_RISK_LABELS, type KnowledgeRiskBand } from "./team-system";

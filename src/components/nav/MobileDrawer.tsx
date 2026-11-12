@@ -17,7 +17,7 @@ export interface MobileDrawerProps {
 const TABBABLE = "a[href], button:not([disabled])";
 
 /**
- * Mobile navigation drawer, below `md` only (docs/features/product-experience/
+ * Mobile navigation drawer, below `md` only (docs/archive/features/product-experience/
  * SPEC.md — Mobile navigation drawer). It is a dialog with four close paths:
  * navigation, the Lukk meny button, Escape and a click on the scrim. Focus
  * opens on the current link (else the first), is trapped while open, and is

@@ -1,7 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 
 /**
- * The single icon wrapper for DevPulse (docs/features/product-experience/SPEC.md
+ * The single icon wrapper for DevPulse (docs/archive/features/product-experience/SPEC.md
  * — Iconography). `lucide-react` is the only icon family. Callers import
  * their icon from `lucide-react` and pass the component here, so the sizes and
  * stroke width are set in one place.

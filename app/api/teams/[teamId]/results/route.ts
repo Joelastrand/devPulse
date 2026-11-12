@@ -9,14 +9,14 @@ const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
  * Protected, per-team survey-instance results/history endpoint
- * (docs/features/managed-surveys/SPEC.md — TASK-012). `teamId` comes from
+ * (docs/archive/features/managed-surveys/SPEC.md — TASK-012). `teamId` comes from
  * the URL path but is never trusted as authorization evidence on its own:
  * `getTeamSurveyResults` always re-derives access via `authorizeTeamAccess`
  * before any protected data is read. Kept thin; orchestration,
  * threshold/suppression, and `closedAt` backfill logic all live in
  * `getTeamSurveyResults` (TASK-011). Replaces this same route's previous
  * calendar-period-scoped `getTeamResults`, retired by TASK-014
- * (docs/features/managed-surveys/SPEC.md).
+ * (docs/archive/features/managed-surveys/SPEC.md).
  */
 export async function GET(
   request: Request,

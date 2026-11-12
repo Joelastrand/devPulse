@@ -17,7 +17,7 @@ export interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
 
 /**
  * Shared single-line text-input primitive consolidating this codebase's
- * previously-duplicated input styling (docs/features/ui-refresh/SPEC.md —
+ * previously-duplicated input styling (docs/archive/features/ui-refresh/SPEC.md —
  * BR-6, BR-8, BR-9). Purely presentational: every native prop (`value`,
  * `onChange`, `type`, `name`, `autoComplete`, `required`, `placeholder`,
  * `disabled`, etc.) passes straight through unchanged, and this component

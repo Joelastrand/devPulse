@@ -1,6 +1,8 @@
+import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../../skill-trees/domain/skill-tree-test-fixtures";
+stubSkillTreeEncryptionKey();
 import { Timestamp } from "firebase-admin/firestore";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { GOAL_DTO_KEYS, GOAL_LIST_RESPONSE_KEYS, GOAL_PERSISTED_KEYS, GOAL_RECOVERY_DTO_KEYS } from "../domain/goal-constants";
+import { GOAL_DTO_KEYS, GOAL_LIST_RESPONSE_KEYS, GOAL_RECOVERY_DTO_KEYS, GOAL_STORED_DOCUMENT_KEYS } from "../domain/goal-constants";
 import { createPersonalGoal } from "./create-personal-goal";
 import { deletePersonalGoal } from "./delete-personal-goal";
 import { getPersonalGoals } from "./get-personal-goals";
@@ -176,7 +178,7 @@ const treeData = (name: string) => ({
 function createCatalog(trees: Record<string, unknown> = {}) {
   const reads: string[] = [];
   const fail = { list: false, getById: false, many: false };
-  const find = (id: string) => ({ id, data: trees[id] });
+  const find = (id: string) => ({ id, data: sealedSkillTreeFixture(id, trees[id]) });
   const reader: CatalogReader = {
     async listOrderedByCreatedAt() {
       reads.push("list");
@@ -372,7 +374,7 @@ describe("owner isolation A/B across operations", () => {
     if (!created.ok) throw new Error("fixture");
     await env.update(OWNER_A, created.dto.id, { status: "completed" });
     const stored = env.raw(OWNER_A, created.dto.id) as Doc;
-    expect(Object.keys(stored).every((k) => (GOAL_PERSISTED_KEYS as readonly string[]).includes(k))).toBe(true);
+    expect(Object.keys(stored).every((k) => (GOAL_STORED_DOCUMENT_KEYS as readonly string[]).includes(k))).toBe(true);
     expect(JSON.stringify(env.allStored().map(([, d]) => d))).not.toContain(OWNER_A);
     expect(JSON.stringify(created)).not.toContain(OWNER_A);
   });
@@ -610,7 +612,8 @@ describe("cross-operation behavior and failure boundaries", () => {
     env.catalog.fail.getById = true;
     expect(await env.update(OWNER_A, "g1", { title: "Ny tittel" })).toEqual({ ok: false, error: "persistence_failed" });
     const committed = env.raw(OWNER_A, "g1");
-    expect(committed).toMatchObject({ title: "Ny tittel" });
+    expect(committed).toHaveProperty("content");
+    expect(JSON.stringify(committed)).not.toContain("Ny tittel");
     expect((committed?.updatedAt as Timestamp).toMillis()).toBe(at(200).getTime());
 
     env.catalog.fail.getById = false;

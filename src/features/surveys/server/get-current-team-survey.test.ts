@@ -1,3 +1,5 @@
+import { persistedSurveyFixture, stubSurveyEncryptionKey } from "./survey-test-fixtures";
+stubSurveyEncryptionKey();
 import { describe, expect, it, vi } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type { AuthorizeTeamAccessCollection } from "../../teams/server/authorize-team-access";
@@ -30,14 +32,14 @@ function verifyTokenReturning(identity: VerifiedIdentity) {
 function surveyDoc(id: string, overrides: Record<string, unknown> = {}): RawSurveyDoc {
   return {
     id,
-    data: {
+    data: persistedSurveyFixture(id, {
       teamId: TEAM_ID,
       accessMode: "public",
       minimumResponses: 5,
       createdAt: new Date("2026-01-01T00:00:00Z"),
       createdBy: "some-admin",
       ...overrides,
-    },
+    }),
   };
 }
 

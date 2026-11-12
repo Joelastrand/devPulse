@@ -1,54 +1,68 @@
-import { describe, expect, it } from "vitest";
+import { randomBytes } from "node:crypto";
+import { describe, expect, it, vi } from "vitest";
+import { invitationEmailIndex } from "../../teams/domain/team-invitation-content-codec";
 import { invitationBelongsToErasedPerson } from "./invitation-match";
 
-// TASK-038 finding 2 and the 2026-11-02 AE-SI-7 repair: the ownership predicate for a stored team invitation. Fixtures are
-// synthetic. The erased person's normalized address is ERASED; the uid is UID.
+// Ownership predicate for a stored team invitation. The stored address is sealed; ownership is decided by the blind index
+// `emailIndex`. Fixtures are synthetic. The erased person's normalized address is ERASED; the uid is UID.
+
+// One fixed key for the whole file: the indexes below are computed at load time and must match the predicate.
+vi.stubEnv("ENCRYPTION_KEY", randomBytes(32).toString("base64"));
 
 const TEAM = "team-1";
 const ERASED = "erased@example.com";
 const UID = "uid-erased";
-const EXACT_ID = `${TEAM}__${ERASED}`;
+const INDEX = invitationEmailIndex(ERASED);
+const EXACT_ID = `${TEAM}__${INDEX}`;
+const OTHER_INDEX = invitationEmailIndex("other@example.com");
 
-describe("invitationBelongsToErasedPerson (AE-SI-7, ownership rule)", () => {
-  it("matches a valid stored email that normalizes to the erased address", () => {
-    expect(invitationBelongsToErasedPerson("any-id", { email: "  Erased@Example.com ", teamId: TEAM }, ERASED, UID)).toBe(true);
+describe("invitationBelongsToErasedPerson (blind-index ownership rule)", () => {
+  it("matches a stored emailIndex equal to the blind index of the erased address", () => {
+    expect(invitationBelongsToErasedPerson("any-id", { emailIndex: INDEX, teamId: TEAM }, ERASED, UID)).toBe(true);
   });
 
-  it("does not match a valid stored email that is different, even when the document id is the erased address's exact id", () => {
-    expect(invitationBelongsToErasedPerson(EXACT_ID, { email: "other@example.com", teamId: TEAM }, ERASED, UID)).toBe(false);
+  it("indexes the normalized address, so casing and whitespace never cause a false negative", () => {
+    expect(invitationEmailIndex("  Erased@Example.com ")).toBe(INDEX);
   });
 
-  it("does not match a valid different stored email by a misleading id that merely ends with the erased address", () => {
-    const misleading = `${TEAM}__someone__${ERASED}`;
-    expect(invitationBelongsToErasedPerson(misleading, { email: "other@example.com", teamId: TEAM }, ERASED, UID)).toBe(false);
+  it("does not match a different stored emailIndex, even when the document id is the erased address's exact id", () => {
+    expect(invitationBelongsToErasedPerson(EXACT_ID, { emailIndex: OTHER_INDEX, teamId: TEAM }, ERASED, UID)).toBe(false);
   });
 
-  it("matches a record with no stored email only by the exact deterministic id", () => {
+  it("never matches by a document id that merely contains the erased index as a suffix", () => {
+    expect(invitationBelongsToErasedPerson(`${TEAM}__x__${INDEX}`, { emailIndex: OTHER_INDEX, teamId: TEAM }, ERASED, UID)).toBe(false);
+  });
+
+  it("matches a record with no emailIndex only by the exact deterministic id", () => {
     expect(invitationBelongsToErasedPerson(EXACT_ID, { teamId: TEAM }, ERASED, UID)).toBe(true);
-    expect(invitationBelongsToErasedPerson(`${TEAM}__other-${ERASED}`, { teamId: TEAM }, ERASED, UID)).toBe(false);
+    expect(invitationBelongsToErasedPerson(`${TEAM}__x__${INDEX}`, { teamId: TEAM }, ERASED, UID)).toBe(false);
   });
 
-  it("matches a null stored email only by the exact deterministic id, never by a misleading id", () => {
-    expect(invitationBelongsToErasedPerson(EXACT_ID, { email: null, teamId: TEAM }, ERASED, UID)).toBe(true);
-    expect(invitationBelongsToErasedPerson(`${TEAM}__x__${ERASED}`, { email: null, teamId: TEAM }, ERASED, UID)).toBe(false);
+  it("matches a null emailIndex only by the exact deterministic id, never by a misleading id", () => {
+    expect(invitationBelongsToErasedPerson(EXACT_ID, { emailIndex: null, teamId: TEAM }, ERASED, UID)).toBe(true);
+    expect(invitationBelongsToErasedPerson(`${TEAM}__x__${INDEX}`, { emailIndex: null, teamId: TEAM }, ERASED, UID)).toBe(false);
   });
 
-  it("matches a non-string stored email (a number, an object) only by the exact deterministic id", () => {
-    expect(invitationBelongsToErasedPerson(EXACT_ID, { email: 42, teamId: TEAM }, ERASED, UID)).toBe(true);
-    expect(invitationBelongsToErasedPerson(EXACT_ID, { email: { address: ERASED }, teamId: TEAM }, ERASED, UID)).toBe(true);
-    expect(invitationBelongsToErasedPerson(`${TEAM}__x__${ERASED}`, { email: 42, teamId: TEAM }, ERASED, UID)).toBe(false);
+  it("matches a non-string emailIndex (a number, an object) only by the exact deterministic id", () => {
+    expect(invitationBelongsToErasedPerson(EXACT_ID, { emailIndex: 42, teamId: TEAM }, ERASED, UID)).toBe(true);
+    expect(invitationBelongsToErasedPerson(EXACT_ID, { emailIndex: { value: INDEX }, teamId: TEAM }, ERASED, UID)).toBe(true);
+    expect(invitationBelongsToErasedPerson(`${TEAM}__x__${INDEX}`, { emailIndex: 42, teamId: TEAM }, ERASED, UID)).toBe(false);
   });
 
-  it("matches a blank stored email only by the exact deterministic id", () => {
-    expect(invitationBelongsToErasedPerson(EXACT_ID, { email: "   ", teamId: TEAM }, ERASED, UID)).toBe(true);
-    expect(invitationBelongsToErasedPerson(`${TEAM}__x__${ERASED}`, { email: "", teamId: TEAM }, ERASED, UID)).toBe(false);
+  it("matches a blank emailIndex only by the exact deterministic id", () => {
+    expect(invitationBelongsToErasedPerson(EXACT_ID, { emailIndex: "", teamId: TEAM }, ERASED, UID)).toBe(true);
+    expect(invitationBelongsToErasedPerson(`${TEAM}__x__${INDEX}`, { emailIndex: "", teamId: TEAM }, ERASED, UID)).toBe(false);
   });
 
-  it("matches a record resolved to the erased uid, whatever its email", () => {
-    expect(invitationBelongsToErasedPerson("other", { email: "other@example.com", resolvedUid: UID, teamId: TEAM }, ERASED, UID)).toBe(true);
+  it("matches a record resolved to the erased uid, whatever its index", () => {
+    expect(invitationBelongsToErasedPerson("other", { emailIndex: OTHER_INDEX, resolvedUid: UID, teamId: TEAM }, ERASED, UID)).toBe(true);
   });
 
-  it("does not match a record with a different resolved uid and a different valid email", () => {
-    expect(invitationBelongsToErasedPerson("other", { email: "other@example.com", resolvedUid: "uid-other", teamId: TEAM }, ERASED, UID)).toBe(false);
+  it("does not match a record with a different resolved uid and a different index", () => {
+    expect(invitationBelongsToErasedPerson("other", { emailIndex: OTHER_INDEX, resolvedUid: "uid-other", teamId: TEAM }, ERASED, UID)).toBe(false);
+  });
+
+  it("refuses a plaintext email field as ownership evidence: only the index counts", () => {
+    expect(invitationBelongsToErasedPerson("other", { email: ERASED, teamId: TEAM }, ERASED, UID)).toBe(false);
   });
 });

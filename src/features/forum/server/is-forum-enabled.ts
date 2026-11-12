@@ -10,7 +10,7 @@ export interface IsForumEnabledDeps {
  * not a security control: Forum's existing server-side authorization,
  * encryption, and API routes (`src/features/forum/server/`,
  * `app/api/teams/[teamId]/forum/...`) are unaffected by this value and
- * remain active regardless of it (docs/features/team-forum/SPEC.md —
+ * remain active regardless of it (docs/archive/features/team-forum/SPEC.md —
  * "Feature flag").
  *
  * Fails closed: only the exact string `"true"` enables the Forum UI; a

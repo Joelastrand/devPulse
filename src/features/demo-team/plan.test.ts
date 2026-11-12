@@ -1,14 +1,19 @@
+import { openSkillProgressDocument } from "../skill-trees/server/skill-progress-content-codec";
 import { createHash, randomBytes } from "node:crypto";
+import { openSkillTreeDocument } from "../skill-trees/domain/skill-tree-content-codec";
+import { openTeamDocument } from "../teams/domain/team-content-codec";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { decrypt, encrypt } from "../../lib/encryption/encryption";
-import { effectiveChallengeStatus, isValidChallenge } from "../challenges/domain/challenge";
+import { decryptRecord, encryptRecord, type RecordEnvelope } from "../../lib/encryption/record-envelope";
+import { challengeContext, effectiveChallengeStatus, isValidChallenge } from "../challenges/domain/challenge";
 import { validateChallengeText } from "../challenges/domain/challenge-text";
-import { computeSurveyAggregate } from "../results/domain/aggregation";
+import { computeSurveyAggregate, type CandidateResponseRecord } from "../results/domain/aggregation";
 import { isRoadmapItemFor, parseRoadmapItem, roadmapItemDocId, type RoadmapItemRecord } from "../roadmap/domain/roadmap-item";
+import { openRoadmapItemDocument } from "../roadmap/domain/roadmap-item-content-codec";
 import { isTargetReached, validateTargetNode } from "../roadmap/domain/roadmap-target";
 import { isValidSkillProgress } from "../skill-trees/domain/skill-progress";
 import { isValidSkillTree } from "../skill-trees/domain/skill-tree";
 import { validateSurveyAnswers } from "../surveys/domain/answers";
+import { surveyResponseContext } from "../surveys/domain/response-context";
 import { effectiveLifecycle, isValidSurvey } from "../surveys/domain/survey";
 import { isValidTeamStatus } from "../teams/domain/team";
 import { isValidMembershipFor } from "../teams/domain/team-membership";
@@ -26,7 +31,7 @@ import {
   assertOperationsMatchManifest,
   buildDemoManifest,
   buildDemoSeedPlan,
-  type DemoEncrypt,
+  type DemoSealRecord,
   type PlannedOperation,
 } from "./plan";
 
@@ -36,13 +41,28 @@ const LATER_AS_OF = new Date("2026-03-30T00:00:00.000Z");
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Deterministic, plaintext-free stand-in so whole plans can be compared for equality. */
-const fakeEncrypt: DemoEncrypt = (plaintext) => {
+const fakeSeal: DemoSealRecord = (plaintext) => {
   const digest = createHash("sha256").update(plaintext).digest("base64");
-  return { ciphertext: digest, iv: "aXYtZml4dHVyZQ==", authTag: "dGFnLWZpeHR1cmU=", keyVersion: "v1" };
+  return { ciphertext: digest, iv: "aXYtZml4dHVyZQ==", authTag: "dGFnLWZpeHR1cmU=", keyVersion: "v2", keyId: "k1" };
 };
 
-function plan(asOf = AS_OF, enc: DemoEncrypt = fakeEncrypt) {
-  return buildDemoSeedPlan({ presenterUid: PRESENTER, asOf, encrypt: enc });
+/** The repository's real v2 record envelope. */
+const realSeal: DemoSealRecord = (plaintext, context) => encryptRecord(plaintext, context);
+
+/** The record context a sealed operation was bound to. Responses and challenges are the only sealed collections. */
+function contextOf(op: PlannedOperation): string {
+  if (op.collection === "challenges") return challengeContext(DEMO_TEAM_ID, op.docId);
+  return surveyResponseContext(DEMO_TEAM_ID, (op.data as { surveyId: string }).surveyId, op.docId);
+}
+
+/** A response as the aggregate reader sees it: its v2 envelope plus the context rebuilt from the document path. */
+function responseCandidate(op: PlannedOperation): CandidateResponseRecord {
+  const data = op.data as RecordEnvelope;
+  return { ciphertext: data.ciphertext, iv: data.iv, authTag: data.authTag, keyVersion: data.keyVersion, keyId: data.keyId, context: contextOf(op) };
+}
+
+function plan(asOf = AS_OF, seal: DemoSealRecord = fakeSeal) {
+  return buildDemoSeedPlan({ presenterUid: PRESENTER, asOf, sealRecord: seal });
 }
 
 function opsIn(operations: readonly PlannedOperation[], collection: string) {
@@ -226,7 +246,7 @@ describe("responses, threshold and trend (real encryption + real aggregation)", 
   });
 
   it("distributes 59 responses as 8 per publishable period and 3 in period 3, none in the scheduled survey", () => {
-    const responses = opsIn(plan(AS_OF, encrypt).operations, "surveyResponses");
+    const responses = opsIn(plan(AS_OF, realSeal).operations, "surveyResponses");
     expect(responses).toHaveLength(59);
     const perSurvey = new Map<string, number>();
     for (const r of responses) {
@@ -242,13 +262,13 @@ describe("responses, threshold and trend (real encryption + real aggregation)", 
   });
 
   it("publishes 7 periods, suppresses period 3 via the real threshold, publishes the latest, and trends the intended way", () => {
-    const { operations } = plan(AS_OF, encrypt);
+    const { operations } = plan(AS_OF, realSeal);
     const responses = opsIn(operations, "surveyResponses");
     const results = Array.from({ length: 8 }, (_, i) => {
       const surveyId = `demo-survey-0${i + 1}`;
       const candidates = responses
         .filter((r) => (r.data as { surveyId: string }).surveyId === surveyId)
-        .map((r) => r.data as { ciphertext: string; iv: string; authTag: string; keyVersion: "v1" });
+        .map(responseCandidate);
       return computeSurveyAggregate(surveyId, candidates, 5);
     });
 
@@ -282,12 +302,12 @@ describe("responses, threshold and trend (real encryption + real aggregation)", 
     const targets = [
       [3.1, 3.9, 3.0], [3.2, 3.8, 3.2], null, [3.4, 3.5, 3.3], [3.6, 3.3, 3.5], [3.5, 3.2, 3.6], [3.8, 2.9, 3.7], [3.9, 2.7, 3.9],
     ];
-    const responses = opsIn(plan(AS_OF, encrypt).operations, "surveyResponses");
+    const responses = opsIn(plan(AS_OF, realSeal).operations, "surveyResponses");
     for (let p = 1; p <= 8; p++) {
       const answers = responses
         .filter((r) => (r.data as { surveyId: string }).surveyId === `demo-survey-0${p}`)
         .map((r) => {
-          const parsed = validateSurveyAnswers(JSON.parse(decrypt(r.data as never)));
+          const parsed = validateSurveyAnswers(JSON.parse(decryptRecord(r.data as never, contextOf(r))));
           expect(parsed.ok).toBe(true);
           return parsed.ok ? parsed.data : [0, 0, 0];
         });
@@ -326,7 +346,7 @@ describe("challenges", () => {
   });
 
   it("carries no submitter identity and the approved audit actor only on resolved/archived", () => {
-    const allowed = ["teamId", "ciphertext", "iv", "authTag", "keyVersion", "submittedAt", "resolvedAt", "resolvedBy", "archivedAt", "archivedBy"];
+    const allowed = ["teamId", "ciphertext", "iv", "authTag", "keyVersion", "keyId", "submittedAt", "resolvedAt", "resolvedBy", "archivedAt", "archivedBy"];
     for (const c of challenges) {
       expect(Object.keys(c.data as object).every((k) => allowed.includes(k))).toBe(true);
     }
@@ -337,9 +357,11 @@ describe("challenges", () => {
 });
 
 describe("skill trees and progress", () => {
-  const { operations } = plan();
-  const trees = opsIn(operations, "skillTrees");
-  const progress = opsIn(operations, "skillProgress");
+  // Trees are sealed with the real envelope; the checks below open them and assert the plaintext shape.
+  vi.stubEnv("ENCRYPTION_KEY", randomBytes(32).toString("base64"));
+  const { operations } = plan(AS_OF, realSeal);
+  const trees = opsIn(operations, "skillTrees").map((t) => ({ docId: t.docId, data: openSkillTreeDocument(t.docId, t.data, decryptRecord) }));
+  const progress = opsIn(operations, "skillProgress").map((p) => ({ docId: p.docId, data: openSkillProgressDocument(p.data, decryptRecord) }));
   const nodesOf = (docId: string) =>
     (trees.find((t) => t.docId === docId)!.data as { nodes: { nodeId: string }[] }).nodes;
 
@@ -380,8 +402,11 @@ describe("skill trees and progress", () => {
 });
 
 describe("team, membership, presenter uid and privacy", () => {
-  const { operations } = plan();
-  const [team, membership] = operations;
+  vi.stubEnv("ENCRYPTION_KEY", randomBytes(32).toString("base64"));
+  const { operations } = plan(AS_OF, realSeal);
+  const [sealedTeam, membership] = operations;
+  // The team name is sealed; the checks open it with the real envelope.
+  const team = { ...sealedTeam, data: openTeamDocument("demo-team", sealedTeam.data, decryptRecord) as Record<string, unknown> };
 
   it("plans one active Demoteam and one presenter membership valid under the real validators", () => {
     expect(team.data).toMatchObject({ name: "Demoteam", status: "active", createdBy: DEMO_AUDIT_ACTOR });
@@ -414,7 +439,7 @@ describe("team, membership, presenter uid and privacy", () => {
   it("gives survey responses exactly the seven approved fields and no identity or ownership marker", () => {
     for (const r of opsIn(operations, "surveyResponses")) {
       expect(Object.keys(r.data as object).sort()).toEqual(
-        ["authTag", "ciphertext", "iv", "keyVersion", "submittedAt", "surveyId", "teamId"],
+        ["authTag", "ciphertext", "iv", "keyId", "keyVersion", "submittedAt", "surveyId", "teamId"],
       );
     }
     const text = JSON.stringify(operations);
@@ -443,8 +468,13 @@ describe("determinism", () => {
     expect(identity(b)).toEqual(identity(a));
     expect(b.manifest).toEqual(a.manifest);
 
+    // A roadmap plan's sealed content carries its plan dates, so its ciphertext legitimately moves with as-of. Its envelope is
+    // compared by identity instead; every other operation is compared byte for byte.
     const strip = (p: ReturnType<typeof plan>) =>
-      JSON.stringify(p.operations, (_k, v) => (typeof v === "string" && /^\d{4}-\d\d-\d\d(T|$)/.test(v) ? "<date>" : v));
+      JSON.stringify(
+        p.operations.map((o) => (o.collection === "roadmapItems" ? { ...o, data: { ...(o.data as object), content: "<sealed>" } } : o)),
+        (_k, v) => (typeof v === "string" && /^\d{4}-\d\d-\d\d(T|$)/.test(v) ? "<date>" : v),
+      );
     expect(strip(b)).toBe(strip(a));
     expect(JSON.stringify(b.operations)).not.toBe(JSON.stringify(a.operations));
 
@@ -454,16 +484,18 @@ describe("determinism", () => {
     expect(closedB.getTime() - closedA.getTime()).toBe(shift);
   });
 
-  it("produces fresh ciphertext with the real encrypt but the same logical plan", () => {
+  it("produces fresh ciphertext with the real v2 seal but the same logical plan", () => {
     vi.stubEnv("ENCRYPTION_KEY", randomBytes(32).toString("base64"));
     try {
-      const a = plan(AS_OF, encrypt);
-      const b = plan(AS_OF, encrypt);
+      const a = plan(AS_OF, realSeal);
+      const b = plan(AS_OF, realSeal);
       expect(a.operations.map((o) => o.path)).toEqual(b.operations.map((o) => o.path));
       expect((a.operations[12].data as { ciphertext: string }).ciphertext).not.toBe(
         (b.operations[12].data as { ciphertext: string }).ciphertext,
       );
-      expect(decrypt(a.operations[12].data as never)).toBe(decrypt(b.operations[12].data as never));
+      expect(decryptRecord(a.operations[12].data as never, contextOf(a.operations[12]))).toBe(
+        decryptRecord(b.operations[12].data as never, contextOf(b.operations[12])),
+      );
     } finally {
       vi.unstubAllEnvs();
     }
@@ -471,8 +503,12 @@ describe("determinism", () => {
 });
 
 describe("roadmap plan fixtures (team-skill-planning TASK-011)", () => {
-  const { operations } = plan();
-  const items = opsIn(operations, "roadmapItems");
+  // Plans are sealed with the real envelope; the checks open them and assert the plaintext shape.
+  vi.stubEnv("ENCRYPTION_KEY", randomBytes(32).toString("base64"));
+  const openedRoadmap = (ops: readonly PlannedOperation[]) =>
+    opsIn(ops, "roadmapItems").map((o) => ({ ...o, data: openRoadmapItemDocument(o.data, decryptRecord) }));
+  const { operations } = plan(AS_OF, realSeal);
+  const items = openedRoadmap(operations);
   const record = (treeId: string) =>
     items.find((o) => o.docId === roadmapItemDocId(DEMO_TEAM_ID, treeId))!.data as RoadmapItemRecord;
   const fixtures = buildDemoLogicalFixtures({ presenterUid: PRESENTER, asOf: AS_OF });
@@ -540,8 +576,8 @@ describe("roadmap plan fixtures (team-skill-planning TASK-011)", () => {
   });
 
   it("moves only the dated plan's dates with as-of", () => {
-    const later = opsIn(plan(LATER_AS_OF).operations, "roadmapItems");
-    const startAt = (x: readonly PlannedOperation[]) => (x[0].data as RoadmapItemRecord).startDate;
+    const later = openedRoadmap(plan(LATER_AS_OF, realSeal).operations);
+    const startAt = (x: readonly { data: unknown }[]) => (x[0].data as RoadmapItemRecord).startDate;
     expect(startAt(later)).toBe("2026-03-16");
     expect((later[0].data as RoadmapItemRecord).targetDate).toBe("2026-05-29");
     expect(JSON.stringify(later.slice(1))).toBe(JSON.stringify(items.slice(1)).replaceAll("2026-03-16", "2026-03-30"));

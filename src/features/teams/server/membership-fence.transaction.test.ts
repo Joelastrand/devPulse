@@ -1,6 +1,10 @@
+import { randomBytes } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
+import { toPersistedInvitation, invitationDocIdForEmail } from "../domain/team-invitation-content-codec";
+
+// One fixed key for the file: invitation fixtures are sealed when they are built.
+vi.stubEnv("ENCRYPTION_KEY", randomBytes(32).toString("base64"));
 import { ErasureWriteRefused } from "../../auth/server/erasure-write-fence";
-import { invitationDocId } from "../domain/team-invitation";
 import { membershipDocId } from "../domain/team-membership";
 import { grantTeamMembership } from "./grant-team-membership";
 import { resolveInvitations } from "./resolve-invitations";
@@ -88,10 +92,10 @@ function createDouble(seed: Record<string, Data>): Double {
 
 const fence = `accountErasures/${UID}`;
 const membership = `teamMemberships/${membershipDocId(UID, TEAM_ID)}`;
-const invitation = `teamInvitations/${invitationDocId(TEAM_ID, EMAIL)}`;
+const invitation = `teamInvitations/${invitationDocIdForEmail(TEAM_ID, EMAIL)}`;
 
 function pendingInvitation(): Data {
-  return { teamId: TEAM_ID, email: EMAIL, status: "pending", invitedBy: INVITER, createdAt: NOW };
+  return toPersistedInvitation(TEAM_ID, { teamId: TEAM_ID, email: EMAIL, status: "pending", invitedBy: INVITER, createdAt: NOW });
 }
 
 describe("membership-writing transactions are fenced by the target uid (TASK-030, BR-4(b))", () => {

@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
+import { randomBytes } from "node:crypto";
 import { skillNeedDocId } from "../domain/skill-need";
+import { toPersistedSkillNeed } from "./skill-need-content-codec";
+
+vi.stubEnv("ENCRYPTION_KEY", randomBytes(32).toString("base64"));
 
 const log: Array<[string, string, unknown?]> = [];
 const docs: Record<string, unknown> = {};
@@ -29,7 +33,7 @@ describe("default need write store", () => {
   it("targets the deterministic teamSkillNeeds slot, maps timestamps and replaces whole documents", async () => {
     const when = new Date("2026-02-01T00:00:00Z");
     const docId = skillNeedDocId("team-1", "tree-1");
-    docs[`teamSkillNeeds/${docId}`] = { createdAt: ts(when), updatedAt: ts(when), requiredLevel: 2 };
+    docs[`teamSkillNeeds/${docId}`] = toPersistedSkillNeed({ teamId: "team-1", treeId: "tree-1", requiredLevel: 2, requiredCoverage: 2, createdAt: ts(when), updatedAt: ts(when) });
 
     const record = {
       teamId: "team-1",
@@ -47,7 +51,15 @@ describe("default need write store", () => {
       tx.deleteNeed(docId);
     });
 
-    expect(log.filter(([op]) => op === "set")).toEqual([["set", `teamSkillNeeds/${docId}`, record]]);
+    // The persisted payload carries no plaintext requirement; the metadata stays plaintext.
+    const sets = log.filter(([op]) => op === "set");
+    expect(sets).toHaveLength(1);
+    const payload = sets[0][2] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty("requiredLevel");
+    expect(payload).not.toHaveProperty("requiredCoverage");
+    expect(payload).toMatchObject({ teamId: "team-1", treeId: "tree-1" });
+    expect(payload.content).toMatchObject({ keyVersion: "v2", keyId: "k1" });
+    expect(JSON.stringify(payload)).not.toMatch(/"requiredCoverage":2|"requiredLevel":3/);
     expect(log.filter(([op]) => op === "delete")).toEqual([["delete", `teamSkillNeeds/${docId}`]]);
   });
 

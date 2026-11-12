@@ -7,7 +7,7 @@ import { formatSurveyDate } from "../domain/format-survey-date";
 
 /**
  * Renders the team's latest closed survey's result
- * (docs/features/managed-surveys/SPEC.md — "Results/history model",
+ * (docs/archive/features/managed-surveys/SPEC.md — "Results/history model",
  * TASK-012). `result` is `null` only when the team has no closed surveys
  * yet — a `scheduled`/`open` survey is never eligible here (BR-27), so this
  * component never needs to distinguish "no survey" from "current survey not

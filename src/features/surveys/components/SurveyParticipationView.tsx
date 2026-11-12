@@ -20,7 +20,7 @@ type ViewState =
 
 /**
  * `/survey/{surveyId}` for both access modes
- * (docs/features/managed-surveys/SPEC.md — BR-10, BR-12, BR-13, BR-20's UI
+ * (docs/archive/features/managed-surveys/SPEC.md — BR-10, BR-12, BR-13, BR-20's UI
  * half). Renders purely from TASK-005's resolved outcome (via the thin
  * `GET /api/surveys/[surveyId]` route) — no lifecycle, access-mode, or
  * membership logic is duplicated here (`.claude/rules/security.md` —

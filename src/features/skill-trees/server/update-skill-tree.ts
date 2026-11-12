@@ -1,3 +1,4 @@
+import { openSkillTreeDocument, toPersistedSkillTree } from "../domain/skill-tree-content-codec";
 import "server-only";
 import { runFencedTransaction, writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
@@ -43,7 +44,8 @@ function getDefaultSkillTreeDocStore(actorUid: string): SkillTreeDocStore {
 }
 
 /** Maps raw Firestore document data (Timestamp fields included) into the candidate shape `isValidSkillTree` expects. */
-function toCandidateSkillTree(data: unknown): unknown {
+function toCandidateSkillTree(treeId: string, raw: unknown): unknown {
+  const data = openSkillTreeDocument(treeId, raw);
   if (typeof data !== "object" || data === null) {
     return undefined;
   }
@@ -93,7 +95,7 @@ export interface UpdateSkillTreeDeps {
 
 /**
  * Cosmetically corrects an existing SkillTree's `name` and/or its nodes'
- * `label` text — never its node count, order, or `nodeId`s (docs/features/
+ * `label` text — never its node count, order, or `nodeId`s (docs/archive/features/
  * team-skill-tree/SPEC.md — "Cosmetic tree correction", BR-31, BR-32,
  * BR-35). Only an app admin may call this successfully.
  *
@@ -140,7 +142,7 @@ export async function updateSkillTree(
     return { ok: false, error: "persistence_failed" };
   }
 
-  const candidate = toCandidateSkillTree(snapshot.exists ? snapshot.data() : undefined);
+  const candidate = toCandidateSkillTree(treeId, snapshot.exists ? snapshot.data() : undefined);
   if (!isValidSkillTree(candidate)) {
     return { ok: false, error: "tree_not_found" };
   }
@@ -167,12 +169,10 @@ export async function updateSkillTree(
 
   const now = deps.now ?? new Date();
   try {
-    await docs.update(treeId, {
-      name: nameResult.name,
-      nodes,
-      updatedAt: now,
-      updatedBy: admin.identity.uid,
-    });
+    await docs.update(
+      treeId,
+      toPersistedSkillTree(treeId, { name: nameResult.name, nodes, updatedAt: now, updatedBy: admin.identity.uid }),
+    );
     return { ok: true };
   } catch (error) {
     return { ok: false, error: writeRefusalFor(error) };

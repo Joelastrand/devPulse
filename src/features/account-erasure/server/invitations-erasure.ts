@@ -8,8 +8,8 @@ import { ErasureStepFailure, type BatchResult, type StepHandler } from "./erasur
  *
  * Categories, in order (the first with a match is handled; `done` only when none has a match):
  *   1. `teamAccessRequests` owned by the uid (uid field, or the legacy `uid__` document-id prefix): deleted (I-10);
- *   2. `teamInvitations` whose stored email normalizes to the erased person's normalized email, or whose `resolvedUid` is
- *      the uid, in any status: deleted (I-11);
+ *   2. `teamInvitations` whose stored `emailIndex` is the blind index of the erased person's normalized email, or whose
+ *      `resolvedUid` is the uid, in any status: deleted (I-11);
  *   3. others' `teamAccessRequests.resolvedBy === uid`: set to null, the record is kept (A-9);
  *   4. others' `teamInvitations.invitedBy === uid`: set to null, the record is kept (A-10).
  *
@@ -39,9 +39,9 @@ export interface InvitationsErasurePort {
   /** Access-request ids owned by the uid (uid field, or legacy `uid__` id prefix), at most `limit`. */
   accessRequestIdsFor(uid: string, limit: number): Promise<string[]>;
   /**
-   * Invitation ids whose stored email equals `normalizedEmail`, whose document id ends in `__${normalizedEmail}`, or whose
-   * `resolvedUid` is the uid. The production adapter (TASK-038) must cover the document-id match without inventing a
-   * `normalizedEmail` field; the step does not rely on the query for that match, it checks the id itself.
+   * Invitation ids whose stored `emailIndex` is the blind index of `normalizedEmail`, or whose `resolvedUid` is the uid. The
+   * address itself is sealed, so the index is the only searchable value; the step also checks ownership itself
+   * (invitation-match.ts).
    */
   invitationIdsFor(normalizedEmail: string, uid: string, limit: number): Promise<string[]>;
   /** Access-request ids whose `resolvedBy` is the uid, at most `limit`. */
@@ -144,7 +144,7 @@ async function resolveNormalizedEmail(deps: InvitationsStepDeps, uid: string): P
 
 interface ParsedRecord {
   readonly uid?: string;
-  readonly email?: string;
+  readonly emailIndex?: string;
   readonly resolvedUid?: string;
   readonly resolvedBy?: string;
   readonly invitedBy?: string;
@@ -156,7 +156,7 @@ function parseRecord(raw: unknown): ParsedRecord | undefined {
   const record = raw as Record<string, unknown>;
   const fields = {
     uid: optionalString(record.uid),
-    email: optionalString(record.email),
+    emailIndex: optionalString(record.emailIndex),
     resolvedUid: optionalString(record.resolvedUid),
     // An actor field cleared to `null` by an earlier erasure step (A-9, A-10) is the preserved state, not corruption.
     resolvedBy: optionalActor(record.resolvedBy),

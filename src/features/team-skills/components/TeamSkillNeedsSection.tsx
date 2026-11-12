@@ -36,7 +36,7 @@ interface Settled {
 }
 
 /**
- * «Kompetansebehov og dekning» on team Oversikt (docs/features/team-skill-needs-and-matrix/SPEC.md —
+ * «Kompetansebehov og dekning» on team Oversikt (docs/archive/features/team-skill-needs-and-matrix/SPEC.md —
  * BR-26, BR-27, BR-28; TASK-008/009). It renders only the needs the server returns, one row per need and
  * nothing per person. The coverage column renders the categorical state the server returns from
  * `GET …/skill-coverage` (TASK-018), requested only when `viewer.canReadCoverage` is true; the browser

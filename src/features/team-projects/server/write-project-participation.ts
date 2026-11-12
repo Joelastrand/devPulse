@@ -11,6 +11,7 @@ import { isAppAdmin, type IsAppAdminDeps } from "../../teams/domain/app-admin";
 import { canAdministerTeam } from "../../teams/domain/team-authority";
 import { extractMemberUid, membershipDocId } from "../../teams/domain/team-membership";
 import { parseStoredTeamProject } from "../domain/team-project";
+import { openParticipationDocument, openTeamProjectDocument, toPersistedParticipation } from "./team-project-codec";
 import {
   hasOverlappingParticipation,
   parseStoredParticipation,
@@ -118,11 +119,13 @@ function toFirestoreTx(db: Firestore, tx: Transaction): WriteProjectParticipatio
     },
     async getProject(projectId) {
       const snapshot = await tx.get(db.collection(PROJECTS_COLLECTION).doc(projectId));
-      return snapshot.exists ? { projectId, ...snapshot.data() } : undefined;
+      // The title is sealed (`content`): open it here, as the list and single-project readers do. A document that cannot
+      // be opened yields no title, so the domain parser refuses it (fail closed).
+      return snapshot.exists ? { projectId, ...(openTeamProjectDocument(projectId, snapshot.data() ?? {}) ?? {}) } : undefined;
     },
     async getParticipation(participationId) {
       const snapshot = await tx.get(participations().doc(participationId));
-      return snapshot.exists ? { participationId, ...snapshot.data() } : undefined;
+      return snapshot.exists ? { participationId, ...openParticipationDocument(participationId, snapshot.data() ?? {}) } : undefined;
     },
     async listMembershipsByRefs(teamId, refs) {
       if (refs.length === 0) return [];
@@ -135,13 +138,13 @@ function toFirestoreTx(db: Firestore, tx: Transaction): WriteProjectParticipatio
       const snapshot = await tx.get(
         participations().where("teamId", "==", teamId).where("memberRef", "==", memberRef).limit(limit),
       );
-      return snapshot.docs.map((doc) => ({ participationId: doc.id, ...doc.data() }));
+      return snapshot.docs.map((doc) => ({ participationId: doc.id, ...openParticipationDocument(doc.id, doc.data()) }));
     },
     createParticipation(participationId, data) {
-      tx.create(participations().doc(participationId), data);
+      tx.create(participations().doc(participationId), toPersistedParticipation(participationId, data));
     },
     setParticipation(participationId, data) {
-      tx.set(participations().doc(participationId), data);
+      tx.set(participations().doc(participationId), toPersistedParticipation(participationId, data));
     },
     touchMembership(uid, teamId, memberRef) {
       tx.update(db.collection(MEMBERSHIPS_COLLECTION).doc(membershipDocId(uid, teamId)), { memberRef });

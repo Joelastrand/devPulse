@@ -14,6 +14,7 @@ import {
 import { getDefaultConversationStore } from "./conversation-store";
 import type { ConversationStore, OwnerDocumentPatch } from "./conversation-store-types";
 import { classifyOwnerDocument, type OwnerReadCodec } from "./owner-read";
+import { conversationContext } from "../domain/stored-owner-conversation";
 
 /**
  * Owner section writes (SPEC BR-6, BR-19, BR-28, BR-39, BR-49, D2-SI-7, IMPL-1; TASK-012). The owner rewrites `title`,
@@ -24,7 +25,7 @@ import { classifyOwnerDocument, type OwnerReadCodec } from "./owner-read";
 
 /** The codec operations a section write needs: the classifier's decrypt seam, the probe and the encoder. */
 export interface UpdateOwnerSectionsCodec extends OwnerReadCodec {
-  encodeContent(content: ConversationContent): EncodeContentResult;
+  encodeContent(content: ConversationContent, context: string): EncodeContentResult;
 }
 
 export interface UpdateOwnerSectionsDeps {
@@ -142,7 +143,7 @@ export async function updateOwnerSections(
       if (raw === undefined) return NOT_FOUND;
 
       // IMPL-1: the rewrite needs the decrypted payload. A key failure throws out of the classifier and is caught below.
-      const classification = classifyOwnerDocument(raw, deps.codec);
+      const classification = classifyOwnerDocument(raw, deps.codec, { ownerUid, conversationId });
       if (classification.kind !== "valid") return NOT_FOUND;
       const record = classification.record;
 
@@ -158,7 +159,7 @@ export async function updateOwnerSections(
         sharedGoals: record.content.sharedGoals,
         sharedEvidence: record.content.sharedEvidence,
       };
-      const encoded = deps.codec.encodeContent(content);
+      const encoded = deps.codec.encodeContent(content, conversationContext(ownerUid, conversationId));
       if (!encoded.ok) return FAILED;
 
       // `plannedFor` is a plain field, so it is patched directly. A `null` value clears it (BR-6).

@@ -1,5 +1,8 @@
+import { openSkillProgressDocument } from "../../skill-trees/server/skill-progress-content-codec";
+import { openRoadmapItemDocument, toPersistedRoadmapItem } from "../domain/roadmap-item-content-codec";
+import { openSkillTreeDocument } from "../../skill-trees/domain/skill-tree-content-codec";
 import "server-only";
-import { FieldValue, type Transaction } from "firebase-admin/firestore";
+import type { Transaction } from "firebase-admin/firestore";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import { getDisplayNames, type ProfileBatchReader } from "../../profiles/server/get-display-names";
@@ -45,6 +48,12 @@ const TEAMS_COLLECTION = "teams";
 
 const ALLOWED_KEYS = ["targetNodeId", "priority", "status", "startDate", "targetDate", "ownerRef", "archived"];
 
+/** Records one plan date in the approved change set. Kept outside the transaction callback (no dynamic write inside it). */
+function setPlanDate(patch: RoadmapPatch, key: "startDate" | "targetDate", value: string): void {
+  if (key === "startDate") patch.set.startDate = value;
+  else patch.set.targetDate = value;
+}
+
 export type UpdateRoadmapItemError =
   | AuthRefusal
   | "forbidden"
@@ -77,7 +86,8 @@ export interface UpdateRoadmapTx {
   getSkillProgress(docId: string): Promise<unknown>;
   getSkillTree(treeId: string): Promise<unknown>;
   listMemberships(teamId: string, limit: number): Promise<unknown[]>;
-  update(docId: string, patch: RoadmapPatch): void;
+  /** Writes the whole sealed plan from `record` (the state read in this transaction); `patch` is the approved change set. */
+  writePlan(docId: string, patch: RoadmapPatch, record: RoadmapItemRecord): void;
   /**
    * Transactional coordination with membership erasure (TASK-038, A-5). Writes the TARGET membership document with its own
    * unchanged `memberRef`, so a concurrent erasure transaction that read that membership conflicts with this one. Called only
@@ -116,7 +126,7 @@ function getDefaultStore(): UpdateRoadmapStore {
         db.collection(MEMBERSHIPS_COLLECTION).where("teamId", "==", teamId).limit(ROADMAP_ITEMS_MAX + 1).get(),
       ]);
       return {
-        progress: progress.exists ? mapDates(progress.data(), ["updatedAt"]) : undefined,
+        progress: progress.exists ? openSkillProgressDocument(mapDates(progress.data(), ["updatedAt"])) : undefined,
         tree: tree.exists ? mapDates(tree.data(), ["createdAt", "updatedAt"]) : undefined,
         memberships: memberships.docs.map((doc) => doc.data()),
       };
@@ -143,18 +153,16 @@ function runUpdateRoadmapTransaction<T>(
         const snapshot = await tx.get(db.collection(MEMBERSHIPS_COLLECTION).doc(membershipDocId(uid, teamId)));
         return snapshot.exists ? snapshot.data() : undefined;
       },
-      getRoadmapItem: (docId) =>
-        data(db.collection(ROADMAP_COLLECTION).doc(docId), ["createdAt", "updatedAt", "completedAt", "archivedAt"]),
-      getSkillProgress: (docId) => data(db.collection(SKILL_PROGRESS_COLLECTION).doc(docId), ["updatedAt"]),
-      getSkillTree: (treeId) => data(db.collection(SKILL_TREES_COLLECTION).doc(treeId), ["createdAt", "updatedAt"]),
+      getRoadmapItem: async (docId) =>
+        openRoadmapItemDocument(await data(db.collection(ROADMAP_COLLECTION).doc(docId), ["createdAt", "updatedAt", "archivedAt"])),
+      getSkillProgress: async (docId) => openSkillProgressDocument(await data(db.collection(SKILL_PROGRESS_COLLECTION).doc(docId), ["updatedAt"])),
+      getSkillTree: async (treeId) => openSkillTreeDocument(treeId, await data(db.collection(SKILL_TREES_COLLECTION).doc(treeId), ["createdAt", "updatedAt"])),
       async listMemberships(teamId, limit) {
         const snapshot = await tx.get(db.collection(MEMBERSHIPS_COLLECTION).where("teamId", "==", teamId).limit(limit));
         return snapshot.docs.map((doc) => doc.data());
       },
-      update(docId, patch) {
-        const fields: Record<string, unknown> = { ...patch.set };
-        for (const field of patch.remove) fields[field] = FieldValue.delete();
-        tx.update(db.collection(ROADMAP_COLLECTION).doc(docId), fields);
+      writePlan(docId, _patch, record) {
+        tx.set(db.collection(ROADMAP_COLLECTION).doc(docId), toPersistedRoadmapItem({ ...record }));
       },
       touchMembership(uid, teamId, memberRef) {
         tx.update(db.collection(MEMBERSHIPS_COLLECTION).doc(membershipDocId(uid, teamId)), { memberRef });
@@ -295,7 +303,7 @@ export async function updateRoadmapItem(
           delete record.archivedBy;
           patch.remove.push("archivedAt", "archivedBy");
         }
-        tx.update(docId, patch);
+        tx.writePlan(docId, patch, record);
         return { ok: true, snapshot: { record } };
       }
       if (isArchived) return fail("archived");
@@ -360,7 +368,7 @@ export async function updateRoadmapItem(
           patch.remove.push(key);
         } else {
           record[key] = value;
-          patch.set[key] = value;
+          setPlanDate(patch, key, value);
         }
       }
 
@@ -381,7 +389,7 @@ export async function updateRoadmapItem(
 
       // Coordination with membership erasure (TASK-038, A-5): only a newly introduced owner touches the target membership.
       if (ownerTouch !== undefined) tx.touchMembership(ownerTouch.uid, teamId, ownerTouch.memberRef);
-      tx.update(docId, patch);
+      tx.writePlan(docId, patch, record);
       return { ok: true, snapshot: { record, tree: rawTree, progress, memberships } };
     });
   } catch (error) {

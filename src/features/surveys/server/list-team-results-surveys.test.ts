@@ -1,3 +1,5 @@
+import { sealSeedDocument, stubSurveyEncryptionKey } from "./survey-test-fixtures";
+stubSurveyEncryptionKey();
 import { describe, expect, it, vi } from "vitest";
 import type { AuthorizeTeamAccessCollection } from "../../teams/server/authorize-team-access";
 import { getBuiltInTemplate } from "../domain/templates";
@@ -38,7 +40,10 @@ function deps(rows: { id: string; data: unknown }[], overrides: Partial<ListTeam
     verifyToken: verifyAs(MEMBER_UID),
     isSuperadmin: async () => false,
     authCollection,
-    collections: { listSurveysForTeam: async () => rows },
+    collections: {
+      listSurveysForTeam: async () =>
+        rows.map((row) => ({ id: row.id, data: sealSeedDocument(`surveys/${row.id}`, row.data as Record<string, unknown>) })),
+    },
     ...overrides,
   };
 }

@@ -14,6 +14,7 @@ import { getDefaultConversationStore } from "./conversation-store";
 import type { ConversationStore, ConversationTransaction, OwnerDocumentPatch } from "./conversation-store-types";
 import { createFirestoreParticipantRefReader, resolveParticipantRef, type ParticipantRefReader } from "./member-ref-binding";
 import { classifyOwnerDocument, type OwnerReadCodec } from "./owner-read";
+import { conversationContext } from "../domain/stored-owner-conversation";
 
 /**
  * Owner removal and replacement (SPEC BR-10, BR-16, BR-18, BR-48, BR-50 (3) and (6), CL-21, IMPL-1, D2-SI-8; TASK-018).
@@ -34,7 +35,7 @@ import { classifyOwnerDocument, type OwnerReadCodec } from "./owner-read";
 export interface ChangeParticipantDeps {
   store: ConversationStore;
   /** The codec operations this path needs: the probe, the classifier's decrypt seam and the encoder. */
-  codec: OwnerReadCodec & { encodeContent(content: ConversationContent): EncodeContentResult };
+  codec: OwnerReadCodec & { encodeContent(content: ConversationContent, context: string): EncodeContentResult };
   /** The TASK-007 reference seam, used only to resolve a replacement candidate. */
   refReader: ParticipantRefReader;
   /** Server time for `participantInvitedAt` and `updatedAt`. Injected so tests can fix it. */
@@ -94,8 +95,12 @@ function parseChangeInput(input: unknown): { ok: true; memberRef: unknown } | { 
 }
 
 /** The owner content with `participantNotes` deleted. Owner content is carried over unchanged (BR-16). */
-function encodeWithoutParticipantNotes(content: ConversationContent, deps: ChangeParticipantDeps): EncodeContentResult {
-  return deps.codec.encodeContent({ ...content, participantNotes: "" });
+function encodeWithoutParticipantNotes(
+  content: ConversationContent,
+  deps: ChangeParticipantDeps,
+  owner: { ownerUid: string; conversationId: string },
+): EncodeContentResult {
+  return deps.codec.encodeContent({ ...content, participantNotes: "" }, conversationContext(owner.ownerUid, owner.conversationId));
 }
 
 interface PreparedReplacement {
@@ -116,7 +121,7 @@ async function prepareReplacement(
 ): Promise<{ ok: true; replacement: PreparedReplacement } | { ok: false; result: ChangeParticipantResult }> {
   const before = await deps.store.getOwner(ownerUid, conversationId);
   if (before === undefined) return { ok: false, result: NOT_FOUND };
-  const classification = classifyOwnerDocument(before, deps.codec);
+  const classification = classifyOwnerDocument(before, deps.codec, { ownerUid, conversationId });
   if (classification.kind !== "valid") return { ok: false, result: NOT_FOUND };
 
   const teamId = classification.record.teamId;
@@ -142,14 +147,14 @@ async function removeInTransaction(
   const raw = await tx.getOwner(ownerUid, conversationId);
   if (raw === undefined) return NOT_FOUND;
   // IMPL-1: removal always reads the payload, so an undecryptable payload fails here, before any write.
-  const classification = classifyOwnerDocument(raw, deps.codec);
+  const classification = classifyOwnerDocument(raw, deps.codec, { ownerUid, conversationId });
   if (classification.kind !== "valid") return NOT_FOUND;
 
   const current = classification.record.participant;
   // Removing a missing participant is a no-op with no write (idempotent).
   if (current === null) return NOOP;
 
-  const encoded = encodeWithoutParticipantNotes(classification.record.content, deps);
+  const encoded = encodeWithoutParticipantNotes(classification.record.content, deps, { ownerUid, conversationId });
   if (!encoded.ok) return FAILED;
 
   const patch: OwnerDocumentPatch = {
@@ -172,7 +177,7 @@ async function replaceInTransaction(
 ): Promise<ChangeParticipantResult> {
   const raw = await tx.getOwner(ownerUid, conversationId);
   if (raw === undefined) return NOT_FOUND;
-  const classification = classifyOwnerDocument(raw, deps.codec);
+  const classification = classifyOwnerDocument(raw, deps.codec, { ownerUid, conversationId });
   if (classification.kind !== "valid") return NOT_FOUND;
   const record = classification.record;
 
@@ -186,7 +191,7 @@ async function replaceInTransaction(
   // participant there is no content to delete, so the payload is not rewritten.
   let contentPatch: OwnerDocumentPatch = {};
   if (current !== null) {
-    const encoded = encodeWithoutParticipantNotes(record.content, deps);
+    const encoded = encodeWithoutParticipantNotes(record.content, deps, { ownerUid, conversationId });
     if (!encoded.ok) return FAILED;
     contentPatch = encoded.content;
   }

@@ -1,3 +1,4 @@
+import { detachedRoadmapItem, roadmapOwnerIndex } from "../../roadmap/domain/roadmap-item-content-codec";
 
 import { issueErasureOwnerCleanupCapability } from "../../development-conversations/server/erasure-owner-cleanup-capability";
 import "server-only";
@@ -45,6 +46,8 @@ function membershipAdapterPort(): MembershipDestructionPort {
       return snapshot.docs.map((doc) => parseOwnedConversationPath(doc.ref.path));
     },
     async runFinalTransaction<T>(work: (tx: MembershipDestructionFinalTransaction) => Promise<T>): Promise<T> {
+      // Sealed roadmap plans prepared by roadmapItemIdsOwnedBy and written by clearRoadmapOwnerRef, in the same attempt.
+      const detachedRoadmapItems = new Map<string, Record<string, unknown>>();
       return db.runTransaction((tx) =>
         work({
           // Same transaction as the membership read and delete below, so a record created before commit fails the commit.
@@ -58,12 +61,23 @@ function membershipAdapterPort(): MembershipDestructionPort {
           async roadmapItemIdsOwnedBy(teamId, memberRef, limit) {
             // A transactional query: the owner set is read in the same transaction as the membership delete.
             const snapshot = await tx.get(
-              db.collection(ROADMAP_ITEMS).where("teamId", "==", teamId).where("ownerRef", "==", memberRef).limit(limit),
+              db
+                .collection(ROADMAP_ITEMS)
+                .where("teamId", "==", teamId)
+                .where("ownerRefIndex", "==", roadmapOwnerIndex(teamId, memberRef))
+                .limit(limit),
             );
-            return snapshot.docs.map((doc) => doc.id);
+            return snapshot.docs.map((doc) => {
+              const detached = detachedRoadmapItem(doc.data(), memberRef);
+              if (detached === null) throw new Error("roadmap_item_unreadable");
+              detachedRoadmapItems.set(doc.id, detached);
+              return doc.id;
+            });
           },
           clearRoadmapOwnerRef(itemId) {
-            tx.update(db.collection(ROADMAP_ITEMS).doc(itemId), { ownerRef: null });
+            const detached = detachedRoadmapItems.get(itemId);
+            if (detached === undefined) throw new Error("roadmap_item_unreadable");
+            tx.set(db.collection(ROADMAP_ITEMS).doc(itemId), detached);
           },
           async boundConversationCount(memberRef, limit) {
             // Transactional: the binding set is re-read in the final transaction, so a concurrent binding is seen or conflicts.

@@ -150,7 +150,8 @@ function threadDoc(): Data {
     ciphertext: "not-used",
     iv: "not-used",
     authTag: "not-used",
-    keyVersion: "v1",
+    keyVersion: "v2",
+    keyId: "k1",
     createdAt: new Date("2026-08-15T00:00:00Z"),
   };
 }
@@ -163,7 +164,8 @@ function replyDoc(overrides: Data = {}): Data {
     ciphertext: "not-used",
     iv: "not-used",
     authTag: "not-used",
-    keyVersion: "v1",
+    keyVersion: "v2",
+    keyId: "k1",
     createdAt: new Date("2026-08-16T00:00:00Z"),
     ...overrides,
   };

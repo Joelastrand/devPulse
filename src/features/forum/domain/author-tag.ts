@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 /**
- * Deterministic, pseudonymous, per-team author display tag (docs/features/
+ * Deterministic, pseudonymous, per-team author display tag (docs/archive/features/
  * team-forum/SPEC.md — "Identity/attribution model" → "Author tag
  * derivation", BR-11, BR-49, BR-50). A pure function of `(teamId,
  * authorUid)` alone — no Firestore read, no Firebase Auth call, no

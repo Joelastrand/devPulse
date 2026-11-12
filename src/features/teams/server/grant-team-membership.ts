@@ -34,7 +34,7 @@ export interface MembershipGrantRecord {
  * `createInvitation` and `resolveInvitations`.
  *
  * A newly created membership also receives a fresh opaque `memberRef`
- * (docs/features/team-skill-planning/SPEC.md — BR-1, BR-2). An existing
+ * (docs/archive/features/team-skill-planning/SPEC.md — BR-1, BR-2). An existing
  * membership is never written, so its ref (or the absence of one on a legacy
  * document) is left exactly as it was — backfilling legacy documents is an
  * explicit admin operation, not a side effect of a grant. Removal deletes the

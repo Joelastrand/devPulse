@@ -1,6 +1,6 @@
 /**
  * Client gateway for the TASK-005 admin SkillTree catalog/creation/
- * correction endpoints (docs/features/team-skill-tree/SPEC.md — "API/DTO
+ * correction endpoints (docs/archive/features/team-skill-tree/SPEC.md — "API/DTO
  * contracts"). Each function is a thin `fetch` wrapper around one of the
  * three `/api/admin/skills` routes — no Firestore access, no SkillTree
  * business logic beyond response-shape validation lives here. Mirrors
@@ -112,7 +112,7 @@ export async function fetchAdminSkillTrees(
   return gateway.fetchAdminSkillTrees(idToken);
 }
 
-// --- Org-wide overview (TASK-002, docs/features/org-skill-progress-overview/
+// --- Org-wide overview (TASK-002, docs/archive/features/org-skill-progress-overview/
 // SPEC.md) -------------------------------------------------------------
 // A thin fetch wrapper around the new, admin-only, read-only `GET /api/admin/
 // skills/overview` endpoint, which delegates entirely to
@@ -426,7 +426,7 @@ export async function correctAdminSkillTree(
 }
 
 // --- Team tracking: start ------------------------------------------------
-// TASK-006 (docs/features/team-skill-tree/SPEC.md — BR-27): thin fetch
+// TASK-006 (docs/archive/features/team-skill-tree/SPEC.md — BR-27): thin fetch
 // wrappers around the three `/api/admin/teams/[teamId]/skills...` endpoints.
 // Each sends only its one whitelisted body field — never a `teamId`/`treeId`
 // override (both travel as route params only) and never an audit field.
@@ -714,7 +714,7 @@ export async function stopAdminTeamSkillTracking(
 }
 
 // --- Team-facing read (TASK-007) -------------------------------------------
-// docs/features/team-skill-tree/SPEC.md — BR-28 through BR-30: a thin fetch
+// docs/archive/features/team-skill-tree/SPEC.md — BR-28 through BR-30: a thin fetch
 // wrapper around the finalized, unchanged `GET /api/teams/[teamId]/skills`
 // endpoint, which itself delegates entirely to `getTeamSkillProgress`. This
 // gateway sends no body and never carries `createdBy`/`updatedBy`/
@@ -753,7 +753,7 @@ export type FetchTeamSkillsResult =
 const KNOWN_TEAM_SKILLS_ERRORS = new Set(["unauthenticated", "forbidden", "read_failed"]);
 
 /**
- * Requires `canReportProgress` to be strictly boolean (docs/features/
+ * Requires `canReportProgress` to be strictly boolean (docs/archive/features/
  * skill-progress-self-report/SPEC.md — "Permission-UI correction"). A
  * missing or non-boolean value fails the whole response closed to
  * `read_failed` rather than defaulting to `true`/permissively enabling
@@ -818,7 +818,7 @@ export async function fetchTeamSkills(
 }
 
 // --- Team-facing self-report (TASK-002) ------------------------------------
-// docs/features/skill-progress-self-report/SPEC.md — BR-14: a thin fetch
+// docs/archive/features/skill-progress-self-report/SPEC.md — BR-14: a thin fetch
 // wrapper around the new `PATCH /api/teams/[teamId]/skills/[treeId]`
 // endpoint, which delegates entirely to `reportTeamSkillProgress`. This
 // gateway only ever sends `{nodeId}` — `teamId`/`treeId` travel as route
@@ -918,7 +918,7 @@ export interface ReportTeamSkillProgressDeps {
 
 /**
  * Reports a real team member's own stage on an already-tracked tree via
- * `PATCH /api/teams/[teamId]/skills/[treeId]` (docs/features/
+ * `PATCH /api/teams/[teamId]/skills/[treeId]` (docs/archive/features/
  * skill-progress-self-report/SPEC.md — BR-14). This gateway only ever sends
  * `{nodeId}` — `teamId`/`treeId` travel as route params, never inside the
  * body — and never surfaces `updatedBy` or any other audit identity in

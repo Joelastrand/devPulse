@@ -17,7 +17,7 @@ export interface SetOwnProfileDeps {
 }
 
 /**
- * Creates or replaces the caller's own display name (docs/features/
+ * Creates or replaces the caller's own display name (docs/archive/features/
  * member-identity-and-team-roles/SPEC.md — BR-2, BR-4). Authentication is
  * checked first, then the candidate name is normalised/validated; the
  * normalised value is what is stored and returned. `createdAt` is preserved

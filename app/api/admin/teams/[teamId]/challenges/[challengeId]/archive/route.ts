@@ -4,7 +4,7 @@ import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
- * Admin-only challenge-archive endpoint (docs/features/
+ * Admin-only challenge-archive endpoint (docs/archive/features/
  * anonymous-challenges/SPEC.md — TASK-006, BR-16, BR-18). Kept thin —
  * authorization, idempotency, and every rejection reason live in
  * `archiveChallenge` (`.claude/rules/nextjs-react.md`); this route

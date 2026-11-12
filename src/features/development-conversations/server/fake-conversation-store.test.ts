@@ -28,7 +28,7 @@ function ownerDoc(): OwnerDocumentWrite {
     ciphertext: "synthetic-ciphertext",
     iv: "synthetic-iv",
     authTag: "synthetic-tag",
-    keyVersion: "v1",
+    keyVersion: "v2", keyId: "k1",
     keyCheck: "synthetic-key-check",
   };
 }

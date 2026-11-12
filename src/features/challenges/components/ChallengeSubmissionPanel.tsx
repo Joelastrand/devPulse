@@ -30,7 +30,7 @@ function isValidLength(rawText: string): boolean {
 }
 
 /**
- * `/teams/[teamId]`'s "Meld en utfordring" panel (docs/features/
+ * `/teams/[teamId]`'s "Meld en utfordring" panel (docs/archive/features/
  * anonymous-challenges/SPEC.md — BR-27, BR-28, BR-32). Sends only the
  * free-text body to the server — no uid/email/displayName/membershipId/
  * admin-state field of any kind; `submitChallenge`'s server operation
@@ -49,7 +49,7 @@ function isValidLength(rawText: string): boolean {
  * `encryption_failed` and `persistence_failed` is never exposed to the user
  * (mirrors TASK-002's outcome-minimization posture). `team_disabled` gets
  * its own accurate message, since it reflects a real, SPEC-documented
- * submission restriction (docs/features/anonymous-challenges/SPEC.md —
+ * submission restriction (docs/archive/features/anonymous-challenges/SPEC.md —
  * "Team-disable semantics") rather than an infrastructure failure — this
  * component never infers a disabled team client-side beforehand; it only
  * ever reports what the server actually decided.

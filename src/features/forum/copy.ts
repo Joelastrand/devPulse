@@ -1,6 +1,6 @@
 /**
  * Norwegian user-facing copy for `/teams/[teamId]`'s "Forum" section and the
- * thread-detail view (docs/features/team-forum/SPEC.md — BR-41). Internal/
+ * thread-detail view (docs/archive/features/team-forum/SPEC.md — BR-41). Internal/
  * technical values (`isDeleted`, raw ISO timestamps) are never shown to a
  * user — every surface uses the labels below. Solely responsible for any
  * prefix/framing text around `authorTag` (e.g. "Medlem {authorTag}") — the

@@ -1,3 +1,4 @@
+import { openSurveyDocument } from "./survey-content-codec";
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
@@ -47,7 +48,8 @@ function getDefaultCollections(): ResolveSurveyForParticipationCollections {
 }
 
 /** Maps raw Firestore document data (Timestamp fields included) into the candidate shape `isValidSurvey` expects. */
-function toCandidateSurvey(surveyId: string, data: unknown): unknown {
+function toCandidateSurvey(surveyId: string, raw: unknown): unknown {
+  const data = openSurveyDocument(surveyId, raw);
   if (typeof data !== "object" || data === null) {
     return undefined;
   }
@@ -85,7 +87,7 @@ function toDateOrUndefined(value: unknown): unknown {
  * a raw `teams/{teamId}` read: a missing document, a missing/malformed
  * `status` field, or any status other than `"active"` all resolve to
  * `active: false` — never distinguished from a genuinely `disabled` team in
- * the outcome this module returns (docs/features/managed-surveys/SPEC.md —
+ * the outcome this module returns (docs/archive/features/managed-surveys/SPEC.md —
  * "Team disable semantics", BR-41). `name` is only populated when it can be
  * read as a genuine, non-empty string — a missing/malformed team document
  * never fabricates a display name.
@@ -110,7 +112,7 @@ function resolveTeamContext(raw: unknown): TeamContext {
 
 /**
  * The minimal, privacy-safe metadata approved for exposure once a caller is
- * authorized to see it (docs/features/managed-surveys/SPEC.md — "Public
+ * authorized to see it (docs/archive/features/managed-surveys/SPEC.md — "Public
  * survey flow"/"Authenticated survey flow" → "What's safe to expose
  * pre-submission"). Deliberately excludes `createdBy`, `archivedAt`,
  * `accessMode`, and any `teamSurveyState` reference — none of the later
@@ -175,7 +177,7 @@ export interface ResolveSurveyForParticipationDeps {
 
 /**
  * The single authoritative server-side read backing `/survey/{surveyId}`
- * for both access modes (docs/features/managed-surveys/SPEC.md — BR-10,
+ * for both access modes (docs/archive/features/managed-surveys/SPEC.md — BR-10,
  * BR-12 through BR-16, BR-19's read half, BR-41's discovery half). Resolves
  * `surveyId` and an optional caller `idToken` into exactly one of six
  * outcomes; `teamId` and `accessMode` are derived only from the persisted,

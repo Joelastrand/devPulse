@@ -36,7 +36,7 @@ function ratingFor(list: Extract<TeamSkillsListResult, { status: "ok" }>, skillI
 }
 
 /**
- * The personal assessment of team-owned skills, grouped by team (docs/features/team-owned-skills/SPEC.md §8). Team names
+ * The personal assessment of team-owned skills, grouped by team (docs/archive/features/team-owned-skills/SPEC.md §8). Team names
  * come from the existing membership overview; only teams the person belongs to are shown. Ratings are written per skill
  * through the server, and the list is reloaded after each change so the stored state is what is shown.
  */

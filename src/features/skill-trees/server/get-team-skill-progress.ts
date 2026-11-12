@@ -1,3 +1,5 @@
+import { openSkillProgressDocument } from "./skill-progress-content-codec";
+import { openSkillTreeDocument } from "../domain/skill-tree-content-codec";
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
@@ -24,7 +26,7 @@ export interface SkillNodeView {
 }
 
 /**
- * The client-facing shape of one tree a team is tracking (docs/features/
+ * The client-facing shape of one tree a team is tracking (docs/archive/features/
  * team-skill-tree/SPEC.md — "API/DTO contracts"). Deliberately excludes
  * `createdAt`/`createdBy`/`updatedAt`/`updatedBy` from either the
  * `skillProgress` or `skillTrees` source document (BR-22) — this is a
@@ -61,7 +63,7 @@ function getDefaultSkillProgressReader(): SkillProgressReader {
         .collection(SKILL_PROGRESS_COLLECTION)
         .where("teamId", "==", teamId)
         .get();
-      return snapshot.docs.map((doc) => ({ id: doc.id, data: doc.data() }));
+      return snapshot.docs.map((doc) => ({ id: doc.id, data: openSkillProgressDocument(doc.data()) }));
     },
   };
 }
@@ -104,7 +106,8 @@ function toCandidateSkillProgress(data: unknown): unknown {
 }
 
 /** Maps raw Firestore document data (Timestamp fields included) into the candidate shape `isValidSkillTree` expects. */
-function toCandidateSkillTree(data: unknown): unknown {
+function toCandidateSkillTree(treeId: string, raw: unknown): unknown {
+  const data = openSkillTreeDocument(treeId, raw);
   if (typeof data !== "object" || data === null) {
     return undefined;
   }
@@ -180,11 +183,11 @@ function getDefaultTeamStatusReader(): TeamStatusReader {
  * Independently re-derives "may this caller currently call
  * `reportTeamSkillProgress` for this team," using the exact same
  * membership-then-team-status semantics that operation requires
- * (docs/features/skill-progress-self-report/SPEC.md — BR-1, BR-4) — never
+ * (docs/archive/features/skill-progress-self-report/SPEC.md — BR-1, BR-4) — never
  * inferred from `authorizeTeamAccess`'s broader `"admin"`/`"member"` result,
  * since an app admin short-circuits that check before membership is ever
  * read (`authorize-team-access.ts`). This is a UI-capability signal only
- * (docs/features/skill-progress-self-report/SPEC.md — "Permission-UI
+ * (docs/archive/features/skill-progress-self-report/SPEC.md — "Permission-UI
  * correction"): it never gates which skills are returned by this operation,
  * and `reportTeamSkillProgress` itself remains the sole write-authorization
  * boundary, re-deriving both checks fresh on every call regardless of this
@@ -232,7 +235,7 @@ export interface GetTeamSkillProgressDeps {
 }
 
 /**
- * Reads a team's full skill-tracking state (docs/features/team-skill-tree/
+ * Reads a team's full skill-tracking state (docs/archive/features/team-skill-tree/
  * SPEC.md — BR-18 through BR-23). Requires `authorizeTeamAccess` to resolve
  * to `"admin"` or `"member"` for `teamId` — the same broader viewing
  * boundary `listTeamChallengesForMember`/`getCurrentTeamSurvey` already use,
@@ -269,7 +272,7 @@ export interface GetTeamSkillProgressDeps {
  * No ordering requirement (SPEC/TASKS.md — "No ordering requirement on the
  * returned array"); the result reflects the query's own document order.
  *
- * Also returns `canReportProgress` (docs/features/skill-progress-self-report/
+ * Also returns `canReportProgress` (docs/archive/features/skill-progress-self-report/
  * SPEC.md — "Permission-UI correction"): whether *this* caller currently
  * holds a genuine `teamMemberships/{uid}__{teamId}` record **and** the team
  * is currently `active`, re-derived independently via
@@ -340,7 +343,7 @@ export async function getTeamSkillProgress(
       return { ok: false, error: "read_failed" };
     }
 
-    const treeCandidate = toCandidateSkillTree(treeSnapshot.exists ? treeSnapshot.data() : undefined);
+    const treeCandidate = toCandidateSkillTree(progress.treeId, treeSnapshot.exists ? treeSnapshot.data() : undefined);
     if (!isValidSkillTree(treeCandidate)) {
       continue;
     }

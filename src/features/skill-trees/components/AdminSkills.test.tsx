@@ -72,7 +72,7 @@ describe("AdminSkills", () => {
     expect(alert.textContent).toMatch(/ikke tilgang/i);
   });
 
-  it("renders the catalog once loaded for an admin, with the creation form collapsed by default (docs/features/ui-refresh/SPEC.md — BR-12)", async () => {
+  it("renders the catalog once loaded for an admin, with the creation form collapsed by default (docs/archive/features/ui-refresh/SPEC.md — BR-12)", async () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchAdminSkillTreesMock.mockResolvedValue({
       status: "ok",
@@ -216,7 +216,7 @@ describe("AdminSkills", () => {
     expect(fetchOrgSkillProgressOverviewMock).toHaveBeenCalledTimes(1);
   });
 
-  it("shows a summary count derived only from the already-loaded catalog (docs/features/ui-refresh/SPEC.md — BR-19)", async () => {
+  it("shows a summary count derived only from the already-loaded catalog (docs/archive/features/ui-refresh/SPEC.md — BR-19)", async () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchAdminSkillTreesMock.mockResolvedValue({
       status: "ok",

@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { encodeSourceRecord } from "./source-record-codec";
+import { encodeSourceRecord, sourceRecordContext } from "./source-record-codec";
 import { FakePersonalRecordStore } from "./fake-personal-record-store";
 import { listSelectableEvidence, readOwnedEvidenceSource } from "./owned-evidence-source";
 import type { RecordCollection } from "../domain/record-schema";
@@ -15,23 +15,33 @@ const OTHER = "owner-2";
 const NOW = new Date("2026-10-01T08:00:00.000Z");
 
 /** Builds the stored document of one responsibility or achievement, exactly as the create path writes it. */
-function storedRecord(collection: RecordCollection, payload: Record<string, unknown>, plain: Record<string, unknown>) {
-  const encoded = encodeSourceRecord(payload);
+function storedRecord(
+  owner: string,
+  collection: RecordCollection,
+  id: string,
+  payload: Record<string, unknown>,
+  plain: Record<string, unknown>,
+) {
+  const encoded = encodeSourceRecord(payload, sourceRecordContext(owner, collection, id));
   if (!encoded.ok) throw new Error("fixture key unavailable");
   return { ...encoded.envelope, ...plain, createdAt: NOW, updatedAt: NOW, _collection: collection };
 }
 
-function responsibilityDoc() {
+function responsibilityDoc(owner = OWNER, id = "resp-1") {
   return storedRecord(
+    owner,
     "responsibilities",
+    id,
     { title: "Synthetic ansvar", description: "Synthetic beskrivelse" },
     { status: "active", relationToRole: "within", startDate: "2026-01-01", endDate: null, goalIds: [] },
   );
 }
 
-function achievementDoc() {
+function achievementDoc(owner = OWNER, id = "ach-1") {
   return storedRecord(
+    owner,
     "achievements",
+    id,
     { title: "Synthetic prestasjon", description: "Synthetic description", outcome: null },
     { relationToRole: "beyond", periodStart: null, periodEnd: "2026-09-30", goalIds: [], responsibilityIds: [] },
   );
@@ -91,7 +101,7 @@ describe("readOwnedEvidenceSource: one owner's record, allow-listed fields only"
   });
 
   it("returns not_found for another owner's record id, with no field", async () => {
-    store.seed(OTHER, "responsibilities", "resp-2", seedable(responsibilityDoc()));
+    store.seed(OTHER, "responsibilities", "resp-2", seedable(responsibilityDoc(OTHER, "resp-2")));
     expect(await readOwnedEvidenceSource(OWNER, "responsibility", "resp-2", store)).toEqual({ ok: false, error: "not_found" });
   });
 
@@ -152,7 +162,7 @@ describe("listSelectableEvidence: owner list without link lookups", () => {
   });
 
   it("does not list another owner's records", async () => {
-    store.seed(OTHER, "responsibilities", "resp-9", seedable(responsibilityDoc()));
+    store.seed(OTHER, "responsibilities", "resp-9", seedable(responsibilityDoc(OTHER, "resp-9")));
     const result = await listSelectableEvidence(OWNER, store);
     expect(result.ok && result.list.items.map((item) => item.id)).toEqual(["resp-1", "ach-1"]);
   });

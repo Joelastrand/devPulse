@@ -169,6 +169,10 @@ Use plan-feature for the first recurring developer pulse survey.
 
 Claude should inspect the repository before asking questions.
 
+Status (2026-11-11): the feature specifications of the previous build were archived to `docs/archive/features/`. No
+feature currently has a live `docs/features/<feature-id>/` directory. A new feature starts here again, and its files are
+created then.
+
 Output:
 
 ```text

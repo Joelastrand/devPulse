@@ -5,7 +5,7 @@ import {
 import type { RoadmapItemView, RoadmapOwner, RoadmapTracking } from "../server/list-roadmap-items";
 
 /**
- * Client gateway for `GET /api/teams/[teamId]/roadmap-items` (docs/features/
+ * Client gateway for `GET /api/teams/[teamId]/roadmap-items` (docs/archive/features/
  * team-skill-planning/SPEC.md — BR-8). A thin `fetch` wrapper: no Firestore
  * access. Each item is rebuilt field by field from the validated response, so
  * anything unexpected a body might carry is dropped, and the optional

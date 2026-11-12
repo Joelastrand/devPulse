@@ -11,14 +11,14 @@ const MEMBERSHIPS_COLLECTION = "teamMemberships";
 
 /**
  * One admin-only member row: uid plus its current, live-resolved email (the
- * existing admin identity), and — additively (docs/features/member-identity-
+ * existing admin identity), and — additively (docs/archive/features/member-identity-
  * and-team-roles/SPEC.md — BR-29) — the member's self-set `displayName`
  * (`null` when they have no valid profile; never derived from e-mail) and the
  * **stored** team role. `role` is the membership's persisted role
  * (`membershipRoleOf`), not the effective `resolveTeamRole` result: a stored
  * lead on a disabled team is still `"lead"` here. This shape carries the
  * `uid` admin operations need and must never be reused for the member-facing
- * roster (`TeamRosterEntry`). `hasMemberRef` (docs/features/team-skill-
+ * roster (`TeamRosterEntry`). `hasMemberRef` (docs/archive/features/team-skill-
  * planning/SPEC.md — BR-5, BR-36) is only the readiness signal for the admin
  * "Klargjør medlemsvelger" action: whether the membership carries a valid
  * `memberRef`. The ref value itself is never returned.
@@ -73,7 +73,7 @@ export interface ListTeamMembersDeps {
 }
 
 /**
- * Lists a team's members for an app admin (docs/features/team-management/
+ * Lists a team's members for an app admin (docs/archive/features/team-management/
  * SPEC.md — BR-29). Each member's email is resolved live from Firebase
  * Auth per `uid` — never persisted on or read from the `teamMemberships`
  * document itself. A member whose document is malformed (no valid `uid`)

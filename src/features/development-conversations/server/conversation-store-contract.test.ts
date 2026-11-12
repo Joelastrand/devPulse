@@ -46,7 +46,7 @@ function ownerDoc(overrides: Partial<OwnerDocumentWrite> = {}): OwnerDocumentWri
     ciphertext: "synthetic-ciphertext",
     iv: "synthetic-iv",
     authTag: "synthetic-tag",
-    keyVersion: "v1",
+    keyVersion: "v2", keyId: "k1",
     keyCheck: "synthetic-key-check",
     ...overrides,
   };
@@ -59,6 +59,7 @@ const CANONICAL_OWNER_KEYS = [
   "createdAt",
   "iv",
   "keyCheck",
+  "keyId",
   "keyVersion",
   "participantAcceptedAt",
   "participantInvitedAt",
@@ -123,7 +124,7 @@ describe.each(implementations)("conversation store contract — $name", ({ creat
   });
 
   describe("owner documents", () => {
-    it("writes the sixteen canonical keys and reads them back as Dates, with no extra key", async () => {
+    it("writes the seventeen canonical keys and reads them back as Dates, with no extra key", async () => {
       await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.createOwner(OWNER, "conv-1", ownerDoc()));
       const stored = await store.getOwner(OWNER, "conv-1");
       expect(Object.keys(stored ?? {}).sort()).toEqual(CANONICAL_OWNER_KEYS);
@@ -145,7 +146,7 @@ describe.each(implementations)("conversation store contract — $name", ({ creat
     });
 
     it("refuses to write a canonical key that is undefined, rather than storing it as absent", async () => {
-      const broken = { ...ownerDoc(), keyCheck: undefined } as unknown as OwnerDocumentWrite;
+      const broken = { ...ownerDoc(), keyId: "k1", keyCheck: undefined } as unknown as OwnerDocumentWrite;
       await expect(store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.setOwner(OWNER, "conv-1", broken))).rejects.toThrow();
       expect(await store.getOwner(OWNER, "conv-1")).toBeUndefined();
     });

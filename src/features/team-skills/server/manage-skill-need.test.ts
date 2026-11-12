@@ -1,3 +1,5 @@
+import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../../skill-trees/domain/skill-tree-test-fixtures";
+stubSkillTreeEncryptionKey();
 import { describe, expect, it, vi } from "vitest";
 import { skillNeedDocId, SKILL_NEED_PERSISTED_KEYS } from "../domain/skill-need";
 import { deleteSkillNeed } from "./delete-skill-need";
@@ -89,7 +91,7 @@ function setup(w: World) {
                 return entry?.membership ? { uid, teamId: entry.teamId ?? teamId, ...entry.membership } : undefined;
               }),
           },
-          getSkillTree: async (id) => read("tree", () => trees[id]),
+          getSkillTree: async (id) => read("tree", () => sealedSkillTreeFixture(id, trees[id])),
           getNeed: async (id) => read("need", () => needs[id]),
           putNeed: (id, record) => {
             pending.push(() => {

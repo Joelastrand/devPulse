@@ -59,7 +59,7 @@ export interface AuthorizeTeamAccessDeps {
 
 /**
  * The single authorization boundary every protected team-scoped operation
- * must go through (docs/features/team-management/SPEC.md — BR-8, BR-10):
+ * must go through (docs/archive/features/team-management/SPEC.md — BR-8, BR-10):
  * never trusts a client-supplied role, membership claim, or team
  * identifier — only the caller's verified identity and server-side
  * Firestore state.

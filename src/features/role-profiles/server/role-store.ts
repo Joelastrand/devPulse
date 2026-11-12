@@ -1,4 +1,6 @@
 import "server-only";
+import { encryptRecord } from "../../../lib/encryption/record-envelope";
+import { openRoleDocument, ROLE_CONTENT_FIELD, ROLE_SEALED_FIELDS, roleContext, toPersistedRole } from "../domain/role-content-codec";
 import { FieldValue, Timestamp, type Transaction } from "firebase-admin/firestore";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { runFencedTransaction } from "../../auth/server/erasure-write-fence";
@@ -36,22 +38,15 @@ export function getDefaultRoleWriteStore(actorUid: string, options: { generateId
       const ref = injectedId !== undefined ? rolesCollection().doc(injectedId) : rolesCollection().doc();
       assertRoleIdSegment(ref.id);
       await runFencedTransaction(db, actorUid, async (tx) => {
-        tx.create(ref, toFirestoreRoleData(role));
+        tx.create(ref, toPersistedRole(ref.id, toFirestoreRoleData(role)));
       });
       return ref.id;
     },
     async update(roleId, changes: RoleFieldChanges) {
       assertMutableRoleChanges(changes);
-      const data: Record<string, unknown> = {};
-      for (const [field, value] of Object.entries(changes.set)) {
-        data[field] = toFirestoreFieldValue(field, value);
-      }
-      for (const field of changes.unset) {
-        data[field] = FieldValue.delete();
-      }
       const db = getFirestoreDb();
       await runFencedTransaction(db, actorUid, async (tx) => {
-        tx.update(roleRef(roleId), data);
+        await applyRoleChanges(tx, roleId, changes);
       });
     },
   };
@@ -68,7 +63,7 @@ function roleRef(roleId: string) {
  */
 export async function getRoleInTransaction(tx: Transaction, roleId: string): Promise<RawRoleData | undefined> {
   const snapshot = await tx.get(roleRef(roleId));
-  return snapshot.exists ? toRawRoleData(snapshot.data() ?? {}) : undefined;
+  return snapshot.exists ? toRawRoleData(openRoleDocument(roleId, snapshot.data() ?? {})) : undefined;
 }
 
 /**
@@ -98,6 +93,44 @@ export function toRawRoleData(data: Record<string, unknown>): RawRoleData {
   );
 }
 
+/**
+ * Applies a field-level change inside a transaction. Plaintext fields are written as given. A change that touches the sealed
+ * content re-reads the document, merges the new name and description into the opened content, and writes one fresh envelope
+ * (the plaintext name and description fields are removed). The envelope is always re-sealed as a whole, never patched.
+ */
+async function applyRoleChanges(tx: Transaction, roleId: string, changes: RoleFieldChanges): Promise<void> {
+  assertMutableRoleChanges(changes);
+  const ref = roleRef(roleId);
+  const data: Record<string, unknown> = {};
+  for (const [field, value] of Object.entries(changes.set)) {
+    if (!ROLE_SEALED_FIELDS.has(field)) data[field] = toFirestoreFieldValue(field, value);
+  }
+  for (const field of changes.unset) {
+    if (!ROLE_SEALED_FIELDS.has(field)) data[field] = FieldValue.delete();
+  }
+  const touchesContent = [...Object.keys(changes.set), ...changes.unset].some((field) => ROLE_SEALED_FIELDS.has(field));
+  if (touchesContent) {
+    const snapshot = await tx.get(ref);
+    if (!snapshot.exists) throw new Error("role_not_found");
+    const current = openRoleDocument(roleId, snapshot.data() ?? {});
+    // The stored content must open before any change: otherwise a partial change would re-seal a record that silently lost
+    // the fields it did not change.
+    if (typeof current.name !== "string") throw new Error("role_content_unreadable");
+    const name = "name" in changes.set ? changes.set.name : current.name;
+    if (typeof name !== "string") throw new Error("role_content_unreadable");
+    const description = changes.unset.includes("description")
+      ? undefined
+      : "description" in changes.set
+        ? changes.set.description
+        : current.description;
+    const content = { name, ...(description !== undefined ? { description } : {}) };
+    data[ROLE_CONTENT_FIELD] = encryptRecord(JSON.stringify(content), roleContext(roleId));
+    data.name = FieldValue.delete();
+    data.description = FieldValue.delete();
+  }
+  tx.update(ref, data);
+}
+
 function toFirestoreFieldValue(field: string, value: unknown): unknown {
   if (TIMESTAMP_FIELDS.has(field) && value instanceof Date) {
     return Timestamp.fromDate(value);
@@ -117,7 +150,7 @@ export function getDefaultRoleStore(options: { generateId?: () => string } = {})
       if (injectedId !== undefined) assertRoleIdSegment(injectedId);
       const ref = injectedId !== undefined ? rolesCollection().doc(injectedId) : rolesCollection().doc();
       assertRoleIdSegment(ref.id);
-      await ref.create(toFirestoreRoleData(role));
+      await ref.create(toPersistedRole(ref.id, toFirestoreRoleData(role)));
       return ref.id;
     },
 
@@ -126,7 +159,7 @@ export function getDefaultRoleStore(options: { generateId?: () => string } = {})
       return {
         docs: snapshot.docs
           .slice(0, ROLE_LIST_WINDOW)
-          .map((doc) => ({ id: doc.id, data: toRawRoleData(doc.data()) })),
+          .map((doc) => ({ id: doc.id, data: toRawRoleData(openRoleDocument(doc.id, doc.data())) })),
         rawCount: snapshot.docs.length,
       };
     },
@@ -138,19 +171,11 @@ export function getDefaultRoleStore(options: { generateId?: () => string } = {})
 
     async get(roleId) {
       const snapshot = await roleRef(roleId).get();
-      return snapshot.exists ? toRawRoleData(snapshot.data() ?? {}) : undefined;
+      return snapshot.exists ? toRawRoleData(openRoleDocument(roleId, snapshot.data() ?? {})) : undefined;
     },
 
     async update(roleId, changes: RoleFieldChanges) {
-      assertMutableRoleChanges(changes);
-      const data: Record<string, unknown> = {};
-      for (const [field, value] of Object.entries(changes.set)) {
-        data[field] = toFirestoreFieldValue(field, value);
-      }
-      for (const field of changes.unset) {
-        data[field] = FieldValue.delete();
-      }
-      await roleRef(roleId).update(data);
+      await getFirestoreDb().runTransaction((tx) => applyRoleChanges(tx, roleId, changes));
     },
   };
 }

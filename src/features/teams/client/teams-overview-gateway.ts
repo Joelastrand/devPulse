@@ -169,7 +169,7 @@ export interface RequestTeamAccessDeps {
 
 /**
  * Submits a request-access action for one team via the existing TASK-005
- * endpoint (docs/features/team-management/SPEC.md — BR-23). Duplicates no
+ * endpoint (docs/archive/features/team-management/SPEC.md — BR-23). Duplicates no
  * eligibility/idempotency logic client-side — every outcome
  * (`created`/`already_pending`/`already_authorized`) or failure is exactly
  * what the server already decided.

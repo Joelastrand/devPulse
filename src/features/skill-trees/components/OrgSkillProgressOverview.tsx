@@ -17,7 +17,7 @@ export interface OrgSkillProgressOverviewProps {
 
 /**
  * The TASK-002 read-only cross-team overview section on `/admin/skills`
- * (docs/features/org-skill-progress-overview/SPEC.md — "UI/UX behavior").
+ * (docs/archive/features/org-skill-progress-overview/SPEC.md — "UI/UX behavior").
  * Renders exactly the already-sorted `trees`/`teams` order the server DTO
  * provides (BR-11/BR-12) — this component never re-sorts, filters, or
  * mutates. No button, form, link, or other interactive/mutation control

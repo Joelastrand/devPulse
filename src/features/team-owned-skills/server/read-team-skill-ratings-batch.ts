@@ -3,6 +3,7 @@ import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { isValidTeamSkillAssessment, teamSkillAssessmentDocId } from "../domain/team-skill-assessment";
 import { TEAM_SKILL_LEVELS } from "../domain/team-skill";
 import { TEAM_SKILL_ASSESSMENTS_COLLECTION } from "./team-skill-store";
+import { openAssessmentDocument } from "./assessment-level-codec";
 
 /** Documents per Admin SDK `getAll` call. Bounds one request, not the total. */
 const GET_ALL_CHUNK = 300;
@@ -93,8 +94,10 @@ export async function readTeamSkillRatingsBatch(
   if (documents.length !== keys.length) return { ok: false };
 
   keys.forEach(({ uid, skillId }, index) => {
-    const raw = documents[index];
-    if (raw === undefined) return;
+    if (documents[index] === undefined) return;
+    // Opened against the team being aggregated: a rating sealed for another team or person fails authentication here
+    // and is classified as invalid, which marks the skill suspect below.
+    const raw = openAssessmentDocument(uid, teamId, skillId, documents[index]);
     const tally = bySkill.get(skillId);
     const target = uniqueTargets.find((candidate) => candidate.skillId === skillId);
     if (!tally || !target) return;

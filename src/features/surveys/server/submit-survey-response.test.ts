@@ -1,3 +1,4 @@
+import { sealSeedDocument } from "./survey-test-fixtures";
 import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
@@ -8,7 +9,8 @@ import type {
   SubmitSurveyResponseTransaction,
 } from "./submit-survey-response";
 import { submitSurveyResponse } from "./submit-survey-response";
-import { decrypt } from "../../../lib/encryption/encryption";
+import { decryptRecord } from "../../../lib/encryption/record-envelope";
+import { surveyResponseContext } from "../domain/response-context";
 
 const TEAM_ID = "team-42";
 const OTHER_TEAM_ID = "team-99";
@@ -18,6 +20,10 @@ const OTHER_UID = "member-2";
 const APP_ADMIN_EMAIL = "admin@example.com";
 const NOW = new Date("2026-09-01T00:00:00Z");
 const VALID_ANSWERS = [3, 4, 5];
+
+function sealedSurveyDoc(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return sealSeedDocument("surveys/survey-1", surveyDoc(overrides));
+}
 
 function surveyDoc(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -79,7 +85,7 @@ function createInMemoryFirestore(
 ) {
   const store = new Map<string, { data: Record<string, unknown>; version: number }>();
   for (const [path, data] of Object.entries(seed)) {
-    store.set(path, { data, version: 1 });
+    store.set(path, { data: sealSeedDocument(path, data), version: 1 });
   }
   const triggered = new Set<string>();
   let totalAttempts = 0;
@@ -223,7 +229,8 @@ describe("submitSurveyResponse", () => {
       expect(typeof responses[0].ciphertext).toBe("string");
       expect(typeof responses[0].iv).toBe("string");
       expect(typeof responses[0].authTag).toBe("string");
-      expect(responses[0].keyVersion).toBe("v1");
+      expect(responses[0].keyVersion).toBe("v2");
+      expect(responses[0].keyId).toBe("k1");
     });
 
     it("never persists the raw answer values in plaintext", async () => {
@@ -254,7 +261,7 @@ describe("submitSurveyResponse", () => {
 
       const responses = responseDocs(store);
       expect(Object.keys(responses[0]).sort()).toEqual(
-        ["authTag", "ciphertext", "iv", "keyVersion", "submittedAt", "surveyId", "teamId"].sort(),
+        ["authTag", "ciphertext", "iv", "keyId", "keyVersion", "submittedAt", "surveyId", "teamId"].sort(),
       );
       expect(participationDocs(store)).toHaveLength(0);
     });
@@ -705,7 +712,7 @@ describe("submitSurveyResponse", () => {
         },
         {
           onFirstRead: {
-            "surveys/survey-1": () => surveyDoc({ closedAt: new Date("2026-08-31T12:00:00Z") }),
+            "surveys/survey-1": () => sealedSurveyDoc({ closedAt: new Date("2026-08-31T12:00:00Z") }),
           },
         },
       );
@@ -744,7 +751,7 @@ describe("submitSurveyResponse", () => {
             // data doesn't need to differ; only the resulting version bump
             // matters for provoking Firestore's own retry-with-fresh-reads
             // behavior.
-            "surveys/survey-1": () => surveyDoc({ endAt }),
+            "surveys/survey-1": () => sealedSurveyDoc({ endAt }),
           },
         },
       );
@@ -846,7 +853,7 @@ describe("submitSurveyResponse", () => {
             get: vi.fn(async (path: string) => {
               callCount += 1;
               if (path === "surveys/survey-1") {
-                return { exists: true, data: () => surveyDoc() };
+                return { exists: true, data: () => sealedSurveyDoc() };
               }
               throw new Error("simulated firestore outage");
             }),
@@ -868,7 +875,7 @@ describe("submitSurveyResponse", () => {
           fn({
             get: vi.fn(async (path: string) => {
               if (path === "surveys/survey-1") {
-                return { exists: true, data: () => surveyDoc({ accessMode: "authenticated" }) };
+                return { exists: true, data: () => sealedSurveyDoc({ accessMode: "authenticated" }) };
               }
               if (path === "teams/team-42") {
                 return { exists: true, data: () => teamDoc() };
@@ -892,11 +899,11 @@ describe("submitSurveyResponse", () => {
     });
 
     it("fails closed with encryption_failed and writes nothing when ENCRYPTION_KEY is missing", async () => {
-      vi.stubEnv("ENCRYPTION_KEY", "");
       const { db, store } = createInMemoryFirestore({
         "surveys/survey-1": surveyDoc(),
         "teams/team-42": teamDoc(),
       });
+      vi.stubEnv("ENCRYPTION_KEY", "");
 
       const result = await submitSurveyResponse(SURVEY_ID, VALID_ANSWERS, undefined, baseDeps(db));
 
@@ -1008,11 +1015,11 @@ describe("submitSurveyResponse", () => {
         baseDeps(duplicateDb, { verifyToken: verifyTokenReturning(identity()) }),
       );
 
-      vi.stubEnv("ENCRYPTION_KEY", "");
       const { db: encryptionFailDb } = createInMemoryFirestore({
         "surveys/survey-1": surveyDoc(),
         "teams/team-42": teamDoc(),
       });
+      vi.stubEnv("ENCRYPTION_KEY", "");
       await submitSurveyResponse(SURVEY_ID, VALID_ANSWERS, undefined, baseDeps(encryptionFailDb));
 
       const failingDb: SubmitSurveyResponseDb = {
@@ -1064,13 +1071,18 @@ describe("submitSurveyResponse with configurable questions (team-survey-builder)
     });
   }
 
-  function decryptStored(record: Record<string, unknown>): string {
-    return decrypt({
-      ciphertext: record.ciphertext as string,
-      iv: record.iv as string,
-      authTag: record.authTag as string,
-      keyVersion: "v1",
-    });
+  /** Opens a stored response with its record context. The first response of each fresh test store is `response-1`. */
+  function decryptStored(record: Record<string, unknown>, responseId = "response-1"): string {
+    return decryptRecord(
+      {
+        ciphertext: record.ciphertext as string,
+        iv: record.iv as string,
+        authTag: record.authTag as string,
+        keyVersion: "v2",
+        keyId: "k1",
+      },
+      surveyResponseContext(TEAM_ID, SURVEY_ID, responseId),
+    );
   }
 
   it("persists answers keyed by question id in the versioned payload, and omits a blank optional answer", async () => {

@@ -1,10 +1,12 @@
+import { openSurveyDocument } from "./survey-content-codec";
 /**
  * Maps raw `surveys/{surveyId}` document data (Firestore `Timestamp` fields
  * included) into the candidate shape `isValidSurvey` expects. Shared by the
  * team-survey-builder operations; existing operations keep their own copies
  * unchanged.
  */
-export function toCandidateSurvey(surveyId: string, data: unknown): unknown {
+export function toCandidateSurvey(surveyId: string, raw: unknown): unknown {
+  const data = openSurveyDocument(surveyId, raw);
   if (typeof data !== "object" || data === null) {
     return undefined;
   }

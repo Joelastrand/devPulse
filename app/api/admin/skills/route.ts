@@ -5,7 +5,7 @@ import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
- * Admin-only SkillTree catalog endpoint (docs/features/team-skill-tree/
+ * Admin-only SkillTree catalog endpoint (docs/archive/features/team-skill-tree/
  * SPEC.md — "API/DTO contracts"). `GET` lists the bounded catalog, `POST`
  * creates a new SkillTree. Kept thin — authorization, validation, and
  * persistence live entirely in `listSkillTrees`/`createSkillTree`

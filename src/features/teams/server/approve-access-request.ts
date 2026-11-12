@@ -16,7 +16,7 @@ export type ApproveOneOutcome = "approved" | "already_approved" | "not_pending" 
 export interface ApproveAccessRequestCollection {
   /**
    * Transactional read-modify-write spanning the access-request document
-   * and the membership document (docs/features/team-management/SPEC.md —
+   * and the membership document (docs/archive/features/team-management/SPEC.md —
    * BR-27, Edge cases → "Concurrent approval and a duplicate request"):
    * re-reads both documents *inside* the transaction, so two concurrent
    * approvals — or an approval racing a duplicate request/resolution —
@@ -88,7 +88,7 @@ export interface ApproveAccessRequestDeps {
 }
 
 /**
- * Approves a pending access request (docs/features/team-management/
+ * Approves a pending access request (docs/archive/features/team-management/
  * SPEC.md — BR-26, BR-27). Only an app admin may call this successfully.
  * Atomically creates the `uid`-based `teamMemberships` document (via the
  * shared `applyMembershipGrant` primitive, race-safe against a concurrent

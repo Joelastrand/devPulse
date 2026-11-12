@@ -3,7 +3,13 @@ import { runFencedTransaction, writeRefusalFor } from "../../auth/server/erasure
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { type VerifiedIdentity } from "../../auth/server/verify-identity";
 import { normalizeEmail } from "../domain/normalize-email";
-import { invitationDocId, isValidPendingInvitationFor } from "../domain/team-invitation";
+import { isValidPendingInvitationFor } from "../domain/team-invitation";
+import {
+  invitationDocIdForEmail,
+  invitationEmailIndex,
+  openInvitationDocument,
+  openStoredInvitation,
+} from "../domain/team-invitation-content-codec";
 import { membershipDocId } from "../domain/team-membership";
 import { applyMembershipGrant } from "./grant-team-membership";
 
@@ -46,13 +52,13 @@ function getDefaultCollection(): ResolveInvitationsCollection {
     async listRawForEmail(email) {
       const snapshot = await db
         .collection(INVITATIONS_COLLECTION)
-        .where("email", "==", email)
+        .where("emailIndex", "==", invitationEmailIndex(email))
         .where("status", "==", "pending")
         .get();
-      return snapshot.docs.map((doc) => doc.data());
+      return snapshot.docs.map((doc) => openStoredInvitation(doc.data()));
     },
     async resolveOne({ teamId, email, uid, now }) {
-      const invitationRef = db.collection(INVITATIONS_COLLECTION).doc(invitationDocId(teamId, email));
+      const invitationRef = db.collection(INVITATIONS_COLLECTION).doc(invitationDocIdForEmail(teamId, email));
       const membershipRef = db.collection(MEMBERSHIPS_COLLECTION).doc(membershipDocId(uid, teamId));
 
       return runFencedTransaction(db, uid, async (tx): Promise<ResolveOneOutcome> => {
@@ -64,7 +70,7 @@ function getDefaultCollection(): ResolveInvitationsCollection {
         if (membershipSnap.exists) {
           if (
             invitationSnap.exists &&
-            isValidPendingInvitationFor(invitationSnap.data(), { teamId, email })
+            isValidPendingInvitationFor(openInvitationDocument(teamId, invitationSnap.data()), { teamId, email })
           ) {
             tx.update(invitationRef, {
               status: "accepted",
@@ -80,7 +86,7 @@ function getDefaultCollection(): ResolveInvitationsCollection {
           return "no_longer_pending";
         }
 
-        const invitationData = invitationSnap.data();
+        const invitationData = openInvitationDocument(teamId, invitationSnap.data());
         if (!isValidPendingInvitationFor(invitationData, { teamId, email })) {
           return "no_longer_pending";
         }
@@ -117,7 +123,7 @@ export interface ResolveInvitationsDeps {
 /**
  * Resolves every pending invitation matching the caller's currently
  * verified email into a `teamMemberships` document
- * (docs/features/team-management/SPEC.md — BR-20). Meant to be composed
+ * (docs/archive/features/team-management/SPEC.md — BR-20). Meant to be composed
  * into any team-scoped request path (TASK-007/TASK-008) using the
  * identity that request has already verified — never re-verifies a token
  * itself.

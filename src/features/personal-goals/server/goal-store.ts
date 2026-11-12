@@ -2,6 +2,7 @@ import "server-only";
 import { Timestamp } from "firebase-admin/firestore";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { runFencedTransaction } from "../../auth/server/erasure-write-fence";
+import { decryptRecord, encryptRecord, RecordEnvelopeError, readRecordEnvelope } from "../../../lib/encryption/record-envelope";
 import { toStoredGoalData, type Goal } from "../domain/goal";
 import {
   GOAL_RAW_READ_LIMIT,
@@ -33,28 +34,62 @@ function goalRef(ownerUid: string, goalId: string) {
  * application `Date`s converted to Firestore `Timestamp`s. Optional keys are omitted, never null. The
  * timestamps are written as given: no clamping and no server-timestamp sentinel (BR-64).
  */
-function toFirestoreGoalData(goal: Goal): Record<string, unknown> {
+/**
+ * Business content of a goal (title, optional skill-tree label, optional target date). It is encrypted as one v2 record
+ * envelope bound to the goal's document path. Lifecycle fields (`status`, timestamps) stay plaintext: the list is
+ * ordered by `createdAt`, and the status drives the completed/active rules.
+ */
+const GOAL_CONTENT_FIELD = "content";
+
+function goalContext(owner: string, goalId: string): string {
+  return `goal:${owner}:${goalId}`;
+}
+
+function toFirestoreGoalData(owner: string, goalId: string, goal: Goal): Record<string, unknown> {
   const stored = toStoredGoalData(goal);
-  return {
+  const content = {
     title: stored.title,
+    ...(stored.treeId !== undefined ? { treeId: stored.treeId } : {}),
+    ...(stored.targetDate !== undefined ? { targetDate: stored.targetDate } : {}),
+  };
+  return {
     status: stored.status,
     createdAt: Timestamp.fromDate(stored.createdAt),
     updatedAt: Timestamp.fromDate(stored.updatedAt),
-    ...(stored.treeId !== undefined ? { treeId: stored.treeId } : {}),
-    ...(stored.targetDate !== undefined ? { targetDate: stored.targetDate } : {}),
     ...(stored.completedAt !== undefined ? { completedAt: Timestamp.fromDate(stored.completedAt) } : {}),
+    [GOAL_CONTENT_FIELD]: encryptRecord(JSON.stringify(content), goalContext(owner, goalId)),
   };
 }
 
 /**
- * Maps top-level Firestore `Timestamp` values to `Date` so no Firestore type leaks past the store.
- * Everything else (strings, numbers, nulls, unknown keys) passes through untouched for the readability
- * parser to reject; nothing is repaired or normalised.
+ * Decrypts the goal's content and merges it with the plaintext lifecycle fields. The domain parser then validates the
+ * result. A tampered, substituted or malformed content envelope yields a document without `title`, so the parser refuses
+ * it like any other invalid stored goal. Key configuration failures are rethrown, not hidden as invalid goals.
  */
-function toRawGoalData(data: Record<string, unknown>): RawGoalData {
-  return Object.fromEntries(
-    Object.entries(data).map(([key, value]) => [key, value instanceof Timestamp ? value.toDate() : value]),
+function toRawGoalData(owner: string, goalId: string, data: Record<string, unknown>): RawGoalData {
+  // Every key except the encrypted content is passed through, so unknown keys still reach the parser and fail closed.
+  const lifecycle: Record<string, unknown> = Object.fromEntries(
+    Object.entries(data)
+      .filter(([key]) => key !== GOAL_CONTENT_FIELD)
+      .map(([key, value]) => [key, value instanceof Timestamp ? value.toDate() : value]),
   );
+  const content = openGoalContent(owner, goalId, data[GOAL_CONTENT_FIELD]);
+  return content === null ? lifecycle : { ...lifecycle, ...content };
+}
+
+function openGoalContent(owner: string, goalId: string, value: unknown): Record<string, unknown> | null {
+  const envelope = readRecordEnvelope(value);
+  if (envelope === null) return null;
+  let json: unknown;
+  try {
+    json = JSON.parse(decryptRecord(envelope, goalContext(owner, goalId)));
+  } catch (error) {
+    if (error instanceof RecordEnvelopeError && error.code !== "authentication_failed" && error.code !== "malformed") {
+      throw error;
+    }
+    return null;
+  }
+  return typeof json === "object" && json !== null && !Array.isArray(json) ? (json as Record<string, unknown>) : null;
 }
 
 /**
@@ -72,7 +107,7 @@ export function getDefaultGoalStore(options: { generateId?: () => string } = {})
       assertGoalIdSegment(ref.id);
       // The erasure fence is read first, in the same transaction (TASK-026, BR-4(b)).
       await runFencedTransaction(getFirestoreDb(), owner, async (tx) => {
-        tx.create(ref, toFirestoreGoalData(goal));
+        tx.create(ref, toFirestoreGoalData(owner, ref.id, goal));
       });
       return ref.id;
     },
@@ -85,7 +120,7 @@ export function getDefaultGoalStore(options: { generateId?: () => string } = {})
       return {
         docs: snapshot.docs
           .slice(0, GOAL_RAW_READ_LIMIT - 1)
-          .map((doc) => ({ id: doc.id, data: toRawGoalData(doc.data()) })),
+          .map((doc) => ({ id: doc.id, data: toRawGoalData(ownerUid, doc.id, doc.data()) })),
         rawCount: snapshot.docs.length,
       };
     },
@@ -108,7 +143,7 @@ export function getDefaultGoalStore(options: { generateId?: () => string } = {})
 
     async get(ownerUid, goalId) {
       const snapshot = await goalRef(ownerUid, goalId).get();
-      return snapshot.exists ? toRawGoalData(snapshot.data() ?? {}) : undefined;
+      return snapshot.exists ? toRawGoalData(ownerUid, goalId, snapshot.data() ?? {}) : undefined;
     },
 
     async runTransaction(owner, goalId, work) {
@@ -120,11 +155,11 @@ export function getDefaultGoalStore(options: { generateId?: () => string } = {})
           async read() {
             const snapshot = await tx.get(ref);
             existed = snapshot.exists;
-            return snapshot.exists ? toRawGoalData(snapshot.data() ?? {}) : undefined;
+            return snapshot.exists ? toRawGoalData(owner, goalId, snapshot.data() ?? {}) : undefined;
           },
           write(goal) {
             if (!existed) throw new Error("write to a goal that was not read as existing");
-            tx.set(ref, toFirestoreGoalData(goal));
+            tx.set(ref, toFirestoreGoalData(owner, goalId, goal));
           },
         });
       });

@@ -13,7 +13,7 @@ export type ThreadListState =
   | { status: "loaded"; threads: ThreadSummaryView[] };
 
 /**
- * `/teams/[teamId]`'s read-only forum thread list (docs/features/
+ * `/teams/[teamId]`'s read-only forum thread list (docs/archive/features/
  * team-forum/SPEC.md — BR-15, BR-37). Renders **exactly** what
  * `listTeamThreads` (via `fetchTeamThreads`'s shape validation) returned —
  * already newest-first, never re-sorted or filtered here. A hard-deleted

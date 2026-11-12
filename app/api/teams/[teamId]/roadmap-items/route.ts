@@ -6,7 +6,7 @@ import { authRefusalStatus, isAuthRefusal } from "../../../../../src/features/au
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
- * Roadmap read (docs/features/team-skill-planning/SPEC.md — BR-8). Thin
+ * Roadmap read (docs/archive/features/team-skill-planning/SPEC.md — BR-8). Thin
  * delegate to `listRoadmapItems`; `teamId` comes from the URL path only and
  * all authorization/read decisions live in the delegated operation. Read-only.
  * `?archived=true` includes archived plans; any other value does not.

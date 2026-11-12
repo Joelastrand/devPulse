@@ -5,7 +5,7 @@ import { PageHeader } from "../../../components/ui/PageHeader";
 import { surveysCopy } from "../copy";
 
 /**
- * Intro screen for a survey the visitor can answer (docs/features/product-
+ * Intro screen for a survey the visitor can answer (docs/archive/features/product-
  * experience/SPEC.md — BR-S1, BR-S1a). The locked notice stays visible. The
  * five-point disclosure is collapsed by default and uses native
  * `<details>`. Pressing Start is the only way into the form. Nothing here is

@@ -1,5 +1,5 @@
 /**
- * D2 limits (docs/features/development-conversations/SPEC.md — "Code constants"). Code constants only:
+ * D2 limits (docs/archive/features/development-conversations/SPEC.md — "Code constants"). Code constants only:
  * never configurable by request, setting or environment variable.
  */
 export const CONVERSATION_LIMIT = 100;

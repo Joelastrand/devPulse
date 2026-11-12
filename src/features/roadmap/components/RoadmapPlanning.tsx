@@ -34,7 +34,7 @@ export interface PlanningActions {
 
 /**
  * The team's non-archived plans from the scope's single roadmap read, for the team overview summary
- * (docs/features/visual-fidelity-and-ui-fixes TASK-028). No second fetch; a failure is reported as `error`.
+ * (docs/archive/features/visual-fidelity-and-ui-fixes TASK-028). No second fetch; a failure is reported as `error`.
  */
 export type PlanSummaryState =
   | { phase: "loading" }
@@ -53,7 +53,7 @@ export interface AreaPlanning {
 }
 
 /**
- * Owns the roadmap read for `/teams/[teamId]` (docs/features/
+ * Owns the roadmap read for `/teams/[teamId]` (docs/archive/features/
  * team-skill-planning/SPEC.md — BR-32): one fetch on mount with its own
  * loading/error state, so a roadmap failure never touches the other sections.
  * Plans are matched to areas by `treeId` only. Archived plans are requested

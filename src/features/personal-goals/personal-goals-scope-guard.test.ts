@@ -5,7 +5,7 @@ import type { GoalDto, GoalListResponse, GoalRecoveryDto, SkillOptionDto } from 
 import {
   GOAL_DTO_KEYS,
   GOAL_LIST_RESPONSE_KEYS,
-  GOAL_PERSISTED_KEYS,
+  GOAL_STORED_DOCUMENT_KEYS,
   GOAL_RECOVERY_DTO_KEYS,
 } from "./domain/goal-constants";
 
@@ -241,7 +241,8 @@ const FORBIDDEN_CONCEPT_PHRASES = ["lead reader", "admin reader", "progress scor
 const NAME_SCAN_EXCLUDED = [`${D1_DIR}copy.ts`];
 
 /** The expected sets are written out here on purpose: the guard pins them independently of the exported tuples. */
-const EXPECTED_PERSISTED_KEYS = ["completedAt", "createdAt", "status", "targetDate", "title", "treeId", "updatedAt"];
+// Stored goal document keys (encryption policy, see GOAL_STORED_DOCUMENT_KEYS). Business content is inside `content`.
+const EXPECTED_PERSISTED_KEYS = ["completedAt", "content", "createdAt", "status", "updatedAt"];
 const EXPECTED_DTO_KEYS = [
   "areaAvailable",
   "areaName",
@@ -1014,13 +1015,13 @@ describe("D1 scope guard — forbidden imports and identifiers (dimension 5)", (
 
 describe("D1 scope guard — persisted keys (dimension 6)", () => {
   it("the persisted-key tuple equals the BR-6 set", () => {
-    expect(keyMismatch(GOAL_PERSISTED_KEYS, EXPECTED_PERSISTED_KEYS)).toEqual([]);
+    expect(keyMismatch(GOAL_STORED_DOCUMENT_KEYS, EXPECTED_PERSISTED_KEYS)).toEqual([]);
   });
 
   it("detects an added, removed or duplicated persisted key", () => {
-    expect(keyMismatch([...GOAL_PERSISTED_KEYS, "ownerUid"], EXPECTED_PERSISTED_KEYS)).toEqual(["unexpected: ownerUid"]);
-    expect(keyMismatch(GOAL_PERSISTED_KEYS.filter((k) => k !== "treeId"), EXPECTED_PERSISTED_KEYS)).toEqual(["missing: treeId"]);
-    expect(keyMismatch([...GOAL_PERSISTED_KEYS, "title"], EXPECTED_PERSISTED_KEYS)).toEqual(["duplicate key"]);
+    expect(keyMismatch([...GOAL_STORED_DOCUMENT_KEYS, "ownerUid"], EXPECTED_PERSISTED_KEYS)).toEqual(["unexpected: ownerUid"]);
+    expect(keyMismatch(GOAL_STORED_DOCUMENT_KEYS.filter((k) => k !== "status"), EXPECTED_PERSISTED_KEYS)).toEqual(["missing: status"]);
+    expect(keyMismatch([...GOAL_STORED_DOCUMENT_KEYS, "status"], EXPECTED_PERSISTED_KEYS)).toEqual(["duplicate key"]);
   });
 
   it("the store writer (once present) names no BR-7 key as an object key", () => {

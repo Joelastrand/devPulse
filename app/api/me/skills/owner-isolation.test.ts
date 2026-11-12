@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createFakeSkillProfileStore } from "../../../../src/features/skill-profiles/server/fake-skill-profile-store";
+import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../../../../src/features/skill-trees/domain/skill-tree-test-fixtures";
+
+stubSkillTreeEncryptionKey();
 
 /**
  * Owner isolation across all four C1 endpoints (BR-17/BR-18), exercised through the real route handlers
@@ -46,7 +49,7 @@ vi.mock("../../../../src/features/skill-profiles/server/skill-profile-store", ()
 vi.mock("../../../../src/features/skill-profiles/server/skill-catalog", async (importActual) => ({
   ...(await importActual<typeof import("../../../../src/features/skill-profiles/server/skill-catalog")>()),
   getDefaultSkillCatalogReader: () => ({
-    listOrderedByCreatedAt: async () => [{ id: "ts", data: NOW_TREE }],
+    listOrderedByCreatedAt: async () => [{ id: "ts", data: sealedSkillTreeFixture("ts", NOW_TREE) as Record<string, unknown> }],
   }),
 }));
 

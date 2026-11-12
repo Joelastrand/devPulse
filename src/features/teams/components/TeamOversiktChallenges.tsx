@@ -5,7 +5,7 @@ import { formatSurveyDate } from "../../results/domain/format-survey-date";
 import type { MemberChallengeView } from "../../challenges/client/challenges-gateway";
 import { challengesCopy } from "../../challenges/copy";
 
-/** How many open challenges the overview lists. The full history is not shown here (docs/features/team-experience-redesign). */
+/** How many open challenges the overview lists. The full history is not shown here (docs/archive/features/team-experience-redesign). */
 export const OVERSIKT_CHALLENGE_LIMIT = 3;
 
 export type OversiktChallengesState =

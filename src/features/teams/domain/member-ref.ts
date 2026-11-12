@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 
 /**
- * Opaque, team-scoped handle of one team membership (docs/features/
+ * Opaque, team-scoped handle of one team membership (docs/archive/features/
  * team-skill-planning/SPEC.md — "Opaque member reference"): 128 bits of
  * CSPRNG output encoded as 26 lowercase Crockford base32 characters. It is
  * never derived from a uid, e-mail, team id or membership document id, and it

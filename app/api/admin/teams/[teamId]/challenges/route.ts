@@ -6,7 +6,7 @@ const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
  * `/admin/teams/[teamId]`'s admin-only challenge list endpoint
- * (docs/features/anonymous-challenges/SPEC.md — TASK-006, BR-35). `GET`
+ * (docs/archive/features/anonymous-challenges/SPEC.md — TASK-006, BR-35). `GET`
  * always delegates to `listTeamChallengesForAdmin` — a genuinely separate
  * operation (and route) from TASK-005's member-facing
  * `app/api/teams/[teamId]/challenges/route.ts`, never the same one

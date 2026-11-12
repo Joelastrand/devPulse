@@ -1,5 +1,5 @@
 /**
- * Pure summary rules for the team Oversikt (docs/features/team-experience-redesign TASK-008, SPEC BR-1–BR-4).
+ * Pure summary rules for the team Oversikt (docs/archive/features/team-experience-redesign TASK-008, SPEC BR-1–BR-4).
  * Each count is derived from an already-authorized detail read, so it agrees with the detail tab under the same
  * scope and archive filters (BR-2). Nothing here is persisted, ranked, or attributed to a named person.
  */

@@ -1,6 +1,6 @@
 /**
  * Presentation-only duplicate-name disambiguation and ordering for the
- * assignable-members selector (docs/features/team-skill-planning/SPEC.md —
+ * assignable-members selector (docs/archive/features/team-skill-planning/SPEC.md —
  * D5b, BR-7). Pure: the ordinal is a rank computed per response from the
  * current member set, never stored, never accepted as an identifier.
  */

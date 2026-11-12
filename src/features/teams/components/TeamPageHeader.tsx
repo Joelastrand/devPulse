@@ -10,7 +10,7 @@ import { TeamIdentity } from "./TeamIdentity";
 import { TeamRouteNav } from "./TeamRouteNav";
 
 /**
- * Shared header for every `/teams/[teamId]/...` page (docs/features/team-experience-redesign
+ * Shared header for every `/teams/[teamId]/...` page (docs/archive/features/team-experience-redesign
  * SPEC — BR-30): the team name as the page `<h1>`, optional header content (counts, summary), then the five-tab
  * navigation. A caller that already holds the name passes it and skips the overview read. Otherwise the name comes
  * from the caller's own teams-overview read; a failed or incomplete read falls back to the generic team label and

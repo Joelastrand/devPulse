@@ -1,5 +1,5 @@
 /**
- * Team system domain model (docs/features/team-system-overview/SPEC.md —
+ * Team system domain model (docs/archive/features/team-system-overview/SPEC.md —
  * D-1, BR-3, BR-8, BR-9, BR-10). Pure functions only: no Firestore, no
  * request handling. Used by the server operations and by the UI for
  * presentation rules, so the risk and attention rules live in exactly one place.

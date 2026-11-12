@@ -1,5 +1,5 @@
 /**
- * One stage within a SkillTree's fixed, linear order (docs/features/
+ * One stage within a SkillTree's fixed, linear order (docs/archive/features/
  * team-skill-tree/SPEC.md — "Terminology"). `nodeId` is assigned at tree
  * creation as `node-<zero-based index>` and is permanently stable —
  * `order` always equals that same index. Neither ever changes after
@@ -41,7 +41,7 @@ export interface SkillTreeRecord {
 
 /**
  * A SkillTree's `nodes` array must contain at least this many entries
- * (docs/features/team-skill-tree/SPEC.md — "Data model": "2-20 entries").
+ * (docs/archive/features/team-skill-tree/SPEC.md — "Data model": "2-20 entries").
  */
 export const SKILL_TREE_MIN_NODES = 2;
 

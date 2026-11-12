@@ -15,9 +15,11 @@ import {
   seedOwnerConversation,
 } from "./owner-read-test-support";
 import { writeParticipantNotes, type WriteParticipantNotesDeps } from "./write-participant-notes";
+import { conversationContext } from "../domain/stored-owner-conversation";
 
 // Synthetic fixtures only (invariant 15). No real person, team or wellbeing data.
 const CONVERSATION_ID = "conv-1";
+const CTX = conversationContext(OWNER_UID, CONVERSATION_ID);
 const LATER = new Date(NOW.getTime() + 60_000);
 const PARTICIPANT_NOTE = "Synthetic participant note";
 const OWNER_NOTE = "Synthetic owner note";
@@ -80,8 +82,8 @@ function decoded(codec: FakeContentCodec, raw: RawConversationData) {
     iv: raw.iv as string,
     authTag: raw.authTag as string,
     keyVersion: raw.keyVersion as string,
-    keyCheck: raw.keyCheck as string,
-  } as Parameters<FakeContentCodec["decodeContent"]>[0]);
+    keyId: "k1", keyCheck: raw.keyCheck as string,
+  } as Parameters<FakeContentCodec["decodeContent"]>[0], CTX);
   if (!result.ok) throw new Error("fixture payload does not decode");
   return result.content;
 }
@@ -571,7 +573,7 @@ function countKeyUse(codec: FakeContentCodec): { codec: FakeContentCodec; uses: 
       },
       decryptForClassification: (envelope) => {
         uses.decrypt += 1;
-        return codec.decryptForClassification(envelope);
+        return codec.decryptForClassification(envelope, CTX);
       },
     },
   };

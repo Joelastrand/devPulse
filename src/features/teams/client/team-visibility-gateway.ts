@@ -1,5 +1,5 @@
 /**
- * Client gateway for team visibility (docs/features/teamadmin-and-team-visibility/SPEC.md): thin `fetch` wrappers around
+ * Client gateway for team visibility (docs/archive/features/teamadmin-and-team-visibility/SPEC.md): thin `fetch` wrappers around
  * `GET`/`PUT /api/teams/[teamId]/visibility` and `GET /api/public/teams/[teamId]`. Responses are parsed to fixed shapes
  * and anything malformed fails to `read_failed`. The server decides every permission; `canAdminister` only hides controls.
  */

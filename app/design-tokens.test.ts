@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 /**
  * Static checks for the non-colour token set and the global focus and motion
- * rules (docs/features/product-experience/SPEC.md — Typography, Spacing,
+ * rules (docs/archive/features/product-experience/SPEC.md — Typography, Spacing,
  * radii, borders, elevation, Focus, Motion strategy).
  */
 

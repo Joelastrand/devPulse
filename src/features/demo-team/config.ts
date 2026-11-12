@@ -2,7 +2,7 @@ import { assertValidPresenterUid } from "./fixtures";
 
 /**
  * Pure CLI-argument and environment validation for the demo-team seed
- * (docs/features/demo-team/SPEC.md — "Target-project safety model", BR-1–BR-3,
+ * (docs/archive/features/demo-team/SPEC.md — "Target-project safety model", BR-1–BR-3,
  * BR-5, BR-6). argv, env and the clock are injected; there is no I/O, no
  * network and no Firebase import. The target project is never inferred: it is
  * always `--project`, and it must be proven against the explicit credential

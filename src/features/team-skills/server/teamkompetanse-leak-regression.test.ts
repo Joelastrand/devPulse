@@ -1,3 +1,5 @@
+import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../../skill-trees/domain/skill-tree-test-fixtures";
+stubSkillTreeEncryptionKey();
 import { describe, expect, it, vi } from "vitest";
 import { membershipDocId } from "../../teams/domain/team-membership";
 import { SKILL_CONTRIBUTION_FIELD } from "../domain/skill-contribution";
@@ -11,7 +13,7 @@ import { getDefaultSkillNeedsStore, type SkillNeedsReader } from "./skill-needs-
 
 /**
  * Permanent regression cases for the Teamkompetanse privacy defects A1–A4
- * (docs/features/team-experience-redesign/D1-OPTION-B-PROPOSAL.md §10a).
+ * (docs/archive/features/team-experience-redesign/D1-OPTION-B-PROPOSAL.md §10a).
  *
  * Conventions:
  * - Synthetic data only. Firebase is mocked to throw, so any real read or write fails the test.
@@ -94,8 +96,8 @@ async function coverageOf(
     async listOrderedByCreatedAt() {
       throw new Error("catalog list must not be used");
     },
-    async getSkillTree() {
-      return {
+    async getSkillTree(treeId) {
+      return sealedSkillTreeFixture(treeId, {
         name: "Synthetic area",
         nodes: [
           { nodeId: "node-0", label: "A", order: 0 },
@@ -103,7 +105,7 @@ async function coverageOf(
         ],
         createdAt: WHEN,
         createdBy: "admin",
-      };
+      });
     },
   };
   const memberships = members.map(membershipOf);

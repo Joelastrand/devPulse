@@ -1,7 +1,7 @@
 import type { SelfAssessedLevel } from "./domain/self-assessed-level";
 
 /**
- * Norwegian copy for the personal skills page (docs/features/individual-skill-
+ * Norwegian copy for the personal skills page (docs/archive/features/individual-skill-
  * self-assessment/SPEC.md — BR-4, BR-5, BR-25, BR-26, BR-30). Level names and
  * descriptions are wording only: the canonical meaning of each level lives in
  * `domain/self-assessed-level.ts` and may not change here. No numeric "x av 4"

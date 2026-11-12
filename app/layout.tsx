@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 // The application's only user-facing language is Norwegian
-// (docs/UI-UX.md — Language; docs/features/product-ux-shell/SPEC.md —
+// (docs/archive/UI-UX-2026-11-11.md — Language; docs/archive/features/product-ux-shell/SPEC.md —
 // BR-1). Reuses the existing Home copy rather than introducing a second,
 // slightly different Norwegian phrasing for the same product description.
 export const metadata: Metadata = {

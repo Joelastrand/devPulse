@@ -1,15 +1,21 @@
 /**
  * The exact key-version literal `src/lib/encryption/encryption.ts` ever
  * produces. Declared independently here (not imported from that module) so
- * this domain module stays framework/I-O free (docs/features/team-forum/
+ * this domain module stays framework/I-O free (docs/archive/features/team-forum/
  * SPEC.md — "Data model").
  */
-export type ForumReplyKeyVersion = "v1";
+export type ForumReplyKeyVersion = "v2";
 
-const FORUM_REPLY_KEY_VERSION: ForumReplyKeyVersion = "v1";
+const FORUM_REPLY_KEY_VERSION: ForumReplyKeyVersion = "v2";
+const FORUM_REPLY_KEY_ID = "k1" as const;
+
+/** AAD of one reply's sealed body: this team, this thread and this reply document. */
+export function forumReplyContext(teamId: string, threadId: string, replyId: string): string {
+  return `forum-reply:${teamId}:${threadId}:${replyId}`;
+}
 
 /**
- * A `forumReplies/{replyId}` document while active (docs/features/
+ * A `forumReplies/{replyId}` document while active (docs/archive/features/
  * team-forum/SPEC.md — "Data model"). `replyId`/`threadId`-as-a-route-param
  * are not fields of this type — `threadId` here is the value denormalized
  * onto the document itself (BR-35), independently cross-checked against the
@@ -23,11 +29,12 @@ export interface ActiveForumReply {
   iv: string;
   authTag: string;
   keyVersion: ForumReplyKeyVersion;
+  keyId: typeof FORUM_REPLY_KEY_ID;
   createdAt: Date;
 }
 
 /**
- * A `forumReplies/{replyId}` document after `deleteReply` (docs/features/
+ * A `forumReplies/{replyId}` document after `deleteReply` (docs/archive/features/
  * team-forum/SPEC.md — "Data model", BR-26). `ciphertext`/`iv`/`authTag`/
  * `keyVersion`/`authorUid` are not optional-and-absent here — they are
  * structurally not part of this type at all, so nothing in this codebase can
@@ -54,13 +61,14 @@ const ACTIVE_ONLY_FIELDS = [
   "iv",
   "authTag",
   "keyVersion",
+  "keyId",
 ] as const;
 
 const TOMBSTONE_ONLY_FIELDS = ["deletedAt", "deletedBy"] as const;
 
 /**
  * Fail-closed runtime validator for a candidate `forumReplies` document
- * (docs/features/team-forum/SPEC.md — BR-56). Never throws.
+ * (docs/archive/features/team-forum/SPEC.md — BR-56). Never throws.
  *
  * Accepts only a candidate matching exactly one of the two documented
  * shapes: a well-formed active shape (every active field present and
@@ -99,7 +107,7 @@ export function isValidForumReply(data: unknown): data is ForumReplyRecord {
 }
 
 /**
- * Derives whether a reply has been tombstoned (docs/features/team-forum/
+ * Derives whether a reply has been tombstoned (docs/archive/features/team-forum/
  * SPEC.md — `isForumReplyDeleted(record) = record.deletedAt is set`). Takes
  * an already-validated `ForumReplyRecord`, mirroring
  * `effectiveChallengeStatus`'s "one function, reused everywhere" derivation
@@ -120,6 +128,7 @@ function isValidActiveShape(record: Record<string, unknown>): boolean {
     isNonEmptyString(record.iv) &&
     isNonEmptyString(record.authTag) &&
     record.keyVersion === FORUM_REPLY_KEY_VERSION &&
+    record.keyId === FORUM_REPLY_KEY_ID &&
     isValidDate(record.createdAt)
   );
 }

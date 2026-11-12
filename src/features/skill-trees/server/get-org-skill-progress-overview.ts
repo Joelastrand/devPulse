@@ -1,3 +1,5 @@
+import { openSkillProgressDocument } from "./skill-progress-content-codec";
+import { openSkillTreeDocument } from "../domain/skill-tree-content-codec";
 import "server-only";
 import { FieldPath } from "firebase-admin/firestore";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
@@ -20,7 +22,7 @@ const TEAMS_COLLECTION = "teams";
 
 /**
  * The server-enforced bound on the `skillProgress` read this operation runs
- * (docs/features/org-skill-progress-overview/SPEC.md — BR-20). A generous,
+ * (docs/archive/features/org-skill-progress-overview/SPEC.md — BR-20). A generous,
  * explicit multiple of `LIST_SKILL_TREES_LIMIT` chosen to comfortably exceed
  * this application's actual current scale while still being a real,
  * documented bound rather than an unbounded collection scan. If more than
@@ -91,7 +93,7 @@ function getDefaultOrgSkillProgressReader(): OrgSkillProgressReader {
         .orderBy(FieldPath.documentId(), "desc")
         .limit(limit)
         .get();
-      return snapshot.docs.map((doc) => ({ id: doc.id, data: doc.data() }));
+      return snapshot.docs.map((doc) => ({ id: doc.id, data: openSkillProgressDocument(doc.data()) }));
     },
   };
 }
@@ -123,7 +125,8 @@ function getDefaultOrgTeamsReader(): OrgTeamsReader {
 }
 
 /** Maps raw Firestore document data (Timestamp fields included) into the candidate shape `isValidSkillTree` expects. */
-function toCandidateSkillTree(data: unknown): unknown {
+function toCandidateSkillTree(treeId: string, raw: unknown): unknown {
+  const data = openSkillTreeDocument(treeId, raw);
   if (typeof data !== "object" || data === null) {
     return undefined;
   }
@@ -218,7 +221,7 @@ export interface GetOrgSkillProgressOverviewDeps {
 }
 
 /**
- * Cross-team `SkillTree` progress overview (docs/features/
+ * Cross-team `SkillTree` progress overview (docs/archive/features/
  * org-skill-progress-overview/SPEC.md — TASK-001, BR-1 through BR-26).
  * App-admin-only (`requireAppAdmin`, unchanged — BR-1); performs no
  * `authorizeTeamAccess` check of any kind (BR-2) — this operation is not
@@ -287,7 +290,7 @@ export async function getOrgSkillProgressOverview(
   const validTreesById = new Map<string, SkillTreeRecord>();
   const treeOrder: string[] = [];
   for (const { id, data } of rawTrees) {
-    const candidate = toCandidateSkillTree(data);
+    const candidate = toCandidateSkillTree(id, data);
     if (isValidSkillTree(candidate)) {
       validTreesById.set(id, candidate);
       treeOrder.push(id);
@@ -356,7 +359,7 @@ export async function getOrgSkillProgressOverview(
  * (`orderBy("createdAt","asc").limit(LIST_SKILL_TREES_LIMIT)`) — reused
  * query shape, not reused call (Architecture decision 4). Single-field
  * `orderBy`, no `.where()` — auto-indexed, unchanged conclusion from
- * docs/features/team-skill-tree/SPEC.md.
+ * docs/archive/features/team-skill-tree/SPEC.md.
  */
 function getDefaultOrgSkillTreesReader(): SkillTreesReader {
   return {

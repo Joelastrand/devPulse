@@ -5,7 +5,7 @@ import { authRefusalStatus, isAuthRefusal } from "../../../../../src/features/au
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
- * Team visibility settings (docs/features/teamadmin-and-team-visibility/SPEC.md). `GET` returns the current visibility
+ * Team visibility settings (docs/archive/features/teamadmin-and-team-visibility/SPEC.md). `GET` returns the current visibility
  * and whether the caller may change it, for members and superadmins only. `PUT` accepts exactly `{visibility}`; the
  * authorization decision lives in `setTeamVisibility`, and the caller's role is never read from the request.
  */

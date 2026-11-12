@@ -1,3 +1,4 @@
+import { openUserProfileDocument } from "../domain/user-profile-content-codec";
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { isValidUserProfile } from "../domain/user-profile";
@@ -5,7 +6,7 @@ import { toProfileCandidate } from "./user-profile-store";
 
 const USER_PROFILES_COLLECTION = "userProfiles";
 
-/** Maximum document refs per Firestore `getAll` call (docs/features/member-identity-and-team-roles/SPEC.md — BR-13). */
+/** Maximum document refs per Firestore `getAll` call (docs/archive/features/member-identity-and-team-roles/SPEC.md — BR-13). */
 export const DISPLAY_NAME_BATCH_SIZE = 100;
 
 /**
@@ -70,8 +71,9 @@ export async function getDisplayNames(
 
   const names = new Map<string, string>();
   for (const { uid, data } of results.flat()) {
-    if (isValidUserProfile(data)) {
-      names.set(uid, data.displayName);
+    const opened = openUserProfileDocument(uid, data);
+    if (isValidUserProfile(opened)) {
+      names.set(uid, opened.displayName);
     }
   }
   return names;

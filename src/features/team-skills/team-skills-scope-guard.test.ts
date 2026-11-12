@@ -144,7 +144,7 @@ const ADMIN_DB_MODULES = [
 /** The only write statements in C2 production code (trimmed, whole line). */
 const APPROVED_WRITE_STATEMENTS: Record<string, string[]> = {
   [`${C2_DIR}server/skill-needs-store.ts`]: [
-    "tx.set(db.collection(SKILL_NEEDS_COLLECTION).doc(docId), record);",
+    "tx.set(db.collection(SKILL_NEEDS_COLLECTION).doc(docId), toPersistedSkillNeed({ ...record }));",
     "tx.delete(db.collection(SKILL_NEEDS_COLLECTION).doc(docId));",
   ],
   [`${C2_DIR}server/skill-contribution-store.ts`]: [
@@ -169,6 +169,8 @@ const CROSS_FEATURE_IMPORTS: Array<{ prefix: string; only?: string[] }> = [
       `${C2_DIR}server/withdraw-own-skill-contribution.ts`,
     ],
   },
+  // Shared record envelope (src/lib/encryption): the only C2 module that seals team skill requirements is the need codec.
+  { prefix: "src/lib/encryption/record-envelope", only: [`${C2_DIR}server/skill-need-content-codec.ts`] },
   { prefix: "src/features/skill-profiles/domain/" },
   { prefix: "src/features/skill-trees/domain/" },
   { prefix: "src/features/teams/domain/" },
@@ -925,7 +927,7 @@ describe("C2 scope guard — write boundary, collections and aggregate persisten
       `${COVERAGE_MODULE}: unapproved write call: await ref.delete();`,
       `${SRV}helper.ts: unapproved write call: batch.update(ref, { a: 1 });`,
       `${SRV}skill-needs-store.ts: unapproved write call: tx.set(db.collection(SKILL_NEEDS_COLLECTION).doc(docId), { coverage: 1 });`,
-      `${SRV}skill-needs-store.ts: approved write missing: tx.set(db.collection(SKILL_NEEDS_COLLECTION).doc(docId), record);`,
+      `${SRV}skill-needs-store.ts: approved write missing: tx.set(db.collection(SKILL_NEEDS_COLLECTION).doc(docId), toPersistedSkillNeed({ ...record }));`,
       `${SRV}skill-needs-store.ts: approved write missing: tx.delete(db.collection(SKILL_NEEDS_COLLECTION).doc(docId));`,
       `${SRV}skill-contribution-store.ts: unapproved write call: tx.update(membershipRef(uid, teamId), { role: "teamadmin" });`,
       `${SRV}skill-contribution-store.ts: approved write missing: tx.update(membershipRef(uid, teamId), { [SKILL_CONTRIBUTION_FIELD]: record });`,

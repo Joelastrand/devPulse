@@ -1,6 +1,5 @@
 import "server-only";
-import type { EncryptedPayload } from "../../../lib/encryption/encryption";
-import { decrypt } from "../../../lib/encryption/encryption";
+import { decryptRecord, type RecordEnvelope } from "../../../lib/encryption/record-envelope";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../../teams/domain/app-admin";
@@ -11,12 +10,16 @@ import {
 import { requireAppAdmin } from "../../teams/server/require-app-admin";
 import { isValidMembershipFor, membershipDocId } from "../../teams/domain/team-membership";
 import {
+  challengeContext,
   effectiveChallengeStatus,
   isValidChallenge,
   type Challenge,
   type ChallengeStatus,
 } from "../domain/challenge";
 import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
+
+/** Opens one sealed challenge text. Production uses `decryptRecord`; tests may substitute a spy. */
+export type DecryptChallengeText = (envelope: RecordEnvelope, context: string) => string;
 
 const CHALLENGES_COLLECTION = "challenges";
 const MEMBERSHIPS_COLLECTION = "teamMemberships";
@@ -32,7 +35,7 @@ const ADMIN_ALLOWED_STATUSES: readonly ChallengeStatus[] = ["open", "resolved", 
 
 /**
  * The minimal, response-minimized DTO returned by either read operation
- * (docs/features/anonymous-challenges/SPEC.md — BR-11, BR-12, BR-13).
+ * (docs/archive/features/anonymous-challenges/SPEC.md — BR-11, BR-12, BR-13).
  * Deliberately excludes `resolvedAt`/`resolvedBy`/`archivedAt`/`archivedBy`
  * and every encrypted field (`iv`/`authTag`/`keyVersion`) — a viewer sees
  * only that a challenge is `resolved`/`archived`, never when or by whom.
@@ -144,7 +147,7 @@ function getDefaultMembershipReader(): MembershipReader {
 /**
  * Independently re-derives "is this caller a genuine current team member,"
  * using the exact same real-membership semantics `submitChallenge` requires
- * (docs/features/anonymous-challenges/SPEC.md — BR-1) — never inferred from
+ * (docs/archive/features/anonymous-challenges/SPEC.md — BR-1) — never inferred from
  * `authorizeTeamAccess`'s broader `"admin"`/`"member"` result, since an app
  * admin short-circuits that check before membership is ever read
  * (`authorize-team-access.ts`) — BR-1's "app-admin status alone is never
@@ -201,7 +204,7 @@ async function fetchTeamChallenges(
   allowedStatuses: readonly ChallengeStatus[],
   deps: {
     reader: ChallengesReader;
-    decryptText: (payload: EncryptedPayload) => string;
+    decryptText: DecryptChallengeText;
   },
 ): Promise<ListTeamChallengesResult> {
   let rawDocs: RawChallengeDoc[];
@@ -231,12 +234,16 @@ async function fetchTeamChallenges(
   for (const entry of eligible) {
     let text: string;
     try {
-      text = deps.decryptText({
-        ciphertext: entry.challenge.ciphertext,
-        iv: entry.challenge.iv,
-        authTag: entry.challenge.authTag,
-        keyVersion: entry.challenge.keyVersion,
-      });
+      text = deps.decryptText(
+        {
+          ciphertext: entry.challenge.ciphertext,
+          iv: entry.challenge.iv,
+          authTag: entry.challenge.authTag,
+          keyVersion: entry.challenge.keyVersion,
+          keyId: entry.challenge.keyId,
+        },
+        challengeContext(teamId, entry.challenge.challengeId),
+      );
     } catch {
       // Skip, don't throw or fall back to ciphertext (BR-15) — never
       // logged, since the thrown error could echo ciphertext/IV bytes.
@@ -269,12 +276,12 @@ export interface ListTeamChallengesForMemberDeps {
   isSuperadmin?: AuthorizeTeamAccessDeps["isSuperadmin"];
   authCollection?: AuthorizeTeamAccessDeps["collection"];
   reader?: ChallengesReader;
-  decryptText?: (payload: EncryptedPayload) => string;
+  decryptText?: DecryptChallengeText;
   membershipReader?: MembershipReader;
 }
 
 /**
- * Backs `/teams/[teamId]`'s team-facing challenge list (docs/features/
+ * Backs `/teams/[teamId]`'s team-facing challenge list (docs/archive/features/
  * anonymous-challenges/SPEC.md — BR-9). Requires `authorizeTeamAccess` to
  * resolve to `"admin"` or `"member"` for `teamId` — the same broader
  * viewing boundary Managed Surveys' `getCurrentTeamSurvey` already uses;
@@ -322,7 +329,7 @@ export async function listTeamChallengesForMember(
 
   const listResult = await fetchTeamChallenges(teamId, MEMBER_ALLOWED_STATUSES, {
     reader: deps.reader ?? getDefaultChallengesReader(),
-    decryptText: deps.decryptText ?? decrypt,
+    decryptText: deps.decryptText ?? decryptRecord,
   });
   if (!listResult.ok) {
     return listResult;
@@ -341,13 +348,13 @@ export interface ListTeamChallengesForAdminDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
   isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   reader?: ChallengesReader;
-  decryptText?: (payload: EncryptedPayload) => string;
+  decryptText?: DecryptChallengeText;
 }
 
 /**
  * Backs `/admin/teams/[teamId]`'s management section only — never called
  * from the team-facing page, regardless of the caller's own role
- * (docs/features/anonymous-challenges/SPEC.md — BR-35). Requires
+ * (docs/archive/features/anonymous-challenges/SPEC.md — BR-35). Requires
  * `requireAppAdmin` — the same boundary every other admin-only management
  * action already uses; a non-admin caller, including an otherwise-
  * authorized team member, is rejected.
@@ -373,6 +380,6 @@ export async function listTeamChallengesForAdmin(
 
   return fetchTeamChallenges(teamId, ADMIN_ALLOWED_STATUSES, {
     reader: deps.reader ?? getDefaultChallengesReader(),
-    decryptText: deps.decryptText ?? decrypt,
+    decryptText: deps.decryptText ?? decryptRecord,
   });
 }

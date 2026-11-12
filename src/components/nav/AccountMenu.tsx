@@ -18,7 +18,7 @@ function menuItems(panel: HTMLElement | null): HTMLElement[] {
 }
 
 /**
- * Account menu in the top bar (rendered at all widths; the sign-out control lives only here) (docs/features/visual-redesign/SPEC.md —
+ * Account menu in the top bar (rendered at all widths; the sign-out control lives only here) (docs/archive/features/visual-redesign/SPEC.md —
  * BR-1, AD-8). A disclosure: the trigger toggles a panel that is rendered only
  * while open, so the menu's links never duplicate the sidebar's links while
  * closed. Escape and an outside pointer press close it; Escape returns focus to

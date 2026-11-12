@@ -1,6 +1,7 @@
 import "server-only";
 import {
   classifyStoredConversation,
+  conversationContext,
   type DecryptOutcome,
   type StoredConversation,
   type StoredConversationClassification,
@@ -20,7 +21,7 @@ import type { TeamEligibilityReader } from "./team-eligibility";
 /** The only codec operations an owner read needs. The real codec module and the test fake both satisfy it. */
 export interface OwnerReadCodec {
   probeKey(): ProbeKeyResult;
-  decryptForClassification(envelope: StoredEnvelope): DecryptOutcome;
+  decryptForClassification(envelope: StoredEnvelope, context: string): DecryptOutcome;
 }
 
 export interface ParticipantStateInput {
@@ -57,8 +58,14 @@ export type OwnerParticipantState = "none" | "pending" | "accepted" | "unavailab
  * Classifies one raw owner document (SPEC BR-33, BR-53). A key failure throws out of the classifier and is not caught
  * here, so the caller reports it as `persistence_failed` and never as a recovery item.
  */
-export function classifyOwnerDocument(raw: unknown, codec: OwnerReadCodec): StoredConversationClassification {
-  return classifyStoredConversation(raw, codec.decryptForClassification);
+export function classifyOwnerDocument(
+  raw: unknown,
+  codec: OwnerReadCodec,
+  owner: { ownerUid: string; conversationId: string },
+): StoredConversationClassification {
+  // The record context is rebuilt from the document path, so a stored document opens only as the owner's own record.
+  const context = conversationContext(owner.ownerUid, owner.conversationId);
+  return classifyStoredConversation(raw, (envelope) => codec.decryptForClassification(envelope, context));
 }
 
 /** The state of a valid record's binding. `unavailable` when a bound participant fails BR-21 (BR-42). */

@@ -1,12 +1,12 @@
 /**
  * Norwegian user-facing copy for `/teams/[teamId]`'s "Utfordringer" section
  * (`ChallengeSubmissionPanel`, `ChallengeList`), per the copy-module
- * convention established in `docs/features/product-ux-shell/SPEC.md` BR-2.
+ * convention established in `docs/archive/features/product-ux-shell/SPEC.md` BR-2.
  * Internal/technical status values (`"open"`, `"resolved"`) are never shown
  * to a user — every surface uses the Norwegian labels below (BR-29).
  *
  * The submission panel's anonymity copy states the guarantee exactly as
- * strongly as the architecture supports (docs/features/
+ * strongly as the architecture supports (docs/archive/features/
  * anonymous-challenges/SPEC.md — "Privacy/anonymity model": *never who*, not
  * *never what*) and explicitly warns against including identifying details
  * (BR-28) — it must never be strengthened beyond this wording without a
@@ -44,7 +44,7 @@ export const challengesCopy = {
   },
   /**
    * Norwegian copy for `/admin/teams/[teamId]`'s "Utfordringer" management
-   * section (`AdminChallengeList.tsx`, docs/features/anonymous-challenges/
+   * section (`AdminChallengeList.tsx`, docs/archive/features/anonymous-challenges/
    * SPEC.md — TASK-006, BR-29, BR-30). Internal/technical status values
    * (`"open"`, `"resolved"`, `"archived"`) are never shown — every surface
    * uses the Norwegian labels below. Lifecycle action labels/errors mirror

@@ -27,7 +27,7 @@ export interface DeleteConfirmationProps {
 
 /**
  * Shared delete-with-confirmation affordance, reused for both a thread's and
- * a reply's delete action (docs/features/team-forum/SPEC.md — BR-40).
+ * a reply's delete action (docs/archive/features/team-forum/SPEC.md — BR-40).
  * Requires an explicit confirmation click before `onConfirmDelete` fires —
  * the destructive call itself is always the caller's responsibility, never
  * triggered from this component alone.

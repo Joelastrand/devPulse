@@ -22,7 +22,7 @@ type ViewState =
   | { phase: "loaded"; token: string; generation: number; result: FetchAdminSkillTreesResult };
 
 /**
- * Admin-only `/admin/skills` page (docs/features/team-skill-tree/SPEC.md —
+ * Admin-only `/admin/skills` page (docs/archive/features/team-skill-tree/SPEC.md —
  * TASK-005, BR-26, BR-34). Mirrors `AdminTeams`' client-side auth-state and
  * generation-guard pattern via `useAuthGatedResource`: the client holds the
  * Firebase ID token (no server session) and every admin operation

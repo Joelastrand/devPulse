@@ -7,7 +7,7 @@ import { hasExactKeys, isNonEmptyString, isPlainObject, isStoredDate } from "./s
  * Stored owner document (SPEC BR-51, AD-2): a document in the D2 owner subtree, keyed by owner uid and conversation id.
  * This is an internal D2 persistence shape only. It grants no access to personal-goal storage.
  *
- * The document holds exactly the sixteen plain keys below. Content is never a plain key: it lives in the single
+ * The document holds exactly the seventeen plain keys below. Content is never a plain key: it lives in the single
  * encrypted payload (BR-51, BR-52). Every key is always written, so an optional value is `null`, never absent. A
  * missing or `undefined` key is malformed. The conversation id is the document path, so no id field is stored.
  *
@@ -34,6 +34,7 @@ export const STORED_OWNER_PLAIN_KEYS = [
   "iv",
   "authTag",
   "keyVersion",
+  "keyId",
   "keyCheck",
 ] as const;
 
@@ -41,17 +42,20 @@ export const STORED_OWNER_PLAIN_KEYS = [
  * The encrypted-payload format of `lib/encryption` (`KEY_VERSION`, AES-256-GCM, 12-byte IV, 16-byte tag). That module
  * is server-only and reads `process.env`, so the constant is repeated here. The codec (TASK-003) must keep them equal.
  */
-export const STORED_KEY_VERSION = "v1";
+export const STORED_KEY_VERSION = "v2";
+/** The record-envelope key id this module stores (`src/lib/encryption/record-envelope.ts`, `CURRENT_RECORD_KEY_ID`). */
+export const STORED_KEY_ID = "k1";
 const IV_BYTES = 12;
 const AUTH_TAG_BYTES = 16;
 const BASE64_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/;
 
 /**
- * The fixed, domain-separated context for the `keyCheck` derivation (SPEC BR-51, CL-27). It is a constant of this
- * module, the single place it is defined. Only TASK-003 uses it, as the HMAC message. Changing it changes every
- * stored `keyCheck`, so it is versioned.
+ * AAD of one owner conversation's sealed content: the owner and the conversation document. Moving a ciphertext to another
+ * owner or conversation fails authentication. The conversation id is the document's own Firestore id.
  */
-export const KEY_CHECK_CONTEXT = "devpulse.d2.conversation-key-check.v1";
+export function conversationContext(ownerUid: string, conversationId: string): string {
+  return `dev-conversation:${ownerUid}:${conversationId}`;
+}
 
 /** HMAC-SHA-256 output length. A stored `keyCheck` is exactly this many decoded bytes (BR-51). */
 export const KEY_CHECK_BYTES = 32;
@@ -61,6 +65,7 @@ export type StoredEnvelope = {
   iv: string;
   authTag: string;
   keyVersion: typeof STORED_KEY_VERSION;
+  keyId: typeof STORED_KEY_ID;
   /**
    * Plaintext, non-secret key-check metadata (BR-51). It is passed to the codec with the envelope so the codec can
    * compare it with the configured key before authentication. It is not part of the valid record and never reaches
@@ -138,8 +143,8 @@ function base64ByteLength(value: string): number | null {
 
 /** The envelope fields: the helper's format and lengths. Structural only, no decryption. */
 function readEnvelope(raw: Record<string, unknown>): Omit<StoredEnvelope, "keyCheck"> | null {
-  const { ciphertext, iv, authTag, keyVersion } = raw;
-  if (keyVersion !== STORED_KEY_VERSION || typeof ciphertext !== "string" || typeof iv !== "string") {
+  const { ciphertext, iv, authTag, keyVersion, keyId } = raw;
+  if (keyVersion !== STORED_KEY_VERSION || keyId !== STORED_KEY_ID || typeof ciphertext !== "string" || typeof iv !== "string") {
     return null;
   }
   if (typeof authTag !== "string") {
@@ -152,7 +157,7 @@ function readEnvelope(raw: Record<string, unknown>): Omit<StoredEnvelope, "keyCh
   if (base64ByteLength(iv) !== IV_BYTES || base64ByteLength(authTag) !== AUTH_TAG_BYTES) {
     return null;
   }
-  return { ciphertext, iv, authTag, keyVersion: STORED_KEY_VERSION };
+  return { ciphertext, iv, authTag, keyVersion: STORED_KEY_VERSION, keyId: STORED_KEY_ID };
 }
 
 /**

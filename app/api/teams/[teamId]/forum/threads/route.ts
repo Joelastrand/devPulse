@@ -18,7 +18,7 @@ const CREATE_ERROR_STATUS: Record<string, number> = {
 };
 
 /**
- * `/teams/[teamId]`'s forum thread-list/create endpoints (docs/features/
+ * `/teams/[teamId]`'s forum thread-list/create endpoints (docs/archive/features/
  * team-forum/SPEC.md — TASK-005, "API/DTO contract"). Both handlers are thin
  * delegates: every authorization/validation/lifecycle decision lives in
  * `listTeamThreads`/`createThread` (`.claude/rules/nextjs-react.md`,

@@ -87,7 +87,7 @@ export interface DeleteChallengeDeps {
 
 /**
  * Permanently deletes a challenge, regardless of its current derived
- * status (docs/features/anonymous-challenges/SPEC.md — BR-16, BR-20,
+ * status (docs/archive/features/anonymous-challenges/SPEC.md — BR-16, BR-20,
  * BR-21, BR-22). Only an app admin may call this successfully — reuses
  * `requireAppAdmin` unchanged; a plain team member, even of their own
  * team, is rejected `forbidden`.

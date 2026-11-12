@@ -1,6 +1,6 @@
 /**
  * Client gateway for `/teams/[teamId]`'s forum section and thread-detail
- * view (docs/features/team-forum/SPEC.md — TASK-005). Thin `fetch` wrappers
+ * view (docs/archive/features/team-forum/SPEC.md — TASK-005). Thin `fetch` wrappers
  * around `/api/teams/[teamId]/forum/...`, mirroring
  * `challenges-gateway.ts`/`admin-challenges-gateway.ts`'s established
  * shape-validation-before-trust convention — a malformed or unexpected

@@ -34,7 +34,7 @@ export function ownerText(owner: RoadmapOwner): string {
 }
 
 /**
- * Read-only plan line for one Kompetanseområde (docs/features/
+ * Read-only plan line for one Kompetanseområde (docs/archive/features/
  * team-skill-planning/SPEC.md — BR-30). Presentation only: it renders exactly
  * the DTO it is given. The target label is never replaced by the raw node id;
  * `targetReached` shows only when it is literally `true` (absent means "not

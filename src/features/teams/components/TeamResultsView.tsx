@@ -29,9 +29,9 @@ import { teamsCopy } from "../copy";
 
 /**
  * `TrendChart` code-split out of the results route's client bundle
- * (docs/features/performance-phase-a/SPEC.md — TASK-003, AD-3/AD-5). Moved
+ * (docs/archive/features/performance-phase-a/SPEC.md — TASK-003, AD-3/AD-5). Moved
  * here from `TeamDetail` with the survey history and trend blocks (BR-5 of
- * docs/features/team-experience-redesign/SPEC.md): `recharts` only loads when
+ * docs/archive/features/team-experience-redesign/SPEC.md): `recharts` only loads when
  * this route actually renders a chart. Declared at module scope for webpack
  * chunk matching.
  */
@@ -103,7 +103,7 @@ async function loadResultsView(idToken: string, teamId: string): Promise<Results
 }
 
 /**
- * `/teams/[teamId]/results` content (docs/features/team-experience-redesign
+ * `/teams/[teamId]/results` content (docs/archive/features/team-experience-redesign
  * SPEC — BR-5). Renders the survey history (summary strip, current survey,
  * latest period, trend table) and the trend chart that were previously
  * rendered inside `TeamDetail`, with their existing behavior and copy.
@@ -169,7 +169,7 @@ export function TeamResultsView({ teamId }: { teamId: string }) {
 }
 
 /**
- * "Pågående undersøkelse" section (docs/features/managed-surveys/SPEC.md —
+ * "Pågående undersøkelse" section (docs/archive/features/managed-surveys/SPEC.md —
  * BR-30 through BR-32). Renders exactly what `fetchCurrentTeamSurvey`
  * returned; it never computes eligibility and never renders response content.
  */

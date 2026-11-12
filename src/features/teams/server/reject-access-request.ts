@@ -69,7 +69,7 @@ export interface RejectAccessRequestDeps {
 }
 
 /**
- * Rejects a pending access request (docs/features/team-management/
+ * Rejects a pending access request (docs/archive/features/team-management/
  * SPEC.md — BR-26, BR-27). Only an app admin may call this successfully.
  * Never creates a `teamMemberships` document under any outcome. Sets
  * `resolvedAt`/`resolvedBy` (the rejecting admin's own `uid`) only when

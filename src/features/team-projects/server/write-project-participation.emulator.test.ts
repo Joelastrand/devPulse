@@ -2,6 +2,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { deleteApp, initializeApp, type App } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { membershipDocId } from "../../teams/domain/team-membership";
+import { toPersistedTeam } from "../../teams/domain/team-content-codec";
+import { openParticipationDocument, toPersistedParticipation, toPersistedTeamProject } from "./team-project-codec";
 import { writeProjectParticipation } from "./write-project-participation";
 
 /**
@@ -79,8 +81,9 @@ function project(extra: Record<string, unknown> = {}) {
 
 /** Seeds one team with a lead and two members, three projects (one archived), and two participations of member A and B. */
 async function seed(database: Firestore): Promise<void> {
-  await database.collection("teams").doc(TEAM).set({ status: "active" });
-  await database.collection("teams").doc(OTHER_TEAM).set({ status: "active" });
+  // Business content is sealed on write (encrypted-only collections); plaintext fixtures would be unreadable by the app.
+  await database.collection("teams").doc(TEAM).set(toPersistedTeam(TEAM, { name: "Synthetisk team", status: "active" }));
+  await database.collection("teams").doc(OTHER_TEAM).set(toPersistedTeam(OTHER_TEAM, { name: "Synthetisk annet team", status: "active" }));
   const memberships: Array<[uid: string, memberRef: string, role: "teamadmin" | "member"]> = [
     [LEAD_UID, REF_LEAD, "teamadmin"],
     [MEMBER_A_UID, REF_A, "member"],
@@ -92,27 +95,34 @@ async function seed(database: Firestore): Promise<void> {
       .doc(membershipDocId(uid, TEAM))
       .set({ uid, teamId: TEAM, memberRef, role, createdAt: timestamp() });
   }
-  await database.collection("teamProjects").doc(PROJECT_1).set(project({ title: "Demo – Leveranse" }));
-  await database.collection("teamProjects").doc(PROJECT_2).set(project({ title: "Observerbarhet" }));
-  await database.collection("teamProjects").doc(PROJECT_ARCHIVED).set(project({ archived: true, archivedAt: timestamp() }));
-  await database.collection("teamProjects").doc(PROJECT_OTHER).set(project({ teamId: OTHER_TEAM }));
-  await database.collection("teamProjectParticipations").doc(PARTICIPATION).set({
-    teamId: TEAM,
-    projectId: PROJECT_1,
-    memberRef: REF_A,
-    startDate: "2026-06-01",
-    endDate: "2026-06-30",
-    note: "Første fase",
-    archived: false,
-  });
-  await database.collection("teamProjectParticipations").doc(UNRELATED).set({
-    teamId: TEAM,
-    projectId: PROJECT_2,
-    memberRef: REF_A,
-    startDate: "2026-09-01",
-    endDate: "2026-09-30",
-    archived: false,
-  });
+  await database.collection("teamProjects").doc(PROJECT_1).set(toPersistedTeamProject(PROJECT_1, project({ title: "Demo – Leveranse" })));
+  await database.collection("teamProjects").doc(PROJECT_2).set(toPersistedTeamProject(PROJECT_2, project({ title: "Observerbarhet" })));
+  await database
+    .collection("teamProjects")
+    .doc(PROJECT_ARCHIVED)
+    .set(toPersistedTeamProject(PROJECT_ARCHIVED, project({ archived: true, archivedAt: timestamp() })));
+  await database.collection("teamProjects").doc(PROJECT_OTHER).set(toPersistedTeamProject(PROJECT_OTHER, project({ teamId: OTHER_TEAM })));
+  await database.collection("teamProjectParticipations").doc(PARTICIPATION).set(
+    toPersistedParticipation(PARTICIPATION, {
+      teamId: TEAM,
+      projectId: PROJECT_1,
+      memberRef: REF_A,
+      startDate: "2026-06-01",
+      endDate: "2026-06-30",
+      note: "Første fase",
+      archived: false,
+    }),
+  );
+  await database.collection("teamProjectParticipations").doc(UNRELATED).set(
+    toPersistedParticipation(UNRELATED, {
+      teamId: TEAM,
+      projectId: PROJECT_2,
+      memberRef: REF_A,
+      startDate: "2026-09-01",
+      endDate: "2026-09-30",
+      archived: false,
+    }),
+  );
 }
 
 async function reset(database: Firestore): Promise<void> {
@@ -126,7 +136,8 @@ async function reset(database: Firestore): Promise<void> {
 
 async function readParticipation(database: Firestore, id: string) {
   const snapshot = await database.collection("teamProjectParticipations").doc(id).get();
-  return snapshot.data();
+  // The stored note is a sealed envelope: open it so assertions compare the business value, not the ciphertext.
+  return snapshot.exists ? openParticipationDocument(id, snapshot.data() ?? {}) : undefined;
 }
 
 async function countTeamParticipations(database: Firestore): Promise<number> {

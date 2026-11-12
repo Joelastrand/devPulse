@@ -1,6 +1,6 @@
 /**
  * Client gateways for `/admin/teams/[teamId]`'s survey-management section
- * (docs/features/managed-surveys/SPEC.md — TASK-009). Each function is a
+ * (docs/archive/features/managed-surveys/SPEC.md — TASK-009). Each function is a
  * thin `fetch` wrapper around a new, otherwise-unchanged admin API route
  * (`app/api/admin/teams/[teamId]/surveys/...`) — no lifecycle or
  * authorization logic lives here. Every parser trusts the response body's

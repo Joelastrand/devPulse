@@ -5,7 +5,7 @@ import { authRefusalStatus, isAuthRefusal } from "../../../../../src/features/au
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
- * Owner-selection contract for roadmap planning (docs/features/
+ * Owner-selection contract for roadmap planning (docs/archive/features/
  * team-skill-planning/SPEC.md — BR-4). `GET` is a thin delegate to
  * `listAssignableMembers`; `teamId` comes from the URL path only and every
  * authorization/read decision lives in the delegated operation. The response

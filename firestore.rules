@@ -9,7 +9,7 @@ service cloud.firestore {
     // unconditionally, regardless of authentication state (including an
     // app admin's) — every collection in this file carries the same
     // documentation/defense-in-depth deny block, for the same reason. See
-    // docs/features/team-management/SPEC.md (BR-35).
+    // docs/archive/features/team-management/SPEC.md (BR-35).
     match /teams/{document=**} {
       allow read, write: if false;
     }
@@ -17,7 +17,7 @@ service cloud.firestore {
     // teamMemberships links a Firebase uid to a teamId, for authorization.
     // Same server-only-access rationale as teams above — all access
     // happens via src/features/teams/server/ using the Admin SDK. See
-    // docs/features/team-management/SPEC.md (BR-35).
+    // docs/archive/features/team-management/SPEC.md (BR-35).
     match /teamMemberships/{document=**} {
       allow read, write: if false;
     }
@@ -26,7 +26,7 @@ service cloud.firestore {
     // invitations, resolved server-side into a teamMemberships document.
     // Same server-only-access rationale as teams/teamMemberships above —
     // all access happens via src/features/teams/server/ using the Admin
-    // SDK. See docs/features/team-management/SPEC.md (BR-35).
+    // SDK. See docs/archive/features/team-management/SPEC.md (BR-35).
     match /teamInvitations/{document=**} {
       allow read, write: if false;
     }
@@ -36,7 +36,7 @@ service cloud.firestore {
     // document; reject creates none). Same server-only-access rationale
     // as teams/teamMemberships/teamInvitations above — all access happens
     // via src/features/teams/server/ using the Admin SDK. See
-    // docs/features/team-management/SPEC.md (BR-35).
+    // docs/archive/features/team-management/SPEC.md (BR-35).
     match /teamAccessRequests/{document=**} {
       allow read, write: if false;
     }
@@ -48,14 +48,14 @@ service cloud.firestore {
     // this rule exists solely to deny the separate client-SDK path
     // unconditionally, regardless of authentication state (including an
     // app admin's), for the same documentation/defense-in-depth reason as
-    // teams above. See docs/features/managed-surveys/SPEC.md (TASK-002).
+    // teams above. See docs/archive/features/managed-surveys/SPEC.md (TASK-002).
     match /surveys/{document=**} {
       allow read, write: if false;
     }
 
     // teamSurveyState is the write-side-only coordination document
     // enforcing "at most one genuinely open survey per team"
-    // (docs/features/managed-surveys/SPEC.md — "One open survey per
+    // (docs/archive/features/managed-surveys/SPEC.md — "One open survey per
     // team"), read and written exclusively inside openSurvey's/
     // closeSurvey's Firestore transactions
     // (src/features/surveys/server/open-survey.ts). Same server-only-
@@ -73,7 +73,7 @@ service cloud.firestore {
     // separate client-SDK path unconditionally, regardless of
     // authentication state (including an app admin's). Same
     // server-only-access rationale as every other collection above. See
-    // docs/features/managed-surveys/SPEC.md (TASK-006).
+    // docs/archive/features/managed-surveys/SPEC.md (TASK-006).
     match /surveyResponses/{document=**} {
       allow read, write: if false;
     }
@@ -83,7 +83,7 @@ service cloud.firestore {
     // same identity (BR-21/BR-22) — deliberately minimal ({uid, surveyId}
     // only, no submittedAt) and never joined to a specific surveyResponses
     // document by this application (BR-18). Same server-only-access
-    // rationale as surveyResponses above. See docs/features/
+    // rationale as surveyResponses above. See docs/archive/features/
     // managed-surveys/SPEC.md (TASK-006).
     match /surveyParticipations/{document=**} {
       allow read, write: if false;
@@ -98,7 +98,7 @@ service cloud.firestore {
     // separate client-SDK path unconditionally, regardless of
     // authentication state (including an app admin's). Same
     // server-only-access rationale as every other collection above. See
-    // docs/features/anonymous-challenges/SPEC.md (TASK-002).
+    // docs/archive/features/anonymous-challenges/SPEC.md (TASK-002).
     match /challenges/{document=**} {
       allow read, write: if false;
     }
@@ -106,14 +106,14 @@ service cloud.firestore {
     // forumThreads holds attributed, encrypted, team-scoped discussion
     // threads (teamId, authorUid, ciphertext, iv, authTag, keyVersion,
     // createdAt) — a thread has no tombstone/soft-delete shape at all;
-    // deletion is a genuine document removal (docs/features/team-forum/
+    // deletion is a genuine document removal (docs/archive/features/team-forum/
     // SPEC.md — "Data model", "Lifecycle/moderation"). All access happens
     // server-side via the Firebase Admin SDK (src/features/forum/server/),
     // which bypasses these rules entirely — this rule exists solely to deny
     // the separate client-SDK path unconditionally, regardless of
     // authentication state (including an app admin's). Same
     // server-only-access rationale as every other collection above. See
-    // docs/features/team-forum/SPEC.md (BR-33, TASK-002).
+    // docs/archive/features/team-forum/SPEC.md (BR-33, TASK-002).
     match /forumThreads/{document=**} {
       allow read, write: if false;
     }
@@ -124,13 +124,13 @@ service cloud.firestore {
     // (outside a thread's own cascade) leaves a content-erasing tombstone —
     // teamId, threadId, createdAt, deletedAt, deletedBy only — rather than a
     // hard delete, solely to preserve its position in the reply list
-    // (docs/features/team-forum/SPEC.md — "Data model",
+    // (docs/archive/features/team-forum/SPEC.md — "Data model",
     // "Lifecycle/moderation"). All access happens server-side via the
     // Firebase Admin SDK (src/features/forum/server/), which bypasses these
     // rules entirely — this rule exists solely to deny the separate
     // client-SDK path unconditionally, regardless of authentication state
     // (including an app admin's). Same server-only-access rationale as every
-    // other collection above. See docs/features/team-forum/SPEC.md (BR-33,
+    // other collection above. See docs/archive/features/team-forum/SPEC.md (BR-33,
     // TASK-003).
     match /forumReplies/{document=**} {
       allow read, write: if false;
@@ -145,7 +145,7 @@ service cloud.firestore {
     // entirely — this rule exists solely to deny the separate client-SDK
     // path unconditionally, regardless of authentication state (including
     // an app admin's). Same server-only-access rationale as every other
-    // collection above. See docs/features/team-skill-tree/SPEC.md
+    // collection above. See docs/archive/features/team-skill-tree/SPEC.md
     // (TASK-002).
     match /skillTrees/{document=**} {
       allow read, write: if false;
@@ -154,13 +154,13 @@ service cloud.firestore {
     // skillProgress holds exactly one team's tracking record against
     // exactly one SkillTree (teamId, treeId, currentNodeId, updatedAt,
     // updatedBy), keyed by the deterministic id `{teamId}__{treeId}` — never
-    // a person's data (docs/features/team-skill-tree/SPEC.md — "Purpose").
+    // a person's data (docs/archive/features/team-skill-tree/SPEC.md — "Purpose").
     // All access happens server-side via the Firebase Admin SDK
     // (src/features/skill-trees/server/), which bypasses these rules
     // entirely — this rule exists solely to deny the separate client-SDK
     // path unconditionally, regardless of authentication state (including
     // an app admin's). Same server-only-access rationale as every other
-    // collection above. See docs/features/team-skill-tree/SPEC.md
+    // collection above. See docs/archive/features/team-skill-tree/SPEC.md
     // (TASK-003).
     match /skillProgress/{document=**} {
       allow read, write: if false;
@@ -176,12 +176,12 @@ service cloud.firestore {
     // deny the separate client-SDK path unconditionally, regardless of
     // authentication state (including an app admin's). Same server-only-access
     // rationale as every other collection above. See
-    // docs/features/team-skill-planning/SPEC.md (TASK-004).
+    // docs/archive/features/team-skill-planning/SPEC.md (TASK-004).
     match /roadmapItems/{document=**} {
       allow read, write: if false;
     }
 
-    // teamProjects holds team-scoped delivery projects (docs/features/team-experience-redesign
+    // teamProjects holds team-scoped delivery projects (docs/archive/features/team-experience-redesign
     // SPEC — AD-1, BR-6). Server-only via the Admin SDK in src/features/team-projects/server/;
     // the deny rule covers the client-SDK path unconditionally, as for every collection above.
     match /teamProjects/{document=**} {
@@ -211,7 +211,7 @@ service cloud.firestore {
     // rule exists solely to deny the separate client-SDK path
     // unconditionally, regardless of authentication state (including an app
     // admin's). Same server-only-access rationale as every other collection
-    // above. See docs/features/member-identity-and-team-roles/SPEC.md
+    // above. See docs/archive/features/member-identity-and-team-roles/SPEC.md
     // (TASK-001).
     match /userProfiles/{document=**} {
       allow read, write: if false;
@@ -225,7 +225,7 @@ service cloud.firestore {
     // separate client-SDK path unconditionally, regardless of authentication
     // state (including the owner's, a team lead's and an app admin's). Same
     // server-only-access rationale as every other collection above. See
-    // docs/features/individual-skill-self-assessment/SPEC.md (BR-36, TASK-006).
+    // docs/archive/features/individual-skill-self-assessment/SPEC.md (BR-36, TASK-006).
     match /skillProfiles/{document=**} {
       allow read, write: if false;
     }
@@ -240,7 +240,7 @@ service cloud.firestore {
     // unconditionally, regardless of authentication state (including a
     // team member's, a team lead's and an app admin's). Same
     // server-only-access rationale as every other collection above. See
-    // docs/features/team-skill-needs-and-matrix/SPEC.md (BR-35, TASK-003).
+    // docs/archive/features/team-skill-needs-and-matrix/SPEC.md (BR-35, TASK-003).
     match /teamSkillNeeds/{document=**} {
       allow read, write: if false;
     }
@@ -253,7 +253,7 @@ service cloud.firestore {
     // these rules entirely. This rule exists solely to deny the separate
     // client-SDK path unconditionally, regardless of authentication state
     // (including an app admin's). Same server-only-access rationale as every
-    // other collection above. See docs/features/role-profiles/SPEC.md (BR-1,
+    // other collection above. See docs/archive/features/role-profiles/SPEC.md (BR-1,
     // AD-1).
     match /roleDefinitions/{document=**} {
       allow read, write: if false;
@@ -268,7 +268,7 @@ service cloud.firestore {
     // for the parent path, the goals subcollection and every descendant,
     // regardless of authentication state (including the owner's, a team
     // lead's and an app admin's). It is defence in depth, not the owner
-    // authorization mechanism. See docs/features/personal-development-goals/
+    // authorization mechanism. See docs/archive/features/personal-development-goals/
     // SPEC.md (BR-44, TASK-002).
     match /userDevelopment/{document=**} {
       allow read, write: if false;
@@ -279,7 +279,7 @@ service cloud.firestore {
     // never read or write it. It holds no personal content, only status,
     // step and timestamps. Server-only access via the Firebase Admin SDK
     // (src/features/account-erasure/server/), which bypasses these rules. See
-    // docs/features/account-erasure/SPEC.md (BR-4, AE-SI-5).
+    // docs/archive/features/account-erasure/SPEC.md (BR-4, AE-SI-5).
     match /accountErasures/{document=**} {
       allow read, write: if false;
     }
@@ -293,7 +293,7 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Team-owned skill definitions (docs/features/team-owned-skills/SPEC.md §3.1) and per-skill private self-assessments
+    // Team-owned skill definitions (docs/archive/features/team-owned-skills/SPEC.md §3.1) and per-skill private self-assessments
     // (§3.2). Server-only via the Admin SDK (src/features/team-owned-skills/server/), which bypasses these rules. The
     // explicit denies document that team administrators never read individual assessments through any client path.
     match /teamSkills/{document=**} {
@@ -302,13 +302,13 @@ service cloud.firestore {
     match /teamSkillAssessments/{document=**} {
       allow read, write: if false;
     }
-    // Collaborative (agreed) team level per canonical team skill (docs/features/team-owned-skills/SPEC.md §12). Team-level
+    // Collaborative (agreed) team level per canonical team skill (docs/archive/features/team-owned-skills/SPEC.md §12). Team-level
     // value only, server-only; no client path reads or writes it.
     match /teamManualAssessments/{document=**} {
       allow read, write: if false;
     }
 
-    // Formal organizational role assignment: one document per user (roleAssignments/{uid}, docs/features/role-profiles/
+    // Formal organizational role assignment: one document per user (roleAssignments/{uid}, docs/archive/features/role-profiles/
     // SPEC.md). Written only by app admins and read by the assigned person through server routes, all via the Admin SDK
     // (src/features/role-profiles/server/role-assignments.ts), which bypasses these rules. The explicit deny keeps direct
     // client access closed for admins, the assigned person and every other signed-in user. An assignment grants no

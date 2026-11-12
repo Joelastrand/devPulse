@@ -1,7 +1,12 @@
+import { sealedPlanFixture, openedPlanFixture, stubRoadmapKey } from "../../roadmap/domain/roadmap-item-test-fixtures";
+stubRoadmapKey();
+import { randomBytes } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeAdminFirestore } from "./admin-firestore.test-helper";
 import { getProductionStartErasureDeps } from "./production-erasure";
 import { startOrResumeErasure } from "./start-erasure";
+import { invitationEmailIndex } from "../../teams/domain/team-invitation-content-codec";
+vi.stubEnv("ENCRYPTION_KEY", randomBytes(32).toString("base64"));
 
 // TASK-038: end-to-end runs of the real start/resume operation through the composed production handler graph, over the Admin
 // Firestore recording double (structural) and a fake Auth port. The production readiness flag stays false: these tests set
@@ -27,10 +32,10 @@ let db: FakeAdminFirestore;
 let deleteUser: ReturnType<typeof vi.fn>;
 
 function threadRecord(authorUid: string, extra: Record<string, unknown> = {}) {
-  return { teamId: TEAM, authorUid, ciphertext: "c-ct", iv: "c-iv", authTag: "c-tag", keyVersion: "v1", createdAt: CREATED, ...extra };
+  return { teamId: TEAM, authorUid, ciphertext: "c-ct", iv: "c-iv", authTag: "c-tag", keyVersion: "v2", keyId: "k1", createdAt: CREATED, ...extra };
 }
 function replyRecord(threadId: string, authorUid: string) {
-  return { teamId: TEAM, threadId, authorUid, ciphertext: "r-ct", iv: "r-iv", authTag: "r-tag", keyVersion: "v1", createdAt: CREATED };
+  return { teamId: TEAM, threadId, authorUid, ciphertext: "r-ct", iv: "r-iv", authTag: "r-tag", keyVersion: "v2", keyId: "k1", createdAt: CREATED };
 }
 
 function seedPerson(): void {
@@ -42,8 +47,8 @@ function seedPerson(): void {
   db.docs.set(`surveyParticipations/${UID}__s1`, { uid: UID, surveyId: "s1" });
   db.docs.set(`surveys/sv1`, { createdBy: UID, title: "kept" });
   db.docs.set(`teamMemberships/${UID}__${TEAM}`, { uid: UID, teamId: TEAM, memberRef: "ref-e2e", role: "teamadmin" });
-  db.docs.set(`roadmapItems/${TEAM}__tree`, { teamId: TEAM, ownerRef: "ref-e2e", targetNodeId: "n" });
-  db.docs.set(`teamInvitations/${TEAM}__${NORMALIZED}`, { email: NORMALIZED, status: "pending", invitedBy: OTHER });
+  db.docs.set(`roadmapItems/${TEAM}__tree`, sealedPlanFixture(TEAM, "tree", { ownerRef: "ref-e2e", targetNodeId: "n" }));
+  db.docs.set(`teamInvitations/${TEAM}__${invitationEmailIndex(NORMALIZED)}`, { emailIndex: invitationEmailIndex(NORMALIZED), status: "pending", invitedBy: OTHER });
   db.docs.set(`forumThreads/th-own`, threadRecord(UID));
   db.docs.set(`forumThreads/th-shared`, threadRecord(UID));
   db.docs.set(`forumReplies/rp-other`, replyRecord("th-shared", OTHER));
@@ -53,7 +58,7 @@ function seedPerson(): void {
 function seedOthers(): void {
   db.docs.set(`skillProfiles/${OTHER}`, { levels: {} });
   db.docs.set(`teamMemberships/${OTHER}__${TEAM}`, { uid: OTHER, teamId: TEAM, memberRef: "ref-other" });
-  db.docs.set(`teamInvitations/${TEAM}__keep@example.com`, { email: "keep@example.com", status: "pending" });
+  db.docs.set(`teamInvitations/${TEAM}__${invitationEmailIndex("keep@example.com")}`, { emailIndex: invitationEmailIndex("keep@example.com"), status: "pending" });
 }
 
 function deps(options: { authResult?: "deleted" | "unavailable" } = {}) {
@@ -117,15 +122,15 @@ describe("production erasure chain, end to end", () => {
     expect(db.docs.has(`surveyParticipations/${UID}__s1`)).toBe(false);
     expect(db.docs.get("surveys/sv1")).toMatchObject({ createdBy: null, title: "kept" });
     expect(db.docs.has(`teamMemberships/${UID}__${TEAM}`)).toBe(false);
-    expect(db.docs.get(`roadmapItems/${TEAM}__tree`)).toMatchObject({ ownerRef: null });
-    expect(db.docs.has(`teamInvitations/${TEAM}__${NORMALIZED}`)).toBe(false);
+    expect(openedPlanFixture(db.docs.get(`roadmapItems/${TEAM}__tree`))).not.toHaveProperty("ownerRef");
+    expect(db.docs.has(`teamInvitations/${TEAM}__${invitationEmailIndex(NORMALIZED)}`)).toBe(false);
     expect(db.docs.has(`forumThreads/th-own`)).toBe(false);
     expect(db.docs.get("forumThreads/th-shared")).toMatchObject({ teamId: TEAM, status: "erased" });
     expect(db.docs.get("forumReplies/rp-other")).toMatchObject({ authorUid: OTHER });
     expect(db.docs.get("accountErasures/" + UID)).toMatchObject({ status: "completed", step: "final_sweep" });
     expect(db.docs.has(`skillProfiles/${OTHER}`)).toBe(true);
     expect(db.docs.has(`teamMemberships/${OTHER}__${TEAM}`)).toBe(true);
-    expect(db.docs.has(`teamInvitations/${TEAM}__keep@example.com`)).toBe(true);
+    expect(db.docs.has(`teamInvitations/${TEAM}__${invitationEmailIndex("keep@example.com")}`)).toBe(true);
   });
 
   it("a completed erasure is never restarted or re-run: the centralized fence refuses the terminal record before the operation", async () => {

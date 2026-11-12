@@ -9,7 +9,7 @@ export interface LoadingStateProps extends HTMLAttributes<HTMLParagraphElement> 
 
 /**
  * Shared "loading X…" primitive replacing this codebase's ad hoc loading
- * paragraphs, per docs/features/product-ux-shell/SPEC.md BR-12.
+ * paragraphs, per docs/archive/features/product-ux-shell/SPEC.md BR-12.
  */
 export function LoadingState({ label = uiCopy.loadingDefault, className, ...props }: LoadingStateProps) {
   return (

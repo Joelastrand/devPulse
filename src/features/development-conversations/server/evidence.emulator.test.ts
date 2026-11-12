@@ -12,6 +12,7 @@ import { setSharedEvidence, type SetSharedEvidenceDeps } from "./set-shared-evid
 import { deleteConversation } from "./delete-conversation";
 import type { RawConversationData } from "./conversation-store-types";
 import type { StoredEnvelope } from "../domain/stored-owner-conversation";
+import { conversationContext } from "../domain/stored-owner-conversation";
 
 /**
  * Evidence selection on the Firestore EMULATOR (SPEC BR-40 to BR-50, BR-70; SECURITY-REVIEW §11.2, W-21). The production
@@ -28,13 +29,14 @@ const KEY = Buffer.alloc(32, 9).toString("base64");
 const OWNER = "emu-evd-owner";
 const OTHER = "emu-evd-other";
 const CONVERSATION_ID = "emu-evd-conv-1";
+const CTX = conversationContext(OWNER, CONVERSATION_ID);
 /** The fixture document is written with `updatedAt` = 2026-10-01T08:00:00.000Z (E-1 version). */
 const FIXTURE_VERSION = "2026-10-01T08:00:00.000Z";
 const SECRET_TITLE = "Syntetisk ansvarstittel for evidens";
 const SECRET_DESCRIPTION = "Syntetisk beskrivelse for evidens";
 
 /** The envelope fields of a stored owner document. Firestore types them as unknown, so the cast is checked by the decoder. */
-const envelopeOf = (raw: RawConversationData) => ({ ciphertext: raw.ciphertext, iv: raw.iv, authTag: raw.authTag, keyVersion: raw.keyVersion, keyCheck: raw.keyCheck }) as StoredEnvelope;
+const envelopeOf = (raw: RawConversationData) => ({ ciphertext: raw.ciphertext, iv: raw.iv, authTag: raw.authTag, keyVersion: raw.keyVersion, keyId: "k1", keyCheck: raw.keyCheck }) as StoredEnvelope;
 
 describe.skipIf(!CONFIGURED)("evidence selection on the Firestore emulator (BR-40 to BR-50, BR-70, W-21)", () => {
   const originalKey = process.env.ENCRYPTION_KEY;
@@ -61,7 +63,7 @@ describe.skipIf(!CONFIGURED)("evidence selection on the Firestore emulator (BR-4
       participantNotes: "",
       sharedGoals: [],
       sharedEvidence: [],
-    });
+    }, CTX);
     if (!encoded.ok) throw new Error("fixture key unavailable");
     const now = new Date("2026-10-01T08:00:00.000Z");
     await getDefaultConversationStore().runOwnerTransaction(OWNER, async (tx) => {
@@ -111,7 +113,7 @@ describe.skipIf(!CONFIGURED)("evidence selection on the Firestore emulator (BR-4
     expect(stored).not.toContain("sharedEvidence");
     expect(stored).not.toContain(responsibilityId);
 
-    const decoded = decodeContent(envelopeOf(raw));
+    const decoded = decodeContent(envelopeOf(raw), CTX);
     expect(decoded.ok && decoded.content.sharedEvidence.map((item) => item.title)).toEqual([SECRET_TITLE]);
     expect(decoded.ok && Object.keys(decoded.content.sharedEvidence[0] ?? {}).sort()).toEqual(
       ["capturedAt", "description", "kind", "period", "relationToRole", "status", "title"],
@@ -124,7 +126,7 @@ describe.skipIf(!CONFIGURED)("evidence selection on the Firestore emulator (BR-4
     expect(result).toEqual({ ok: false, error: "conversation_changed" });
     const raw = await getDefaultConversationStore().getOwner(OWNER, CONVERSATION_ID);
     if (raw === undefined) throw new Error("conversation missing");
-    const decoded = decodeContent(envelopeOf(raw));
+    const decoded = decodeContent(envelopeOf(raw), CTX);
     expect(decoded.ok && decoded.content.sharedEvidence.map((item) => item.title)).toEqual([SECRET_TITLE]);
   });
 
@@ -133,7 +135,7 @@ describe.skipIf(!CONFIGURED)("evidence selection on the Firestore emulator (BR-4
 
     const raw = await getDefaultConversationStore().getOwner(OWNER, CONVERSATION_ID);
     if (raw === undefined) throw new Error("conversation missing");
-    const decoded = decodeContent(envelopeOf(raw));
+    const decoded = decodeContent(envelopeOf(raw), CTX);
     expect(decoded.ok && decoded.content.sharedEvidence.map((item) => item.title)).toEqual([SECRET_TITLE]);
   });
 

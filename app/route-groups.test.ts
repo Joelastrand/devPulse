@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 /**
- * Route groups (docs/features/product-experience/SPEC.md — Application shell,
+ * Route groups (docs/archive/features/product-experience/SPEC.md — Application shell,
  * Structure). Groups are folders in parentheses and never change a URL. The
  * list below is the complete set of page URLs in the application.
  */

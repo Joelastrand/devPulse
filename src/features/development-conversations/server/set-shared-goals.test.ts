@@ -8,9 +8,11 @@ import { OTHER_OWNER_UID, NOW, OWNER_UID, PARTICIPANT_UID, seedOwnerConversation
 import type { OwnedGoalReader } from "./read-owned-goal-snapshots";
 import { setSharedGoals, type SetSharedGoalsDeps } from "./set-shared-goals";
 import type { StoredEnvelope } from "../domain/stored-owner-conversation";
+import { conversationContext } from "../domain/stored-owner-conversation";
 
 /** Synthetic fixtures only (invariant 15). No real person, team or wellbeing data. */
 const CONVERSATION_ID = "conv-1";
+const CTX = conversationContext(OWNER_UID, CONVERSATION_ID);
 const LATER = new Date(NOW.getTime() + 60_000);
 const CAPTURED_AT = new Date("2026-10-01T08:00:00.000Z");
 const OLD_SNAPSHOT: SharedGoalSnapshot = {
@@ -117,9 +119,9 @@ async function storedContent(store: FakeConversationStore, codec: FakeContentCod
     iv: raw.iv,
     authTag: raw.authTag,
     keyVersion: raw.keyVersion,
-    keyCheck: raw.keyCheck,
+    keyId: "k1", keyCheck: raw.keyCheck,
   } as StoredEnvelope;
-  const decoded = codec.decodeContent(envelope);
+  const decoded = codec.decodeContent(envelope, CTX);
   if (!decoded.ok) throw new Error("fixture content unreadable");
   return decoded.content;
 }
@@ -458,7 +460,7 @@ describe("setSharedGoals: stored conversation classification (BR-33, BR-53)", ()
       participantNotes: "",
       sharedGoals: [],
       sharedEvidence: [],
-    });
+    }, CTX);
     if (!bad.ok) throw new Error("fixture key unavailable");
     await reseedRawOwner(store, { ...bad.content });
     const before = await rawOwner(store);

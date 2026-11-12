@@ -19,7 +19,7 @@ export interface DeleteReplyDocSnapshot {
  * The read/write seam for the target `forumReplies/{replyId}` document
  * itself, satisfied in production by direct Firestore document calls and by
  * an in-memory fake in tests. `tombstone` erases the reply's content-bearing
- * and identity fields (docs/features/team-forum/SPEC.md — BR-26) — the
+ * and identity fields (docs/archive/features/team-forum/SPEC.md — BR-26) — the
  * default implementation uses Firestore's own `FieldValue.delete()` on each
  * one, a genuine field removal, never merely setting them to `undefined`/
  * `null`.
@@ -55,6 +55,7 @@ function getDefaultForumReplyDocStore(): ForumReplyDocStore {
           iv: FieldValue.delete(),
           authTag: FieldValue.delete(),
           keyVersion: FieldValue.delete(),
+          keyId: FieldValue.delete(),
           authorUid: FieldValue.delete(),
         });
       });

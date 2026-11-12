@@ -1,3 +1,5 @@
+import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../../skill-trees/domain/skill-tree-test-fixtures";
+stubSkillTreeEncryptionKey();
 import { describe, expect, it, vi } from "vitest";
 import { membershipDocId } from "../../teams/domain/team-membership";
 import {
@@ -99,7 +101,7 @@ function setup(s: Setup) {
     },
     async getSkillTree(treeId) {
       if (s.failTree) throw new Error("boom");
-      return s.trees?.[treeId];
+      return sealedSkillTreeFixture(treeId, s.trees?.[treeId]);
     },
   };
   const listMembershipsForCoverage = vi.fn(async (_teamId: string, limit: number) => {

@@ -13,7 +13,7 @@ import { cert, initializeApp } from "firebase-admin/app";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { encodeContent, decodeContent } from "../src/features/development-conversations/server/content-codec";
 import { decryptForClassification } from "../src/features/development-conversations/server/content-codec";
-import { classifyStoredConversation } from "../src/features/development-conversations/domain/stored-owner-conversation";
+import { classifyStoredConversation, conversationContext } from "../src/features/development-conversations/domain/stored-owner-conversation";
 import type { ConversationContent } from "../src/features/development-conversations/domain/content-payload";
 
 const TARGET_PROJECT = "devpulse-ac26e";
@@ -115,7 +115,7 @@ console.log(`Mode: ${WRITE ? "WRITE" : "dry-run"} | create=${creates.length} ski
 
 if (WRITE) {
   for (const c of CONVERSATIONS.filter((x) => creates.includes(x.id))) {
-    const encoded = encodeContent(c.content);
+    const encoded = encodeContent(c.content, conversationContext(OWNER_UID, c.id));
     if (!encoded.ok) throw new Error(`Aborted: content codec unavailable (${encoded.error})`);
     const data = {
       teamId: null,
@@ -144,8 +144,9 @@ for (const c of CONVERSATIONS) {
   }
   const raw = snap.data() as Record<string, unknown>;
   const plain = Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, v instanceof Timestamp ? v.toDate() : v]));
-  const result = classifyStoredConversation(plain, decryptForClassification);
-  const decoded = result.kind === "valid" ? decodeContent({ ciphertext: raw.ciphertext as string, iv: raw.iv as string, authTag: raw.authTag as string, keyVersion: "v1", keyCheck: raw.keyCheck as string }) : null;
+  const context = conversationContext(OWNER_UID, c.id);
+  const result = classifyStoredConversation(plain, (envelope) => decryptForClassification(envelope, context));
+  const decoded = result.kind === "valid" ? decodeContent({ ciphertext: raw.ciphertext as string, iv: raw.iv as string, authTag: raw.authTag as string, keyVersion: "v2", keyId: "k1", keyCheck: raw.keyCheck as string }, context) : null;
   const titleOk = decoded?.ok === true && decoded.content.title === c.content.title;
   console.log(`${c.id}: classification=${result.kind}${result.kind === "malformed" ? `(${result.reason})` : ""} titleRoundTrip=${titleOk}`);
 }

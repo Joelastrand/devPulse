@@ -4,7 +4,7 @@ import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
- * Admin-only survey-open endpoint (docs/features/managed-surveys/SPEC.md —
+ * Admin-only survey-open endpoint (docs/archive/features/managed-surveys/SPEC.md —
  * BR-5, BR-6). Kept thin — authorization, the one-open-survey-per-team
  * transaction, and every rejection reason live in `openSurvey`
  * (`.claude/rules/nextjs-react.md`); this route duplicates none of that

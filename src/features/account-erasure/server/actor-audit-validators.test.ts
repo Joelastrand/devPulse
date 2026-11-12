@@ -84,7 +84,7 @@ describe("challenge resolvedBy and archivedBy (A-7)", () => {
     ciphertext: "ciphertext-base64",
     iv: "iv-base64",
     authTag: "auth-tag-base64",
-    keyVersion: "v1",
+    keyVersion: "v2", keyId: "k1",
     submittedAt: T0,
   };
 

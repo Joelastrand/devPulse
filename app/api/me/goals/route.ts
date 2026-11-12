@@ -20,7 +20,7 @@ const CREATE_ERROR_STATUS: Record<Extract<CreatePersonalGoalResult, { ok: false 
 };
 
 /**
- * Own goals (docs/features/personal-development-goals/SPEC.md — BR-1, BR-5, BR-22…BR-25). Thin: the only
+ * Own goals (docs/archive/features/personal-development-goals/SPEC.md — BR-1, BR-5, BR-22…BR-25). Thin: the only
  * subject is the uid of the verified bearer token. No uid in path, query or body, and no team or app-admin
  * logic; a body that names an owner is rejected as an unknown key. `GET` and `POST` only.
  */

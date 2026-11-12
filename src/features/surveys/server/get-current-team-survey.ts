@@ -1,3 +1,4 @@
+import { openSurveyDocument } from "./survey-content-codec";
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
@@ -14,7 +15,7 @@ const TEAMS_COLLECTION = "teams";
 
 /**
  * The team-page-safe view of a team's current survey
- * (docs/features/managed-surveys/SPEC.md — BR-30, BR-32). Deliberately
+ * (docs/archive/features/managed-surveys/SPEC.md — BR-30, BR-32). Deliberately
  * excludes `createdBy`, `archivedAt`, and anything `teamSurveyState`-shaped,
  * mirroring `resolveSurveyForParticipation`'s own `SafeSurveyParticipationView`
  * minimization discipline — this section never renders response/result
@@ -41,7 +42,7 @@ export interface RawSurveyDoc {
  * Deliberately separate from TASK-009's admin-only `TeamSurveysCollection`
  * (`list-team-surveys.ts`) — this operation's authorization boundary is
  * "team member or admin," never admin-only, so it is not wired through that
- * module (docs/features/managed-surveys/SPEC.md — TASK-010).
+ * module (docs/archive/features/managed-surveys/SPEC.md — TASK-010).
  */
 export interface GetCurrentTeamSurveyCollections {
   listRawForTeam(teamId: string): Promise<RawSurveyDoc[]>;
@@ -66,7 +67,8 @@ function getDefaultCollections(): GetCurrentTeamSurveyCollections {
 }
 
 /** Maps raw Firestore document data (Timestamp fields included) into the candidate shape `isValidSurvey` expects. */
-function toCandidateSurvey(surveyId: string, data: unknown): unknown {
+function toCandidateSurvey(surveyId: string, raw: unknown): unknown {
+  const data = openSurveyDocument(surveyId, raw);
   if (typeof data !== "object" || data === null) {
     return undefined;
   }
@@ -195,7 +197,7 @@ export interface GetCurrentTeamSurveyDeps {
 
 /**
  * Resolves `/teams/[teamId]`'s "Pågående undersøkelse" section for an
- * authorized caller (docs/features/managed-surveys/SPEC.md — BR-30, BR-31,
+ * authorized caller (docs/archive/features/managed-surveys/SPEC.md — BR-30, BR-31,
  * BR-32, BR-41's discovery half). Authorization reuses `authorizeTeamAccess`
  * unchanged — the same "team member or admin" boundary `getTeamSurveyResults`
  * already uses for viewing results, never `requireAppAdmin` (TASK-009's

@@ -1,5 +1,5 @@
 /**
- * The three original DevPulse illustrations (docs/features/product-experience/SPEC.md —
+ * The three original DevPulse illustrations (docs/archive/features/product-experience/SPEC.md —
  * Illustration strategy). Drawn for DevPulse, no third-party artwork. Grammar: a 160 x 120
  * frame, 1.5 px stroke, round caps and joins, geometric forms only, token colours only,
  * no text in the artwork. Each is aria-hidden: the surrounding copy carries the meaning.

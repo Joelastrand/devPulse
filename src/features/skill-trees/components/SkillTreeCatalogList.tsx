@@ -16,7 +16,7 @@ export type SkillTreeCatalogState =
   | { status: "loaded"; trees: AdminSkillTreeEntry[] };
 
 /**
- * The TASK-005 SkillTree catalog list (docs/features/team-skill-tree/
+ * The TASK-005 SkillTree catalog list (docs/archive/features/team-skill-tree/
  * SPEC.md — BR-6, BR-26, BR-34): renders the bounded catalog `GET
  * /api/admin/skills` returns, each entry with its full ordered stage list
  * and a "Rett opp" correction action. Deliberately never renders a

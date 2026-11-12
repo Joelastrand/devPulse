@@ -1,5 +1,5 @@
 /**
- * Norwegian product copy for Systemoversikt (docs/features/team-system-overview/
+ * Norwegian product copy for Systemoversikt (docs/archive/features/team-system-overview/
  * SPEC.md). Code identifiers stay English; user-facing text lives here.
  */
 export const systemsCopy = {

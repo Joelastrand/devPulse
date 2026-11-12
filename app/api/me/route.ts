@@ -5,7 +5,7 @@ import { authRefusalStatus } from "../../../src/features/auth/server/auth-refusa
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
- * Own-identity status endpoint (docs/features/product-ux-shell/SPEC.md —
+ * Own-identity status endpoint (docs/archive/features/product-ux-shell/SPEC.md —
  * BR-5 server half, TASK-004). Returns only the caller's own `isAdmin`
  * boolean — never the allow-list, another identity's status, or any team/
  * result data. Kept thin — authorization lives entirely in

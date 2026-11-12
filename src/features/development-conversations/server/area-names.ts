@@ -1,3 +1,4 @@
+import { openSkillTreeDocument } from "../../skill-trees/domain/skill-tree-content-codec";
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { isValidSkillTree } from "../../skill-trees/domain/skill-tree";
@@ -38,7 +39,8 @@ export type AreaNamesResult = { ok: true; names: Map<string, string | null> } | 
  * Maps Firestore `Timestamp`-like `createdAt` and `updatedAt` values to `Date` so the pure validator can judge them.
  * Unexpected shapes are left as they are for the validator to reject; nothing is repaired.
  */
-export function toTreeCandidate(data: unknown): unknown {
+export function toTreeCandidate(treeId: string, raw: unknown): unknown {
+  const data = openSkillTreeDocument(treeId, raw);
   if (typeof data !== "object" || data === null) {
     return undefined;
   }
@@ -60,8 +62,8 @@ function toDateOrRaw(value: unknown): unknown {
 }
 
 /** The validated catalog name, or `null` when the document is absent or not a valid SkillTree. */
-function validTreeName(data: unknown): string | null {
-  const candidate = toTreeCandidate(data);
+function validTreeName(treeId: string, data: unknown): string | null {
+  const candidate = toTreeCandidate(treeId, data);
   return isValidSkillTree(candidate) ? candidate.name : null;
 }
 
@@ -90,7 +92,7 @@ export async function resolveAreaNames(
     } catch {
       return { ok: false, error: "persistence_failed" };
     }
-    names.set(treeId, validTreeName(data));
+    names.set(treeId, validTreeName(treeId, data));
   }
 
   return { ok: true, names };

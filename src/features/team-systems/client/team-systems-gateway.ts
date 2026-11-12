@@ -3,7 +3,7 @@ import { ASSESSMENT_ATTRIBUTES, isAssessmentValue, isAssessmentAttribute } from 
 import type { AssessmentView, KnowledgeMemberView, TeamSystemView } from "../server/list-team-systems";
 
 /**
- * Client gateway for `/api/teams/[teamId]/systems` (docs/features/
+ * Client gateway for `/api/teams/[teamId]/systems` (docs/archive/features/
  * team-system-overview/SPEC.md). Thin `fetch` wrapper; no Firestore access.
  * Responses are rebuilt field by field, so unexpected keys are dropped; a
  * malformed body fails safe to `read_failed`. The server is the privacy

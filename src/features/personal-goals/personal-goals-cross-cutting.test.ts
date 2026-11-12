@@ -1,3 +1,5 @@
+import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../skill-trees/domain/skill-tree-test-fixtures";
+stubSkillTreeEncryptionKey();
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, posix } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -34,7 +36,7 @@ const EMAIL = "sweep-owner@example.test";
 
 const catalogReader = {
   async listOrderedByCreatedAt() {
-    return [{ id: "tree1", data: { name: SECRET_TREE, nodes: [{ nodeId: "node-0", label: "A", order: 0 }, { nodeId: "node-1", label: "B", order: 1 }], createdAt: new Date(0), createdBy: "admin-uid" } }];
+    return [{ id: "tree1", data: sealedSkillTreeFixture("tree1", { name: SECRET_TREE, nodes: [{ nodeId: "node-0", label: "A", order: 0 }, { nodeId: "node-1", label: "B", order: 1 }], createdAt: new Date(0), createdBy: "admin-uid" }) as Record<string, unknown> }];
   },
   async getById(id: string) {
     return { id, data: id === "tree1" ? await this.listOrderedByCreatedAt().then((l) => l[0].data) : undefined };

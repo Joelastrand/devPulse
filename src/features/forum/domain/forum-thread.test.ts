@@ -8,7 +8,8 @@ describe("isValidForumThread", () => {
     ciphertext: "ciphertext-base64",
     iv: "iv-base64",
     authTag: "auth-tag-base64",
-    keyVersion: "v1",
+    keyVersion: "v2",
+    keyId: "k1",
     createdAt: new Date("2026-06-01T00:00:00.000Z"),
   };
 
@@ -35,7 +36,7 @@ describe("isValidForumThread", () => {
   });
 
   it("rejects a syntactically-valid-but-wrong keyVersion, not just any string", () => {
-    expect(isValidForumThread({ ...valid, keyVersion: "v2" })).toBe(false);
+    expect(isValidForumThread({ ...valid, keyVersion: "v1" })).toBe(false);
     expect(isValidForumThread({ ...valid, keyVersion: "" })).toBe(false);
     expect(isValidForumThread({ ...valid, keyVersion: undefined })).toBe(false);
   });

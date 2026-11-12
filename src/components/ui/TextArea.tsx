@@ -17,7 +17,7 @@ export interface TextAreaProps extends TextareaHTMLAttributes<HTMLTextAreaElemen
 
 /**
  * Shared multi-line text primitive, the `<textarea>` counterpart to
- * `TextField` (docs/features/ui-refresh/SPEC.md — BR-6, BR-8, BR-9). Same
+ * `TextField` (docs/archive/features/ui-refresh/SPEC.md — BR-6, BR-8, BR-9). Same
  * label/description/error contract; native props (`value`, `onChange`,
  * `rows`, `placeholder`, `required`, etc.) pass straight through, and no
  * validation logic lives here.

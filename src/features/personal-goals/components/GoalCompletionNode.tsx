@@ -1,7 +1,7 @@
 import { cx } from "../../../components/ui/class-names";
 
 /**
- * The completion node on a goal card (docs/features/product-experience/SPEC.md —
+ * The completion node on a goal card (docs/archive/features/product-experience/SPEC.md —
  * Progress and gamification). It fills when the goal is completed, over the
  * 300 ms progress duration. The reduced-motion rule in app/globals.css disables
  * the change. It is decorative: the "Fullført" / "Aktivt" status text is the

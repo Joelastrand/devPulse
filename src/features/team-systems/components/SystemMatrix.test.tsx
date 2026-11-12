@@ -206,7 +206,7 @@ describe("Progressive-disclosure assessment rows (reference 17)", () => {
     await openEditForm([system({ name: "Kontroll" })]);
     const chevron = screen.getByRole("button", { name: systemsCopy.form.rowExpand("Sikkerhet") });
     await userEvent.click(chevron);
-    await userEvent.type(screen.getByRole("textbox", { name: /Begrunnelse \(valgfritt\)/ }), "Kjent sårbarhet");
+    await userEvent.setup({ delay: null }).type(screen.getByRole("textbox", { name: /Begrunnelse \(valgfritt\)/ }), "Kjent sårbarhet");
     await userEvent.click(screen.getByRole("button", { name: systemsCopy.form.rowCollapse("Sikkerhet") }));
     await userEvent.click(screen.getByRole("button", { name: systemsCopy.form.rowExpand("Sikkerhet") }));
     expect((screen.getByRole("textbox", { name: /Begrunnelse \(valgfritt\)/ }) as HTMLTextAreaElement).value).toBe("Kjent sårbarhet");
@@ -216,7 +216,7 @@ describe("Progressive-disclosure assessment rows (reference 17)", () => {
     await openEditForm([system({ name: "Kontroll" })]);
     const chevron = screen.getByRole("button", { name: systemsCopy.form.rowExpand("Sikkerhet") });
     await userEvent.click(chevron);
-    await userEvent.type(screen.getByRole("textbox", { name: /Begrunnelse \(valgfritt\)/ }), "Begrunnelse");
+    await userEvent.setup({ delay: null }).type(screen.getByRole("textbox", { name: /Begrunnelse \(valgfritt\)/ }), "Begrunnelse");
     await userEvent.selectOptions(screen.getByRole("combobox", { name: "Vurdering: Sikkerhet" }), "kritisk");
     expect(chevron.getAttribute("aria-expanded")).toBe("true");
     expect((screen.getByRole("textbox", { name: /Begrunnelse \(valgfritt\)/ }) as HTMLTextAreaElement).value).toBe("Begrunnelse");

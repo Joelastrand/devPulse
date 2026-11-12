@@ -1,3 +1,4 @@
+import { toPersistedTeam } from "../domain/team-content-codec";
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { runFencedTransaction, writeRefusalFor } from "../../auth/server/erasure-write-fence";
@@ -68,7 +69,7 @@ function getDefaultCollection(actorUid: string): LegacyTeamSeedCollection {
     async createIfAbsent(teamId, record) {
       try {
         await runFencedTransaction(db, actorUid, async (tx) => {
-          tx.create(collection.doc(teamId), record);
+          tx.create(collection.doc(teamId), toPersistedTeam(teamId, { ...record }));
         });
         return "created";
       } catch (error) {
@@ -103,7 +104,7 @@ export interface SeedLegacyTeamsDeps {
  * `ALLOWED_TEAM_IDS` — retired in TASK-011), so any pre-existing
  * `pulseSurveyResponses.teamId` continues to resolve to a real `teams`
  * document once the dynamic survey team source replaces the static array
- * (docs/features/team-management/SPEC.md — TASK-006, "Continuity with the
+ * (docs/archive/features/team-management/SPEC.md — TASK-006, "Continuity with the
  * existing static team list"). Idempotent and safe to re-run, including
  * concurrently: each legacy id is written with a single atomic
  * create-if-absent call, never a read-then-write — a document that

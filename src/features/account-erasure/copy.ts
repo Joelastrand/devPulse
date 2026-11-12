@@ -1,5 +1,5 @@
 /**
- * User-facing copy for the account erasure flow (TASK-039). Norwegian, per docs/UI-UX.md. The consequences follow the SPEC
+ * User-facing copy for the account erasure flow (TASK-039). Norwegian, per docs/archive/UI-UX-2026-11-11.md. The consequences follow the SPEC
  * "Confirmation and recent-authentication semantics" list. The copy never claims deletion from provider logs (BR-19), never
  * offers an undo or recovery (AE-SI-11), and never shows an identifier, an e-mail address, or raw error text (AE-SI-2).
  */

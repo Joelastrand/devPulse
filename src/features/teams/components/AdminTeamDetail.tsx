@@ -92,7 +92,7 @@ interface TeamSummary {
 /**
  * The Anonymous Challenges section's own composed state, resolved
  * independently of the team/members/invitations/requests/surveys read above
- * it (docs/features/anonymous-challenges/SPEC.md — TASK-006: a challenge
+ * it (docs/archive/features/anonymous-challenges/SPEC.md — TASK-006: a challenge
  * read failure must not erase any other section, mirroring `TeamDetail.tsx`'s
  * `ChallengesSectionState`/`CurrentSurveySectionState` pattern). `"unavailable"`
  * covers both a genuine read failure and a rare authorization race — never
@@ -110,7 +110,7 @@ function toChallengesSectionState(result: FetchAdminChallengesResult): Challenge
 
 /**
  * The TASK-006 SkillTree catalog section's own composed state, resolved
- * independently of the rest of the page (docs/features/team-skill-tree/
+ * independently of the rest of the page (docs/archive/features/team-skill-tree/
  * SPEC.md — TASK-006), mirroring `ChallengesSectionState`: a catalog read
  * failure must not erase any other section of `/admin/teams/[teamId]`.
  */
@@ -124,7 +124,7 @@ function toSkillCatalogSectionState(result: FetchAdminSkillTreesResult): SkillCa
 
 /**
  * The persisted skill-tracking-state section (TASK-008 closeout fix for the
- * TASK-006/TASK-007 admin-reload finding — docs/features/team-skill-tree/
+ * TASK-006/TASK-007 admin-reload finding — docs/archive/features/team-skill-tree/
  * TASKS.md, TASK-007's "TASK-008 closeout finding"). TASK-006 originally
  * derived "which trees are tracked, and their current stage" purely from
  * this session's own start/update/stop calls because it owned no read
@@ -294,8 +294,8 @@ type SurveyCreateState =
  * approve/reject pair, no two actions ever compete for the same row, so a
  * plain per-survey state (mirroring `RowActionState`) is enough, with one
  * extra phase (`confirming_removal`) for the destructive remove action's
- * explicit confirmation step (docs/features/managed-surveys/SPEC.md —
- * BR-37, `docs/UI-UX.md` → "Admin UX").
+ * explicit confirmation step (docs/archive/features/managed-surveys/SPEC.md —
+ * BR-37, `docs/archive/UI-UX-2026-11-11.md` → "Admin UX").
  */
 type SurveyRowActionState =
   | { status: "idle" }
@@ -305,7 +305,7 @@ type SurveyRowActionState =
 
 /**
  * The survey-link "copy" affordance's own transient feedback state
- * (docs/features/ui-refresh/SPEC.md — BR-22): a successful copy and a
+ * (docs/archive/features/ui-refresh/SPEC.md — BR-22): a successful copy and a
  * failed one (e.g. a denied clipboard permission) share the same
  * transient-then-cleared mechanism, keyed to one survey row at a time —
  * only which outcome to render differs.
@@ -384,7 +384,7 @@ function surveyLink(surveyId: string): string {
 
 /**
  * Admin-only `/admin/teams/[teamId]` detail page
- * (docs/features/team-management/SPEC.md — BR-17, BR-19, BR-21, BR-26,
+ * (docs/archive/features/team-management/SPEC.md — BR-17, BR-19, BR-21, BR-26,
  * BR-27, BR-29, BR-30 UI). Reuses TASK-009's admin shell and calls
  * TASK-004/TASK-005's existing server operations directly — no new server
  * logic. Mirrors `AdminTeams`'s client-side auth-state and generation-guard
@@ -642,7 +642,7 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
       accessMode: surveyAccessMode,
       // Parsed client-side for the request only — the server independently
       // validates this value and never relies on the UI's default or its
-      // min/max attributes (docs/features/managed-surveys/SPEC.md —
+      // min/max attributes (docs/archive/features/managed-surveys/SPEC.md —
       // "Per-survey result threshold": client input is always untrusted).
       minimumResponses: Number(surveyMinimumResponses),
       ...(surveyTitle.trim() !== "" ? { title: surveyTitle.trim() } : {}),
@@ -671,7 +671,7 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
 
   /**
    * Closes the survey-creation form without creating anything
-   * (docs/features/ui-refresh/SPEC.md — BR-14), resetting the same
+   * (docs/archive/features/ui-refresh/SPEC.md — BR-14), resetting the same
    * in-progress fields a successful create already resets — no
    * already-submitted server state (there is none yet) is ever discarded.
    */
@@ -799,7 +799,7 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
    * Resolve/archive/delete each guard against a duplicate click for their
    * own row only (`challengeActions[challengeId]`) — resolving one
    * challenge never disables, shows pending, or overwrites the error state
-   * of another (docs/features/anonymous-challenges/SPEC.md — TASK-006,
+   * of another (docs/archive/features/anonymous-challenges/SPEC.md — TASK-006,
    * mirrors `SurveyRowActionState`'s existing per-row isolation). Every
    * result is applied only if `generation` is still current, and a
    * successful action always re-fetches the full authoritative view via
@@ -891,7 +891,7 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
   }
 
   /**
-   * TASK-006's start/set-stage/stop handlers (docs/features/team-skill-tree/
+   * TASK-006's start/set-stage/stop handlers (docs/archive/features/team-skill-tree/
    * SPEC.md — BR-27). Each guards its own row (`skillActions[treeId]`) the
    * same way `handleResolveChallenge`/`handleArchiveChallenge` do — one
    * pending action per row at a time — and, on success, updates

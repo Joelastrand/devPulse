@@ -10,6 +10,10 @@ import type { ApprovedContext, ApprovedDynamicFieldPath, ApprovedDynamicKey } fr
 
 /** Uid-bearing names that are not stored field names, with the reason each is safe to leave unregistered. */
 export const ALLOWED_UNREGISTERED_NAMES: Readonly<Record<string, string>> = {
+  email:
+    "Verified identity or input e-mail in code (Firebase Auth identity, sign-in and invitation forms). No collection stores " +
+    "it as a plaintext field: teamInvitations keeps only the sealed address and the blind index `emailIndex` " +
+    "(teams/domain/team-invitation-content-codec.ts), which is registered on I-11.",
   presenterUid:
     "Demo-team operator input (config.ts). Persisted only through the registered `uid` field of the fixture " +
     "documents. TASK-036 (W-18) refuses a presenter that has an erasure record.",

@@ -1,5 +1,5 @@
 /**
- * Team-owned skill definitions and their persisted shape (docs/features/team-owned-skills/SPEC.md §3.1).
+ * Team-owned skill definitions and their persisted shape (docs/archive/features/team-owned-skills/SPEC.md §3.1).
  * Pure: no Firestore access. Every value crossing a trust boundary is validated here, fail closed.
  */
 

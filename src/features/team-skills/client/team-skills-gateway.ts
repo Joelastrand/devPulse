@@ -1,7 +1,7 @@
 import { isRequiredCoverage, isRequiredLevel, type RequiredLevel } from "../domain/skill-need";
 
 /**
- * Browser gateway for the team skill needs (docs/features/team-skill-needs-and-matrix/
+ * Browser gateway for the team skill needs (docs/archive/features/team-skill-needs-and-matrix/
  * SPEC.md — BR-4): a thin `fetch` wrapper around `GET /api/teams/[teamId]/skill-needs`.
  * The parser rebuilds every need from the five contract fields and the `viewer`
  * hints from their two booleans, so anything else a response might carry is

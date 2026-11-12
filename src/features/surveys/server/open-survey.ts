@@ -1,3 +1,4 @@
+import { openSurveyDocument } from "./survey-content-codec";
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
@@ -93,7 +94,8 @@ export type OpenSurveyOutcome =
   | "invalid_coordination_state";
 
 /** Maps raw Firestore document data (Timestamp fields included) into the candidate shape `isValidSurvey` expects. */
-function toCandidateSurvey(surveyId: string, data: unknown): unknown {
+function toCandidateSurvey(surveyId: string, raw: unknown): unknown {
+  const data = openSurveyDocument(surveyId, raw);
   if (typeof data !== "object" || data === null) {
     return undefined;
   }
@@ -128,7 +130,7 @@ function toDateOrUndefined(value: unknown): unknown {
 
 /**
  * The whole race-safe "open" decision, run inside one Firestore
- * transaction (docs/features/managed-surveys/SPEC.md — "One open survey
+ * transaction (docs/archive/features/managed-surveys/SPEC.md — "One open survey
  * per team"). All reads happen before any write, matching Firestore
  * transactions' own requirement and letting the caller retry the entire
  * decision — with fresh reads — on a detected write conflict.
@@ -258,7 +260,7 @@ export interface OpenSurveyDeps {
 }
 
 /**
- * Opens a `scheduled` survey (docs/features/managed-surveys/SPEC.md —
+ * Opens a `scheduled` survey (docs/archive/features/managed-surveys/SPEC.md —
  * BR-5, BR-6, BR-41's opening half). Only an app admin may call this
  * successfully — reuses `requireAppAdmin` unchanged. `teamId` is always
  * the caller's own trusted server/route scope (mirrors `createSurvey`),

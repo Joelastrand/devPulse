@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 /**
- * Motion audit (docs/features/product-experience/SPEC.md — Motion strategy). Only the SPEC
+ * Motion audit (docs/archive/features/product-experience/SPEC.md — Motion strategy). Only the SPEC
  * durations are used, every transition names one, nothing loops, and the one animation is the
  * drawer slide-in. The reduced-motion override lives in app/globals.css (design-tokens test).
  */

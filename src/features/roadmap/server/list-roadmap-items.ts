@@ -1,3 +1,6 @@
+import { openRoadmapItemDocument } from "../domain/roadmap-item-content-codec";
+import { openSkillProgressDocument } from "../../skill-trees/server/skill-progress-content-codec";
+import { openSkillTreeDocument } from "../../skill-trees/domain/skill-tree-content-codec";
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
@@ -120,16 +123,16 @@ export function getDefaultRoadmapReadStore(): RoadmapReadStore {
       const snapshot = await db().collection(ROADMAP_COLLECTION).where("teamId", "==", teamId).limit(limit).get();
       return snapshot.docs.map((doc) => ({
         id: doc.id,
-        data: mapDates(doc.data(), ["createdAt", "updatedAt", "completedAt", "archivedAt"]),
+        data: openRoadmapItemDocument(mapDates(doc.data(), ["createdAt", "updatedAt", "archivedAt"])),
       }));
     },
     async listSkillProgress(teamId) {
       const snapshot = await db().collection(SKILL_PROGRESS_COLLECTION).where("teamId", "==", teamId).get();
-      return snapshot.docs.map((doc) => ({ id: doc.id, data: mapDates(doc.data(), ["updatedAt"]) }));
+      return snapshot.docs.map((doc) => ({ id: doc.id, data: openSkillProgressDocument(mapDates(doc.data(), ["updatedAt"])) }));
     },
     async getSkillTree(treeId) {
       const snapshot = await db().collection(SKILL_TREES_COLLECTION).doc(treeId).get();
-      return snapshot.exists ? mapDates(snapshot.data(), ["createdAt", "updatedAt"]) : undefined;
+      return openSkillTreeDocument(treeId, snapshot.exists ? mapDates(snapshot.data(), ["createdAt", "updatedAt"]) : undefined);
     },
     async listMemberships(teamId, limit) {
       const snapshot = await db().collection(MEMBERSHIPS_COLLECTION).where("teamId", "==", teamId).limit(limit).get();

@@ -1,12 +1,12 @@
 import "server-only";
-import { encrypt } from "../../../lib/encryption/encryption";
+import { encryptRecord } from "../../../lib/encryption/record-envelope";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import { runFencedTransaction, writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import { isValidTeamStatus } from "../../teams/domain/team";
 import { isValidMembershipFor, membershipDocId } from "../../teams/domain/team-membership";
 import { isValidForumThread, type ForumThreadRecord } from "../domain/forum-thread";
-import type { ActiveForumReply } from "../domain/forum-reply";
+import { forumReplyContext, type ActiveForumReply } from "../domain/forum-reply";
 import { validateReplyBody } from "../domain/reply-content";
 import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 
@@ -15,7 +15,7 @@ const FORUM_REPLIES_COLLECTION = "forumReplies";
 const TEAMS_COLLECTION = "teams";
 const MEMBERSHIPS_COLLECTION = "teamMemberships";
 
-/** The reply-count threshold `createReply` enforces at creation time (docs/features/team-forum/SPEC.md — BR-52). */
+/** The reply-count threshold `createReply` enforces at creation time (docs/archive/features/team-forum/SPEC.md — BR-52). */
 export const REPLY_CAPACITY_LIMIT = 500;
 
 /**
@@ -24,7 +24,9 @@ export const REPLY_CAPACITY_LIMIT = 500;
  * needs none.
  */
 export interface ForumRepliesCollection {
-  add(record: ActiveForumReply): Promise<void>;
+  /** Reserves the reply's document id before encryption (the body is sealed with AAD `forum-reply:<teamId>:<threadId>:<replyId>`). */
+  reserveId(): string;
+  create(replyId: string, record: ActiveForumReply): void;
 }
 
 /** The read seam for a real `teamMemberships/{uid}__{teamId}` record — same shape as `createThread`'s (BR-1). */
@@ -104,8 +106,11 @@ function runReplyTransaction<T>(uid: string, work: (scope: ReplyTransactionScope
         },
       },
       collection: {
-        async add(record) {
-          tx.create(db.collection(FORUM_REPLIES_COLLECTION).doc(), record);
+        reserveId() {
+          return db.collection(FORUM_REPLIES_COLLECTION).doc().id;
+        },
+        create(replyId, record) {
+          tx.create(db.collection(FORUM_REPLIES_COLLECTION).doc(replyId), record);
         },
       },
     }),
@@ -160,7 +165,7 @@ export interface CreateReplyDeps {
 }
 
 /**
- * Creates one reply to `threadId` within `teamId` (docs/features/team-forum/SPEC.md — "Server operations" → `createReply`;
+ * Creates one reply to `threadId` within `teamId` (docs/archive/features/team-forum/SPEC.md — "Server operations" → `createReply`;
  * BR-1, BR-2, BR-4, BR-5, BR-6, BR-7, BR-8, BR-9, BR-35, BR-47, BR-52, BR-53). `teamId`/`threadId` are the caller's trusted
  * route scope; `authorUid` is always the verified caller's own `uid`.
  *
@@ -246,9 +251,10 @@ async function createReplyInTransaction(
     return { ok: false, error: "thread_full" };
   }
 
+  const replyId = scope.collection.reserveId();
   let encrypted;
   try {
-    encrypted = encrypt(body);
+    encrypted = encryptRecord(body, forumReplyContext(thread.teamId, threadId, replyId));
   } catch {
     return { ok: false, error: "encryption_failed" };
   }
@@ -261,9 +267,10 @@ async function createReplyInTransaction(
     iv: encrypted.iv,
     authTag: encrypted.authTag,
     keyVersion: encrypted.keyVersion,
+    keyId: encrypted.keyId,
     createdAt: now,
   };
 
-  await scope.collection.add(record);
+  scope.collection.create(replyId, record);
   return { ok: true };
 }

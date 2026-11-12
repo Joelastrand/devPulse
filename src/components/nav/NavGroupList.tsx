@@ -34,7 +34,7 @@ const CURRENT_LINK_CLASSNAME = "bg-sidebar-active text-sidebar-foreground";
 
 /**
  * The grouped navigation list shared by the desktop sidebar and the mobile
- * drawer (docs/features/product-experience/SPEC.md — Application shell). The
+ * drawer (docs/archive/features/product-experience/SPEC.md — Application shell). The
  * caller supplies the `<nav>` landmark. Sign-out is not part of the list: it lives
  * only in the top-bar account menu (BR-17, D-4).
  */

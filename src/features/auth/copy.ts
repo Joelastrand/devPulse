@@ -2,7 +2,7 @@
  * Norwegian user-facing copy for the auth screens (`app/sign-in/page.tsx`,
  * `app/sign-up/page.tsx`, `SignInForm`, `SignUpForm`), per the copy-module
  * convention established in TASK-001
- * (docs/features/product-ux-shell/SPEC.md — BR-2).
+ * (docs/archive/features/product-ux-shell/SPEC.md — BR-2).
  */
 export const authCopy = {
   signIn: {

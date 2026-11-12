@@ -1,7 +1,7 @@
 import type { SurveyResultSummary } from "../../results/client/team-results-gateway";
 
 /**
- * Summary values for the team header (docs/features/visual-fidelity-and-ui-fixes
+ * Summary values for the team header (docs/archive/features/visual-fidelity-and-ui-fixes
  * — TASK-010 / D-8). It renders the existing latest-survey values as plain text
  * inside the header band, without a status badge. It uses only the latest survey
  * already loaded for the Pulse section; no other summary item is read or

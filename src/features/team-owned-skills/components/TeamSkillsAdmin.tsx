@@ -57,7 +57,7 @@ function guidanceOf(draft: DraftValues): TeamSkillGuidance {
 }
 
 /**
- * Administration of a team's own skill definitions (docs/features/team-owned-skills/SPEC.md §4). The list is loaded for
+ * Administration of a team's own skill definitions (docs/archive/features/team-owned-skills/SPEC.md §4). The list is loaded for
  * the signed-in user; `canEdit` only shows or hides controls. The server re-checks every write.
  */
 export function TeamSkillsAdmin({ teamId }: { teamId: string }) {

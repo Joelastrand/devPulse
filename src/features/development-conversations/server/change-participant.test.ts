@@ -16,9 +16,11 @@ import {
   TEAM_ID,
   seedOwnerConversation,
 } from "./owner-read-test-support";
+import { conversationContext } from "../domain/stored-owner-conversation";
 
 // Synthetic fixtures only (invariant 15). Every ref satisfies the TASK-002 grammar.
 const CONVERSATION_ID = "conv-1";
+const CTX = conversationContext(OWNER_UID, CONVERSATION_ID);
 const LATER = new Date(NOW.getTime() + 60_000);
 const OWNER_REF = "0123456789abcdefghjkmnpqrs";
 const CANDIDATE_UID = "candidate-2";
@@ -88,8 +90,8 @@ function decodedNotes(codec: FakeContentCodec, raw: RawConversationData): { part
     iv: raw.iv as string,
     authTag: raw.authTag as string,
     keyVersion: raw.keyVersion as string,
-    keyCheck: raw.keyCheck as string,
-  } as Parameters<FakeContentCodec["decodeContent"]>[0]);
+    keyId: "k1", keyCheck: raw.keyCheck as string,
+  } as Parameters<FakeContentCodec["decodeContent"]>[0], CTX);
   if (!decoded.ok) throw new Error("fixture payload does not decode");
   return { participantNotes: decoded.content.participantNotes, ownerNotes: decoded.content.ownerNotes, title: decoded.content.title };
 }

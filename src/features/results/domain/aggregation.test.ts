@@ -1,10 +1,13 @@
 import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { encrypt } from "../../../lib/encryption/encryption";
+import { encryptRecord } from "../../../lib/encryption/record-envelope";
 import { computeSurveyAggregate, type CandidateResponseRecord } from "./aggregation";
 
+const CONTEXT = "survey-response:team-test:survey-test:response-test";
+
+/** A v2 candidate sealed under the test context, as the reader would rebuild it from the document path. */
 function encryptedAnswers(answers: [number, number, number]): CandidateResponseRecord {
-  return encrypt(JSON.stringify(answers));
+  return { ...encryptRecord(JSON.stringify(answers), CONTEXT), context: CONTEXT };
 }
 
 function tamper(record: CandidateResponseRecord): CandidateResponseRecord {

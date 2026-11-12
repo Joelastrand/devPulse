@@ -1,4 +1,5 @@
 import "server-only";
+import { openTeamSystemDocument, toPersistedTeamSystem } from "./team-system-codec";
 import { randomUUID } from "node:crypto";
 import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
@@ -109,13 +110,13 @@ function toFirestoreTx(db: Firestore, tx: Transaction): WriteTeamSystemTx {
     },
     async getSystem(systemId) {
       const snapshot = await tx.get(systems().doc(systemId));
-      return snapshot.exists ? mapTeamSystemDates(snapshot.data()) : undefined;
+      return snapshot.exists ? openTeamSystemDocument(systemId, mapTeamSystemDates(snapshot.data())) : undefined;
     },
     createSystem(systemId, data) {
-      tx.create(systems().doc(systemId), data);
+      tx.create(systems().doc(systemId), toPersistedTeamSystem(systemId, data));
     },
     setSystem(systemId, data) {
-      tx.set(systems().doc(systemId), data);
+      tx.set(systems().doc(systemId), toPersistedTeamSystem(systemId, data));
     },
     touchMembership(uid, teamId, memberRef) {
       tx.update(db.collection(MEMBERSHIPS_COLLECTION).doc(membershipDocId(uid, teamId)), { memberRef });

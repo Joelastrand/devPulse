@@ -1,7 +1,7 @@
 import type { TeamSkillGuidance, TeamSkillLevel } from "../domain/team-skill";
 
 /**
- * Browser gateway for team-owned skills (docs/features/team-owned-skills/SPEC.md). Thin `fetch` wrappers over
+ * Browser gateway for team-owned skills (docs/archive/features/team-owned-skills/SPEC.md). Thin `fetch` wrappers over
  * `/api/teams/[teamId]/team-skills`. Responses are rebuilt field by field; a malformed body fails safe to
  * `read_failed`. The server is the authorization boundary: `canEdit` only shows or hides controls.
  */

@@ -1,3 +1,5 @@
+import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../../skill-trees/domain/skill-tree-test-fixtures";
+stubSkillTreeEncryptionKey();
 import { describe, expect, it, vi } from "vitest";
 import { listSkillTrees, type RawSkillTreeDoc } from "../../skill-trees/server/list-skill-trees";
 import {
@@ -39,7 +41,9 @@ function doc(index: number, overrides: { id?: string; name?: string; data?: Reco
 
 const invalidDoc = (index: number) => doc(index, { data: { nodes: [] } });
 
-function fakeReader(docs: RawTreeDoc[]) {
+function fakeReader(plain: RawTreeDoc[]) {
+  // Trees are read sealed, as in production: each document is sealed under its own id (invalid shapes stay as given).
+  const docs = plain.map((d) => ({ id: d.id, data: sealedSkillTreeFixture(d.id, d.data) as Record<string, unknown> }));
   const listOrderedByCreatedAt = vi.fn(async (limit: number) => docs.slice(0, limit));
   const reader: SkillNeedCatalogReader = { listOrderedByCreatedAt, getSkillTree: vi.fn() };
   return { reader, listOrderedByCreatedAt };
@@ -142,7 +146,7 @@ describe("readSkillNeedCatalog — raw window", () => {
 describe("readValidSkillTree", () => {
   const readerFor = (value: unknown): SkillNeedCatalogReader => ({
     listOrderedByCreatedAt: vi.fn(),
-    getSkillTree: vi.fn(async () => value),
+    getSkillTree: vi.fn(async (treeId: string) => sealedSkillTreeFixture(treeId, value)),
   });
 
   it("returns a valid tree, null for missing or invalid, and rejects on read failure", async () => {
@@ -184,7 +188,10 @@ describe("parity with listSkillTrees candidate mapping", () => {
     const admin = await listSkillTrees("token", {
       verifyToken: vi.fn().mockResolvedValue({ uid: "a", email: "admin@example.com", email_verified: true }),
       isSuperadmin: async (uid: string) => uid === "a",
-      reader: { listOrderedByCreatedAt: async (limit) => fixtures.slice(0, limit) as RawSkillTreeDoc[] },
+      reader: {
+        listOrderedByCreatedAt: async (limit) =>
+          fixtures.slice(0, limit).map((d) => ({ id: d.id, data: sealedSkillTreeFixture(d.id, d.data) })) as RawSkillTreeDoc[],
+      },
     });
 
     expect(admin.ok).toBe(true);

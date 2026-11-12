@@ -2,7 +2,7 @@ import type { ButtonHTMLAttributes, Ref } from "react";
 import { cx } from "./class-names";
 
 /**
- * Action hierarchy (docs/features/product-experience/SPEC.md — Action
+ * Action hierarchy (docs/archive/features/product-experience/SPEC.md — Action
  * hierarchy). `destructive` is for dialogs and danger areas only.
  */
 export type ButtonVariant = "primary" | "secondary" | "tertiary" | "destructive";
@@ -54,7 +54,7 @@ export interface ButtonClassNameOptions {
  * Prefer `Button` itself whenever the control performs an action; use this
  * only to avoid rendering an invalid nested/impersonating interactive
  * element while keeping a `Link`'s real anchor semantics
- * (docs/features/product-ux-shell/SPEC.md — TASK-003 guidance, applied by
+ * (docs/archive/features/product-ux-shell/SPEC.md — TASK-003 guidance, applied by
  * TASK-006).
  */
 export function buttonClassName({
@@ -69,7 +69,7 @@ export function buttonClassName({
  * Shared button primitive covering this codebase's three existing visual
  * treatments (primary/secondary/destructive) at the two sizes actually in
  * use (form/hero-sized `md`, compact row-action `sm`) — see
- * docs/features/product-ux-shell/SPEC.md BR-9. Native `<button>` semantics
+ * docs/archive/features/product-ux-shell/SPEC.md BR-9. Native `<button>` semantics
  * and props (including `type`, `disabled`, `onClick`) pass through
  * unchanged; `type` defaults to `"button"` so a button never implicitly
  * submits an enclosing form unless a caller opts in with `type="submit"`.

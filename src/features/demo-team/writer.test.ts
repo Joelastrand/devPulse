@@ -15,7 +15,7 @@ const AS_OF = new Date("2026-03-16T00:00:00.000Z");
 const { operations, manifest } = buildDemoSeedPlan({
   presenterUid: PRESENTER,
   asOf: AS_OF,
-  encrypt: () => ({ ciphertext: "Y2lwaGVy", iv: "aXY=", authTag: "dGFn", keyVersion: "v1" }),
+  sealRecord: () => ({ ciphertext: "Y2lwaGVy", iv: "aXY=", authTag: "dGFn", keyVersion: "v2", keyId: "k1" }),
 });
 
 /** In-memory atomic fake: writes apply only on a successful commit; `create` on an existing path fails the whole commit. */

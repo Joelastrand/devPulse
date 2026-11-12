@@ -1,3 +1,7 @@
+import { sealedProgressFixture, stageOfProgressUpdate } from "../domain/skill-tree-test-fixtures";
+import { openSkillProgressDocument } from "./skill-progress-content-codec";
+import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../domain/skill-tree-test-fixtures";
+stubSkillTreeEncryptionKey();
 import { describe, expect, it, vi } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type {
@@ -93,8 +97,8 @@ function fakeProgressStore(data: Record<string, unknown> | undefined): FakeProgr
 
 function fakeTreeReader(data: Record<string, unknown> | undefined): SkillTreeReader {
   return {
-    async get(): Promise<ReportTeamSkillProgressDocSnapshot> {
-      return { exists: data !== undefined, data: () => data };
+    async get(treeId): Promise<ReportTeamSkillProgressDocSnapshot> {
+      return { exists: data !== undefined, data: () => (data === undefined ? undefined : sealedSkillTreeFixture(treeId, data)) };
     },
   };
 }
@@ -119,8 +123,8 @@ describe("reportTeamSkillProgress", () => {
       const result = await reportTeamSkillProgress("token", TEAM_ID, TREE_ID, "node-1", baseDeps({ progress }));
 
       expect(result).toEqual({ ok: true });
-      expect(progress.updates).toEqual([
-        { docId: `${TEAM_ID}__${TREE_ID}`, data: { currentNodeId: "node-1", updatedAt: NOW, updatedBy: MEMBER_UID } },
+      expect(progress.updates.map((u) => ({ docId: u.docId, stage: stageOfProgressUpdate(TEAM_ID, TREE_ID, u.data), updatedAt: u.data.updatedAt, updatedBy: u.data.updatedBy }))).toEqual([
+        { docId: `${TEAM_ID}__${TREE_ID}`, stage: "node-1", updatedAt: NOW, updatedBy: MEMBER_UID },
       ]);
     });
 
@@ -130,7 +134,7 @@ describe("reportTeamSkillProgress", () => {
       const result = await reportTeamSkillProgress("token", TEAM_ID, TREE_ID, "node-0", baseDeps({ progress }));
 
       expect(result).toEqual({ ok: true });
-      expect(progress.updates[0].data.currentNodeId).toBe("node-0");
+      expect(stageOfProgressUpdate(TEAM_ID, TREE_ID, progress.updates[0].data)).toBe("node-0");
     });
 
     it("succeeds and still performs a write for a same-node re-report, refreshing updatedAt/updatedBy", async () => {
@@ -139,8 +143,8 @@ describe("reportTeamSkillProgress", () => {
       const result = await reportTeamSkillProgress("token", TEAM_ID, TREE_ID, "node-0", baseDeps({ progress }));
 
       expect(result).toEqual({ ok: true });
-      expect(progress.updates).toEqual([
-        { docId: `${TEAM_ID}__${TREE_ID}`, data: { currentNodeId: "node-0", updatedAt: NOW, updatedBy: MEMBER_UID } },
+      expect(progress.updates.map((u) => ({ docId: u.docId, stage: stageOfProgressUpdate(TEAM_ID, TREE_ID, u.data), updatedAt: u.data.updatedAt, updatedBy: u.data.updatedBy }))).toEqual([
+        { docId: `${TEAM_ID}__${TREE_ID}`, stage: "node-0", updatedAt: NOW, updatedBy: MEMBER_UID },
       ]);
     });
 
@@ -515,7 +519,7 @@ describe("reportTeamSkillProgress", () => {
 
       await reportTeamSkillProgress("token", TEAM_ID, TREE_ID, "node-1", baseDeps({ progress }));
 
-      expect(Object.keys(progress.updates[0].data)).toEqual(["currentNodeId", "updatedAt", "updatedBy"]);
+      expect(Object.keys(progress.updates[0].data)).toEqual(["content", "updatedAt", "updatedBy"]);
     });
 
     it("always sets updatedBy to the verified caller's uid, ignoring any request-shaped override", async () => {
@@ -579,12 +583,12 @@ describe("reportTeamSkillProgress", () => {
       // Shared in-memory store: reportTeamSkillProgress writes into it, then
       // the real, unmodified getTeamSkillProgress reads it back.
       const store = new Map<string, Record<string, unknown>>();
-      store.set(`${TEAM_ID}__${TREE_ID}`, validProgressData({ updatedBy: "original-admin" }));
+      store.set(`${TEAM_ID}__${TREE_ID}`, sealedProgressFixture(validProgressData({ updatedBy: "original-admin" })) as Record<string, unknown>);
 
       const progressStore: SkillProgressDocStore = {
         async get(docId) {
           const data = store.get(docId);
-          return { exists: data !== undefined, data: () => data };
+          return { exists: data !== undefined, data: () => (data === undefined ? undefined : openSkillProgressDocument(data)) };
         },
         async update(docId, data) {
           const existing = store.get(docId) ?? {};
@@ -606,15 +610,16 @@ describe("reportTeamSkillProgress", () => {
           const docs: RawSkillProgressDoc[] = [];
           for (const [id, data] of store.entries()) {
             if ((data as Record<string, unknown>).teamId === teamId) {
-              docs.push({ id, data });
+              // The production query opens each stored progress document; the stage is sealed in storage.
+              docs.push({ id, data: openSkillProgressDocument(data) });
             }
           }
           return docs;
         },
       };
       const getTreeReader: GetSkillTreeReader = {
-        async get() {
-          return { exists: true, data: () => validTreeData() };
+        async get(treeId) {
+          return { exists: true, data: () => sealedSkillTreeFixture(treeId, validTreeData()) };
         },
       };
       const authCollection: AuthorizeTeamAccessCollection = {

@@ -5,7 +5,7 @@ export const SKIP_LINK_TARGET_ID = "main-content";
 
 /**
  * Skip-to-content link, the first focusable element on every layout
- * (docs/features/product-experience/SPEC.md — Focus, Application shell). It is
+ * (docs/archive/features/product-experience/SPEC.md — Focus, Application shell). It is
  * visually hidden until it receives focus.
  */
 export function SkipLink() {

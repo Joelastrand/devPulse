@@ -12,7 +12,7 @@ const RESOLVE_ERROR_STATUS = {
 
 /**
  * Thin, unauthenticated-reachable read backing `/survey/{surveyId}`
- * (docs/features/managed-surveys/SPEC.md — TASK-007). A missing/invalid
+ * (docs/archive/features/managed-surveys/SPEC.md — TASK-007). A missing/invalid
  * Authorization header is not itself rejected here — `public` surveys need
  * none, and `resolveSurveyForParticipation` resolves a missing/invalid
  * token to `sign_in_required` for `authenticated` surveys on its own. Every

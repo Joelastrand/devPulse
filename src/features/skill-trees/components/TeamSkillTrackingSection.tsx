@@ -17,7 +17,7 @@ export type TeamSkillCatalogState =
 
 /**
  * One SkillTree's tracking state for this team, as known to this session
- * (docs/features/team-skill-tree/SPEC.md — TASK-006). TASK-006 owns no read
+ * (docs/archive/features/team-skill-tree/SPEC.md — TASK-006). TASK-006 owns no read
  * endpoint of its own (SPEC's finalized route table has no `GET` under
  * `/api/admin/teams/[teamId]/skills`; the only `GET` for a team's tracking
  * state is TASK-007's team-facing `/api/teams/[teamId]/skills`, which this
@@ -49,12 +49,12 @@ export interface TeamSkillTrackingSectionProps {
 
 /**
  * `/admin/teams/[teamId]`'s "Kompetanseområder" tracking section
- * (docs/features/team-skill-tree/SPEC.md — TASK-006, BR-27). Renders the
+ * (docs/archive/features/team-skill-tree/SPEC.md — TASK-006, BR-27). Renders the
  * TASK-005 catalog (`catalogState`, reused unchanged) split into two groups
  * by this session's own `tracking` state: trees not yet tracked by this
  * team offer a "start tracking" action; already-tracked trees show their
  * full ordered stage list with the current stage marked, rendered by the
- * shared presentational `SkillProgressPath` (docs/features/gamified-skill-tree/
+ * shared presentational `SkillProgressPath` (docs/archive/features/gamified-skill-tree/
  * SPEC.md — BR-8; `aria-current="step"` plus visible text, never color alone
  * — BR-29; never a control), and controls to change the stage (forward or
  * backward, BR-13) or stop tracking.

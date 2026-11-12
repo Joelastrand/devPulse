@@ -1,4 +1,4 @@
-/** Display-name length bounds, counted in Unicode code points (docs/features/member-identity-and-team-roles/SPEC.md — BR-4). */
+/** Display-name length bounds, counted in Unicode code points (docs/archive/features/member-identity-and-team-roles/SPEC.md — BR-4). */
 export const DISPLAY_NAME_MIN_LENGTH = 2;
 export const DISPLAY_NAME_MAX_LENGTH = 50;
 

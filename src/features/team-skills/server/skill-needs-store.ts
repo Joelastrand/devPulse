@@ -3,6 +3,7 @@ import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { membershipDocId } from "../../teams/domain/team-membership";
 import { isValidSkillNeed, type SkillNeedRecord } from "../domain/skill-need";
 import type { GenuineMembershipReads } from "../../teams/domain/genuine-membership";
+import { openSkillNeedDocument, toPersistedSkillNeed } from "./skill-need-content-codec";
 
 const SKILL_NEEDS_COLLECTION = "teamSkillNeeds";
 
@@ -77,10 +78,10 @@ export function getDefaultSkillNeedWriteStore(): SkillNeedWriteStore {
           },
           async getNeed(docId) {
             const snapshot = await tx.get(db.collection(SKILL_NEEDS_COLLECTION).doc(docId));
-            return snapshot.exists ? mapNeedDates(snapshot.data()) : undefined;
+            return snapshot.exists ? openSkillNeedDocument(mapNeedDates(snapshot.data())) : undefined;
           },
           putNeed(docId, record) {
-            tx.set(db.collection(SKILL_NEEDS_COLLECTION).doc(docId), record);
+            tx.set(db.collection(SKILL_NEEDS_COLLECTION).doc(docId), toPersistedSkillNeed({ ...record }));
           },
           deleteNeed(docId) {
             tx.delete(db.collection(SKILL_NEEDS_COLLECTION).doc(docId));
@@ -116,7 +117,7 @@ function getDefaultReader(): SkillNeedsReader {
         .where("teamId", "==", teamId)
         .limit(limit)
         .get();
-      return snapshot.docs.map((doc) => ({ id: doc.id, data: mapNeedDates(doc.data()) }));
+      return snapshot.docs.map((doc) => ({ id: doc.id, data: openSkillNeedDocument(mapNeedDates(doc.data())) }));
     },
   };
 }

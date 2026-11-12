@@ -13,7 +13,7 @@ export interface IsAppAdminDeps {
 
 /**
  * Determines superadmin (app-admin) status from the caller's already-verified identity: the UID must have an active
- * registry record, and the verified-email requirement is kept (docs/features/team-management/SPEC.md — BR-5, BR-6).
+ * registry record, and the verified-email requirement is kept (docs/archive/features/team-management/SPEC.md — BR-5, BR-6).
  * The email address is never an authorization key. Only `uid` and `emailVerified` from `identity` are trusted.
  *
  * Async: every caller must `await` it. A registry read failure rejects, so the caller fails closed.

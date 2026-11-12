@@ -24,7 +24,7 @@ function isValidLength(rawValue: string): boolean {
 }
 
 /**
- * A thread's reply-submission panel (docs/features/team-forum/SPEC.md —
+ * A thread's reply-submission panel (docs/archive/features/team-forum/SPEC.md —
  * BR-38, BR-43, BR-44). Sends only the reply body — no identity/scope/
  * lifecycle field of any kind; `createReply` derives everything else
  * server-side.

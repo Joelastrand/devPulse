@@ -11,7 +11,7 @@ vi.mock("../../../../src/features/skill-trees/components/AdminSkills", () => ({
 const { default: AdminSkillsPage } = await import("./page");
 
 describe("AdminSkillsPage", () => {
-  it("renders at the wide PageShell width (docs/features/ui-refresh/SPEC.md — BR-5)", () => {
+  it("renders at the wide PageShell width (docs/archive/features/ui-refresh/SPEC.md — BR-5)", () => {
     render(<AdminSkillsPage />);
 
     expect(screen.getByRole("main").closest(".max-w-main")).not.toBeNull();

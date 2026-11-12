@@ -1,11 +1,14 @@
-import type { EncryptedPayload } from "../../lib/encryption/encryption";
-import type { Challenge } from "../challenges/domain/challenge";
-import { roadmapItemDocId, type RoadmapItemRecord } from "../roadmap/domain/roadmap-item";
-import type { SkillProgressRecord } from "../skill-trees/domain/skill-progress";
+import { toPersistedSkillProgress } from "../skill-trees/server/skill-progress-content-codec";
+import { toPersistedTeam } from "../teams/domain/team-content-codec";
+import { toPersistedSurvey } from "../surveys/server/survey-content-codec";
+import type { RecordEnvelope } from "../../lib/encryption/record-envelope";
+import { surveyResponseContext } from "../surveys/domain/response-context";
+import { challengeContext, type Challenge } from "../challenges/domain/challenge";
+import { roadmapItemDocId } from "../roadmap/domain/roadmap-item";
+import { toPersistedRoadmapItem } from "../roadmap/domain/roadmap-item-content-codec";
 import { skillProgressDocId } from "../skill-trees/domain/skill-progress";
-import type { SkillTreeRecord } from "../skill-trees/domain/skill-tree";
+import { toPersistedSkillTree } from "../skill-trees/domain/skill-tree-content-codec";
 import type { SurveyResponseRecord } from "../surveys/server/submit-survey-response";
-import type { Team } from "../teams/domain/team";
 import { membershipDocId, type TeamMembershipRecord } from "../teams/domain/team-membership";
 import {
   assertValidAsOf,
@@ -21,11 +24,10 @@ import {
   demoResponseId,
   demoSurveyId,
   periodResponseCount,
-  type SurveyFixture,
 } from "./fixtures";
 
 /**
- * Pure logical seed plan + explicit manifest (docs/features/demo-team/
+ * Pure logical seed plan + explicit manifest (docs/archive/features/demo-team/
  * SPEC.md — "Ownership model", "Manifest classification"). No Firebase
  * import, no I/O, no clock, no RNG. Reading, classifying against persisted
  * documents and writing belong to later tasks.
@@ -62,8 +64,16 @@ export interface ManifestEntry {
  * matching the existing server operations; validators are fed the id
  * separately, exactly as the read paths do.
  */
-export type PersistedTeam = Omit<Team, "teamId">;
-export type PersistedSurvey = SurveyFixture;
+/** Sealed team document: plaintext metadata plus the `content` envelope (see `teams/domain/team-content-codec.ts`). */
+export type PersistedTeam = Record<string, unknown>;
+/** Sealed skill progress document: plaintext metadata plus the `content` envelope. */
+export type PersistedSkillProgress = Record<string, unknown>;
+/** Sealed roadmap plan: plaintext metadata, the sealed business content and the owner index (see `roadmap/domain`). */
+export type PersistedRoadmapItem = Record<string, unknown>;
+/** Sealed survey document: plaintext metadata plus the `content` envelope (see `surveys/server/survey-content-codec.ts`). */
+export type PersistedSurvey = Record<string, unknown>;
+/** Sealed skill tree document: plaintext structure plus the `content` envelope. */
+export type PersistedSkillTree = Record<string, unknown>;
 export type PersistedChallenge = Omit<Challenge, "challengeId">;
 
 interface OperationBase extends ManifestEntry {
@@ -78,12 +88,13 @@ export type PlannedOperation = OperationBase &
     | { collection: "surveys"; data: PersistedSurvey }
     | { collection: "surveyResponses"; data: SurveyResponseRecord }
     | { collection: "challenges"; data: PersistedChallenge }
-    | { collection: "skillTrees"; data: SkillTreeRecord }
-    | { collection: "skillProgress"; data: SkillProgressRecord }
-    | { collection: "roadmapItems"; data: RoadmapItemRecord }
+    | { collection: "skillTrees"; data: PersistedSkillTree }
+    | { collection: "skillProgress"; data: PersistedSkillProgress }
+    | { collection: "roadmapItems"; data: PersistedRoadmapItem }
   );
 
-export type DemoEncrypt = (plaintext: string) => EncryptedPayload;
+/** v2 record seal, bound to the record context (AAD). Every demo collection with business content is sealed with it. */
+export type DemoSealRecord = (plaintext: string, context: string) => RecordEnvelope;
 
 function entry(collection: DemoCollection, docId: string, writeClass: WriteClass): ManifestEntry {
   return { collection, docId, path: `${collection}/${docId}`, writeClass };
@@ -198,9 +209,9 @@ export interface DemoSeedPlan {
 export function buildDemoSeedPlan(input: {
   presenterUid: string;
   asOf: Date;
-  encrypt: DemoEncrypt;
+  sealRecord: DemoSealRecord;
 }): DemoSeedPlan {
-  const { presenterUid, asOf, encrypt } = input;
+  const { presenterUid, asOf, sealRecord } = input;
   assertValidAsOf(asOf);
 
   const fixtures = buildDemoLogicalFixtures({ presenterUid, asOf });
@@ -221,27 +232,31 @@ export function buildDemoSeedPlan(input: {
   };
 
   const operations: PlannedOperation[] = [
-    op("teams", DEMO_TEAM_ID, fixtures.team),
+    op("teams", DEMO_TEAM_ID, toPersistedTeam(DEMO_TEAM_ID, { ...fixtures.team }, sealRecord)),
     op("teamMemberships", membershipDocId(presenterUid, DEMO_TEAM_ID), fixtures.membership),
-    ...fixtures.closedSurveys.map(({ id, record }) => op("surveys", id, record)),
-    op("surveys", fixtures.scheduledSurvey.id, fixtures.scheduledSurvey.record),
+    ...fixtures.closedSurveys.map(({ id, record }) => op("surveys", id, toPersistedSurvey(id, { ...record }, sealRecord))),
+    op("surveys", fixtures.scheduledSurvey.id, toPersistedSurvey(fixtures.scheduledSurvey.id, { ...fixtures.scheduledSurvey.record }, sealRecord)),
     ...fixtures.responses.map((r) =>
       op("surveyResponses", r.id, {
         surveyId: r.surveyId,
         teamId: DEMO_TEAM_ID,
-        ...encrypt(JSON.stringify(r.answers)),
+        ...sealRecord(JSON.stringify(r.answers), surveyResponseContext(DEMO_TEAM_ID, r.surveyId, r.id)),
         submittedAt: r.submittedAt,
       }),
     ),
     ...fixtures.challenges.map(({ id, text, ...rest }) =>
-      op("challenges", id, { teamId: DEMO_TEAM_ID, ...encrypt(text), ...rest }),
+      op("challenges", id, {
+        teamId: DEMO_TEAM_ID,
+        ...sealRecord(text, challengeContext(DEMO_TEAM_ID, id)),
+        ...rest,
+      }),
     ),
-    ...fixtures.skillTrees.map((t) => op("skillTrees", t.id, t.record)),
+    ...fixtures.skillTrees.map((t) => op("skillTrees", t.id, toPersistedSkillTree(t.id, { ...t.record }, sealRecord))),
     ...fixtures.skillProgress.map((p) =>
-      op("skillProgress", skillProgressDocId(DEMO_TEAM_ID, p.treeId), p.record),
+      op("skillProgress", skillProgressDocId(DEMO_TEAM_ID, p.treeId), toPersistedSkillProgress({ ...p.record }, sealRecord)),
     ),
     ...fixtures.roadmapItems.map((r) =>
-      op("roadmapItems", roadmapItemDocId(DEMO_TEAM_ID, r.treeId), r.record),
+      op("roadmapItems", roadmapItemDocId(DEMO_TEAM_ID, r.treeId), toPersistedRoadmapItem({ ...r.record }, sealRecord)),
     ),
   ];
 

@@ -6,9 +6,11 @@ import { createFakeConversationStore, type FakeConversationStore } from "./fake-
 import { OTHER_OWNER_UID, NOW, OWNER_UID, PARTICIPANT_UID, seedOwnerConversation } from "./owner-read-test-support";
 import { updateOwnerSections, type UpdateOwnerSectionsDeps } from "./update-owner-sections";
 import type { StoredEnvelope } from "../domain/stored-owner-conversation";
+import { conversationContext } from "../domain/stored-owner-conversation";
 
 /** Synthetic fixtures only (invariant 15). No real person, team or wellbeing data. */
 const CONVERSATION_ID = "conv-1";
+const CTX = conversationContext(OWNER_UID, CONVERSATION_ID);
 const LATER = new Date(NOW.getTime() + 60_000);
 const CAPTURED_AT = new Date("2026-10-01T08:00:00.000Z");
 const SNAPSHOT_GOAL: SharedGoalSnapshot = {
@@ -41,9 +43,9 @@ async function storedContent(store: FakeConversationStore, codec: FakeContentCod
     iv: raw.iv,
     authTag: raw.authTag,
     keyVersion: raw.keyVersion,
-    keyCheck: raw.keyCheck,
+    keyId: "k1", keyCheck: raw.keyCheck,
   } as StoredEnvelope;
-  const decoded = codec.decodeContent(envelope);
+  const decoded = codec.decodeContent(envelope, CTX);
   if (!decoded.ok) throw new Error("fixture content unreadable");
   return decoded.content;
 }
@@ -389,11 +391,11 @@ describe("updateOwnerSections: validation runs before any read, codec call or tr
       },
       encodeContent: (content: Parameters<FakeContentCodec["encodeContent"]>[0]) => {
         calls.push("encodeContent");
-        return deps.codec.encodeContent(content);
+        return deps.codec.encodeContent(content, CTX);
       },
       decryptForClassification: (envelope: StoredEnvelope) => {
         calls.push("decryptForClassification");
-        return deps.codec.decryptForClassification(envelope);
+        return deps.codec.decryptForClassification(envelope, CTX);
       },
     };
     return { calls, deps: { ...deps, store, codec } };
@@ -460,7 +462,7 @@ describe("updateOwnerSections: transactional read on retry (BR-49, no stale-payl
           participantNotes: "",
           sharedGoals: [],
           sharedEvidence: [],
-        });
+        }, CTX);
         if (!concurrent.ok) throw new Error("fixture key unavailable");
         await store.runTransaction(async (tx) => {
           tx.updateOwner(OWNER_UID, CONVERSATION_ID, { ...concurrent.content, updatedAt: LATER });

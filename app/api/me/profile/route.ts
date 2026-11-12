@@ -6,7 +6,7 @@ import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
- * Own-profile endpoints (docs/features/member-identity-and-team-roles/SPEC.md
+ * Own-profile endpoints (docs/archive/features/member-identity-and-team-roles/SPEC.md
  * — BR-1 through BR-3). Kept thin: authentication, validation and
  * persistence live in the delegated server operations
  * (`.claude/rules/nextjs-react.md`). There is deliberately no `uid` in the

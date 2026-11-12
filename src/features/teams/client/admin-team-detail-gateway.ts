@@ -1,6 +1,6 @@
 /**
  * Client gateways for the `/admin/teams/[teamId]` detail page
- * (docs/features/team-management/SPEC.md — TASK-010). Each function is a
+ * (docs/archive/features/team-management/SPEC.md — TASK-010). Each function is a
  * thin `fetch` wrapper around an existing, unchanged admin API route
  * (`app/api/admin/teams/[teamId]/{members,invitations,access-requests}`) —
  * no new server logic is introduced here. Every parser trusts the

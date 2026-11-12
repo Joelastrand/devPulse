@@ -1,5 +1,5 @@
 /**
- * Norwegian copy for the "Min profil" page (docs/features/member-identity-
+ * Norwegian copy for the "Min profil" page (docs/archive/features/member-identity-
  * and-team-roles/SPEC.md — BR-30, BR-33). Validation wording deliberately
  * avoids implementation terms; the detailed rules live only in the server
  * domain (`display-name.ts`).

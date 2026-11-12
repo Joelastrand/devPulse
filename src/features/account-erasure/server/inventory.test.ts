@@ -144,15 +144,16 @@ describe("erasure inventory sweep query shapes", () => {
     expect(sweepsOf("I-8")).toEqual([{ kind: "collectionGroupFieldEquals", field: "participantUid", value: "uid" }]);
   });
 
-  it("covers I-11 by the email field, by the invitation document-ID tail, and by resolvedUid", () => {
+  it("covers I-11 by the blind index of the e-mail, by its document-ID tail, and by resolvedUid; the sealed address has no sweep", () => {
     expect(sweepsOf("I-11")).toEqual([
-      { kind: "fieldEquals", field: "email", value: "email" },
+      { kind: "fieldEquals", field: "emailIndex", value: "email" },
       { kind: "docIdEndsWith", value: "normalizedEmail" },
       { kind: "fieldEquals", field: "resolvedUid", value: "uid" },
     ]);
   });
 
-  it("registers the invitation document-ID email as an email-kind field on I-11, not as an allow-list exception", () => {
+  it("registers the invitation blind index and its document-ID tail as email-kind fields on I-11, not as allow-list exceptions", () => {
+    expect(registeredFields().get("emailIndex")).toBe("email");
     expect(registeredFields().get("normalizedEmail")).toBe("email");
     expect(ALLOWED_UNREGISTERED_NAMES).not.toHaveProperty("normalizedEmail");
   });
@@ -199,7 +200,7 @@ describe("erasure inventory change-detection tripwire over the repository (DEMOT
   });
 
   it("registers the known persisted personal fields", () => {
-    for (const name of ["authorUid", "createdBy", "archivedBy", "memberRef", "ownerRef", "email"]) {
+    for (const name of ["authorUid", "createdBy", "archivedBy", "memberRef", "ownerRef", "emailIndex"]) {
       expect(registeredFields().has(name)).toBe(true);
     }
   });

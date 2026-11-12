@@ -6,7 +6,7 @@ const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
  * `/teams/[teamId]`'s member-facing read-only skill endpoint
- * (docs/features/team-skill-tree/SPEC.md — TASK-007, BR-28 through BR-30).
+ * (docs/archive/features/team-skill-tree/SPEC.md — TASK-007, BR-28 through BR-30).
  * `GET` is a thin delegate to `getTeamSkillProgress` — `teamId` comes from
  * the URL path only and is never trusted as authorization evidence on its
  * own; every authorization/read decision lives in the delegated server

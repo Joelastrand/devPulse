@@ -1,3 +1,5 @@
+import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../domain/skill-tree-test-fixtures";
+stubSkillTreeEncryptionKey();
 import { describe, expect, it, vi } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type { AuthorizeTeamAccessCollection } from "../../teams/server/authorize-team-access";
@@ -111,7 +113,7 @@ function fakeTreeReader(trees: Record<string, Record<string, unknown> | undefine
   return {
     async get(treeId): Promise<GetTeamSkillProgressDocSnapshot> {
       const data = trees[treeId];
-      return { exists: data !== undefined, data: () => data };
+      return { exists: data !== undefined, data: () => (data === undefined ? undefined : sealedSkillTreeFixture(treeId, data)) };
     },
   };
 }
@@ -503,7 +505,7 @@ describe("getTeamSkillProgress", () => {
   });
 
   /**
-   * `canReportProgress` (docs/features/skill-progress-self-report/SPEC.md —
+   * `canReportProgress` (docs/archive/features/skill-progress-self-report/SPEC.md —
    * "Permission-UI correction"): a UI-capability signal, independent of the
    * `skills` list above and of `authorizeTeamAccess`'s broader read result —
    * re-derives the exact membership-then-team-status semantics

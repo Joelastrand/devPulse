@@ -1,7 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { EncryptedPayload } from "../../../lib/encryption/encryption";
-import { decrypt, encrypt } from "../../../lib/encryption/encryption";
+import type { RecordEnvelope } from "../../../lib/encryption/record-envelope";
+import { decryptRecord, encryptRecord } from "../../../lib/encryption/record-envelope";
+import { forumThreadContext } from "../domain/forum-thread";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type { AuthorizeTeamAccessCollection } from "../../teams/server/authorize-team-access";
 import { authorTag } from "../domain/author-tag";
@@ -38,8 +39,8 @@ function verifyTokenReturning(identity: VerifiedIdentity) {
   });
 }
 
-function encryptedContent(title: string, body: string): EncryptedPayload {
-  return encrypt(JSON.stringify({ title, body }));
+function encryptedContent(threadId: string, title: string, body: string): RecordEnvelope {
+  return encryptRecord(JSON.stringify({ title, body }), forumThreadContext(TEAM_ID, threadId));
 }
 
 function threadDoc(
@@ -47,7 +48,7 @@ function threadDoc(
   content: { title: string; body: string } | undefined,
   overrides: Record<string, unknown> = {},
 ): RawThreadDoc {
-  const encoded = content !== undefined ? encryptedContent(content.title, content.body) : undefined;
+  const encoded = content !== undefined ? encryptedContent(id, content.title, content.body) : undefined;
   return {
     id,
     data: {
@@ -58,7 +59,8 @@ function threadDoc(
         ciphertext: "not-used",
         iv: "not-used",
         authTag: "not-used",
-        keyVersion: "v1",
+        keyVersion: "v2",
+        keyId: "k1",
       }),
       ...overrides,
     },
@@ -114,12 +116,12 @@ function fakeAuthCollection(state: {
   };
 }
 
-function spyDecrypt(): ((payload: EncryptedPayload) => string) & { calls: EncryptedPayload[] } {
-  const calls: EncryptedPayload[] = [];
-  const fn = ((payload: EncryptedPayload) => {
-    calls.push(payload);
-    return decrypt(payload);
-  }) as ((payload: EncryptedPayload) => string) & { calls: EncryptedPayload[] };
+function spyDecrypt(): ((envelope: RecordEnvelope, context: string) => string) & { calls: RecordEnvelope[] } {
+  const calls: RecordEnvelope[] = [];
+  const fn = ((envelope: RecordEnvelope, context: string) => {
+    calls.push(envelope);
+    return decryptRecord(envelope, context);
+  }) as ((envelope: RecordEnvelope, context: string) => string) & { calls: RecordEnvelope[] };
   fn.calls = calls;
   return fn;
 }
@@ -271,7 +273,7 @@ describe("listTeamThreads", () => {
   });
 
   it("excludes a document with a wrong keyVersion literal without failing the whole call", async () => {
-    const wrongVersion = threadDoc("wrong-version", { title: "T", body: "B" }, { keyVersion: "v2" });
+    const wrongVersion = threadDoc("wrong-version", { title: "T", body: "B" }, { keyVersion: "v1" });
     const valid = threadDoc("valid-thread", { title: "T", body: "B" });
     const reader = fakeReader([wrongVersion, valid]);
 
@@ -295,8 +297,8 @@ describe("listTeamThreads", () => {
   });
 
   it("excludes a document whose decrypted payload is not the expected {title, body} JSON shape", async () => {
-    const notJson = encrypt("not json at all");
-    const wrongShape = encrypt(JSON.stringify({ title: "only a title" }));
+    const notJson = encryptRecord("not json at all", forumThreadContext(TEAM_ID, "not-json"));
+    const wrongShape = encryptRecord(JSON.stringify({ title: "only a title" }), forumThreadContext(TEAM_ID, "wrong-shape"));
     const docs: RawThreadDoc[] = [
       { id: "not-json", data: { teamId: TEAM_ID, authorUid: MEMBER_UID, createdAt: new Date(), ...notJson } },
       { id: "wrong-shape", data: { teamId: TEAM_ID, authorUid: MEMBER_UID, createdAt: new Date(), ...wrongShape } },

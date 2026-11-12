@@ -23,7 +23,7 @@ type ViewState =
   | { phase: "ready"; data: GoalListResponse; token: string; generation: number };
 
 /**
- * The signed-in person's own goals (docs/features/personal-development-goals/SPEC.md — BR-48 states 1–5, 7–10).
+ * The signed-in person's own goals (docs/archive/features/personal-development-goals/SPEC.md — BR-48 states 1–5, 7–10).
  * One `GET /api/me/goals` per auth state; the server order (BR-31) is rendered as given. Every successful
  * mutation refetches that canonical `GET` (TASK-013) instead of patching local state. Goals are private to
  * the owner: nothing here offers any other person access.

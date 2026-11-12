@@ -26,7 +26,7 @@ function walk(dir: string): string[] {
 }
 
 // Matches a team-nav link whose sub-route is NOT one of the five SPEC BR-30 tabs (Oversikt is the bare base).
-// `skills` is the team-owned skills administration tab (docs/features/team-owned-skills/SPEC.md §4), an explicit owner request.
+// `skills` is the team-owned skills administration tab (docs/archive/features/team-owned-skills/SPEC.md §4), an explicit owner request.
 const UNAPPROVED_TEAM_NAV_HREF = /href:\s*`\$\{base\}\/(?!(roadmap|systems|competence-plan|competence|skills)`)/;
 
 const isTest =(path: string) => /\.test\.tsx?$/.test(path);

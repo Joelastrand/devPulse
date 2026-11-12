@@ -6,7 +6,7 @@ const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
  * `/teams/[teamId]`'s "Pågående undersøkelse" section read
- * (docs/features/managed-surveys/SPEC.md — TASK-010). `teamId` comes from
+ * (docs/archive/features/managed-surveys/SPEC.md — TASK-010). `teamId` comes from
  * the URL path but is never trusted as authorization evidence on its own —
  * `getCurrentTeamSurvey` always re-derives access via `authorizeTeamAccess`
  * before any survey data is read. Kept thin; orchestration and lifecycle/

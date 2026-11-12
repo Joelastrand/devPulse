@@ -8,7 +8,7 @@ import { teamSkillsCopy } from "../copy";
 const LEVELS: readonly TeamSkillLevel[] = [1, 2, 3, 4];
 
 /**
- * Compact four-option rating control (docs/features/team-owned-skills/SPEC.md; personal UX §7.2). A radio group with roving
+ * Compact four-option rating control (docs/archive/features/team-owned-skills/SPEC.md; personal UX §7.2). A radio group with roving
  * focus: arrow keys only move focus, and a rating is saved only by a click or by Enter/Space, so focus and hover never
  * write. The selected level is shown by text and a filled state, not by colour alone. Each option's accessible name is
  * the skill name plus the full level name.
@@ -63,7 +63,7 @@ export function TeamSkillRatingControl({
             onKeyDown={(event) => onKeyDown(event, index)}
             title={copy.name}
             className={
-              "flex min-h-11 min-w-11 items-center justify-center rounded-md border px-3 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-60 sm:min-h-9 " +
+              "flex min-h-11 min-w-11 items-center justify-center rounded-md border px-3 text-sm font-semibold transition-colors duration-micro focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-60 sm:min-h-9 " +
               (checked
                 ? "border-primary bg-primary text-text-inverse"
                 : "border-border-strong bg-surface text-text-primary hover:bg-surface-muted")

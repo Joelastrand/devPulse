@@ -1,4 +1,5 @@
 import "server-only";
+import { openTeamProjectDocument } from "./team-project-codec";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { authRefusalFor, type AuthRefusal } from "../../auth/server/auth-refusal";
 import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
@@ -61,7 +62,8 @@ export function getDefaultTeamProjectReadStore(): TeamProjectReadStore {
 export function mapTeamProjectDocs(
   docs: ReadonlyArray<{ id: string; data(): Record<string, unknown> }>,
 ): Record<string, unknown>[] {
-  return docs.map((doc) => ({ ...mapProjectTimestamps(doc.data()), projectId: doc.id }));
+  // An unopenable project contributes no title, so its row fails `parseStoredTeamProject` and the read fails closed.
+  return docs.map((doc) => ({ ...(openTeamProjectDocument(doc.id, mapProjectTimestamps(doc.data())) ?? {}), projectId: doc.id }));
 }
 
 function mapProjectTimestamps(data: Record<string, unknown>): Record<string, unknown> {

@@ -11,7 +11,7 @@ export interface SectionProps {
 }
 
 /**
- * A page section (docs/features/product-experience/SPEC.md — Section
+ * A page section (docs/archive/features/product-experience/SPEC.md — Section
  * hierarchy). Sections are separated by space rather than a border. The
  * region is labelled by its `h2`, so it is announced by name.
  */

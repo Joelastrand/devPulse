@@ -18,9 +18,11 @@ import type { DecryptOutcome, StoredEnvelope } from "../domain/stored-owner-conv
 import type { SharedGoalSnapshot } from "../domain/shared-goal-snapshot";
 import { ContentKeyError } from "./content-codec";
 import { issueErasureOwnerCleanupCapability } from "./erasure-owner-cleanup-capability";
+import { conversationContext } from "../domain/stored-owner-conversation";
 
 /** Synthetic fixtures only (invariant 15). No real person, team or wellbeing data. */
 const CONVERSATION_ID = "conv-1";
+const CTX = conversationContext(OWNER_UID, CONVERSATION_ID);
 const SNAPSHOT_GOAL: SharedGoalSnapshot = {
   goalTitle: "Synthetic goal",
   treeId: "tree-a",
@@ -110,9 +112,9 @@ async function storedContent(store: FakeConversationStore, codec: FakeContentCod
     iv: raw.iv,
     authTag: raw.authTag,
     keyVersion: raw.keyVersion,
-    keyCheck: raw.keyCheck,
+    keyId: "k1", keyCheck: raw.keyCheck,
   } as StoredEnvelope;
-  const decoded = codec.decodeContent(envelope);
+  const decoded = codec.decodeContent(envelope, CTX);
   if (!decoded.ok) throw new Error("fixture content unreadable");
   return decoded.content;
 }
@@ -163,14 +165,14 @@ function spyCodec(base: FakeContentCodec): { codec: FakeContentCodec; calls: { p
       calls.probe += 1;
       return base.probeKey();
     },
-    encodeContent(content) {
+    encodeContent(content, CTX) {
       calls.encode += 1;
-      return base.encodeContent(content);
+      return base.encodeContent(content, CTX);
     },
-    decodeContent: (envelope) => base.decodeContent(envelope),
-    decryptForClassification(envelope) {
+    decodeContent: (envelope) => base.decodeContent(envelope, CTX),
+    decryptForClassification(envelope, CTX) {
       calls.decrypt += 1;
-      return base.decryptForClassification(envelope);
+      return base.decryptForClassification(envelope, CTX);
     },
     setKeyFailure: (failure) => base.setKeyFailure(failure),
   };
@@ -833,7 +835,7 @@ describe("acceptInvitation: BR-48 transaction-backed eligibility and retry (TASK
       },
       decryptForClassification: (envelope: StoredEnvelope): DecryptOutcome => {
         decrypts += 1;
-        return codec.decryptForClassification(envelope);
+        return codec.decryptForClassification(envelope, CTX);
       },
     };
 

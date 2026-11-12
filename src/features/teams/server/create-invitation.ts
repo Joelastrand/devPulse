@@ -6,11 +6,12 @@ import type { IsAppAdminDeps } from "../domain/app-admin";
 import { normalizeEmail } from "../domain/normalize-email";
 import { isValidTeamStatus } from "../domain/team";
 import { isValidMembershipFor, membershipDocId } from "../domain/team-membership";
+import { readInvitationStatusFor, type TeamInvitationRecord } from "../domain/team-invitation";
 import {
-  invitationDocId,
-  readInvitationStatusFor,
-  type TeamInvitationRecord,
-} from "../domain/team-invitation";
+  invitationDocIdForEmail,
+  openInvitationDocument,
+  toPersistedInvitation,
+} from "../domain/team-invitation-content-codec";
 import {
   grantTeamMembership,
   type GrantTeamMembershipCollection,
@@ -72,21 +73,21 @@ function getDefaultInvitationsCollection(actorUid: string): CreateInvitationInvi
     async get(teamId, email) {
       const snapshot = await getFirestoreDb()
         .collection(INVITATIONS_COLLECTION)
-        .doc(invitationDocId(teamId, email))
+        .doc(invitationDocIdForEmail(teamId, email))
         .get();
-      return snapshot.exists ? snapshot.data() : undefined;
+      return snapshot.exists ? openInvitationDocument(teamId, snapshot.data()) : undefined;
     },
     async setPending(record) {
       const db = getFirestoreDb();
-      const ref = db.collection(INVITATIONS_COLLECTION).doc(invitationDocId(record.teamId, record.email));
+      const ref = db.collection(INVITATIONS_COLLECTION).doc(invitationDocIdForEmail(record.teamId, record.email));
       await runFencedTransaction(db, actorUid, async (tx) => {
-        tx.set(ref, record);
+        tx.set(ref, toPersistedInvitation(record.teamId, { ...record }));
       });
     },
     async markAccepted(teamId, email, resolvedUid, now) {
       // The accepted uid is the person whose erasure record is read first, in the same transaction (TASK-030, BR-4(b)).
       const db = getFirestoreDb();
-      const ref = db.collection(INVITATIONS_COLLECTION).doc(invitationDocId(teamId, email));
+      const ref = db.collection(INVITATIONS_COLLECTION).doc(invitationDocIdForEmail(teamId, email));
       await runFencedTransaction(db, resolvedUid, async (tx) => {
         tx.update(ref, { status: "accepted", updatedAt: now, resolvedAt: now, resolvedUid });
       });
@@ -100,7 +101,7 @@ function getDefaultInvitationsCollection(actorUid: string): CreateInvitationInvi
  * given (teamId, email) — closes the gap where an earlier pending
  * invitation would otherwise be left stale/misleading after `createInvitation`
  * grants (or discovers) membership through this same email
- * (docs/features/team-management/SPEC.md — BR-18, BR-30). A no-op for a
+ * (docs/archive/features/team-management/SPEC.md — BR-18, BR-30). A no-op for a
  * missing, already-`"accepted"`, or `"canceled"` invitation: only a
  * currently-pending record is ever transitioned here — a `"canceled"`
  * invitation is never silently revived into `"accepted"` (BR-21), and an
@@ -172,7 +173,7 @@ export interface CreateInvitationDeps {
 }
 
 /**
- * Invites an email to a team (docs/features/team-management/SPEC.md —
+ * Invites an email to a team (docs/archive/features/team-management/SPEC.md —
  * BR-17 through BR-22). Only an app admin may call this successfully.
  * Fails closed if the target team doesn't exist or is `disabled` — never
  * creates or revives a team. If the email already belongs to a

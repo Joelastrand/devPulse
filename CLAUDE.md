@@ -11,6 +11,9 @@ DevPulse is an internal application for developer/team wellbeing and delivery he
 - Prefer small, vertical changes over broad refactors. Avoid unrelated cleanup, speculative abstractions, and scope expansion.
 - Use the applicable path-scoped coding rules under `.claude/rules/`; do not duplicate those rules here.
 - Run the repository's actual relevant checks before marking work complete, then inspect the actual `git diff`. Never report a command as passing unless it was run and checked.
+- Routine verification is task-scoped. Name the files you changed or that the task owns: `pnpm test:quick --files <paths>` while implementing, and `pnpm test:standard --files <paths>` before reporting a task done. Both always run the security guards. Do not use `--changed` (all working-tree changes) unless the user asks, because this repository holds hundreds of unrelated uncommitted changes.
+- A task-scoped quick or standard run is feedback for the task, not complete verification. Do not describe it as the full suite.
+- Do not run the whole suite (`pnpm test`, about 9 minutes) after small changes. Use `pnpm test:full` only for milestones, architecture changes, encryption, authorization, Firestore schema or rules, and release work. Run `pnpm test:emulator` for changes to persistence, erasure, the superadmin registry, Firestore rules, or transactions. See `docs/TESTING.md` §1a.
 - Use pnpm for repository commands. `package.json` is the source of truth for available scripts.
 - Update the relevant durable document when a product, architecture, security, data, or feature contract changes.
 - Never commit secrets, invent credentials, or expose sensitive survey/free-text/key material.
@@ -47,12 +50,16 @@ git
 
 | File | Contents |
 | --- | --- |
-| `docs/PRODUCT.md` | vision, users, non-goals |
-| `docs/ARCHITECTURE.md` | system boundaries, technical decisions |
-| `docs/SECURITY.md` | privacy/security invariants and review guidance |
-| `docs/DATA-MODEL.md` | conceptual data model |
-| `docs/ROADMAP.md` | product phases |
-| `docs/DEVELOPMENT.md` | development conventions |
+| `docs/PRODUCT.md` | product as implemented: users, features, workflows, non-goals |
+| `docs/ARCHITECTURE.md` | stack, layout, request path, feature slices, Firebase integration |
+| `docs/ROUTES.md` | pages, navigation, redirects, API route groups and access |
+| `docs/SECURITY.md` | authentication, authorization, privacy thresholds, encryption, erasure |
+| `docs/DATA-MODEL.md` | Firestore collections, document IDs, validation, erasure classes |
+| `docs/DEVELOPMENT.md` | setup, environment, emulators, scripts, operational tools |
+| `docs/TESTING.md` | test layers, guards, expected-fail cases |
+| `docs/KNOWN-LIMITATIONS.md` | verified gaps, operational limits, technical debt |
 | `docs/AI-WORKFLOW.md` | practical Claude Code workflow |
-| `docs/features/<feature-id>/SPEC.md` | one feature's requirements |
-| `docs/features/<feature-id>/TASKS.md` | one feature's task state |
+| `docs/operations/` | operator runbooks (account erasure, superadmin bootstrap) |
+| `docs/archive/` | historical specs and superseded documents. Not current guidance |
+| `docs/features/<feature-id>/SPEC.md` | one feature's requirements, when a new feature is planned (none is live now) |
+| `docs/features/<feature-id>/TASKS.md` | one feature's task state, when a new feature is planned (none is live now) |

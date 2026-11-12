@@ -20,7 +20,7 @@ const LEGACY_TEAM_IDS = ["platform", "web-app", "mobile", "data-platform"] as co
  * document per pre-existing legacy team id, using that exact literal
  * string as the Firestore document ID (never a derived/invented ID), and
  * `name` set to the same string initially
- * (docs/features/team-management/SPEC.md — Architecture decisions →
+ * (docs/archive/features/team-management/SPEC.md — Architecture decisions →
  * "Continuity with the existing static team list"). This is a one-time
  * seed-migration constant, kept separate from the pulse-survey's dynamic
  * runtime team source (`list-active-teams.ts`), which never reads it.

@@ -37,7 +37,7 @@ const RELATIONSHIP_LABELS: Record<TeamOverviewEntry["relationship"], string> =
 const PARENT_SUPPLIED_RESULT: TeamsOverviewFetchResult = { status: "ok", teams: [] };
 
 /**
- * Authenticated `/teams` overview (docs/features/team-management/SPEC.md —
+ * Authenticated `/teams` overview (docs/archive/features/team-management/SPEC.md —
  * BR-11 through BR-13, BR-23). Uses this feature's established client-side
  * auth-state pattern: the client holds the Firebase ID token (no server
  * session) and sends it to `GET /api/teams` on each auth-state change. This

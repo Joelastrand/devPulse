@@ -6,7 +6,7 @@ const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
  * Admin-only, one-time (safe-to-repeat) seed endpoint for the four legacy
- * team ids (`LEGACY_TEAM_SEEDS`, docs/features/team-management/SPEC.md —
+ * team ids (`LEGACY_TEAM_SEEDS`, docs/archive/features/team-management/SPEC.md —
  * TASK-006). Never invoked automatically by any request path; an app
  * admin triggers it explicitly. Kept thin — authorization, idempotency,
  * and persistence live in `seedLegacyTeams`

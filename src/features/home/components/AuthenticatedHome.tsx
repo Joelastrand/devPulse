@@ -29,7 +29,7 @@ const copy = authenticatedHomeCopy;
 const LOADING: { phase: "loading" } = { phase: "loading" };
 
 /**
- * Authenticated home (docs/design/references/03-app-home.png, visual-redesign
+ * Authenticated home (docs/archive/design/references/03-app-home.png, visual-redesign
  * SPEC BR-12). Rendered only inside `AppShell` after the client has a signed-in
  * token. Every value comes from an existing read the viewer may already make.
  * Each section loads and fails on its own, so one failed read never hides

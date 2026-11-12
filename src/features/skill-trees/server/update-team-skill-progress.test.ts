@@ -1,3 +1,6 @@
+import { stageOfProgressUpdate } from "../domain/skill-tree-test-fixtures";
+import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../domain/skill-tree-test-fixtures";
+stubSkillTreeEncryptionKey();
 import { describe, expect, it, vi } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type {
@@ -71,8 +74,8 @@ function fakeProgressStore(data: Record<string, unknown> | undefined): FakeProgr
 
 function fakeTreeReader(data: Record<string, unknown> | undefined): SkillTreeReader {
   return {
-    async get(): Promise<UpdateTeamSkillProgressDocSnapshot> {
-      return { exists: data !== undefined, data: () => data };
+    async get(treeId): Promise<UpdateTeamSkillProgressDocSnapshot> {
+      return { exists: data !== undefined, data: () => (data === undefined ? undefined : sealedSkillTreeFixture(treeId, data)) };
     },
   };
 }
@@ -95,11 +98,8 @@ describe("updateTeamSkillProgress", () => {
     const result = await updateTeamSkillProgress("token", TEAM_ID, TREE_ID, "node-1", baseDeps({ progress }));
 
     expect(result).toEqual({ ok: true });
-    expect(progress.updates).toEqual([
-      {
-        docId: `${TEAM_ID}__${TREE_ID}`,
-        data: { currentNodeId: "node-1", updatedAt: NOW, updatedBy: ADMIN_UID },
-      },
+    expect(progress.updates.map((u) => ({ docId: u.docId, stage: stageOfProgressUpdate(TEAM_ID, TREE_ID, u.data), updatedAt: u.data.updatedAt, updatedBy: u.data.updatedBy }))).toEqual([
+      { docId: `${TEAM_ID}__${TREE_ID}`, stage: "node-1", updatedAt: NOW, updatedBy: ADMIN_UID },
     ]);
   });
 
@@ -109,7 +109,7 @@ describe("updateTeamSkillProgress", () => {
     const result = await updateTeamSkillProgress("token", TEAM_ID, TREE_ID, "node-0", baseDeps({ progress }));
 
     expect(result).toEqual({ ok: true });
-    expect(progress.updates[0].data.currentNodeId).toBe("node-0");
+    expect(stageOfProgressUpdate(TEAM_ID, TREE_ID, progress.updates[0].data)).toBe("node-0");
   });
 
   it("rejects an unauthenticated caller and attempts no write", async () => {
@@ -263,7 +263,7 @@ describe("updateTeamSkillProgress", () => {
     );
 
     expect(progress.updates[0].data.updatedBy).toBe("admin-2");
-    expect(Object.keys(progress.updates[0].data)).toEqual(["currentNodeId", "updatedAt", "updatedBy"]);
+    expect(Object.keys(progress.updates[0].data)).toEqual(["content", "updatedAt", "updatedBy"]);
   });
 
   it("reports a controlled failure when reading progress fails", async () => {

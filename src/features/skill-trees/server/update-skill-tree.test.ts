@@ -2,6 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type { SkillTreeDocStore, UpdateSkillTreeDeps, UpdateSkillTreeDocSnapshot } from "./update-skill-tree";
 import { updateSkillTree } from "./update-skill-tree";
+import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../domain/skill-tree-test-fixtures";
+import { openSkillTreeDocument } from "../domain/skill-tree-content-codec";
+
+stubSkillTreeEncryptionKey();
 
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_UID = "admin-1";
@@ -45,10 +49,11 @@ function fakeSkillTreeDocStore(data: Record<string, unknown> | undefined): FakeS
   return {
     updates,
     async get(): Promise<UpdateSkillTreeDocSnapshot> {
-      return { exists: data !== undefined, data: () => data };
+      return { exists: data !== undefined, data: () => sealedSkillTreeFixture(TREE_ID, data) };
     },
     async update(treeId, updateData) {
-      updates.push({ treeId, data: updateData });
+      // Recorded opened: the assertions check the plaintext shape; sealing is covered by the storage-boundary test.
+      updates.push({ treeId, data: openSkillTreeDocument(treeId, updateData) as Record<string, unknown> });
     },
   };
 }
@@ -298,7 +303,7 @@ describe("updateSkillTree", () => {
 
   it("reports a controlled failure, not partial success, when the write fails", async () => {
     const docs: SkillTreeDocStore = {
-      get: vi.fn().mockResolvedValue({ exists: true, data: () => existingTreeData() }),
+      get: vi.fn().mockResolvedValue({ exists: true, data: () => sealedSkillTreeFixture(TREE_ID, existingTreeData()) }) ,
       update: vi.fn().mockRejectedValue(new Error("simulated firestore outage")),
     };
 

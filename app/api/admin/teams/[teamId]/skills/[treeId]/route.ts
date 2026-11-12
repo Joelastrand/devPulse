@@ -5,7 +5,7 @@ import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
- * Admin-only "set current stage" / "stop tracking" endpoints (docs/features/
+ * Admin-only "set current stage" / "stop tracking" endpoints (docs/archive/features/
  * team-skill-tree/SPEC.md — TASK-006, BR-27). Kept thin — `teamId`/`treeId`
  * come only from the route params (route-authoritative, never body-supplied);
  * `PATCH`'s body is read for exactly `{nodeId}`. Neither handler adds a

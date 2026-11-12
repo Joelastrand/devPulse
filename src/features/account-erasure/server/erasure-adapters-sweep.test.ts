@@ -1,8 +1,13 @@
+import { sealedPlanFixture, openedPlanFixture, stubRoadmapKey } from "../../roadmap/domain/roadmap-item-test-fixtures";
+stubRoadmapKey();
+import { randomBytes } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeAdminFirestore } from "./admin-firestore.test-helper";
 import { createSweepCounter, sweepCounterKeys, sweepKeyOf } from "./erasure-adapters-sweep";
 import { inventorySweeps } from "./inventory";
 import type { InventorySweep } from "./inventory";
+import { invitationEmailIndex } from "../../teams/domain/team-invitation-content-codec";
+vi.stubEnv("ENCRYPTION_KEY", randomBytes(32).toString("base64"));
 
 // TASK-038 / BR-5: runtime coverage of the production residual counter over the Admin Firestore recording double.
 
@@ -39,7 +44,7 @@ describe("production residual counter", () => {
   it("fails closed when an e-mail-bound query has no normalized e-mail (no silent zero)", async () => {
     const counter = createSweepCounter();
     await expect(
-      counter.countMatches(sweep("teamInvitations", { kind: "fieldEquals", field: "email", value: "email" }), { uid: UID }),
+      counter.countMatches(sweep("teamInvitations", { kind: "fieldEquals", field: "emailIndex", value: "email" }), { uid: UID }),
     ).rejects.toThrow("normalized e-mail is required");
     expect(db.reads).toEqual([]);
   });
@@ -49,7 +54,7 @@ describe("production residual counter", () => {
     db.docs.set(`teamMemberships/${UID}__t1`, { uid: UID });
     db.docs.set(`teamMemberships/${UID}__t2`, {});
     db.docs.set(`teamMemberships/${OTHER}__t1`, {});
-    db.docs.set(`teamInvitations/t1__${EMAIL}`, { teamId: "t1", status: "pending" });
+    db.docs.set(`teamInvitations/t1__${invitationEmailIndex(EMAIL)}`, { teamId: "t1", status: "pending" });
     db.docs.set(`teamInvitations/t2__other@example.com`, {});
     const counter = createSweepCounter();
 
@@ -75,15 +80,15 @@ describe("production residual counter", () => {
   it("counts a roadmap ownerRef that still names a membership of the uid, and drops to zero once nulled", async () => {
     db.docs.set(`teamMemberships/${UID}__t1`, { uid: UID, teamId: "t1", memberRef: "ref-1" });
     db.docs.set(`teamMemberships/${UID}__legacy`, { teamId: "legacy", memberRef: "ref-legacy" }); // no uid field
-    db.docs.set("roadmapItems/t1__tree", { teamId: "t1", ownerRef: "ref-1" });
-    db.docs.set("roadmapItems/legacy__tree", { teamId: "legacy", ownerRef: "ref-legacy" });
+    db.docs.set("roadmapItems/t1__tree", sealedPlanFixture("t1", "tree", { ownerRef: "ref-1" }));
+    db.docs.set("roadmapItems/legacy__tree", sealedPlanFixture("legacy", "tree", { ownerRef: "ref-legacy" }));
     const counter = createSweepCounter();
     const perMembership = sweep("roadmapItems", { kind: "perMembership", field: "ownerRef" });
 
     expect(await counter.countMatches(perMembership, binding)).toBe(2);
 
-    db.docs.set("roadmapItems/t1__tree", { teamId: "t1", ownerRef: null });
-    db.docs.set("roadmapItems/legacy__tree", { teamId: "legacy", ownerRef: null });
+    db.docs.set("roadmapItems/t1__tree", sealedPlanFixture("t1", "tree"));
+    db.docs.set("roadmapItems/legacy__tree", sealedPlanFixture("legacy", "tree"));
     expect(await counter.countMatches(perMembership, binding)).toBe(0);
   });
 
@@ -111,7 +116,7 @@ describe("sweep counter completeness (fail closed on a missing counter)", () => 
 
 describe("residual counter: an invitation whose id only coincides with the erased address is not a residual", () => {
   it("does not count a suffix match whose stored e-mail is another person's (TASK-038 finding 2)", async () => {
-    db.docs.set(`teamInvitations/t9__a__${EMAIL}`, { teamId: "t9", email: `a__${EMAIL.replace("erased", "stranger")}`, status: "pending" });
+    db.docs.set(`teamInvitations/t9__a__${EMAIL}`, { teamId: "t9", emailIndex: invitationEmailIndex(`a__${EMAIL.replace("erased", "stranger")}`), status: "pending" });
     const count = await createSweepCounter().countMatches(
       sweep("teamInvitations", { kind: "docIdEndsWith", value: "normalizedEmail" }),
       binding,

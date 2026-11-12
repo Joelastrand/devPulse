@@ -1,3 +1,4 @@
+import { openTeamDocument } from "../domain/team-content-codec";
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
@@ -23,7 +24,7 @@ function getDefaultCollection(): TeamListCollection {
         const data = doc.data();
         return {
           teamId: doc.id,
-          name: data.name,
+          name: (openTeamDocument(doc.id, data) as { name?: unknown } | null | undefined)?.name,
           status: data.status,
           createdAt: data.createdAt?.toDate?.() ?? data.createdAt,
           createdBy: data.createdBy,
@@ -45,7 +46,7 @@ export interface ListTeamsDeps {
 
 /**
  * Lists every team, including `disabled` ones — an app-admin-only view
- * (docs/features/team-management/SPEC.md — TASK-009's "see every team,
+ * (docs/archive/features/team-management/SPEC.md — TASK-009's "see every team,
  * including disabled ones"). Not for non-admin use: `listActiveTeams`
  * (`/teams`) is a separate, more restricted operation added by a later task.
  */

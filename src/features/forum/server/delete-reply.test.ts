@@ -1,8 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { EncryptedPayload } from "../../../lib/encryption/encryption";
-import { decrypt, encrypt } from "../../../lib/encryption/encryption";
-import * as encryptionModule from "../../../lib/encryption/encryption";
+import { decryptRecord, encryptRecord, type RecordEnvelope } from "../../../lib/encryption/record-envelope";
+import * as recordEnvelopeModule from "../../../lib/encryption/record-envelope";
+import { forumReplyContext } from "../domain/forum-reply";
+import { forumThreadContext } from "../domain/forum-thread";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import { createReply } from "./create-reply";
 import type { ActiveForumReply } from "../domain/forum-reply";
@@ -49,7 +50,8 @@ function activeReplyRecord(overrides: Record<string, unknown> = {}): Record<stri
     ciphertext: "ciphertext-bytes",
     iv: "iv-bytes",
     authTag: "auth-tag-bytes",
-    keyVersion: "v1",
+    keyVersion: "v2",
+    keyId: "k1",
     createdAt: new Date("2026-08-02T00:00:00Z"),
     ...overrides,
   };
@@ -368,7 +370,7 @@ describe("deleteReply", () => {
         threadId: THREAD_ID,
         authorUid: OTHER_MEMBER_UID,
         createdAt: new Date("2026-08-02T12:00:00Z"),
-        ...encrypt("Untouched reply"),
+        ...encryptRecord("Untouched reply", forumReplyContext(TEAM_ID, THREAD_ID, "reply-other")),
       },
     };
     const targetReply = fakeForumReplyDocStore(activeReplyRecord());
@@ -387,7 +389,7 @@ describe("deleteReply", () => {
           teamId: TEAM_ID,
           authorUid: AUTHOR_UID,
           createdAt: new Date("2026-08-01T00:00:00Z"),
-          ...encrypt(JSON.stringify({ title: "T", body: "B" })),
+          ...encryptRecord(JSON.stringify({ title: "T", body: "B" }), forumThreadContext(TEAM_ID, THREAD_ID)),
         };
       },
     };
@@ -423,7 +425,7 @@ describe("deleteReply", () => {
     // Mirrors `challenge-management-concurrency.test.ts`'s established
     // fake: `get()` always returns the original, never-mutated snapshot (as
     // if both calls' reads happened before either call's write landed),
-    // modeling the real non-transactional race (docs/features/team-forum/
+    // modeling the real non-transactional race (docs/archive/features/team-forum/
     // SPEC.md — "Edge cases and concurrency") rather than relying on
     // incidental microtask-scheduling order.
     const initial = activeReplyRecord();
@@ -489,7 +491,7 @@ describe("deleteReply", () => {
   });
 
   it("never calls decrypt on any path", async () => {
-    const decryptSpy = vi.spyOn(encryptionModule, "decrypt");
+    const decryptSpy = vi.spyOn(recordEnvelopeModule, "decryptRecord");
     const docs = fakeForumReplyDocStore(activeReplyRecord());
     await deleteReply("token", TEAM_ID, THREAD_ID, REPLY_ID, baseDeps({ docs }));
 
@@ -497,7 +499,7 @@ describe("deleteReply", () => {
   });
 
   it("never calls decrypt on the idempotent tombstone-retry path either — a different non-admin caller retrying an already-tombstoned reply never decrypts anything (there is nothing left to decrypt)", async () => {
-    const decryptSpy = vi.spyOn(encryptionModule, "decrypt");
+    const decryptSpy = vi.spyOn(recordEnvelopeModule, "decryptRecord");
     const docs = fakeForumReplyDocStore(tombstoneReplyRecord());
     const result = await deleteReply(
       "token",
@@ -565,9 +567,12 @@ describe("deleteReply", () => {
       const docs = new Map<string, Record<string, unknown>>();
       let counter = 0;
       return {
-        async add(record: ActiveForumReply) {
+        reserveId() {
           counter += 1;
-          docs.set(`reply-${counter}`, { ...record });
+          return `reply-${counter}`;
+        },
+        create(replyId: string, record: ActiveForumReply) {
+          docs.set(replyId, { ...record });
         },
         async listOrderedForThread(threadId: string) {
           return [...docs.entries()]
@@ -603,7 +608,7 @@ describe("deleteReply", () => {
             teamId: TEAM_ID,
             authorUid: AUTHOR_UID,
             createdAt: new Date("2026-08-01T00:00:00Z"),
-            ...encrypt(JSON.stringify({ title: "T", body: "B" })),
+            ...encryptRecord(JSON.stringify({ title: "T", body: "B" }), forumThreadContext(TEAM_ID, THREAD_ID)),
           };
         },
       };
@@ -632,7 +637,7 @@ describe("deleteReply", () => {
                   teamId: TEAM_ID,
                   authorUid: AUTHOR_UID,
                   createdAt: new Date("2026-08-01T00:00:00Z"),
-                  ...encrypt(JSON.stringify({ title: "T", body: "B" })),
+                  ...encryptRecord(JSON.stringify({ title: "T", body: "B" }), forumThreadContext(TEAM_ID, THREAD_ID)),
                 };
               },
             },
@@ -651,10 +656,10 @@ describe("deleteReply", () => {
       });
       expect(deleted).toEqual({ ok: true });
 
-      const decryptCalls: EncryptedPayload[] = [];
-      const decryptSpy = (payload: EncryptedPayload) => {
-        decryptCalls.push(payload);
-        return decrypt(payload);
+      const decryptCalls: RecordEnvelope[] = [];
+      const decryptSpy = (envelope: RecordEnvelope, context: string) => {
+        decryptCalls.push(envelope);
+        return decryptRecord(envelope, context);
       };
 
       const detail = await getThreadWithReplies("token", TEAM_ID, THREAD_ID, {

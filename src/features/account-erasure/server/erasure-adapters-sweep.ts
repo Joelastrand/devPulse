@@ -1,5 +1,7 @@
+import { roadmapOwnerIndex } from "../../roadmap/domain/roadmap-item-content-codec";
 import "server-only";
 import { FieldPath, type Firestore } from "firebase-admin/firestore";
+import { invitationEmailIndex } from "../../teams/domain/team-invitation-content-codec";
 import { invitationBelongsToErasedPerson } from "./invitation-match";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import type { InventorySweep } from "./inventory";
@@ -84,7 +86,7 @@ const COUNTERS: ReadonlyMap<string, Counter> = new Map<string, Counter>([
     let total = 0;
     for (const membership of await membershipsOf(db, b.uid)) {
       if (typeof membership.teamId !== "string" || typeof membership.memberRef !== "string") continue;
-      total += (await db.collection("roadmapItems").where("teamId", "==", membership.teamId).where("ownerRef", "==", membership.memberRef).select().get()).size;
+      total += (await db.collection("roadmapItems").where("teamId", "==", membership.teamId).where("ownerRefIndex", "==", roadmapOwnerIndex(membership.teamId, membership.memberRef)).select().get()).size;
     }
     return total;
   }],
@@ -93,13 +95,15 @@ const COUNTERS: ReadonlyMap<string, Counter> = new Map<string, Counter>([
     (await db.collection("teamAccessRequests").where(FieldPath.documentId(), ">=", `${b.uid}__`).where(FieldPath.documentId(), "<", `${b.uid}__${PREFIX_END}`).select().get()).size],
   ["teamAccessRequests|fieldEquals|uid", async (db, b) => (await db.collection("teamAccessRequests").where("uid", "==", b.uid).select().get()).size],
   ["teamAccessRequests|fieldEquals|resolvedBy", async (db, b) => (await db.collection("teamAccessRequests").where("resolvedBy", "==", b.uid).select().get()).size],
-  // I-11: invitations by e-mail, document-id suffix, resolvedUid, invitedBy.
-  ["teamInvitations|fieldEquals|email", async (db, b) => (await db.collection("teamInvitations").where("email", "==", requireEmail(b)).select().get()).size],
+  // I-11: invitations by the blind index of the e-mail (the address itself is sealed), the document-id index tail, resolvedUid, invitedBy.
+  ["teamInvitations|fieldEquals|emailIndex", async (db, b) => (await db.collection("teamInvitations").where("emailIndex", "==", invitationEmailIndex(requireEmail(b))).select().get()).size],
   ["teamInvitations|docIdEndsWith|normalizedEmail", async (db, b) => {
     // Same ownership rule as the step (invitation-match.ts): a suffix match counts only when it belongs to the erased person.
     const email = requireEmail(b);
-    const all = await db.collection("teamInvitations").get();
-    return all.docs.filter((doc) => invitationBelongsToErasedPerson(doc.id, doc.data() as Record<string, unknown>, email, b.uid)).length;
+    const index = invitationEmailIndex(email);
+    const keys = await db.collection("teamInvitations").select().get();
+    const snapshots = await Promise.all(keys.docs.filter((doc) => doc.id.endsWith(`__${index}`)).map((doc) => doc.ref.get()));
+    return snapshots.filter((snap) => snap.exists && invitationBelongsToErasedPerson(snap.id, snap.data() as Record<string, unknown>, email, b.uid)).length;
   }],
   ["teamInvitations|fieldEquals|resolvedUid", async (db, b) => (await db.collection("teamInvitations").where("resolvedUid", "==", b.uid).select().get()).size],
   ["teamInvitations|fieldEquals|invitedBy", async (db, b) => (await db.collection("teamInvitations").where("invitedBy", "==", b.uid).select().get()).size],

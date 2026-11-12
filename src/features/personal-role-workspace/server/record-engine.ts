@@ -1,7 +1,7 @@
 import "server-only";
 import { ENVELOPE_MAX_BYTES } from "../domain/constants";
 import type { RecordCollection, RecordSchema } from "../domain/record-schema";
-import { checkStoredKey, decodeSourceRecord, encodeSourceRecord, readEnvelope, type SourceEnvelope } from "./source-record-codec";
+import { checkStoredKey, decodeSourceRecord, encodeSourceRecord, readEnvelope, sourceRecordContext, type SourceEnvelope } from "./source-record-codec";
 import { writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import type { PersonalRecordStore, RawRecord, RecordTransaction } from "./personal-record-store";
 
@@ -61,7 +61,7 @@ function exactKeys(value: Record<string, unknown>, expected: readonly string[]):
 }
 
 /** Classifies one raw document in the fixed order: envelope shape, key, authenticated decryption, plaintext, schema. */
-export function readStoredRecord<C>(raw: RawRecord, schema: RecordSchema<C>): StoredRead<C> {
+export function readStoredRecord<C>(raw: RawRecord, schema: RecordSchema<C>, ownerUid: string): StoredRead<C> {
   const { data } = raw;
   const envelope = readEnvelope(data);
   if (envelope === null) return { kind: "malformed" };
@@ -72,7 +72,7 @@ export function readStoredRecord<C>(raw: RawRecord, schema: RecordSchema<C>): St
   const updatedAt = data.updatedAt;
   if (!(createdAt instanceof Date) || !(updatedAt instanceof Date)) return { kind: "malformed" };
 
-  const decoded = decodeSourceRecord(envelope);
+  const decoded = decodeSourceRecord(envelope, sourceRecordContext(ownerUid, schema.collection, raw.id));
   if (!decoded.ok) {
     if (decoded.error === "key_unavailable" || decoded.error === "key_mismatch") return { kind: "key", error: decoded.error };
     if (decoded.error === "payload_unauthenticated") return { kind: "unavailable" };
@@ -105,7 +105,7 @@ export async function listRecords<C, DTO>(
   const truncated = raw.length > schema.cap;
   const items: RecordListItem<DTO>[] = [];
   for (const record of raw.slice(0, schema.cap)) {
-    const read = readStoredRecord(record, schema);
+    const read = readStoredRecord(record, schema, ownerUid);
     if (read.kind === "key") return { ok: false, error: "persistence_failed" };
     if (read.kind === "malformed") items.push({ kind: "malformed", id: record.id });
     else if (read.kind === "unavailable") items.push({ kind: "unavailable" });
@@ -140,19 +140,21 @@ export async function createRecord<C, DTO>(
   }
 
   const { payload, plain } = schema.split(parsed.value);
-  const encoded = encodeSourceRecord(payload);
-  if (!encoded.ok) return { ok: false, error: "persistence_failed" };
-  const document = { ...encoded.envelope, ...plain };
-  if (envelopeBytes(document) > ENVELOPE_MAX_BYTES) return { ok: false, error: "payload_too_large" };
-
   const now = deps.clock();
   try {
-    const id = await deps.store.runFenced(ownerUid, async (tx) => {
+    type Created = { ok: true; id: string } | { ok: false; error: RecordError };
+    const created = await deps.store.runFenced<Created>(ownerUid, async (tx) => {
+      // The id is reserved before sealing: the record is bound to its own document by AAD (PR-SI-5).
       const newId = tx.newId(schema.collection);
+      const encoded = encodeSourceRecord(payload, sourceRecordContext(ownerUid, schema.collection, newId));
+      if (!encoded.ok) return { ok: false, error: "persistence_failed" };
+      const document = { ...encoded.envelope, ...plain };
+      if (envelopeBytes(document) > ENVELOPE_MAX_BYTES) return { ok: false, error: "payload_too_large" };
       tx.set(schema.collection, newId, { ...document, createdAt: now, updatedAt: now });
-      return newId;
+      return { ok: true, id: newId };
     });
-    return { ok: true, dto: toDto(id, parsed.value, now, now) };
+    if (!created.ok) return created;
+    return { ok: true, dto: toDto(created.id, parsed.value, now, now) };
   } catch (error) {
     return { ok: false, error: writeRefusalFor(error) };
   }
@@ -188,7 +190,7 @@ async function updateInTransaction<C, DTO>(
   const current = await tx.get(schema.collection, id);
   if (current === undefined) return { ok: false, error: "not_found" };
 
-  const read = readStoredRecord({ id, data: current }, schema);
+  const read = readStoredRecord({ id, data: current }, schema, ownerUid);
   if (read.kind === "key") return { ok: false, error: "persistence_failed" };
   if (read.kind !== "ok") return { ok: false, error: "record_unavailable" };
 
@@ -198,7 +200,7 @@ async function updateInTransaction<C, DTO>(
   if (!(await deps.checkLinks(ownerUid, parsed.value))) return { ok: false, error: "invalid_reference" };
 
   const { payload, plain } = schema.split(parsed.value);
-  const encoded = encodeSourceRecord(payload);
+  const encoded = encodeSourceRecord(payload, sourceRecordContext(ownerUid, schema.collection, id));
   if (!encoded.ok) return { ok: false, error: "persistence_failed" };
   const document = { ...encoded.envelope, ...plain };
   if (envelopeBytes(document) > ENVELOPE_MAX_BYTES) return { ok: false, error: "payload_too_large" };

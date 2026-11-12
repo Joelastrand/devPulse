@@ -35,7 +35,7 @@ export async function listSelectableEvidenceForOwner(
   try {
     const raw = await deps.store.getOwner(ownerUid, conversationId);
     if (raw === undefined) return { ok: false, error: "conversation_not_found" };
-    const classification = classifyOwnerDocument(raw, deps.codec);
+    const classification = classifyOwnerDocument(raw, deps.codec, { ownerUid, conversationId });
     if (classification.kind !== "valid") return { ok: false, error: "conversation_not_found" };
 
     const list = await deps.reader.list(ownerUid);

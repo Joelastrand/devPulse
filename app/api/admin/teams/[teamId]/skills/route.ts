@@ -4,7 +4,7 @@ import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
- * Admin-only "start tracking" endpoint (docs/features/team-skill-tree/
+ * Admin-only "start tracking" endpoint (docs/archive/features/team-skill-tree/
  * SPEC.md — TASK-006, BR-27). Kept thin — `teamId` comes only from the route
  * param (route-authoritative, never body-supplied); the request body is read
  * for exactly `{treeId}` and nothing else ever reaches `startTeamSkillTracking`

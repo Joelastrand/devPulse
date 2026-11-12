@@ -35,7 +35,8 @@ describe("isValidChallenge", () => {
     ciphertext: "ciphertext-base64",
     iv: "iv-base64",
     authTag: "auth-tag-base64",
-    keyVersion: "v1",
+    keyVersion: "v2",
+    keyId: "k1",
     submittedAt: new Date("2026-06-01T00:00:00.000Z"),
   };
 
@@ -82,10 +83,19 @@ describe("isValidChallenge", () => {
     ).toBe(false);
   });
 
-  it("rejects a syntactically-valid-but-wrong keyVersion, not just any string", () => {
+  it("rejects a retired v1 envelope, a wrong keyId, and a missing keyId", () => {
     expect(
-      isValidChallenge({ ...valid, keyVersion: "v2" }, { challengeId: "challenge-1" }),
+      isValidChallenge({ ...valid, keyVersion: "v1" }, { challengeId: "challenge-1" }),
     ).toBe(false);
+    expect(
+      isValidChallenge({ ...valid, keyId: "k2" }, { challengeId: "challenge-1" }),
+    ).toBe(false);
+    expect(
+      isValidChallenge({ ...valid, keyId: undefined }, { challengeId: "challenge-1" }),
+    ).toBe(false);
+  });
+
+  it("rejects a syntactically-valid-but-wrong keyVersion, not just any string", () => {
     expect(
       isValidChallenge({ ...valid, keyVersion: "" }, { challengeId: "challenge-1" }),
     ).toBe(false);

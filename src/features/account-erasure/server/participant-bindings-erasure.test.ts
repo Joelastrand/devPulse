@@ -8,6 +8,7 @@ vi.mock("server-only", () => ({}));
 import { createFakeConversationStore, type FakeConversationStore } from "../../development-conversations/server/fake-conversation-store";
 import { createFakeContentCodec, type FakeContentCodec } from "../../development-conversations/server/fake-content-codec";
 import { seedOwnerConversation, OWNER_UID, PARTICIPANT_UID, NOW } from "../../development-conversations/server/owner-read-test-support";
+import { conversationContext } from "../../development-conversations/domain/stored-owner-conversation";
 import type { ConversationStore } from "../../development-conversations/server/conversation-store-types";
 import { ErasureStepFailure } from "./erasure-runner";
 import {
@@ -77,14 +78,15 @@ async function seedBound(
 }
 
 /** The stored envelope decoded with the codec, for asserting the preserved content. */
-function decodedOf(codec: FakeContentCodec, raw: Record<string, unknown>) {
+function decodedOf(codec: FakeContentCodec, raw: Record<string, unknown>, conversationId = CONVERSATION) {
   const decoded = codec.decodeContent({
     ciphertext: raw.ciphertext as string,
     iv: raw.iv as string,
     authTag: raw.authTag as string,
-    keyVersion: raw.keyVersion as "v1",
+    keyVersion: raw.keyVersion as "v2",
+    keyId: "k1",
     keyCheck: raw.keyCheck as string,
-  });
+  }, conversationContext(OWNER_UID, conversationId));
   if (!decoded.ok) throw new Error("stored payload does not decode");
   return decoded.content;
 }
@@ -211,7 +213,7 @@ describe("participant binding cleanup on a conversation owned by someone else (T
       ciphertext: Buffer.from("no-such-handle").toString("base64"),
       iv: "AAAAAAAAAAAAAAAA",
       authTag: "AAAAAAAAAAAAAAAAAAAAAA==",
-      keyVersion: "v1",
+      keyVersion: "v2", keyId: "k1",
       keyCheck: "A".repeat(43) + "=",
     });
     store.seedRawParticipation(PARTICIPANT_UID, CONVERSATION, { ownerUid: OWNER_UID, invitedAt: NOW });
@@ -339,7 +341,7 @@ describe("participant bindings step (TASK-019)", () => {
     expect(await discovery.listBoundTo(OTHER_PARTICIPANT, 10)).toEqual([{ ownerUid: OWNER_UID, conversationId: "conv-c" }]);
     const other = await ownerRaw(store, "conv-c");
     expect(other.participantUid).toBe(OTHER_PARTICIPANT);
-    expect(decodedOf(codec, other).participantNotes).toBe("keep");
+    expect(decodedOf(codec, other, "conv-c").participantNotes).toBe("keep");
   });
 
   it("reports done when no binding to the erased person remains", async () => {

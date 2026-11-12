@@ -5,7 +5,7 @@ import { authRefusalStatus, isAuthRefusal } from "../../../src/features/auth/ser
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
- * The `/teams` overview endpoint (docs/features/team-management/SPEC.md —
+ * The `/teams` overview endpoint (docs/archive/features/team-management/SPEC.md —
  * BR-11 through BR-13). Kept thin — authorization, invitation resolution,
  * and relationship computation all live in `getTeamsOverview`. Identity
  * comes only from the verified bearer token, never a client-supplied

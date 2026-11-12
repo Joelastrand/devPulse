@@ -1,3 +1,5 @@
+import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../../skill-trees/domain/skill-tree-test-fixtures";
+stubSkillTreeEncryptionKey();
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GOAL_DTO_KEYS, GOAL_PERSISTED_KEYS } from "../domain/goal-constants";
 import { createPersonalGoal } from "./create-personal-goal";
@@ -32,7 +34,8 @@ const treeData = (name: string) => ({
 });
 
 /** Catalog double; the selector list must never be used by create. */
-function catalog(trees: RawCatalogDoc[] = []) {
+function catalog(plain: RawCatalogDoc[] = []) {
+  const trees: RawCatalogDoc[] = plain.map((d) => ({ id: d.id, data: sealedSkillTreeFixture(d.id, d.data) as Record<string, unknown> }));
   const calls = { list: 0, get: [] as string[], many: 0 };
   const reader: SkillCatalogReader = {
     async listOrderedByCreatedAt() {

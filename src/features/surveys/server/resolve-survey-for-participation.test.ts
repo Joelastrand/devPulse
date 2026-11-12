@@ -1,3 +1,5 @@
+import { persistedSurveyFixture, stubSurveyEncryptionKey } from "./survey-test-fixtures";
+stubSurveyEncryptionKey();
 import { getBuiltInTemplate } from "../domain/templates";
 const TEAM_PULSE_QUESTIONS = getBuiltInTemplate("team-pulse").questions;
 import { describe, expect, it, vi } from "vitest";
@@ -62,7 +64,9 @@ function fakeCollections(
     calls,
     async getSurvey(surveyId) {
       calls.survey += 1;
-      return state.surveys?.[surveyId];
+      const doc = state.surveys?.[surveyId] as Record<string, unknown> | undefined;
+      // A document without a team cannot be sealed; it is returned as-is so the operation refuses it.
+      return doc !== undefined && typeof doc.teamId === "string" ? persistedSurveyFixture(surveyId, doc) : doc;
     },
     async getTeam(teamId) {
       calls.team += 1;
@@ -605,7 +609,7 @@ describe("resolveSurveyForParticipation", () => {
 
     it("reports a controlled read_failed result on a team read failure", async () => {
       const collections: ResolveSurveyForParticipationCollections = {
-        getSurvey: vi.fn().mockResolvedValue(surveyDoc({ accessMode: "public" })),
+        getSurvey: vi.fn().mockResolvedValue(persistedSurveyFixture(SURVEY_ID, surveyDoc({ accessMode: "public" }))),
         getTeam: vi.fn().mockRejectedValue(new Error("boom")),
         getMembership: vi.fn(),
       };
@@ -617,7 +621,7 @@ describe("resolveSurveyForParticipation", () => {
 
     it("reports a controlled read_failed result on a membership read failure", async () => {
       const collections: ResolveSurveyForParticipationCollections = {
-        getSurvey: vi.fn().mockResolvedValue(surveyDoc({ accessMode: "authenticated" })),
+        getSurvey: vi.fn().mockResolvedValue(persistedSurveyFixture(SURVEY_ID, surveyDoc({ accessMode: "authenticated" }))),
         getTeam: vi.fn(),
         getMembership: vi.fn().mockRejectedValue(new Error("boom")),
       };

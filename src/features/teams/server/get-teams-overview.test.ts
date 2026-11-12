@@ -1,3 +1,4 @@
+import { toPersistedTeam } from "../domain/team-content-codec";
 import { describe, expect, it, vi } from "vitest";
 import type { DecodedIdToken } from "firebase-admin/auth";
 import type { ActiveTeamsCollection } from "./list-active-teams";
@@ -52,7 +53,10 @@ function fakeOverviewCollection(seed: {
       return seed.accessRequests ?? [];
     },
     async getTeam(teamId) {
-      return seed.teams?.[teamId];
+      const doc = seed.teams?.[teamId];
+      return typeof doc === "object" && doc !== null && typeof (doc as { name?: unknown }).name === "string"
+        ? toPersistedTeam(teamId, doc as Record<string, unknown> & { name: string })
+        : doc;
     },
   };
 }

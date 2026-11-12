@@ -1,3 +1,4 @@
+import { sealedProfileFixture } from "../domain/user-profile-test-fixtures";
 import { describe, expect, it, vi } from "vitest";
 import { DISPLAY_NAME_BATCH_SIZE, getDisplayNames, type ProfileBatchReader } from "./get-display-names";
 
@@ -18,7 +19,7 @@ function fakeReader(docs: Record<string, unknown>) {
   const reader: ProfileBatchReader = {
     async readBatch(uids) {
       batches.push([...uids]);
-      return uids.map((uid) => ({ uid, data: docs[uid] }));
+      return uids.map((uid) => ({ uid, data: sealedProfileFixture(uid, docs[uid]) }));
     },
   };
   return { reader, batches };

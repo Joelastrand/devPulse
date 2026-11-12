@@ -20,7 +20,7 @@ const VALUE_ICONS = [TrendingUp, Layers, Target] as const;
 const TRUST_ICONS = [Shield, Users] as const;
 
 /**
- * Home (docs/features/managed-surveys/SPEC.md — BR-38, BR-39). The route is
+ * Home (docs/archive/features/managed-surveys/SPEC.md — BR-38, BR-39). The route is
  * shared by both audiences, so it chooses the shell from the client's own
  * token:
  *

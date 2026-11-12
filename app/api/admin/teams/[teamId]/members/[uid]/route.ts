@@ -33,7 +33,7 @@ export async function DELETE(
 }
 
 /**
- * Admin-only team-role endpoint (docs/features/member-identity-and-team-roles/
+ * Admin-only team-role endpoint (docs/archive/features/member-identity-and-team-roles/
  * SPEC.md — BR-18). Kept thin — authorization, the active-team gate and
  * persistence live in `setTeamMemberRole`. `teamId`/`uid` come from the URL
  * path but are never authorization evidence; the body is accepted only as

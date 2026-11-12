@@ -14,7 +14,7 @@ describe("AdminTeamsPage", () => {
     cleanup();
   });
 
-  it("renders at the wide PageShell width (docs/features/ui-refresh/SPEC.md — BR-5)", () => {
+  it("renders at the wide PageShell width (docs/archive/features/ui-refresh/SPEC.md — BR-5)", () => {
     render(<AdminTeamsPage />);
 
     expect(screen.getByRole("main").closest(".max-w-main")).not.toBeNull();

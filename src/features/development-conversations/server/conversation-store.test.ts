@@ -40,7 +40,7 @@ function ownerDoc(): OwnerDocumentWrite {
     ciphertext: "synthetic-ciphertext",
     iv: "synthetic-iv",
     authTag: "synthetic-tag",
-    keyVersion: "v1",
+    keyVersion: "v2", keyId: "k1",
     keyCheck: "synthetic-key-check",
   };
 }
@@ -70,7 +70,7 @@ describe("Admin conversation store", () => {
   });
 
   describe("write shape", () => {
-    it("persists exactly the sixteen canonical keys, the dates as Timestamps, and the envelope as given", async () => {
+    it("persists exactly the seventeen canonical keys, the dates as Timestamps, and the envelope as given", async () => {
       await getDefaultConversationStore().runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.createOwner("owner-1", "conv-1", ownerDoc()));
       const stored = double.documents.get(OWNER_PATH) ?? {};
       expect(Object.keys(stored).sort()).toEqual(
@@ -81,6 +81,7 @@ describe("Admin conversation store", () => {
           "createdAt",
           "iv",
           "keyCheck",
+          "keyId",
           "keyVersion",
           "participantAcceptedAt",
           "participantInvitedAt",
@@ -96,7 +97,7 @@ describe("Admin conversation store", () => {
       expect(stored.createdAt).toBeInstanceOf(Timestamp);
       expect(stored.participantInvitedAt).toBeInstanceOf(Timestamp);
       expect(stored.keyCheck).toBe("synthetic-key-check");
-      expect(stored.keyVersion).toBe("v1");
+      expect(stored.keyVersion).toBe("v2");
     });
 
     it("persists the index as exactly ownerUid and a Timestamp invitedAt", async () => {

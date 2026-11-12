@@ -16,7 +16,7 @@ const LINK_CLASSNAME =
   "rounded-control px-2 py-2 text-label font-medium text-text-secondary md:px-3 transition-colors duration-micro ease-standard hover:bg-surface-subtle hover:text-text-primary";
 
 /**
- * Top bar for signed-out routes (docs/features/product-experience/SPEC.md —
+ * Top bar for signed-out routes (docs/archive/features/product-experience/SPEC.md —
  * Application shell). It offers only Hjem, Logg inn and Opprett konto. It reads
  * no auth state, so it cannot show signed-in navigation to a signed-out
  * viewer, and it cannot fail open.

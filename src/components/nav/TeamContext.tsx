@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 
 /**
  * Team name shown as context in the shell on team routes
- * (docs/features/product-experience/SPEC.md — Application shell). The team page
+ * (docs/archive/features/product-experience/SPEC.md — Application shell). The team page
  * already loads the name, and it announces it here. No request is made for it,
  * and it is not stored anywhere.
  */

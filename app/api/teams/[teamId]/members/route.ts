@@ -5,7 +5,7 @@ import { authRefusalStatus, isAuthRefusal } from "../../../../../src/features/au
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
- * `/teams/[teamId]`'s member-facing roster endpoint (docs/features/
+ * `/teams/[teamId]`'s member-facing roster endpoint (docs/archive/features/
  * member-identity-and-team-roles/SPEC.md — BR-8 through BR-15). `GET` is a
  * thin delegate to `listTeamRoster` — `teamId` comes from the URL path only
  * and is never trusted as authorization evidence on its own; every

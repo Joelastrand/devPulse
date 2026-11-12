@@ -1,5 +1,5 @@
 /**
- * Client gateway for the member-facing team roster (docs/features/member-
+ * Client gateway for the member-facing team roster (docs/archive/features/member-
  * identity-and-team-roles/SPEC.md — BR-8 through BR-15, BR-31): a thin
  * `fetch` wrapper around `GET /api/teams/[teamId]/members`. The public entry
  * shape is exactly `{displayName, isLead, isSelf}` — the parser rebuilds each

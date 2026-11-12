@@ -1,737 +1,178 @@
-# DevPulse — Architecture
+# DevPulse — Architecture (current implementation)
 
-Status labels used below: **decided**, **provisional**, **open question**.
+Source of truth: the repository. Companion documents: [`SECURITY.md`](SECURITY.md) (authorization and privacy),
+[`DATA-MODEL.md`](DATA-MODEL.md) (collections and IDs), [`ROUTES.md`](ROUTES.md) (pages and API).
 
-## High-level shape (decided)
+## 1. Stack
 
-```mermaid
-flowchart TD
-    Browser -->|HTTPS| NextJS[Next.js app]
-    NextJS -->|server-side only| Boundary[Server-side application boundary]
-    Boundary --> Firestore[(Firebase / Firestore)]
+- Next.js 16 App Router (`next` 16.3.x), React 19, strict TypeScript, Tailwind CSS 4, `lucide-react` icons, `recharts`.
+- Firebase: Auth (client SDK for sign-in and sign-up; Admin SDK for token verification), Firestore (Admin SDK only, from
+  server code), emulators for local development. Production project `devpulse-nve`; its `(default)` Firestore database is
+  located in `europe-north2` (Stockholm). Do not change the location: a Firestore location cannot be changed in place.
+- Node cryptography (`node:crypto`) for AES-256-GCM application-level encryption.
+- Tooling: pnpm, Vitest + Testing Library + jsdom (unit and component tests), Playwright (browser specs, run only via
+  `pnpm verify:browser`), ESLint 9 with `eslint-config-next`.
+
+## 2. Repository layout
+
+```text
+app/                       Next.js App Router: pages, layouts and API route handlers only
+  (public)/                 sign-in, sign-up, public team page
+  (survey)/                 survey participation
+  (app)/                    authenticated shell: personal, team, admin pages
+  api/                      JSON route handlers (thin delegates)
+src/
+  features/<feature>/       vertical feature slices (see §4)
+  components/               shared UI primitives (ui/) and navigation shell (nav/)
+  lib/                      genuinely shared infrastructure: firebase/, encryption/, theme/
+browser/                    Playwright specs and emulator seed for browser verification
+scripts/                    one-off and operational scripts (see DEVELOPMENT.md)
+test/                       Vitest setup helpers
+docs/                       this documentation set
+firestore.rules             deny-all client access rules
+firestore.indexes.json      composite indexes
 ```
 
-- Next.js + TypeScript, Firebase, Firestore — **decided**, not to be
-  re-evaluated (see `AGENTS.md` / project constraints).
-- All access to Firestore for sensitive data goes through the server-side
-  boundary (Next.js server code), never directly from the browser client.
-- **Decided, implemented** (Phase 2): Firestore Security Rules
-  (`firestore.rules`) deny all client-SDK reads/writes unconditionally, as
-  defense in depth alongside the Admin-SDK-only server boundary above — see
-  `docs/DEVELOPMENT.md` ("Firestore rules and indexes") for deployment
-  requirements.
+`app/` holds no business logic. Pages compose feature components; route handlers parse the request and call one feature
+operation.
 
-## Authentication and authorization
+## 3. Request path
 
-- Firebase Authentication (email/password) is **implemented** (Phase 2; see
-  `docs/features/results-dashboard/SPEC.md`). SSO/OAuth providers remain
-  **not yet implemented**.
-- Team authorization is enforced **server-side**: a request must prove
-  membership in a team before that team's protected data is returned.
-  A user authorized for Team A must not thereby gain access to Team B's
-  private results — **decided invariant**.
-- **Current model, implemented (`docs/features/team-management/SPEC.md`)**:
-  a Firestore-backed, Firebase-**uid**-keyed `teamMemberships` collection
-  supporting zero/one/many teams per user, and a global app-admin role
-  determined server-side from the Firestore superadmin registry
-  (`superadmins/{uid}`, read per request) for a Firebase-**verified**,
-  revocation-checked identity — never a client-supplied role. The single
-  authorization boundary every protected team-scoped operation must go
-  through is `authorizeTeamAccess(identity, teamId)`
-  (`src/features/teams/server/authorize-team-access.ts`), returning
-  `"admin" | "member" | "denied"`; it re-derives the decision from
-  server-side Firestore state on every call — no cached/session-based
-  authorization state exists.
-- **Retired model (historical, Phase 2)**: a static, server-only,
-  verified-email-to-`teamId` mapping (`TEAM_ASSIGNMENTS`,
-  `resolveTeamForUser`), with a single static `teamId` list
-  (`ALLOWED_TEAM_IDS`) — no self-service team selection, no Firestore
-  `TeamMembership` collection, at most one team per user. Fully removed in
-  TASK-011 once the team-management model above was proven working
-  (`get-dashboard.ts`, the old `GET /api/results` route, and
-  `team-assignments.ts` no longer exist); `/results` is now a thin
-  client-side compatibility redirect to `/teams`/`/teams/[teamId]`
-  (`src/features/results/components/ResultsRedirect.tsx`) rather than a
-  page that renders results itself. See
-  `docs/features/results-dashboard/SPEC.md` for what this model
-  originally implemented.
-- Admin access does not automatically imply access to raw individual
-  responses (see `docs/SECURITY.md`) — the app-admin role introduced by
-  team-management extends *which teams'* aggregates an identity may view
-  and team/membership management, not raw-response access.
-- **Participation vs. viewing authorization, implemented
-  (`docs/features/managed-surveys/SPEC.md`, BR-16)**: `authorizeTeamAccess`
-  (`"admin" | "member" | "denied"`) remains the sole boundary for *viewing*
-  a team's results, but is deliberately **not** reused to decide who may
-  *answer* an `authenticated` survey — an app admin with no actual
-  `teamMemberships` record for that team is `"admin"` under
-  `authorizeTeamAccess` yet must still be rejected as a respondent.
-  `resolveSurveyForParticipation` and `submitSurveyResponse`
-  (`src/features/surveys/server/`) instead check a real
-  `teamMemberships/{uid}__{teamId}` record directly, re-derived from a
-  fresh read at both page-load and submit time — never trusting an earlier
-  check or app-admin status alone.
-- **Own-admin-status read, implemented (`docs/features/product-ux-shell/
-  SPEC.md`)**: a minimal `GET /api/me` route reuses `verifyIdToken` +
-  `isAppAdmin` exactly as above and returns only the caller's own
-  `{isAdmin: boolean}` (no Firestore read), so the UI can show/hide the
-  Admin navigation link from server-derived state only — the UI never
-  evaluates the superadmin registry or any allow-list itself.
-
-## Member identity and team roles (decided, implemented)
-
-Foundation for the team/personal-development work
-(`docs/features/member-identity-and-team-roles/SPEC.md`, F0). Additive and
-migration-free; it gives no new permission to anyone.
-
-- **Profiles feature (`src/features/profiles/`).** `domain/` holds the
-  display-name normalisation/validation and the `userProfiles` record guard;
-  `server/` holds the own-profile operations (`getOwnProfile`/
-  `setOwnProfile`/`deleteOwnProfile`), a `UserProfileStore` seam over
-  `userProfiles/{uid}`, and the batched `getDisplayNames` reader
-  (`getAll`, ≤ 100 refs per call, returns only `uid → validated name` for
-  server-internal use — not a directory); `client/` + `components/` hold
-  the gateway and the `/me/profile` form. The own-profile API
-  (`/api/me/profile`) derives the subject only from the verified token and
-  takes no `uid`. `teams` imports only the batched name reader from
-  `profiles`; `profiles` never imports `teams`.
-- **Team role primitives (`src/features/teams/`).** A membership may carry
-  an optional `role: "lead"` (`membershipRoleOf` is the single,
-  fail-safe classifier: only exactly `"lead"`). `setTeamMemberRole`
-  (app-admin-only, one Firestore transaction: membership check → for a
-  promotion, a fresh `active` team-status check → update) is the only writer
-  and is exposed through `PATCH /api/admin/teams/[teamId]/members/[uid]`.
-- **`authorizeTeamAccess` vs `resolveTeamRole`.** `authorizeTeamAccess`
-  (`admin | member | denied`) is **unchanged**: every existing caller still
-  sees a lead as a plain `member`. `resolveTeamRole` is a separate,
-  **opt-in** primitive that wraps it and returns
-  `admin | lead | member | denied` (or `read_failed`): it reuses the wrapped
-  decision verbatim for `admin`/`denied`, and only for a `member` re-reads
-  the caller's membership (and, for a stored lead, the team status). An app
-  admin is always `admin`, even when also a lead member; a lead is never an
-  admin. **No production code calls `resolveTeamRole` yet and lead grants no
-  capability in F0** — later features must opt in explicitly.
-- **Effective lead.** A stored `role: "lead"` is an *effective* lead only
-  while the team's status is exactly `"active"`. On a disabled (or
-  unreadable/malformed-status) team it resolves to `member`; the stored role
-  is left untouched and becomes effective again on re-activation. The
-  member-facing roster's `isLead` uses this same effective definition; the
-  admin member list deliberately shows the **stored** role so an admin can
-  manage it.
-- **Member-facing roster boundary.** `GET /api/teams/[teamId]/members`
-  (`listTeamRoster`) authorizes with `authorizeTeamAccess` and returns only
-  `{displayName, isLead, isSelf}` per member (plus `truncated`), built field
-  by field. It reads at most 500 memberships (limit 501 to detect
-  truncation, document-id order, no composite index) and resolves names with
-  batched profile reads — never Firebase Auth, never e-mail. The app-admin
-  member list (`GET /api/admin/teams/[teamId]/members`) is a separate,
-  admin-only contract that carries `uid`/e-mail and is never reused for
-  members. The UI roster (`TeamRosterSection`) is collapsed, loads lazily on
-  first expand, and makes no other request.
-- **Forum anonymity constraint.** A forum `authorTag` is a pure function of
-  `(teamId, authorUid)`, so no member-visible response may expose another
-  member's `uid` or a value derived from it (see `docs/SECURITY.md`).
-  Consequently a client-visible **member reference** must be an opaque,
-  team-scoped, non-`uid`, non-authoritative reference resolved server-side
-  with fresh authorization. F0 deliberately built none
-  (`docs/features/member-identity-and-team-roles/SPEC.md` — "Follow-up
-  constraints for A–D"); Team Skill Planning (A0) introduced it as
-  `teamMemberships.memberRef` — see "Team skill planning and member
-  references" below. The F0 roster itself is unchanged and still carries no
-  reference.
-- **Not built in F0.** No RBAC framework, no professional roles, no lead-only
-  capability, no directory/search, no account-deletion flow, no feature flag
-  (the exposure is opt-in: nothing is visible until a user sets a name).
-
-## Team skill planning and member references (decided, implemented)
-
-Feature A (`docs/features/team-skill-planning/SPEC.md`) adds team-level
-roadmap *plans* for competency areas and the first client-visible member
-handle. Boundaries:
-
-- **Server-only persistence.** `roadmapItems` and `teamMemberships.memberRef`
-  are read/written only through the Firebase Admin SDK; `firestore.rules`
-  denies all client access. The browser uses API routes through the gateway
-  `src/features/roadmap/client/roadmap-gateway.ts` (and the existing teams
-  gateways); it never touches Firestore.
-- **Routes.** `GET/POST /api/teams/[teamId]/roadmap-items`,
-  `PATCH …/roadmap-items/[treeId]` (no DELETE), `GET
-  /api/teams/[teamId]/assignable-members`, and the admin-only `POST
-  /api/admin/teams/[teamId]/member-refs`. Handlers are thin: bearer
-  extraction, strict allow-lists, then a server operation with injected deps.
-- **Slice layout.** `src/features/roadmap/` holds pure domain helpers (item
-  guard, dates, target rule, sort, form mapping), the server read/create/
-  update services, the gateway, components and copy. `src/features/teams/`
-  holds the member-reference primitive (`domain/member-ref.ts`), presentation
-  ordinals, `materialize-member-refs` and `list-assignable-members`.
-  Dependencies point `roadmap → teams/skill-trees/profiles`, never back;
-  `TeamDetail` only composes.
-- **Authorization is re-derived per operation.** Reads follow the existing
-  team/admin access semantics (`authorizeTeamAccess`, unchanged). Writes
-  require a genuine membership in an *active* team, checked inside the write
-  transaction; an app admin or team lead who is not a member gets no extra
-  write access (a lead is an ordinary member here; `resolveTeamRole` still has
-  no production caller). `canEdit` in the read DTO is server-derived and only
-  hides controls; the server re-checks every write.
-- **Member reference.** `memberRef` is CSPRNG output stored on the membership,
-  an opaque selector identity only — never evidence of identity or
-  authorization. It is generated in `applyMembershipGrant`, or by the explicit
-  admin preparation operation for legacy memberships; no GET writes. Resolving
-  a ref reads the team's memberships (≤501) and matches in memory; unknown,
-  stale, cross-team, malformed or duplicate refs fail closed. The
-  assignable-members endpoint is a separate, privacy-minimized contract
-  (`{memberRef, displayName, ordinal, isSelf}` + counts); the F0 roster DTO is
-  not reused. Owner display names are resolved server-side.
-- **Source-of-truth split.** Current stage stays `skillProgress`; planning is
-  `roadmapItems` (one deterministic document per team + tree; the id is a
-  uniqueness device, not authorization). Derived values (tracking state,
-  `targetReached`, `overdue`, labels, owner name) are computed per read and
-  never stored. Plans are not coupled to tracking writes: stopping tracking
-  leaves the plan in place.
-- **Shared client state.** One `RoadmapPlanningScope` component state in
-  `TeamDetail` serves the tracked-area rows and the untracked-plans section;
-  its failures are independent of the other sections.
-- **Surface.** Feature A lives inside the existing *Kompetanseområder*
-  section; it adds no route, tab or navigation entry. The dedicated Team
-  Roadmap surface is Feature B (below). Future `teamSkillNeeds`
-  and `roleDefinitions` are described in "Role profiles" below (simplified 2026-11-11); personal `skillProfiles`
-  (C1) is described in "Individual skill self-assessment" below.
-
-## Team Roadmap (Feature B, decided, implemented)
-
-Feature B (`docs/features/team-roadmap/SPEC.md`) is a presentation surface over
-Feature A's `roadmapItems`. Boundaries:
-
-- **No new infrastructure.** No new collection, field, route method, Firestore
-  rule, index, migration, backfill or Demo Team fixture; no client Firestore
-  access. It uses the existing `GET/POST …/roadmap-items` and
-  `PATCH …/roadmap-items/[treeId]`, the team skills read, the assignable-members
-  read (lazy, as in A) and the teams overview (best-effort team name only).
-  Authorization is unchanged and server-side; a lead is an ordinary member.
-- **Route and navigation.** Thin `app/teams/[teamId]/roadmap/page.tsx`; logic in
-  `src/features/roadmap/`. A small shared two-link nav (`Oversikt · Roadmap`,
-  exact-path `aria-current`) lives in `src/features/teams/components/`;
-  `TeamDetail` only gains the nav and a link. No three-tab shell.
-- **Current-plan model.** One deterministic plan per team + tree, shared with A;
-  replanning overwrites it. No persisted history, timeline buckets, filters or
-  view state; timeline groups, filters, counts and eligibility are derived on the
-  client from the loaded response by pure helpers in
-  `src/features/roadmap/domain/` (`roadmap-timeline`, `roadmap-filter`). The only
-  URL state is the closed `?view` enum.
-- **Single canonical read.** The page loads one archived-inclusive response
-  (`?archived=true`) into page state via the extracted planning hook
-  (`useRoadmapPlanning`, mode `archived-inclusive`; Feature A keeps the
-  `lazy-archived` mode and its request pattern). Filters, `Vis arkiverte`, view
-  switch and disclosures issue no roadmap GET. After a successful mutation the
-  page performs one archived-inclusive refetch; there are no optimistic updates.
-  `RoadmapItemView` gained one additive derived field, `completedAt` (ISO string
-  or `null`, no actor).
-- **Fail-closed creation.** `Områder uten plan` = areas from the team skills
-  read minus every `treeId` in the complete archived-inclusive response. When
-  that read is `truncated` (501-document bound, applied before in-memory archived
-  filtering), creation is withheld, because the absence of a plan cannot be
-  proven from an incomplete response. This is intentional; the server's
-  `already_planned` check remains a backstop, not a substitute for correct client
-  eligibility.
-- **Skills dependency.** Roadmap plans and the skills read are independent
-  dependencies: a skills failure leaves plans readable, withholds every mutation
-  control and creation, and retries only the skills read. It never implies an
-  access failure. Mutation controls require `canEdit` **and** a loaded skills
-  read; legacy completed plans without `completedAt` are additionally read-only
-  per item. A refetch that returns `canEdit: false` removes controls while the
-  roadmap stays readable (distinct from `forbidden` → no-access).
-- **Privacy.** Owner presentation reuses A's privacy-safe contract; the page
-  renders no UID, e-mail, `memberRef`, membership id, forum `authorTag` or
-  challenge identity, and there is no roadmap–challenge link. Counts are over
-  plans, not people.
-
-## Individual skill self-assessment (Feature C1, decided, implemented)
-
-C1 (`docs/features/individual-skill-self-assessment/SPEC.md`) adds a person-owned,
-**owner-only** self-assessment. It is the only part of the Team & Personal
-Development work that stores per-person skill data; team aggregation was added later by C2 (see
-"Team skill needs and privacy-thresholded coverage" below). Boundaries as delivered by C1:
-
-- **Amendment 2026-11-10 (personal radar).** The `/me/skills` Oversikt view renders one personal radar
-  (`components/PersonalRadar.tsx`, the only C1 UI module importing `recharts`) from the signed-in person's own
-  levels and the owner-only role comparison. The page is one server route with four `?vy=` views; the editing list,
-  role section and sharing control are unchanged. No API, field, index, rule or data flow is added, and no team
-  or aggregate data enters the chart. The view/overview logic is pure (`domain/overview-model.ts`, `domain/personal-radar.ts`).
-- **Slice and dependency direction.** `src/features/skill-profiles/` holds `domain/`
-  (the 1–4 ordinal scale, record guard, sort and count helpers), `server/` (store
-  seam over `skillProfiles/{uid}`, bounded catalog reader, own-profile operations),
-  `client/` (gateway) and `components/` (the `/me/skills` page); copy lives in
-  `copy.ts`. Dependencies point `skill-profiles → skill-trees (isValidSkillTree) / auth`,
-  never back. It imports no team authorization, `skillProgress`, roadmap, membership,
-  `userProfiles` or admin code.
-- **Server-only persistence.** Admin SDK only; `firestore.rules` has an explicit
-  deny-only `skillProfiles` block (defence in depth). The browser uses the gateway and
-  never touches Firestore. Owner authorization is enforced by server API behaviour using
-  the verified token, not by the rules block.
-- **Owner-only API.** `GET /api/me/skills`, `PUT` and `DELETE /api/me/skills/[treeId]`,
-  `DELETE /api/me/skills`. No uid in path/query/body, no admin/team/lead reader, and no
-  `emailVerified` requirement for own-profile access. Role never expands access.
-- **SkillTree catalog reuse.** The global SkillTree catalog supplies skill-area identity
-  (`treeId`) and name; there is no personal catalog. `listSkillTrees` (admin-only) is not
-  reused or changed: the catalog read is duplicated minimally in the slice. This couples
-  `skillProfiles` and future `teamSkillNeeds` to the catalog: replacing or materially
-  changing the global catalog model requires considering both (no migration is defined).
-- **Catalog raw window.** One query, `orderBy(createdAt asc).limit(501)`: the 501st **raw**
-  document is only a truncation probe; the first 500 raw documents are the candidate
-  window; invalid candidates are dropped but still consume slots; there is no refill
-  query; valid skills are then sorted by name for presentation (sorting never changes
-  window membership). Firestore resolves equal `createdAt` by document id; the application
-  adds no tie-break. `truncated` is true iff a raw 501st document exists — it does not prove
-  a valid skill is hidden or that assessments were cut off; the UI says only
-  "Listen kan være ufullstendig." The query needs no composite index.
-- **Existence is not the catalog window.** A `PUT` validates its target SkillTree directly
-  inside the write transaction, so a valid `treeId` beyond the visible catalog window can
-  still be written. Catalog visibility is not existence authorization.
-- **Read, write and erase semantics.** `GET` never writes or repairs. Per-skill writes are
-  single-transaction per-key merges (only the requested key and `updatedAt`, plus a
-  `createdAt` repair when missing/invalid); unrelated keys and unknown top-level fields are
-  preserved. Different-key concurrent writes are protected by the transaction; same-key
-  writes are last-write-wins. `DELETE` one is an idempotent no-write when the key or
-  document is absent. `DELETE` all physically deletes the document with no timestamp
-  repair. A non-object `levels` makes the profile unreadable: reads return no levels and
-  `profile: "unreadable"`, per-skill writes/clears return `409 profile_unreadable` and write
-  nothing, and only reset-all (physical delete) recovers it. No automatic repair or migration.
-- **Client state.** The page loads one `GET`, applies server-confirmed values only (no
-  optimistic state), and moves to the unreadable state on `409`, to the sign-in prompt on
-  `401`, and refetches the catalog once on `404`. A state epoch invalidates responses started
-  before an unreadable transition or a successful reset so they cannot restore stale
-  assessment data; reset is unavailable while a row save is pending.
-- **Static privacy guard.** `skill-profiles-scope-guard.test.ts` is two-dimensional:
-  (1) the files that reference the `skillProfiles` collection and (2) the entry points that
-  import the skill-profiles server/store modules must each equal an approved allow-list, so
-  an accidental new reader or importer fails visibly. It also pins the persisted key set and
-  forbids team-authorization/`skillProgress`/roadmap/membership imports in the slice. It is
-  change detection, **not a security boundary**: it does not prove runtime behaviour,
-  dynamic collection names or module paths, code outside `src/` and `app/`, or arbitrary
-  Admin-credential access. The C2 reader deliberately edited **both** allow-lists
-  under review (`docs/SECURITY.md`, invariants 31–36).
-- **Not in C1 (C2 later added the opt-in thresholded subset; the rest remains undelivered):** `teamSkillNeeds`, a team skill matrix, gap
-  analysis, aggregate views, privacy thresholds, inclusion/consent decisions, role
-  expectations, sharing, and any team/lead/admin access to individual self-assessments.
-- **No new infrastructure.** No composite index, migration, backfill, dependency or
-  environment variable; no Demo Team personal profile.
-- **Known limitations (as built).** A 404-triggered catalog refetch can theoretically overlap
-  another successful save by the same user and briefly replace that row with an older
-  snapshot (transient, same user, corrected by the next action or reload; the state epoch
-  covers 409/reset transitions but not this overlap). The page reuses the generic
-  `DeleteConfirmation` component from `src/features/forum/components/` (no data coupling; a
-  maintainability concern only).
-
-## Team skill needs and privacy-thresholded coverage (Feature C2, decided, implemented)
-
-C2 (`docs/features/team-skill-needs-and-matrix/SPEC.md`) adds team-owned skill needs, a
-per-team opt-in contribution, and a derived categorical coverage status. It is the only
-reader of `skillProfiles` other than the owner. Boundaries:
-
-- **Slice and dependency direction.** `src/features/team-skills/` holds `domain/` (need
-  record and validation, participation rule, pure `deriveCoverageState`, and the policy
-  constants), `server/` (genuine-membership check, needs list/upsert/delete, participation
-  get/set/withdraw, `get-team-skill-coverage`), `client/` (gateway), `components/`
-  (`TeamSkillNeedsSection`, `SkillNeedEditor`, `SkillContributionPanel`) and `copy.ts`.
-  Routes are thin: `app/api/teams/[teamId]/skill-needs[/[treeId]]`, `.../skill-coverage`,
-  `.../skill-contribution`. Dependencies point `team-skills → skill-trees/domain,
-  teams/domain, skill-profiles (level domain and the one batch module)`, never back.
-  `team-skills` imports no roadmap or `skillProgress` module.
-- **Policy constants, one owner.** `SKILL_COVERAGE_MIN_CONTRIBUTORS = 5`,
-  `SKILL_CONTRIBUTION_NOTICE_VERSION = 1` and `TEAM_SKILL_COHORT_SCAN_MAX = 500` live only in
-  `team-skills/domain/skill-coverage-policy.ts`. No environment variable, setting, request
-  parameter or UI can change them (invariant 34).
-- **Genuine-membership ordering.** `authorizeTeamAccess` and `resolveTeamRole` return `admin`
-  before they look at membership, and both are unchanged. Need *read* uses
-  `authorizeTeamAccess` (member or admin; disabled teams readable). Coverage, need writes and
-  participation use `genuine-team-membership.ts` with fresh reads in this order: verified token
-  (401) → team exists with a valid status (else 403 for everyone) → the caller's own valid
-  membership (else 403, without consulting app-admin status) → `active` team (else 409
-  `team_disabled`) → operation-specific checks. Failed reads are 500 `read_failed`, never 403.
-  Read-need, write-need and read-coverage are three separate permissions; there is no combined
-  `canEdit`, and the response `viewer` hints only hide controls.
-- **The one lead capability.** `PUT`/`DELETE .../skill-needs/[treeId]` re-verify in one
-  transaction that the caller's genuine membership has exactly `role: "lead"` and the team is
-  `active` (PUT also reads the target tree directly). This is decided from the membership, not
-  through `resolveTeamRole`; a lead who is also an app admin keeps it, an admin without a lead
-  membership has none, and a removed or demoted lead loses it on the next call.
-- **Needs persistence.** `teamSkillNeeds/{teamId}__{treeId}`: `teamId`, `treeId`,
-  `requiredLevel` (2–4), `requiredCoverage` (1–20), `createdAt`, `updatedAt`. No actor,
-  archive or history fields; `DELETE` is a hard, idempotent delete. Invalid documents are
-  skipped on read, never repaired. Server-only (Admin SDK) with an explicit deny-only
-  `firestore.rules` block; the needs query is `where("teamId","==",…).limit(501)`, so no index.
-- **Participation persistence.** Membership field `skillContribution: { noticeVersion,
-  consentedAt }` (presence = opt-in, no `enabled` flag). Written only by the owner through
-  `PUT`/`DELETE .../skill-contribution` in a transaction that updates only that field;
-  withdrawal deletes the whole object. Effective only when the key set is exact, the version
-  equals the current constant and the timestamp is valid; a version bump silently lapses all
-  participation. Membership removal destroys it, a rejoin starts without it, and a re-grant of
-  an existing membership is a no-op. It is never in a membership-derived DTO (roster,
-  assignable members, members list, admin member list, access requests); `consentedAt` is
-  never returned or used for a decision.
-- **Coverage aggregation order.** Authorize (above) → list needs (≤501) → none ⇒ empty
-  `available`, no profile read → list memberships (≤501; 501 ⇒ `incomplete` with no rows) →
-  keep valid memberships with effective participation → `readSkillLevelsBatch(uids,
-  needTreeIds)` → direct-read needed trees (invalid ⇒ `area_unavailable`) → derive →
-  allow-listed DTO, `Cache-Control: no-store`. Any read failure ⇒ 500 with no partial data;
-  nothing is persisted or cached (invariant 35). The route accepts no query parameter or body.
-- **Pure derivation.** `deriveCoverageState` takes plain integers for one skill plus the need's
-  two numbers: fewer than 5 eligible contributors ⇒ `insufficient_data`; otherwise at least
-  `requiredCoverage` at or above `requiredLevel` ⇒ `covered`, else `gap` (also when
-  `requiredCoverage` exceeds the cohort). The cohort is **per skill**, not team size. Only valid
-  exact-tree levels (1–4) contribute; unreadable, unassessed, invalid and absent profiles are
-  excluded without any count or cause, so every suppression cause is indistinguishable. The DTO
-  is exactly `treeId`, `areaName`, `requiredLevel`, `requiredCoverage`, `state` per row, plus
-  `availability`.
-- **The single reader.** `skill-profiles/server/read-skill-levels-batch.ts` exports only
-  `readSkillLevelsBatch(uids, treeIds)` and returns, per tree, a sorted array of plain
-  integers 1–4 with no uid or per-person association (or `{ ok: false }`). It builds on one new
-  function `readSkillProfilesBatch` inside the already approved `skill-profile-store.ts`, which is
-  **not** on the `SkillProfileStore` interface, default store or in-memory fake, so C1 owner
-  operations cannot call it. Only `team-skills/server/get-team-skill-coverage.ts` may import the
-  batch module, and a call-site test pins the uid list passed to it.
-- **Guard edits.** `skill-profiles-scope-guard.test.ts` gained module-level importer maps for
-  `skill-profile-store.ts` and the batch module, exactly one added outside importer in
-  `APPROVED_SERVER_IMPORTERS`, identifier and re-export scans, and negative fixtures; its
-  forbidden-identifier list is unchanged. The new `team-skills-scope-guard.test.ts` pins exact
-  writer sets for `teamSkillNeeds` and `skillContribution`, the coverage DTO key set, no
-  Firebase client SDK, no roadmap/`skillProgress` import, and the lead-only write check. Both are
-  change detection, **not security boundaries** (they do not prove dynamic paths, aliases other
-  than `@/`, code outside `src/` and `app/`, or Admin-credential access).
-- **Catalog read.** The member-readable bounded catalog read (500/501 raw window, the C1 rule) is
-  a minimal duplicate in `team-skills/server/skill-need-catalog.ts`; `listSkillTrees` and C1's
-  catalog module are neither changed nor imported.
-- **Client (superseded 2026-11-11).** `TeamSkillNeedsSection` is no longer rendered by any page: `TeamDetail` does not use it, and `TeamCompetenceNeedsSection` has no caller. The needs and coverage routes remain (see TC-SI-11 in SECURITY.md). Originally it was rendered by `TeamDetail` on Oversikt (no new route or
-  navigation). It loads needs, then coverage when `viewer.canReadCoverage`; the participation panel
-  loads separately. The browser uses the gateway only.
-- **Independence.** C2 writes only `teamSkillNeeds` and the caller's own `skillContribution`. It never
-  writes `skillProfiles`, `userProfiles`, `skillProgress` or `roadmapItems`, creates no roadmap item,
-  assignment, goal or notification, and reads neither `skillProgress` nor `roadmapItems`.
-- **No new infrastructure.** No composite index (`firestore.indexes.json` unchanged), dependency,
-  environment variable, cache, background job, migration or Demo Team fixture. Rules deployment is a
-  separate explicit step not performed by implementation.
-- **Known limitations (as built).** The residual privacy risks of `docs/SECURITY.md` (invariant 36),
-  including the malicious-lead need-mutation oracle; a membership scan above 500 shows `incomplete`
-  rather than aggregating; no account-deletion flow, so orphaned memberships and profiles can persist;
-  a Demo re-seed (full-replace membership write) resets role and participation; and the Demo cannot show
-  the `covered`/`gap` states.
-
-## Personal development goals (Feature D1, decided, implemented)
-
-D1 (`docs/features/personal-development-goals/SPEC.md`) adds person-owned, **owner-only** development
-goals. It is independent of C1 and C2 data. Boundaries as delivered:
-
-- **Slice and dependency direction.** `src/features/personal-goals/` holds `domain/` (pure goal,
-  title, target-date and limit rules), `server/` (the single store module that names the collection,
-  own-goal operations, an in-memory fake for tests), `client/` (gateway) and `components/` (the
-  `/me/goals` page); copy lives in `copy.ts`. It depends on `auth` token verification, generic
-  `src/lib/firebase/` and `src/components/ui/` primitives, and the pure `isValidSkillTree` predicate
-  only. It imports no `profiles`, `skill-profiles`, `team-skills`, `teams`, `roadmap` or
-  `skill-trees/server` code and no team authorization or membership logic.
-- **First subcollection pattern.** Goals live at `userDevelopment/{uid}/goals/{goalId}`; every other
-  collection is top-level. The path is the ownership boundary (a foreign goal id resolves as missing
-  under the caller's path), no owner field is duplicated, no composite index is needed, and a future
-  erasure can target one owner subtree. No `userDevelopment/{uid}` parent document is stored. No
-  `collectionGroup` goal query is permitted. The root name is reserved for later per-owner
-  development data; D1 defines only `goals`.
-- **Server-only persistence and owner route family.** Admin SDK only; `firestore.rules` has an
-  explicit deny-only `userDevelopment/{document=**}` block placed before the catch-all (defence in
-  depth; the Admin SDK bypasses client rules, so owner authorization is enforced by server
-  behaviour using the verified token uid, never by the rules). Routes: `GET`/`POST /api/me/goals`,
-  `PATCH`/`DELETE /api/me/goals/[goalId]`. No uid in path, query or body; no user-id, admin or team
-  route; no `emailVerified` requirement; a role never widens access.
-- **SkillTree reuse.** The global catalog supplies only the optional topic link (`treeId`) and the
-  name resolved at read; a bounded catalog read (500/501 raw window) is duplicated minimally in the
-  slice. A stored link whose tree is gone or invalid is reported as unavailable, and editing stays
-  possible. D1 writes no SkillTree data and never reads `skillProfiles`. (D1 never reads `skillProfiles`. The owner-only role comparison that once read it was removed with the role simplification on 2026-11-11; no role feature reads skill data now.)
-- **Limits, read window and recovery.** At most 100 goals per owner, enforced count-then-create
-  (a small overshoot under concurrent creates is accepted). The list reads a bounded window
-  (newest 100 by `createdAt`); malformed or overflow documents count toward the cap, and a bounded
-  `select`-only recovery scan finds malformed documents lacking `createdAt`. A malformed document
-  with an addressable id is returned to the owner only as a delete-only `{ goalId }` item with no
-  stored content; documents whose id is not addressable cannot be recovered in-product.
-- **Personal navigation.** The sidebar (`AppShell`, group `Min utvikling`) is the only navigation between
-  `/me/skills`, `/me/goals` and `/me/conversations`. The former page-level `PersonalNav` links were removed
-  (personal-experience redesign, Phase 1, approved). `/me/skills` keeps its own view navigation
-  (Oversikt, Kompetansekart, Rollesammenligning, Deling med team). There is no `/me` index.
-- **Static privacy guard.** `personal-goals-scope-guard.test.ts` pins the collection-name allow-list,
-  importer allow-lists, forbidden imports and concepts, and DTO/persisted key sets. It is change
-  detection, **not a security boundary** (same limits as the C1/C2 guards), and no C1/C2 allow-list
-  was edited for D1.
-- **Not in D1:** check-ins/conversations (D2), sharing, lead/admin/manager access, role profiles or
-  expectations, progress history, notifications, assignments, analytics.
-- **No new infrastructure.** No composite index (`firestore.indexes.json` unchanged), dependency,
-  environment variable, migration, background job or Demo Team fixture. Rules deployment is a
-  separate explicit step not performed by implementation.
-- **Known limitations.** See `docs/SECURITY.md` (after invariant 54): no account-deletion flow,
-  operator access, unencrypted titles, cap race, non-addressable ids and bounded windows.
-
-### Development conversations (D2, implemented 2026-10-21)
-
-Spec: `docs/features/development-conversations/SPEC.md`. Invariants: `docs/SECURITY.md` 55–72.
-
-- **Module boundary.** `src/features/development-conversations/` with `domain/`, `server/`, `client/`,
-  `components/` and `copy.ts`. Routes live under `app/api/me/conversations/` and `app/me/conversations/`.
-  The module imports `auth` token verification, `lib/encryption`, the Admin SDK, `components/ui`, the D1
-  goal store (one approved importer, CL-5), `profiles/server/get-display-names` (one call site), the pure
-  `teams/domain` membership helpers and the pure SkillTree predicate. It imports no `authorizeTeamAccess`,
-  C1, C2, roadmap, results, forum, surveys or challenges code.
-- **Two subtrees.** The owner document at `userDevelopment/{ownerUid}/conversations/{conversationId}` is the
-  only authority for content, participant state and status. The participant index at
-  `userDevelopment/{participantUid}/conversationParticipations/{conversationId}` holds exactly
-  `{ ownerUid, invitedAt }` and grants nothing alone. Both subtrees are covered by the existing recursive
-  deny rule, so `firestore.rules` and `firestore.indexes.json` are unchanged.
-- **Access check.** Every participant read and write re-derives the binding: the index, the owner document,
-  an active team, a current genuine membership and a matching `memberRef` (BR-21). Nothing is cached. Role,
-  lead status and app-admin status are never inputs, and `authorizeTeamAccess` is not used on this path.
-- **Encryption scope.** Free text (title, owner notes, next steps, participant notes and goal snapshots) is
-  encrypted with the existing AES-256-GCM helper through one codec module. Plain fields are structural only,
-  and a plain `keyCheck` distinguishes a configured-key mismatch (an operational failure) from a malformed or
-  unreadable document (CL-18, CL-27, BR-53). This is application-layer encryption, not end-to-end.
-- **Transactions.** Lifecycle transitions and every write touching both subtrees run as Firestore transactions
-  with preconditions re-read inside them (BR-48, BR-50).
-- **D1 interaction.** Snapshot selection reads D1 goals only through `getDefaultGoalStore().get(ownerUid,
-  goalId)`. Area names come from the SkillTree catalog. Membership is read only for eligibility. D2 writes no
-  goal, `skillProfiles`, `roadmapItems`, `skillProgress`, `userProfiles` or membership document.
-- **Navigation.** Page-level `PersonalNav` links were removed in the Phase 1 personal-experience redesign;
-  the sidebar provides `Ferdigheter · Mål · Samtaler`. The header entry `Min utvikling` is unchanged.
-- **Known limitations.** See `docs/SECURITY.md` (after invariant 72).
-
-## Submission and dashboard boundaries (decided, implemented)
-
-```mermaid
-flowchart LR
-    subgraph Public["Public / anonymous boundary"]
-        Submit[Survey submission]
-    end
-    subgraph Protected["Protected boundary (auth required)"]
-        Dashboard[Team dashboard]
-    end
-    Submit --> Encrypt[Application-level encryption - server-side]
-    Encrypt --> Firestore[(Firestore)]
-    Firestore --> Aggregate[Server-side aggregation]
-    Aggregate --> Dashboard
+```text
+Browser (React client components, feature gateways)
+   │  Authorization: Bearer <Firebase ID token>
+   ▼
+app/api/.../route.ts                      thin: read params, body, bearer token
+   │
+   ▼
+src/features/<feature>/server/<op>.ts     "server-only": verify token → authorize → validate → read/write
+   │   verifyIdToken (checkRevoked, erasure fence)
+   │   isAppAdmin / genuine membership / teamadmin checks (read on every call)
+   ▼
+Firestore via Firebase Admin SDK          (src/lib/firebase/admin.ts, server-only)
 ```
 
-- **Public/anonymous submission boundary**: accepts pulse survey answers
-  without requiring the respondent's identity to be attached to the stored
-  response payload.
-- **Protected dashboard boundary**: requires authentication + team
-  authorization; only serves aggregated results (see minimum threshold in
-  `docs/SECURITY.md`), never raw individual responses, to an authorized
-  team member or app admin (`authorizeTeamAccess`, enforced server-side —
-  see "Authentication and authorization" above). App-admin status does not
-  imply raw-response access (see invariant 17, `docs/SECURITY.md`).
-- **`SurveyParticipation`, implemented, `authenticated`-mode only
-  (`docs/features/managed-surveys/SPEC.md`)**: a deliberately minimal
-  `surveyParticipations/{uid}__{surveyId}` document (`{uid, surveyId}`
-  only — no `submittedAt` or any other field) records that one identity has
-  submitted to one survey, used solely to reject a second accepted
-  submission from the same `uid` (BR-21/BR-22). It carries no shared
-  identifier, foreign key, or content field joining it to the specific
-  `surveyResponses` document it accompanies (BR-18) — an app admin (or
-  anyone else, at the application level) can see *that* a `uid` submitted
-  to a survey, never *which* response is theirs. Written in the same
-  Firestore transaction as the response, for exactly-once duplicate
-  prevention with no race window; the resulting shared commit-timestamp
-  metadata is a residual, raw-Firestore-only correlation signal this
-  application itself never reads or exposes (see "Consistency vs.
-  unlinkability tradeoff," `docs/features/managed-surveys/SPEC.md`). Does
-  not exist for `public` surveys, which remain exactly as identity-free and
-  dedup-free as Phase 1.
+- Server-only code imports `"server-only"`. Admin SDK imports are confined to `server/` modules and `src/lib/firebase/`.
+- Client gateways (`features/<feature>/client/*-gateway.ts`) call the API routes, validate the response shape, and return
+  typed results. They never hold Admin SDK material and never talk to Firestore directly.
+- Errors are typed refusals (for example `forbidden`, `team_disabled`, `read_failed`, `invalid_token`,
+  `erasure_in_progress`), mapped to HTTP status in the route layer. Fail-closed is the default: an unreadable authorization
+  input is a refusal, never a grant.
 
-## Survey lifecycle (decided, implemented)
+## 4. Feature slices
 
-- A survey's answerability (`"scheduled" | "open" | "closed"`) is a
-  **derived** value, computed identically everywhere it's used (submission
-  enforcement, admin UI, team UI) from three optional timestamps
-  (`openedAt`, `closedAt`, `endAt`) — never a separately stored status
-  field that could drift from them (`effectiveLifecycle`,
-  `src/features/surveys/domain/survey.ts`). This pattern replaces the
-  now-retired calendar-period equivalent (`isPeriodClosed`), generalized
-  from "is this fixed calendar period closed" to "is this survey closed,"
-  including a set `endAt` closing a survey automatically and live, with no
-  background job.
-- **One open survey per team** is enforced via a dedicated coordination
-  document (`teamSurveyState/{teamId}`, `{activeSurveyId, updatedAt}`)
-  rather than a query — the same established pattern this codebase already
-  uses for every other one-of-a-kind invariant (`teamMemberships/
-  {uid}__{teamId}`, `teamInvitations/{teamId}__{email}`). Opening and
-  closing a survey each happen inside one Firestore transaction that reads
-  this document, re-derives the referenced survey's own lifecycle before
-  trusting the pointer, and only then writes both documents together — so
-  two concurrent "open" attempts for the same team can never both succeed,
-  and a stale pointer left by a survey that auto-expired via `endAt` is
-  self-corrected rather than treated as a false conflict. See
-  `docs/features/managed-surveys/SPEC.md` → "One open survey per team" for
-  the full mechanism.
-- Every lifecycle/answerability decision uses the server's own clock
-  exclusively; a client/browser-supplied timestamp is never accepted or
-  compared against for any authorization or answerability decision.
+Each feature under `src/features/` owns its domain rules, server operations, client gateway, components and tests. The
+usual layout is `domain/` (pure rules and validation), `server/` (operations and stores), `client/` (gateway and hooks),
+`components/` and `copy.ts` (Norwegian UI copy). A feature may import shared infrastructure from `src/lib` and primitives
+from `src/components`. Cross-feature imports are limited to small, explicit seams. Examples: `team-owned-skills` reads the
+consent-gated membership scan through `team-skills`; `teams/domain/genuine-membership.ts` is the one membership rule shared by
+several owners.
 
-## Application-level encryption boundary (decided invariant, provisional implementation)
+Feature list (directory → purpose). Details are in [`PRODUCT.md`](PRODUCT.md).
 
-- Sensitive survey fields are encrypted **server-side** before being written
-  to Firestore, and decrypted **server-side** only when authorized
-  aggregation/reporting requires it.
-- Encryption keys never reach the browser, Firestore, git, or logs.
-- Key management approach (e.g. Cloud KMS, Secret Manager, or another
-  provider) is an **open question** — future key-management integration
-  point, not yet selected.
-- **Implemented (Phase 5, `docs/features/anonymous-challenges/SPEC.md`)**:
-  `challenges` (Anonymous Challenges' free-text reports) is a second
-  encrypted-at-rest collection alongside `surveyResponses`, reusing
-  `src/lib/encryption/encryption.ts` unchanged. Its anonymity shape is
-  deliberately different from a survey response's, and intentionally so, not
-  an inconsistency: a survey response's *content* is never shown to anyone,
-  only a threshold-gated aggregate, whereas a challenge's *content* is shown
-  individually to any authorized team member/admin once decrypted — the
-  guarantee this feature makes is narrower and different in kind (*never
-  who*, not *never what*). No identity field is ever persisted on a
-  `challenges` document, and there is no participation-tracking collection
-  for it at all (unlike `SurveyParticipation`), since Anonymous Challenges
-  has no duplicate-submission-detection requirement to enforce. See
-  `docs/features/anonymous-challenges/SPEC.md` — "Privacy/anonymity model"
-  for the full threat model.
-- **Implemented (Phase 6, `docs/features/team-forum/SPEC.md`)**:
-  `forumThreads`/`forumReplies` (Team Forum's attributed discussion
-  threads/replies) are a third encrypted-at-rest collection pair, reusing
-  `src/lib/encryption/encryption.ts` unchanged — a thread's title/body and
-  a reply's body are each encrypted server-side before being written, for
-  the same reason Anonymous Challenges' free text is: this content can
-  easily discuss the same kind of sensitive workplace-friction material,
-  regardless of whether it happens to be attributed. Team Forum's identity
-  shape is different in kind from both existing encrypted collections, not
-  merely a third instance of the same pattern: a survey response is never
-  individually shown to anyone (only a threshold-gated aggregate); a
-  challenge is individually shown but its *submitter* is never persisted or
-  recoverable; a forum thread/reply is individually shown **and** its
-  author's real `authorUid` is persisted — attribution itself is this
-  feature's deliberate point, not something to avoid. What Team Forum still
-  keeps hidden is the author's *real-world* identity: `authorUid` is never
-  returned by any API response, and the only member-visible attribution is
-  `authorTag`, a deterministic, one-way pseudonym computed purely from
-  `(teamId, authorUid)` (`src/features/forum/domain/author-tag.ts`) — never
-  an email address, display name, or the raw `uid` itself, and never
-  derived from a Firebase Auth lookup. Deletion goes further than Anonymous
-  Challenges too: a deleted thread is a genuine Firestore document deletion
-  of the thread and every one of its replies (not an update), and a deleted
-  reply has its encrypted fields physically removed from the document
-  (`FieldValue.delete()`), not merely withheld from a response — deleted
-  forum content is not just unauthorized to read, it no longer exists
-  anywhere to decrypt. See `docs/features/team-forum/SPEC.md` —
-  "Identity/attribution model" and "Encryption/content classification" for
-  the full model.
+| Directory | Purpose |
+| --- | --- |
+| `auth` | Sign-in and sign-up, token verification, recent-authentication check, erasure fence |
+| `account-erasure` | Self-service account erasure, inventory and guard tests |
+| `profiles` | Display name |
+| `superadmins` | Superadmin registry and bootstrap |
+| `teams` | Team records, membership, invitations, access requests, visibility, team administration |
+| `team-skills` | Consent (`skillContribution`), coverage policy constants, skill needs |
+| `team-owned-skills` | Canonical team competence catalog, private self-assessments, automatic and collaborative profile |
+| `skill-profiles` | Personal skill self-assessment and personal radar |
+| `skill-trees` | Organization skill-tree catalog, team skill progress |
+| `role-profiles` | Organizational roles and assignments (reference data, no permissions) |
+| `personal-goals` | Owner-only development goals |
+| `personal-role-workspace` | Owner-only responsibilities and achievements |
+| `development-conversations` | Owner conversations with an optional, explicitly accepted participant |
+| `team-competence-plan` | Kompetanseplan: independent team development plans |
+| `roadmap` | Team roadmap items per competency area |
+| `team-projects` | Team delivery projects and planned participation |
+| `team-systems` | Team system overview with seven attributes |
+| `surveys` | Survey definitions, anonymous responses, participation, open and close lifecycle |
+| `results` | Aggregated survey results with per-survey thresholds |
+| `challenges` | Anonymous encrypted team challenges |
+| `forum` | Team forum (behind `FEATURE_FORUM_ENABLED` for UI) |
+| `home` | Authenticated and signed-out home composition |
+| `demo-team` | Synthetic demo team seed and its guards |
 
-## Aggregation
+## 5. Client/server separation
 
-- Aggregated results are computed server-side from decrypted data and only
-  the aggregate (not raw responses) is exposed to dashboards.
-- Aggregates are suppressed below a configurable minimum response count
-  (see `docs/SECURITY.md`).
+- `"use client"` components and gateways must not import `firebase-admin`, `src/lib/encryption`, or server operations.
+- `NEXT_PUBLIC_FIREBASE_*` values are the public Firebase web config only. Every secret (`FIREBASE_PRIVATE_KEY`,
+  `ENCRYPTION_KEY`, `FEATURE_FORUM_ENABLED`) is server-only.
+- Page components (`app/`) are server components by default. Client pages use `"use client"` and gateways.
 
-## Open questions
+## 6. Firebase integration
 
-- Key management provider and rotation strategy.
-- Hosting/runtime target for the server-side boundary (not decided in this
-  session; no deployment work has been done).
+- Client: `src/lib/firebase/client.ts` initializes the web SDK for Auth.
+- Server: `src/lib/firebase/admin.ts` initializes the Admin SDK. It uses the service-account variables when present, and
+  otherwise platform default credentials. Emulator hosts are accepted only when local and only for `demo-` projects
+  (`assertAdminEmulatorSafe`).
+- Firestore security rules deny all client access (see `SECURITY.md` §3).
 
-## Role profiles (organizational roles and formal assignment, simplified 2026-11-11)
+## 7. Authentication and authorization architecture
 
-Feature spec: `docs/features/role-profiles/SPEC.md` (current contract). Vertical slice in `src/features/role-profiles/`
-(domain, Admin SDK server operations, client components and gateways). Routes: `app/api/admin/roles/` (catalogue),
-`app/api/admin/users/[uid]/role-assignment/` (assign, change, remove), `app/api/admin/role-assignments/lookup/` (batch read),
-`app/api/roles/` (active roles, title and description only) and `app/api/me/role-assignment/` (the person's own role).
-Pages: `app/(app)/admin/roles/` (catalogue), the member section of `app/(app)/admin/teams/[teamId]/` (assignments), and the
-section on `app/(app)/me/skills/` (Min rolle).
+- Token verification is centralized in `src/features/auth/server/verify-identity.ts` and checks revocation.
+- Superadmin status is a registry read per request (`superadmins/{uid}`), not a token claim or an email allow-list.
+- Team authorization uses the membership document for the exact `(uid, teamId)` pair, plus team status, read inside the
+  operation's transaction where the write needs it.
+- Account erasure adds a fence (`accountErasures/{uid}`) that every person-owned write checks inside its transaction.
 
-Boundaries:
-- **Persistence:** only `roleDefinitions` and `roleAssignments/{uid}`, through the Admin SDK on the server. No client Firestore
-  path, no `collectionGroup`, no composite index, no environment variable, no dependency.
-- **Authorization:** catalogue and assignment writes use `requireAppAdmin`. Assignment reads by the person use the verified
-  token's uid only. An assignment grants no application permission; no authorization path reads it.
-- **Transactions:** assignment writes run in a fenced transaction on the target uid (`runFencedTransaction`), which reads the
-  erasure record first. Role catalogue writes use the same fence on the acting admin.
-- **Cross-feature reads:** the admin team page composes the member role section from role-profiles. The personal workspace
-  reads its own assignment only through `/api/me/role-assignment`. Nothing in skills, goals, team planning or the roadmap
-  reads roles.
-- **Guards:** the C2, D1 and erasure fence guards list the exact role-profiles write owners. The personal workspace guard
-  forbids the `roleAssignments` collection name in that feature. These guards are change detection, not authorization.
-  The Firestore deny rules for both collections are checked statically in `role-assignments-rules.test.ts`.
+The three role concepts (superadmin, team role, formal organizational role) and their boundaries are defined in
+[`SECURITY.md`](SECURITY.md) §2.
 
-## Account erasure (2026-11-02)
+## 8. Major data flows
 
-- **Fence on every protected request.** `verifyIdToken` reads `accountErasures/{uid}` for each protected request. A record refuses
-  the request, except the erasure endpoint, which is the only caller that passes the in-progress check. This is an intentional
-  cost: one extra document read per protected request.
-- **Transactional fence on person-owned writes.** Every person-owned write reads the same record with `tx.get` in the same
-  transaction as the write (BR-4(b)). A helper that uses an ordinary read inside a transaction does not count. Ordinary admin removal
-  of a membership reads the removed member's record (the target person, not the admin) in the same transaction as the membership
-  delete and its roadmap and binding cleanup.
-- **Erasure contract.** `POST /api/me/erasure` is the only erasure route. The runner executes ordered steps, is resumable, and hands
-  off to Auth deletion as the last step. Verification advances only at zero residuals. Production enablement is set in code
-  (`PRODUCTION_HANDLERS_READY`) and still depends on the TASK-045 operator gate in `OPERATIONS.md`: the TTL policy, index deployment,
-  the superadmin registry bootstrap and cutover (`docs/features/superadmin-registry/BOOTSTRAP.md`), and the platform-log and
-  provider-backup limitations.
-- **Known limits, not claimed as erased.** Provider logs and provider backups (E-1, E-2). Client-side caches in the erased person's
-  browser (E-3). Historical invitations addressed to an e-mail that cannot be linked to the person (BR-13).
+- **Team competence, automatic profile:** members opt in (`skillContribution` on their membership) → the aggregate reads
+  opted-in members and their private ratings on the server → skills with fewer than k = 3 contributors, or with suspect
+  ratings, are suppressed → the client receives only levels or `insufficient_data`.
+- **Team competence, collaborative profile:** a team administrator writes the agreed level per skill to
+  `teamManualAssessments`. Members read it.
+- **Surveys:** an administrator creates and opens a survey (one open survey per team, enforced in a transaction). A
+  participant submits an encrypted response with no identity. In `authenticated` mode a uid-keyed participation record only
+  blocks a duplicate. Results are aggregated on the server and suppressed below `minimumResponses`.
+- **Account erasure:** the person starts it with a recent sign-in. The fence blocks their person-owned writes. The inventory
+  drives deletion, anonymization and detachment step by step. Anonymous data is preserved by design.
 
-## Product Experience presentation foundation (TASK-001 to TASK-004, 2026-11-02)
+## 8a. Encrypted persistence
 
-- Icons: `lucide-react` (exact pin 1.66.0, ISC) is the only icon family, used through `src/components/ui/Icon.tsx`. Client bundle record: `docs/features/product-experience/VERIFICATION.md`.
-- Theme: a viewer-only `data-theme` attribute on `<html>`, set before first paint from one local key (`src/lib/theme/theme.ts`). No server state, no network call and no telemetry.
+Each feature that stores encrypted business content owns a `server/*-codec.ts` beside its store. The codec builds the
+record context, seals on write and opens on read, and returns a value the domain parser refuses when it cannot open it.
+Stores call the codec; domain validators never see ciphertext. All codecs use the v2 record envelope
+(`src/lib/encryption/record-envelope.ts`). Only `src/lib/` holds the primitive. No feature repeats the cipher.
 
-## Team-owned skills (docs/features/team-owned-skills/SPEC.md)
+Codec placement: a codec that another feature's server code imports lives in that feature's `domain/` folder, with
+`import "server-only"` at the top. Examples: `teams/domain/team-content-codec.ts`, `skill-trees/domain/skill-tree-content-codec.ts`,
+`roadmap/domain/roadmap-item-content-codec.ts`, `profiles/domain/user-profile-content-codec.ts`. This keeps the cross-feature
+import list of the C2 scope guard closed. Test-only fixtures for stored documents sit beside them
+(`*-test-fixtures.ts`), and build fixtures with the same codec the production read path opens.
 
-- **Identity.** Team-owned skills are a second, additive skill identity alongside the global `skillTrees` catalog. The
-  catalog stays supported, and nothing is migrated or name-mapped. A team skill is identified by its `teamSkills` document
-  id and is always scoped to one `teamId`.
-- **Storage.** Personal ratings are one document per (person, team skill), `teamSkillAssessments/{uid}__{skillId}`. A
-  map keyed by skill id was rejected: it needs dynamic keys that the erasure guard admits only for its reviewed C1 shape.
-- **Module.** `src/features/team-owned-skills/` owns the domain, the store seam with a Firestore implementation and an
-  in-memory fake and the operations (list, create, update, own rating set/clear, and the administrator-entered manual level).
-- **Gates.** Member and administrator decisions reuse `requireGenuineMemberWith` and `requireTeamAdministratorWith`, run
-  inside the same transaction as the write. App-admin status grants team configuration only, never a member's rating.
-- **Known limits.** Previous guidance text is not retained after an edit (only the criteria version changes). The
-  team aggregate (`server/get-team-owned-skill-aggregate.ts`) is the single approved team-owned consumer of the C2 membership
-  scan. It reads ratings through `server/read-team-skill-ratings-batch.ts`, an identity-free reader over exact documents,
-  applies consent, criteria version and threshold 3 (owner decision 2026-11-11), and returns only a level or `insufficient_data` per active skill.
+Keyed blind indexes (for matching without a plaintext value) use `src/lib/encryption/blind-index.ts`: one HKDF-derived key per
+purpose, HMAC-SHA-256. Current purposes are `team-invitation-email` and `roadmap-owner-ref`. A new purpose must be added to
+that module's union type and documented in [`DATA-MODEL.md`](DATA-MODEL.md) §11.
 
-## Unified Teamkompetanse and Competence Plan (2026-11-11, current)
+## 9. Shared components
 
-Sources: `docs/features/team-experience-redesign/SPEC.md` (OD-3 to OD-6) and `docs/SECURITY.md` (TC-SI-1 to TC-SI-11). This
-section describes the code as it stands. Older sections above that describe the retired parallel systems are historical.
+- `src/components/ui/` holds presentation primitives (`Button`, `Card`, `Badge`, `Alert`, `Container`, `PageShell`,
+  `ChartFrame`, dashboard primitives, `Icon`, `SkipLink`). They carry no business logic.
+- `src/components/nav/` holds the shell: `AppShell` (sidebar from `md`, drawer below), `PublicHeader`, `PersonalNav`,
+  `TeamContext`, `AccountMenu`, and `copy.ts`.
+- Navigation items are defined in code (`navGroupsFor` in `AppShell.tsx`, `TeamRouteNav`). Visibility of admin items
+  follows `state.isAdmin` from `/api/me`.
 
-- **One Teamkompetanse page.** `/teams/[teamId]/competence` (`app/(app)/teams/[teamId]/competence/page.tsx`) renders
-  `TeamCompetenceWorkspace` from `src/features/team-owned-skills/components/`. It has two modes, selected on the page:
-  *Automatisk profil* (the team level derived from shared ratings) and *Felles vurdering* (the team level entered by an
-  administrator). Each mode shows one radar and one readable list, which are built from the same rows.
-- **Canonical catalog.** `teamSkills/{skillId}` is the team's own catalog (`src/features/team-owned-skills/`). Administrators
-  create, edit and deactivate skills through `/api/teams/[teamId]/team-skills` and `.../[skillId]`. Names are unique among
-  active skills. A guidance change bumps `criteriaVersion`. The global `skillTrees` catalog is a separate identity and is
-  not mapped to team skills by name.
-- **Individual assessment.** A member sets or clears their own level per active skill through
-  `PUT` / `DELETE /api/teams/[teamId]/team-skills/[skillId]/level` (`teamSkillAssessments/{uid}__{skillId}`). Team
-  members never read another person's rating.
-- **Automatic team level.** `GET /api/teams/[teamId]/team-skills/aggregate` (`server/get-team-owned-skill-aggregate.ts`)
-  reads only shared, current-criteria ratings through `server/read-team-skill-ratings-batch.ts`, applies the k = 3 threshold
-  (`SKILL_COVERAGE_MIN_CONTRIBUTORS`) and returns a level or `insufficient_data` per active skill. It returns no count or
-  person-level value.
-- **Manual team level.** `teamManualAssessments/{skillId}` is written by `PUT` / `DELETE
-  /api/teams/[teamId]/team-skills/[skillId]/manual` (administrators only) and read by `GET
-  /api/teams/[teamId]/team-skills/manual` (genuine members and administrators). The read reports `outdated` when the level
-  was entered under older criteria. It never reports the administrator who entered it.
-- **Competence Plan (independent).** `/teams/[teamId]/competence-plan` is a separate navigation entry. Plans live in
-  `teamCompetencePlans/{planId}` (random UUID) and are created, read, edited and archived through
-  `/api/teams/[teamId]/competence-plans` and `.../[planId]`. A plan needs no competence area, rating, consent or profile.
-  Its title is its own. `treeId` is an optional catalog label, `null` for every plan created now.
-- **Module boundaries.** `team-owned-skills` owns the catalog, the individual and manual levels, the aggregate, the radar
-  (`components/KompetanseprofilRadar.tsx`, `domain/radar-model.ts`) and the workspace copy. It imports the C2 consent,
-  need, coverage-policy and contribution-store modules from `team-skills` (`domain/skill-contribution`, `domain/skill-coverage-policy`, `domain/skill-need`,
-  `domain/team-level`, `server/skill-contribution-store`). `team-competence-plan` imports the team and auth helpers, the roadmap read used for the read-only legacy records (BR-17), and shared level constants from `skill-profiles`. It has
-  no import from `team-owned-skills` or `team-skills`, and no competence area or skill-catalog module.
-- **Retired and not present.** `teamCompetenceAreas`, `teamProfileSettings`, `teamCollaborativeLevels`, the `competence-areas`,
-  `profile-settings` and `skill-levels` routes, the `team-competence-catalog` and `team-competence-profile` modules, and the
-  collaborative profile and numeric skill-levels operations. These have no rules, inventory rows or callers.
-- **Open.** `team-skills` still provides the `skill-needs` and `skill-coverage` routes and their domain, store and gateway,
-  but no page renders them. Whether they return to Teamkompetanse (BR-17a) or are retired is a product decision.
+## 10. Visual design
+
+Colour and typography use Tailwind tokens. The theme module `src/lib/theme/` applies light or dark mode based on the system
+preference (`prefers-color-scheme`). Chart colours and dashboard layout are defined in the UI primitives. The earlier design
+documents are archived at `docs/archive/design/`; the implementation is the reference.
+
+## 11. External dependencies
+
+- Firebase: Auth, Firestore, and the local emulators.
+- Fonts: Geist and Geist Mono, loaded with `next/font/google` in `app/layout.tsx`.
+- No analytics or error-reporting SDK is present (grep for common analytics and error-reporting packages found none).
+
+## 12. Known architectural debt
+
+See [`KNOWN-LIMITATIONS.md`](KNOWN-LIMITATIONS.md) §4.

@@ -226,9 +226,9 @@ describe("readOwnerConversations: owner list (BR-33, BR-36, BR-44)", () => {
       ...deps,
       codec: {
         probeKey: () => codec.probeKey(),
-        decryptForClassification: (envelope) => {
+        decryptForClassification: (envelope, context) => {
           decrypts += 1;
-          return codec.decryptForClassification(envelope);
+          return codec.decryptForClassification(envelope, context);
         },
       },
     };

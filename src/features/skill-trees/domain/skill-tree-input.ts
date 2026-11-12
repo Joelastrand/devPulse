@@ -1,7 +1,7 @@
 import { SKILL_TREE_MAX_NODES, SKILL_TREE_MIN_NODES, type SkillNode } from "./skill-tree";
 
 /**
- * Bounds for a SkillTree's `name` (docs/features/team-skill-tree/SPEC.md —
+ * Bounds for a SkillTree's `name` (docs/archive/features/team-skill-tree/SPEC.md —
  * "Data model", BR-2): non-empty after trimming, and between these two
  * lengths (inclusive), measured on the trimmed text. Reused unchanged by
  * both `createSkillTree` and `updateSkillTree` (TASK-002) — the same
@@ -11,7 +11,7 @@ export const SKILL_TREE_NAME_MIN_LENGTH = 3;
 export const SKILL_TREE_NAME_MAX_LENGTH = 100;
 
 /**
- * Bounds for a single SkillNode's `label` (docs/features/team-skill-tree/
+ * Bounds for a single SkillNode's `label` (docs/archive/features/team-skill-tree/
  * SPEC.md — "Data model", BR-2), measured the same way as
  * `SKILL_TREE_NAME_MIN_LENGTH`/`SKILL_TREE_NAME_MAX_LENGTH`.
  */
@@ -101,7 +101,7 @@ export function validateSkillNodeLabels(input: unknown): ValidateSkillNodeLabels
 
 /**
  * Assigns deterministic, position-matching `nodeId`/`order` values to an
- * already-validated array of trimmed labels (docs/features/team-skill-tree/
+ * already-validated array of trimmed labels (docs/archive/features/team-skill-tree/
  * SPEC.md — "Data model", BR-3): `node-<zero-based index>` in submitted
  * order, with `order` equal to that same index. This is the one place tree
  * creation derives node identity — `createSkillTree` (TASK-002) calls this

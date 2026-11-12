@@ -98,7 +98,7 @@ export interface ResolveChallengeDeps {
 }
 
 /**
- * Resolves an `open` challenge (docs/features/anonymous-challenges/SPEC.md
+ * Resolves an `open` challenge (docs/archive/features/anonymous-challenges/SPEC.md
  * — BR-16, BR-17, BR-21, BR-22). Only an app admin may call this
  * successfully — reuses `requireAppAdmin` unchanged; a plain team member,
  * even of their own team, is rejected `forbidden`.

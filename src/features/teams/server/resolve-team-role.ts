@@ -14,7 +14,7 @@ const TEAMS_COLLECTION = "teams";
 const MEMBERSHIPS_COLLECTION = "teamMemberships";
 
 /**
- * A caller's effective team-scoped role (docs/features/teamadmin-and-team-visibility/SPEC.md).
+ * A caller's effective team-scoped role (docs/archive/features/teamadmin-and-team-visibility/SPEC.md).
  * `admin` is the superadmin (global app admin), `teamadmin` a membership with
  * the approved team-admin role, `member` any other genuine membership.
  * This is a team authorization role, never a professional role.

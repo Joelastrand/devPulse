@@ -11,7 +11,7 @@ import type { RoadmapItemView } from "../../roadmap/server/list-roadmap-items";
 
 /**
  * Team overview summary row and roadmap next-steps panel
- * (docs/features/visual-fidelity-and-ui-fixes TASK-028, reference 05 top half).
+ * (docs/archive/features/visual-fidelity-and-ui-fixes TASK-028, reference 05 top half).
  *
  * Every value is derived from data the overview already loads: the challenges
  * read and the single roadmap read of

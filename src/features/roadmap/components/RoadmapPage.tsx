@@ -34,7 +34,7 @@ type ViewState =
   | { phase: "signed_in"; token: string };
 
 /**
- * `/teams/[teamId]/roadmap` shell (docs/features/team-roadmap/SPEC.md — BR-1,
+ * `/teams/[teamId]/roadmap` shell (docs/archive/features/team-roadmap/SPEC.md — BR-1,
  * BR-2, BR-3, BR-4). Route foundation: auth gating, the shared team
  * navigation (via the shared `TeamPageHeader`) and the link back to
  * Kompetanseområder. The header's team name is purely presentational: a failed

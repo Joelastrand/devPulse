@@ -1,6 +1,6 @@
 /**
  * Client gateway for `/teams/[teamId]`'s survey-instance results/history
- * section (docs/features/managed-surveys/SPEC.md — TASK-012). A thin
+ * section (docs/archive/features/managed-surveys/SPEC.md — TASK-012). A thin
  * `fetch` wrapper around `GET /api/teams/[teamId]/results`, now backed by
  * TASK-011's `getTeamSurveyResults` instead of the retired calendar-period
  * aggregation. Mirrors `current-team-survey-gateway.ts`'s

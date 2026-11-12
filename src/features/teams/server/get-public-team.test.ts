@@ -1,3 +1,4 @@
+import { toPersistedTeam } from "../domain/team-content-codec";
 import { describe, expect, it, vi } from "vitest";
 import { getPublicTeam, type PublicTeamReader } from "./get-public-team";
 
@@ -7,7 +8,12 @@ vi.mock("../../../lib/firebase/admin", () => ({
   },
 }));
 
-const readerFor = (doc: unknown): PublicTeamReader => ({ getTeam: vi.fn().mockResolvedValue(doc) });
+// Teams are read sealed, as in production: a document that carries a name is sealed under its own id.
+const sealedTeam = (teamId: string, doc: unknown): unknown =>
+  typeof doc === "object" && doc !== null && typeof (doc as { name?: unknown }).name === "string"
+    ? toPersistedTeam(teamId, doc as Record<string, unknown> & { name: string })
+    : doc;
+const readerFor = (doc: unknown): PublicTeamReader => ({ getTeam: vi.fn().mockResolvedValue(sealedTeam("team-1", doc)) });
 
 const publicDoc = {
   name: "Team Alfa",

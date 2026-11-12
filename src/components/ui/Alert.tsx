@@ -19,7 +19,7 @@ const VARIANT_CONFIG: Record<AlertVariant, { role: "status" | "alert"; className
 
 /**
  * Shared status/error-message primitive replacing this codebase's inline
- * status/error paragraphs, per docs/features/product-ux-shell/SPEC.md
+ * status/error paragraphs, per docs/archive/features/product-ux-shell/SPEC.md
  * BR-11. Uses `role="alert"` for `error` (assertive) and `role="status"`
  * for `success`/`info` (polite) — matching the accessibility semantics
  * every existing instance already uses. Never maps or rewrites the message

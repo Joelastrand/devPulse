@@ -12,7 +12,7 @@ import { DemoWriteError, writeDemoOperations } from "./writer";
 
 /**
  * Runner: wires config → (online) adapters → preflight → report, and — only in
- * explicit write mode after every gate — the guarded writer (docs/features/
+ * explicit write mode after every gate — the guarded writer (docs/archive/features/
  * demo-team/SPEC.md "Execution interface", BR-3, BR-29, BR-30). All I/O is
  * injected; the runner returns lines instead of printing, so nothing here can
  * leak raw errors, credentials or document data: failures are fixed categories.
@@ -77,7 +77,11 @@ export async function runDemoSeed(input: DemoRunnerInput): Promise<DemoRunnerOut
 
   let plan: ReturnType<typeof buildDemoSeedPlan>;
   try {
-    plan = buildDemoSeedPlan({ presenterUid: config.presenterUid, asOf: config.asOf, encrypt: crypto.encrypt });
+    plan = buildDemoSeedPlan({
+      presenterUid: config.presenterUid,
+      asOf: config.asOf,
+      sealRecord: crypto.sealRecord,
+    });
   } catch {
     return abort([], "plan-failed");
   }

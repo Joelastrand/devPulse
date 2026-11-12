@@ -29,7 +29,7 @@ function challengeData(overrides: Record<string, unknown> = {}): Record<string, 
     ciphertext: "ciphertext-bytes",
     iv: "iv-bytes",
     authTag: "auth-tag-bytes",
-    keyVersion: "v1",
+    keyVersion: "v2", keyId: "k1",
     submittedAt: new Date("2026-01-01T00:00:00Z"),
     ...overrides,
   };

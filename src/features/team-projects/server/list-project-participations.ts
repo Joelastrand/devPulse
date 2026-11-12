@@ -1,4 +1,5 @@
 import "server-only";
+import { openParticipationDocument } from "./team-project-codec";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { authRefusalFor, type AuthRefusal } from "../../auth/server/auth-refusal";
 import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
@@ -40,7 +41,7 @@ export function getDefaultProjectParticipationReadStore(): ProjectParticipationR
         .where("teamId", "==", teamId)
         .limit(limit)
         .get();
-      return snapshot.docs.map((doc) => ({ participationId: doc.id, ...doc.data() }));
+      return snapshot.docs.map((doc) => ({ participationId: doc.id, ...openParticipationDocument(doc.id, doc.data()) }));
     },
   };
 }

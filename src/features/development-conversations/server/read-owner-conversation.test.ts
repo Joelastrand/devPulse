@@ -1,3 +1,5 @@
+import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../../skill-trees/domain/skill-tree-test-fixtures";
+stubSkillTreeEncryptionKey();
 import { describe, expect, it } from "vitest";
 import { FORBIDDEN_DTO_KEYS, OWNER_DTO_KEYS, OWNER_PARTICIPANT_KEYS } from "../domain/dto-keys";
 import type { SharedGoalSnapshot } from "../domain/shared-goal-snapshot";
@@ -37,7 +39,7 @@ function fakeCatalog(trees: Record<string, unknown> = {}) {
   const reader: SkillTreeNameReader = {
     async getSkillTree(treeId) {
       reads.push(treeId);
-      return trees[treeId] === undefined ? undefined : structuredClone(trees[treeId]);
+      return trees[treeId] === undefined ? undefined : sealedSkillTreeFixture(treeId, structuredClone(trees[treeId]));
     },
   };
   return { reader, reads };

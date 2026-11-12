@@ -1,3 +1,4 @@
+import { sealedProfileFixture } from "../../profiles/domain/user-profile-test-fixtures";
 import { describe, expect, it, vi } from "vitest";
 import type { AuthorizeTeamAccessCollection } from "../../teams/server/authorize-team-access";
 import {
@@ -126,7 +127,7 @@ function build(world: World, callerUid = "user-1") {
     now: () => NOW,
     profileReader: {
       async readBatch(uids) {
-        return uids.map((uid) => ({ uid, data: world.profiles?.[uid] }));
+        return uids.map((uid) => ({ uid, data: sealedProfileFixture(uid, world.profiles?.[uid]) }));
       },
     },
   };

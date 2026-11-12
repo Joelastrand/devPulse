@@ -10,7 +10,7 @@ import {
   updateResponsibility,
   type PersonalRecordDeps,
 } from "./record-operations";
-import { encodeSourceRecord } from "./source-record-codec";
+import { encodeSourceRecord, sourceRecordContext } from "./source-record-codec";
 import { RESPONSIBILITY_CAP } from "../domain/constants";
 
 const KEY = Buffer.alloc(32, 7).toString("base64");
@@ -48,8 +48,8 @@ const validCreate = {
 };
 
 /** A stored record sealed with the configured key, for seeding the fake store. */
-function sealedDocument(payload: Record<string, unknown>, plain: Record<string, unknown>, overrides: Record<string, unknown> = {}) {
-  const sealed = encodeSourceRecord(payload);
+function sealedDocument(collection: string, id: string, payload: Record<string, unknown>, plain: Record<string, unknown>, overrides: Record<string, unknown> = {}) {
+  const sealed = encodeSourceRecord(payload, sourceRecordContext(OWNER, collection, id));
   if (!sealed.ok) throw new Error("setup failed");
   const stamp = new Date("2026-11-01T00:00:00.000Z");
   return { ...sealed.envelope, ...plain, createdAt: stamp, updatedAt: stamp, ...overrides };
@@ -108,7 +108,7 @@ describe("responsibilities: owner-only create, list and update (SPEC BR-10 to BR
 
   it("enforces the per-person cap with no write", async () => {
     for (let index = 0; index < RESPONSIBILITY_CAP; index += 1) {
-      store.seed(OWNER, "responsibilities", `seed-${index}`, sealedDocument({ title: "t", description: null }, plainOf));
+      store.seed(OWNER, "responsibilities", `seed-${index}`, sealedDocument("responsibilities", `seed-${index}`, { title: "t", description: null }, plainOf));
     }
     const result = await createResponsibility(OWNER, validCreate, deps);
     expect(result).toEqual({ ok: false, error: "record_limit" });
@@ -124,7 +124,7 @@ describe("responsibilities: owner-only create, list and update (SPEC BR-10 to BR
 
   it("refuses a create when an existing record was sealed with a different key, with no write", async () => {
     process.env.ENCRYPTION_KEY = OTHER_KEY;
-    store.seed(OWNER, "responsibilities", "old-record", sealedDocument({ title: "t", description: null }, plainOf));
+    store.seed(OWNER, "responsibilities", "old-record", sealedDocument("responsibilities", "old-record", { title: "t", description: null }, plainOf));
     process.env.ENCRYPTION_KEY = KEY;
     const result = await createResponsibility(OWNER, validCreate, deps);
     expect(result).toEqual({ ok: false, error: "persistence_failed" });
@@ -135,14 +135,14 @@ describe("responsibilities: owner-only create, list and update (SPEC BR-10 to BR
 describe("responsibilities: key failures never become deletable items (PR-SI-5, C-5)", () => {
   it("fails the whole list with a wrong key and returns no item and no id", async () => {
     process.env.ENCRYPTION_KEY = OTHER_KEY;
-    store.seed(OWNER, "responsibilities", "rec-a", sealedDocument({ title: "t", description: null }, plainOf));
+    store.seed(OWNER, "responsibilities", "rec-a", sealedDocument("responsibilities", "rec-a", { title: "t", description: null }, plainOf));
     process.env.ENCRYPTION_KEY = KEY;
     const list = await listResponsibilities(OWNER, deps);
     expect(list).toEqual({ ok: false, error: "persistence_failed" });
   });
 
   it("reports a tampered record as unavailable, with no id", async () => {
-    const document = sealedDocument({ title: "t", description: null }, plainOf);
+    const document = sealedDocument("responsibilities", "rec-tampered", { title: "t", description: null }, plainOf);
     const bytes = Buffer.from(String(document.ciphertext), "base64");
     bytes[0] = bytes[0] ^ 0xff;
     store.seed(OWNER, "responsibilities", "rec-tampered", { ...document, ciphertext: bytes.toString("base64") });
@@ -153,7 +153,7 @@ describe("responsibilities: key failures never become deletable items (PR-SI-5, 
   });
 
   it("refuses an update of a tampered record, with no write", async () => {
-    const document = sealedDocument({ title: "t", description: null }, plainOf);
+    const document = sealedDocument("responsibilities", "rec-tampered", { title: "t", description: null }, plainOf);
     const bytes = Buffer.from(String(document.ciphertext), "base64");
     bytes[0] = bytes[0] ^ 0xff;
     const tampered = { ...document, ciphertext: bytes.toString("base64") };
@@ -165,7 +165,7 @@ describe("responsibilities: key failures never become deletable items (PR-SI-5, 
 
   it("refuses an update with a wrong key without writing, and the stored document is unchanged", async () => {
     process.env.ENCRYPTION_KEY = OTHER_KEY;
-    const document = sealedDocument({ title: "t", description: null }, plainOf);
+    const document = sealedDocument("responsibilities", "rec-b", { title: "t", description: null }, plainOf);
     store.seed(OWNER, "responsibilities", "rec-b", document);
     process.env.ENCRYPTION_KEY = KEY;
     const result = await updateResponsibility(OWNER, "rec-b", { title: "Ny" }, deps);
@@ -174,7 +174,7 @@ describe("responsibilities: key failures never become deletable items (PR-SI-5, 
   });
 
   it("reports a structurally invalid record (extra field) as a delete-only recovery item", async () => {
-    store.seed(OWNER, "responsibilities", "rec-extra", { ...sealedDocument({ title: "t", description: null }, plainOf), leaked: "x" });
+    store.seed(OWNER, "responsibilities", "rec-extra", { ...sealedDocument("responsibilities", "rec-extra", { title: "t", description: null }, plainOf), leaked: "x" });
     const list = await listResponsibilities(OWNER, deps);
     expect(list.ok).toBe(true);
     if (!list.ok) return;
@@ -182,7 +182,7 @@ describe("responsibilities: key failures never become deletable items (PR-SI-5, 
   });
 
   it("refuses to update a malformed record, with no write", async () => {
-    const malformed = { ...sealedDocument({ title: "t", description: null }, plainOf), leaked: "x" };
+    const malformed = { ...sealedDocument("responsibilities", "rec-extra", { title: "t", description: null }, plainOf), leaked: "x" };
     store.seed(OWNER, "responsibilities", "rec-extra", malformed);
     const result = await updateResponsibility(OWNER, "rec-extra", { title: "Ny" }, deps);
     expect(result).toEqual({ ok: false, error: "record_unavailable" });
@@ -191,7 +191,7 @@ describe("responsibilities: key failures never become deletable items (PR-SI-5, 
 
   it("deletes a record under a wrong key, without decrypting it", async () => {
     process.env.ENCRYPTION_KEY = OTHER_KEY;
-    store.seed(OWNER, "responsibilities", "rec-c", sealedDocument({ title: "t", description: null }, plainOf));
+    store.seed(OWNER, "responsibilities", "rec-c", sealedDocument("responsibilities", "rec-c", { title: "t", description: null }, plainOf));
     process.env.ENCRYPTION_KEY = KEY;
     const result = await deleteResponsibility(OWNER, "rec-c", deps);
     expect(result).toEqual({ ok: true });

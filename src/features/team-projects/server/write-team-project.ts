@@ -1,4 +1,5 @@
 import "server-only";
+import { openTeamProjectDocument, toPersistedTeamProject } from "./team-project-codec";
 import { randomUUID } from "node:crypto";
 import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
@@ -86,13 +87,14 @@ function toFirestoreTx(db: Firestore, tx: Transaction): WriteTeamProjectTx {
         const value = data[key] as { toDate?: () => Date } | null | undefined;
         if (value && typeof value.toDate === "function") data[key] = value.toDate();
       }
-      return { projectId, ...data };
+      // A document that cannot be opened has no title, so the domain parser refuses it.
+      return { projectId, ...(openTeamProjectDocument(projectId, data) ?? {}) };
     },
     createProject(projectId, data) {
-      tx.create(projects().doc(projectId), data);
+      tx.create(projects().doc(projectId), toPersistedTeamProject(projectId, data));
     },
     setProject(projectId, data) {
-      tx.set(projects().doc(projectId), data);
+      tx.set(projects().doc(projectId), toPersistedTeamProject(projectId, data));
     },
   };
 }

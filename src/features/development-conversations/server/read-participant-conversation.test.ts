@@ -1,3 +1,5 @@
+import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../../skill-trees/domain/skill-tree-test-fixtures";
+stubSkillTreeEncryptionKey();
 import { describe, expect, it } from "vitest";
 import { PARTICIPANT_DTO_KEYS } from "../domain/dto-keys";
 import type { SharedGoalSnapshot } from "../domain/shared-goal-snapshot";
@@ -50,7 +52,7 @@ function setup(
     getSkillTree: async (treeId) =>
       trees[treeId] === undefined
         ? undefined
-        : {
+        : sealedSkillTreeFixture(treeId, {
             name: trees[treeId],
             nodes: [
               { nodeId: "node-0", label: "Start", order: 0 },
@@ -58,7 +60,7 @@ function setup(
             ],
             createdAt: new Date("2026-08-01T08:00:00.000Z"),
             createdBy: "admin-1",
-          },
+          }),
   };
   const deps: ReadParticipantConversationDeps = {
     store,

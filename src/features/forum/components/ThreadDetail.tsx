@@ -68,7 +68,7 @@ type ViewState =
   | { phase: "loaded"; token: string; generation: number; result: LoadResult };
 
 /**
- * `/teams/[teamId]/forum/[threadId]` (docs/features/team-forum/SPEC.md —
+ * `/teams/[teamId]/forum/[threadId]` (docs/archive/features/team-forum/SPEC.md —
  * TASK-005, BR-16, BR-38 through BR-40, BR-46). Mirrors `TeamDetail`'s
  * client-side auth-state and generation-guard pattern via the shared
  * `useAuthGatedResource` hook, with both `teamId` and `threadId` as extra

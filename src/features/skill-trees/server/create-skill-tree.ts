@@ -1,3 +1,4 @@
+import { toPersistedSkillTree } from "../domain/skill-tree-content-codec";
 import "server-only";
 import { runFencedTransaction, writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
@@ -13,7 +14,7 @@ const SKILL_TREES_COLLECTION = "skillTrees";
  * The write seam this operation depends on, satisfied in production by a
  * Firestore `CollectionReference` (whose `.add()` assigns the opaque,
  * auto-generated document ID that becomes `treeId` — never client-supplied
- * or content-derived, docs/features/team-skill-tree/SPEC.md BR-7) and by an
+ * or content-derived, docs/archive/features/team-skill-tree/SPEC.md BR-7) and by an
  * in-memory fake in tests.
  */
 export interface SkillTreesCollection {
@@ -27,7 +28,7 @@ function getDefaultCollection(actorUid: string): SkillTreesCollection {
       const db = getFirestoreDb();
       const ref = db.collection(SKILL_TREES_COLLECTION).doc();
       await runFencedTransaction(db, actorUid, async (tx) => {
-        tx.create(ref, record);
+        tx.create(ref, toPersistedSkillTree(ref.id, { ...record }));
       });
       return { id: ref.id };
     },
@@ -49,7 +50,7 @@ export interface CreateSkillTreeDeps {
 }
 
 /**
- * Creates a new SkillTree (docs/features/team-skill-tree/SPEC.md — BR-1
+ * Creates a new SkillTree (docs/archive/features/team-skill-tree/SPEC.md — BR-1
  * through BR-3, BR-7). Only an app admin may call this successfully —
  * reuses `requireAppAdmin` unchanged.
  *

@@ -1,7 +1,7 @@
 import type { SurveyQuestion } from "./question-definitions";
 
 /**
- * Built-in survey templates (docs/features/team-survey-builder/SPEC.md —
+ * Built-in survey templates (docs/archive/features/team-survey-builder/SPEC.md —
  * "Templates"). Each template is a factory, not a shared constant: every call
  * returns a fresh, independent copy, so creating a survey from a template
  * copies its definitions and can never mutate another survey or the template.

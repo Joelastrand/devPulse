@@ -22,7 +22,7 @@ export function isValidTeamStatus(value: unknown): value is TeamStatus {
 /**
  * A Firestore `teams` document. `teamId` is a stable, server-generated,
  * opaque identifier (a Firestore auto-generated document ID) — never
- * derived from `name` (docs/features/team-management/SPEC.md —
+ * derived from `name` (docs/archive/features/team-management/SPEC.md —
  * Architecture decisions → "Team identifier scheme").
  */
 export interface Team {

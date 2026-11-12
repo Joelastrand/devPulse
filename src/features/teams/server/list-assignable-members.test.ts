@@ -1,3 +1,4 @@
+import { sealedProfileFixture } from "../../profiles/domain/user-profile-test-fixtures";
 import { describe, expect, it, vi } from "vitest";
 import type { AuthorizeTeamAccessCollection } from "./authorize-team-access";
 import {
@@ -83,7 +84,7 @@ function build(world: World, callerUid = "user-1") {
       async readBatch(uids) {
         log.profileBatches.push([...uids]);
         if (world.failProfiles) throw new Error("secret internal detail");
-        return uids.map((uid) => ({ uid, data: world.profiles?.[uid] }));
+        return uids.map((uid) => ({ uid, data: sealedProfileFixture(uid, world.profiles?.[uid]) }));
       },
     },
   };

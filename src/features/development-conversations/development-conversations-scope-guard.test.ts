@@ -167,6 +167,7 @@ const FORBIDDEN_CONCEPT_PHRASES = ["read receipt", "last viewed", "on track", "m
  */
 const INTERNAL_ONLY_KEYS = [
   "keyCheck", // CL-27: internal cryptographic metadata, not authorization, identity, memberRef or a recovery token
+  "keyId",
   "keyVersion",
   "ciphertext",
   "iv",
@@ -203,6 +204,7 @@ const EXPECTED_STORED_OWNER_PLAIN_KEYS = [
   "iv",
   "authTag",
   "keyVersion",
+  "keyId",
   "keyCheck",
 ];
 const EXPECTED_PARTICIPATION_INDEX_KEYS = ["ownerUid", "invitedAt"];

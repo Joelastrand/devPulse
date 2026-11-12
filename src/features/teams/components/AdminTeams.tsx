@@ -43,7 +43,7 @@ function createErrorMessage(error: string): string {
 }
 
 /**
- * Admin-only `/admin/teams` page (docs/features/team-management/SPEC.md —
+ * Admin-only `/admin/teams` page (docs/archive/features/team-management/SPEC.md —
  * BR-1, BR-2, BR-3 UI). Mirrors `TeamsOverview`/`TeamDetail`'s client-side
  * auth-state and generation-guard pattern via the shared
  * `useAuthGatedResource` hook: the client holds the Firebase ID token (no
@@ -135,7 +135,7 @@ export function AdminTeams() {
   }
 
   /**
-   * Closes the creation form without creating anything (docs/features/
+   * Closes the creation form without creating anything (docs/archive/features/
    * ui-refresh/SPEC.md — BR-14). Unmounting the form on collapse is
    * acceptable per `SkillTreeCorrectionForm`'s existing precedent — any
    * in-progress, unsubmitted name is discarded, never any already-submitted

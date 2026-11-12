@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getPublicTeam } from "../../../../../src/features/teams/server/get-public-team";
 
 /**
- * Anonymous read of one public team (docs/features/teamadmin-and-team-visibility/SPEC.md). No authentication is read and
+ * Anonymous read of one public team (docs/archive/features/teamadmin-and-team-visibility/SPEC.md). No authentication is read and
  * none is required. The response is the explicit `{team: {teamId, name}}` projection only. A private, disabled or
  * unknown team is the same `404`. Never cached, so a visibility change takes effect on the next request.
  */

@@ -1,3 +1,5 @@
+import { persistedSurveyFixture, stubSurveyEncryptionKey } from "./survey-test-fixtures";
+stubSurveyEncryptionKey();
 import { describe, expect, it, vi } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type { DeleteOrArchiveSurveyDocSnapshot, SurveyDocStore } from "./delete-or-archive-survey";
@@ -33,7 +35,7 @@ function fakeDocStore(data: Record<string, unknown> | undefined) {
   const store: SurveyDocStore & { deleted: string[] } = {
     deleted,
     async get(): Promise<DeleteOrArchiveSurveyDocSnapshot> {
-      return { exists: data !== undefined, data: () => data };
+      return { exists: data !== undefined, data: () => (data === undefined ? undefined : persistedSurveyFixture(SURVEY_ID, data)) };
     },
     async delete(surveyId) {
       deleted.push(surveyId);

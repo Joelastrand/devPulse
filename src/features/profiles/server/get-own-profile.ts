@@ -15,7 +15,7 @@ export interface GetOwnProfileDeps {
 
 /**
  * Returns the caller's own display name, or `null` when none is set or the
- * stored document is invalid (docs/features/member-identity-and-team-roles/
+ * stored document is invalid (docs/archive/features/member-identity-and-team-roles/
  * SPEC.md — BR-1, BR-7). The `uid` comes exclusively from the verified ID
  * token; no `uid` parameter exists. Never falls back to e-mail or any other
  * identity value when no name is set.

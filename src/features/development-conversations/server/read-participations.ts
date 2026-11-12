@@ -158,7 +158,7 @@ async function summarizeEntry(
   if (!reads.keyAvailable()) return FAIL;
   // A key failure throws out of the classifier and is caught by the caller as `persistence_failed`. Malformed or
   // unauthenticated content is an omission for this entry, never a whole-list failure.
-  const classification = classifyOwnerDocument(rawOwner, deps.codec);
+  const classification = classifyOwnerDocument(rawOwner, deps.codec, { ownerUid, conversationId });
   if (classification.kind !== "valid") return OMIT;
 
   return {

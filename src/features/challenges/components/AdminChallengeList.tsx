@@ -16,7 +16,7 @@ export type AdminChallengeListState =
 /**
  * Per-challenge admin action state — mirrors `AdminTeamDetail`'s existing
  * `SurveyRowActionState`/`RequestActionState` per-row patterns
- * (docs/features/anonymous-challenges/SPEC.md — TASK-006). Only one action
+ * (docs/archive/features/anonymous-challenges/SPEC.md — TASK-006). Only one action
  * is ever pending for a given row at a time; `confirming_deletion` is its
  * own phase, distinct from `pending`, so the destructive delete call never
  * fires before an explicit confirmation.
@@ -39,7 +39,7 @@ export interface AdminChallengeListProps {
 
 /**
  * `/admin/teams/[teamId]`'s "Utfordringer" management section
- * (docs/features/anonymous-challenges/SPEC.md — BR-30, BR-31, BR-35).
+ * (docs/archive/features/anonymous-challenges/SPEC.md — BR-30, BR-31, BR-35).
  * Renders **exactly** what `listTeamChallengesForAdmin` (via
  * `fetchAdminChallenges`'s shape validation) returned — active/archived is a
  * pure presentation split of an already-fully-eligible, already-decrypted

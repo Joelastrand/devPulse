@@ -63,7 +63,7 @@ export interface ListTeamAccessRequestsDeps {
 
 /**
  * Lists a team's pending access requests for an app admin
- * (docs/features/team-management/SPEC.md — BR-30). Each requester's email
+ * (docs/archive/features/team-management/SPEC.md — BR-30). Each requester's email
  * is resolved live from Firebase Auth per `uid` — never persisted on or
  * read from the `teamAccessRequests` document itself (SPEC → Architecture
  * decisions → "Firestore collections": deliberately no persisted email),

@@ -53,7 +53,7 @@ describe("GET /api/teams/[teamId]/skills", () => {
     expect(payload.canReportProgress).toBe(true);
   });
 
-  it("passes through canReportProgress: false exactly as getTeamSkillProgress returned it (docs/features/skill-progress-self-report/SPEC.md — 'Permission-UI correction')", async () => {
+  it("passes through canReportProgress: false exactly as getTeamSkillProgress returned it (docs/archive/features/skill-progress-self-report/SPEC.md — 'Permission-UI correction')", async () => {
     getTeamSkillProgressMock.mockResolvedValue({ ok: true, skills: [], canReportProgress: false });
 
     const response = await GET(getRequest("Bearer valid-token"), params());

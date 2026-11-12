@@ -4,7 +4,7 @@ import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
- * Admin-only survey-close endpoint (docs/features/managed-surveys/SPEC.md —
+ * Admin-only survey-close endpoint (docs/archive/features/managed-surveys/SPEC.md —
  * BR-7). Kept thin — authorization, idempotency, and the
  * `teamSurveyState` cleanup all live in `closeSurvey`
  * (`.claude/rules/nextjs-react.md`). This route's own `teamId` path segment

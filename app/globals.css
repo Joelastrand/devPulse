@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /*
- * Semantic token contract (docs/features/product-experience/SPEC.md — Token
+ * Semantic token contract (docs/archive/features/product-experience/SPEC.md — Token
  * contract). Light is the default. Dark applies only when the root element
  * carries data-theme="dark" (set by the inline script in app/layout.tsx).
  * The OS preference is never read here, so an OS dark setting does not change

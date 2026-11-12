@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { randomBytes } from "node:crypto";
 import { skillNeedDocId } from "../domain/skill-need";
+import { toPersistedSkillNeed } from "./skill-need-content-codec";
+
+vi.stubEnv("ENCRYPTION_KEY", randomBytes(32).toString("base64"));
 
 const calls: Array<{ op: string; arg: unknown }> = [];
 let queryResult: Array<{ id: string; data: () => unknown }> = [];
@@ -66,7 +70,7 @@ beforeEach(() => {
 
 describe("default Firestore reader", () => {
   it("reads exactly teamSkillNeeds with a single-field where and limit 501 (no orderBy, no composite index)", async () => {
-    queryResult = [{ id: skillNeedDocId("team-1", "t1"), data: () => need("team-1", "t1", { createdAt: ts(WHEN), updatedAt: ts(WHEN) }) }];
+    queryResult = [{ id: skillNeedDocId("team-1", "t1"), data: () => toPersistedSkillNeed(need("team-1", "t1", { createdAt: ts(WHEN), updatedAt: ts(WHEN) })) }];
 
     const listed = await getDefaultSkillNeedsStore().listNeeds("team-1");
 

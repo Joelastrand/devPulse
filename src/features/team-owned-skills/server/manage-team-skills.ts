@@ -356,7 +356,7 @@ export async function setOwnTeamSkillLevel(
       const skill = await readActiveTeamSkill(tx, teamId, skillId);
       if (!skill.ok) return skill;
 
-      const existing = await tx.getAssessment(identity.uid, skillId);
+      const existing = await tx.getAssessment(identity.uid, teamId, skillId);
       let createdAt = now;
       if (existing !== undefined) {
         if (!isValidTeamSkillAssessment(existing, { uid: identity.uid, skillId })) {
@@ -407,7 +407,7 @@ export async function clearOwnTeamSkillLevel(
       const skill = await readActiveTeamSkill(tx, teamId, skillId);
       if (!skill.ok) return skill;
 
-      const existing = await tx.getAssessment(identity.uid, skillId);
+      const existing = await tx.getAssessment(identity.uid, teamId, skillId);
       if (existing === undefined) return { ok: true, skillId, cleared: false };
       if (!isValidTeamSkillAssessment(existing, { uid: identity.uid, skillId })) {
         return { ok: false, error: "assessment_unreadable" };

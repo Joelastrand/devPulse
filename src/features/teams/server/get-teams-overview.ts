@@ -1,3 +1,4 @@
+import { openTeamDocument } from "../domain/team-content-codec";
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
@@ -27,7 +28,7 @@ export type TeamRelationship =
 
 /**
  * The minimal, non-sensitive shape one row of `/teams` shows
- * (docs/features/team-management/SPEC.md — BR-11): never a member list,
+ * (docs/archive/features/team-management/SPEC.md — BR-11): never a member list,
  * invitation list, another user's relationship, or any result/aggregate
  * data.
  */
@@ -105,7 +106,7 @@ function readTeamId(raw: unknown): string | null {
 
 /**
  * Loads the authenticated caller's `/teams` overview
- * (docs/features/team-management/SPEC.md — BR-11 through BR-13). Identity
+ * (docs/archive/features/team-management/SPEC.md — BR-11 through BR-13). Identity
  * always comes from a revocation-checked `verifyIdToken` — never a
  * client-supplied uid/email/admin flag.
  *
@@ -239,7 +240,11 @@ export async function getTeamsOverview(
     if (typeof rawTeam !== "object" || rawTeam === null) {
       continue;
     }
-    const data = rawTeam as Record<string, unknown>;
+    const opened = openTeamDocument(teamId, rawTeam);
+    if (typeof opened !== "object" || opened === null) {
+      continue;
+    }
+    const data = opened as Record<string, unknown>;
     if (!isValidTeamStatus(data.status)) {
       continue;
     }

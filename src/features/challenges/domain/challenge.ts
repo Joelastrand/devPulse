@@ -1,24 +1,36 @@
 /**
  * A challenge's derived lifecycle state — never a separately stored status
- * field that could drift from its derivation (docs/features/
+ * field that could drift from its derivation (docs/archive/features/
  * anonymous-challenges/SPEC.md — "Lifecycle", BR-6). Always recomputed from
  * `resolvedAt`/`archivedAt` via `effectiveChallengeStatus`.
  */
 export type ChallengeStatus = "open" | "resolved" | "archived";
 
 /**
- * The exact key-version literal `src/lib/encryption/encryption.ts` ever
+ * The record-envelope literals `src/lib/encryption/record-envelope.ts` ever
  * produces. Declared independently here (not imported from that module)
  * so this domain module stays framework/I-O free — this module never
  * imports `server-only`, Firebase, or any encryption implementation, only
- * the shape its persisted output must satisfy.
+ * the shape its persisted output must satisfy. A challenge is bound to its
+ * own document by AAD `challenge:<teamId>:<challengeId>`, which this module
+ * never sees.
  */
-export type ChallengeKeyVersion = "v1";
+export type ChallengeKeyVersion = "v2";
+export type ChallengeKeyId = "k1";
 
-const CHALLENGE_KEY_VERSION: ChallengeKeyVersion = "v1";
+const CHALLENGE_KEY_VERSION: ChallengeKeyVersion = "v2";
+const CHALLENGE_KEY_ID: ChallengeKeyId = "k1";
 
 /**
- * The canonical, persisted `Challenge` domain shape (docs/features/
+ * AAD of one challenge's sealed text: this team and this document. Any ciphertext moved to another challenge or team
+ * fails authentication. The same string is used on write and read, so it lives here, next to the envelope literals.
+ */
+export function challengeContext(teamId: string, challengeId: string): string {
+  return `challenge:${teamId}:${challengeId}`;
+}
+
+/**
+ * The canonical, persisted `Challenge` domain shape (docs/archive/features/
  * anonymous-challenges/SPEC.md — "Data model"). `challengeId` is a stable,
  * opaque, Firestore auto-generated document ID — never derived from
  * `teamId`, `uid`, or the challenge's own text, and never client-supplied.
@@ -41,6 +53,7 @@ export interface Challenge {
   iv: string;
   authTag: string;
   keyVersion: ChallengeKeyVersion;
+  keyId: ChallengeKeyId;
   submittedAt: Date;
   resolvedAt?: Date;
   resolvedBy?: string | null;
@@ -61,7 +74,7 @@ export interface ChallengeLifecycleFields {
 
 /**
  * The single authoritative derivation of a challenge's lifecycle state,
- * computed identically everywhere it's used (docs/features/
+ * computed identically everywhere it's used (docs/archive/features/
  * anonymous-challenges/SPEC.md — "Lifecycle"):
  *
  * - `archived` if `archivedAt` is set — takes precedence even when
@@ -103,9 +116,9 @@ export function effectiveChallengeStatus(
  * Returns `false` (never throws) for a missing/non-object candidate, a
  * `challengeId` that doesn't match `expected.challengeId`, a missing/blank
  * `teamId`, a missing/blank `ciphertext`/`iv`/`authTag`, a `keyVersion`
- * that isn't the exact literal `"v1"` (a syntactically-valid-but-wrong
- * value like `"v2"` or `""` is rejected, not just "any string" — this
- * codebase's encryption module only ever produces `"v1"`), a missing or
+ * that isn't the exact literal `"v2"` (a syntactically-valid-but-wrong
+ * value like `"v1"` or `""` is rejected, not just "any string"), a `keyId`
+ * that isn't `"k1"`, a missing or
  * invalid `submittedAt`, or a `resolvedAt`/`resolvedBy` pair (or
  * `archivedAt`/`archivedBy` pair) that isn't either both present and
  * well-typed or both absent.
@@ -132,6 +145,7 @@ export function isValidChallenge(
     isNonEmptyString(record.iv) &&
     isNonEmptyString(record.authTag) &&
     record.keyVersion === CHALLENGE_KEY_VERSION &&
+    record.keyId === CHALLENGE_KEY_ID &&
     isValidDate(record.submittedAt) &&
     isValidLifecycleActorPair(record.resolvedAt, record.resolvedBy) &&
     isValidLifecycleActorPair(record.archivedAt, record.archivedBy)

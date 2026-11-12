@@ -15,6 +15,7 @@ import { getDefaultConversationStore } from "./conversation-store";
 import type { ConversationStore, ConversationTransaction, RawConversationData } from "./conversation-store-types";
 import { classifyOwnerDocument, type OwnerReadCodec } from "./owner-read";
 import { readGenuineActiveMembership } from "./team-eligibility";
+import { conversationContext } from "../domain/stored-owner-conversation";
 
 /**
  * Participant notes write (SPEC BR-20, BR-21, BR-28, BR-48, BR-49, BR-50 (1) and (2), BR-53, D2-SI-7, IMPL-1; TASK-019).
@@ -29,7 +30,7 @@ import { readGenuineActiveMembership } from "./team-eligibility";
 
 /** The codec operations this write needs: the probe, the classifier's decrypt seam and the encoder. */
 export interface WriteParticipantNotesCodec extends OwnerReadCodec {
-  encodeContent(content: ConversationContent): EncodeContentResult;
+  encodeContent(content: ConversationContent, context: string): EncodeContentResult;
 }
 
 export interface WriteParticipantNotesDeps {
@@ -94,12 +95,12 @@ async function writeInTransaction(
   if (!deps.codec.probeKey().ok) return FAILED;
 
   // IMPL-1: the rewrite needs the decrypted payload. A key failure throws out of the classifier and is caught by the caller.
-  const classification = classifyOwnerDocument(raw, deps.codec);
+  const classification = classifyOwnerDocument(raw, deps.codec, { ownerUid, conversationId });
   if (classification.kind !== "valid") return NOT_FOUND;
 
   // Only `participantNotes` changes. Owner sections are carried over unchanged (BR-49, D2-SI-7).
   const content: ConversationContent = { ...classification.record.content, participantNotes: notes };
-  const encoded = deps.codec.encodeContent(content);
+  const encoded = deps.codec.encodeContent(content, conversationContext(ownerUid, conversationId));
   if (!encoded.ok) return FAILED;
 
   tx.updateOwner(ownerUid, conversationId, {

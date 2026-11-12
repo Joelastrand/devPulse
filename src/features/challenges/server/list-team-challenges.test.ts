@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { EncryptedPayload } from "../../../lib/encryption/encryption";
-import { decrypt, encrypt } from "../../../lib/encryption/encryption";
+import { decryptRecord, encryptRecord, type RecordEnvelope } from "../../../lib/encryption/record-envelope";
+import { challengeContext } from "../domain/challenge";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type { AuthorizeTeamAccessCollection } from "../../teams/server/authorize-team-access";
 import * as listTeamChallengesModule from "./list-team-challenges";
@@ -40,8 +40,9 @@ function verifyTokenReturning(identity: VerifiedIdentity) {
   });
 }
 
-function encryptedFields(text: string): EncryptedPayload {
-  return encrypt(text);
+/** The v2 envelope fields a stored challenge carries, sealed with the AAD of the document that holds them. */
+function encryptedFields(text: string, challengeId: string): RecordEnvelope {
+  return encryptRecord(text, challengeContext(TEAM_ID, challengeId));
 }
 
 function challengeDoc(
@@ -49,7 +50,7 @@ function challengeDoc(
   text: string | undefined,
   overrides: Record<string, unknown> = {},
 ): RawChallengeDoc {
-  const encoded = text !== undefined ? encryptedFields(text) : undefined;
+  const encoded = text !== undefined ? encryptedFields(text, id) : undefined;
   return {
     id,
     data: {
@@ -59,7 +60,8 @@ function challengeDoc(
         ciphertext: "not-used",
         iv: "not-used",
         authTag: "not-used",
-        keyVersion: "v1",
+        keyVersion: "v2",
+        keyId: "k1",
       }),
       ...overrides,
     },
@@ -113,12 +115,12 @@ function fakeMembershipReader(memberships: Record<string, unknown> = {}): Member
   };
 }
 
-function spyDecrypt(): ((payload: EncryptedPayload) => string) & { calls: EncryptedPayload[] } {
-  const calls: EncryptedPayload[] = [];
-  const fn = ((payload: EncryptedPayload) => {
-    calls.push(payload);
-    return decrypt(payload);
-  }) as ((payload: EncryptedPayload) => string) & { calls: EncryptedPayload[] };
+function spyDecrypt(): ((envelope: RecordEnvelope, context: string) => string) & { calls: RecordEnvelope[] } {
+  const calls: RecordEnvelope[] = [];
+  const fn = ((envelope: RecordEnvelope, context: string) => {
+    calls.push(envelope);
+    return decryptRecord(envelope, context);
+  }) as ((envelope: RecordEnvelope, context: string) => string) & { calls: RecordEnvelope[] };
   fn.calls = calls;
   return fn;
 }
@@ -299,6 +301,23 @@ describe("listTeamChallengesForMember", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.challenges.map((c) => c.challengeId)).toEqual(["open-1"]);
+  });
+
+  it("excludes a ciphertext moved to another challenge id (AAD substitution), without failing the call", async () => {
+    const moved = challengeDoc("moved-1", RESOLVED_TEXT);
+    const source = challengeDoc("open-1", OPEN_TEXT);
+    // The sealed text of `moved-1` is copied under the document id `moved-2`: AAD mismatch, so it must not be shown.
+    const reader = fakeReader([
+      source,
+      { id: "moved-2", data: { ...(moved.data as Record<string, unknown>) } },
+    ]);
+
+    const result = await listTeamChallengesForMember("token", TEAM_ID, memberBaseDeps({ reader }));
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.challenges.map((c) => c.challengeId).sort()).toEqual(["open-1"]);
+    expect(JSON.stringify(result)).not.toContain(RESOLVED_TEXT);
   });
 
   it("excludes a record whose ciphertext fails to decrypt, without failing the whole call or logging detail", async () => {

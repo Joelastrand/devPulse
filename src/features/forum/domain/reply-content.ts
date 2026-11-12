@@ -1,5 +1,5 @@
 /**
- * Bounds for a reply's body (docs/features/team-forum/SPEC.md — BR-4):
+ * Bounds for a reply's body (docs/archive/features/team-forum/SPEC.md — BR-4):
  * non-empty after trimming, and between these two lengths (inclusive),
  * measured on the trimmed text.
  */
@@ -11,7 +11,7 @@ export type ValidateReplyBodyResult =
   | { ok: false; error: "invalid_input" };
 
 /**
- * Validates and normalizes a raw, untrusted reply body (docs/features/
+ * Validates and normalizes a raw, untrusted reply body (docs/archive/features/
  * team-forum/SPEC.md — BR-4). This is the single canonical trim path for a
  * reply body — callers must use the returned `body`, not re-trim the
  * original input themselves.

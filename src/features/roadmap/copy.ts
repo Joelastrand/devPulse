@@ -1,7 +1,7 @@
 import type { RoadmapPriority, RoadmapStatus } from "./domain/roadmap-item";
 
 /**
- * Norwegian copy for the plan summary in Kompetanseområder (docs/features/
+ * Norwegian copy for the plan summary in Kompetanseområder (docs/archive/features/
  * team-skill-planning/SPEC.md — BR-30, BR-35). The owner help text and the
  * unavailable-owner wording are neutral: they say nothing about why an owner
  * is not shown.

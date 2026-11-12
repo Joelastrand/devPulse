@@ -1,3 +1,4 @@
+import { openTeamDocument } from "../domain/team-content-codec";
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { effectiveTeamVisibility } from "../domain/team-authority";
@@ -6,7 +7,7 @@ import { isValidTeamStatus } from "../domain/team";
 const TEAMS_COLLECTION = "teams";
 
 /**
- * The only shape an anonymous visitor ever receives for a team (docs/features/teamadmin-and-team-visibility/SPEC.md).
+ * The only shape an anonymous visitor ever receives for a team (docs/archive/features/teamadmin-and-team-visibility/SPEC.md).
  * It is an explicit projection built field by field: no member data, no visibility or status fields, no timestamps,
  * no audit fields, and no content that requires a competence-consent or coverage decision.
  */
@@ -56,8 +57,9 @@ export async function getPublicTeam(teamId: string, deps: GetPublicTeamDeps = {}
     return { ok: false, error: "read_failed" };
   }
 
-  if (typeof raw !== "object" || raw === null) return { ok: false, error: "not_found" };
-  const record = raw as Record<string, unknown>;
+  const opened = openTeamDocument(teamId, raw);
+  if (typeof opened !== "object" || opened === null) return { ok: false, error: "not_found" };
+  const record = opened as Record<string, unknown>;
   if (!isValidTeamStatus(record.status) || record.status !== "active") return { ok: false, error: "not_found" };
   if (effectiveTeamVisibility(record.visibility) !== "public") return { ok: false, error: "not_found" };
   if (typeof record.name !== "string" || record.name.trim().length === 0) return { ok: false, error: "not_found" };

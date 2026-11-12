@@ -48,7 +48,7 @@ function toSkillSectionState(result: FetchTeamSkillsResult): SkillSectionState {
 /**
  * The composed result this component renders — never a raw gateway response. Only `authorized` and
  * `results_unavailable` ever carry team data; every other state is a non-sensitive "you don't have access" variant
- * (docs/features/team-management/SPEC.md — BR-14, BR-15, BR-16).
+ * (docs/archive/features/team-management/SPEC.md — BR-14, BR-15, BR-16).
  */
 type TeamDetailResult =
   | { status: "unauthenticated" }
@@ -137,7 +137,7 @@ type RequestActionState =
 const RELATIONSHIP_MESSAGES: Record<DeniedRelationship, string> = teamsCopy.detail.relationshipMessages;
 
 /**
- * Authenticated `/teams/[teamId]` overview (docs/features/team-management/SPEC.md — BR-12, BR-14 through BR-16;
+ * Authenticated `/teams/[teamId]` overview (docs/archive/features/team-management/SPEC.md — BR-12, BR-14 through BR-16;
  * reference 18). Renders the team header and the overview only. Detailed workflows (roadmap, competence plan, skill
  * tracking, needs, roster, visibility, results history) live on their own team sub-pages.
  *

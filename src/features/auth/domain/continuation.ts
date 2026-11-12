@@ -1,7 +1,7 @@
 /**
  * Validates and resolves the `continue` query parameter accepted by
  * `/sign-in` as a post-authentication redirect target
- * (docs/features/managed-surveys/SPEC.md — BR-40, "The sign-in flow needs
+ * (docs/archive/features/managed-surveys/SPEC.md — BR-40, "The sign-in flow needs
  * a continuation target").
  *
  * This is a narrow allow-list, not a same-origin/relative-URL check: the

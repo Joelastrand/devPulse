@@ -1,5 +1,5 @@
 /**
- * Formal organizational role assignment (docs/features/role-profiles/SPEC.md, "Formal role assignment"). One document per
+ * Formal organizational role assignment (docs/archive/features/role-profiles/SPEC.md, "Formal role assignment"). One document per
  * user at `roleAssignments/{uid}`, holding a stable `roleId` reference. An assignment is organizational information only:
  * it grants no application permission and nothing reads it for authorization, skills or goals.
  */

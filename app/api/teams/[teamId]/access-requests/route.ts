@@ -5,7 +5,7 @@ const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
  * Non-admin, authenticated access-request endpoint
- * (docs/features/team-management/SPEC.md — BR-23). Kept thin —
+ * (docs/archive/features/team-management/SPEC.md — BR-23). Kept thin —
  * authorization and persistence live in `createAccessRequest`
  * (`.claude/rules/nextjs-react.md`). `teamId` comes from the URL path but
  * is never trusted as authorization evidence on its own; identity comes

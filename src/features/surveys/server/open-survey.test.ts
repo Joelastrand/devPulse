@@ -1,7 +1,10 @@
+import { sealSeedDocument, stubSurveyEncryptionKey } from "./survey-test-fixtures";
 import { describe, expect, it, vi } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type { OpenSurveyDb, OpenSurveyDeps, OpenSurveyTransaction } from "./open-survey";
 import { openSurvey } from "./open-survey";
+
+stubSurveyEncryptionKey();
 
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_UID = "admin-1";
@@ -51,7 +54,7 @@ type PendingWrite = { kind: "set"; data: Record<string, unknown> } | { kind: "up
 function createInMemoryFirestore(seed: Record<string, Record<string, unknown>> = {}) {
   const store = new Map<string, { data: Record<string, unknown>; version: number }>();
   for (const [path, data] of Object.entries(seed)) {
-    store.set(path, { data, version: 1 });
+    store.set(path, { data: sealSeedDocument(path, data), version: 1 });
   }
   let totalAttempts = 0;
   let totalCommittedWrites = 0;
@@ -274,9 +277,10 @@ describe("openSurvey", () => {
       updatedAt: new Date("2026-08-15T00:00:00Z"),
     });
     // Neither the requested survey nor the cross-team survey was mutated.
-    expect(store.get("surveys/survey-other-team")?.data).toEqual(
-      surveyDoc({ teamId: "other-team", openedAt: new Date("2026-08-15T00:00:00Z") }),
-    );
+    expect(store.get("surveys/survey-other-team")?.data).toMatchObject({
+      teamId: "other-team",
+      openedAt: new Date("2026-08-15T00:00:00Z"),
+    });
     // No document was written at all — not a self-heal, not a repair.
     expect(fake.totalCommittedWrites).toBe(0);
   });

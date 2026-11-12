@@ -20,6 +20,7 @@ import {
   type KnowledgeRiskBand,
 } from "../domain/team-system";
 import { parseTeamSystemRecord, type StoredAssessment, type TeamSystemRecord } from "../domain/team-system-record";
+import { openTeamSystemDocument } from "./team-system-codec";
 
 const SYSTEMS_COLLECTION = "teamSystems";
 const MEMBERSHIPS_COLLECTION = "teamMemberships";
@@ -102,7 +103,7 @@ export function getDefaultTeamSystemsReadStore(): TeamSystemsReadStore {
   return {
     async listSystems(teamId, limit) {
       const snapshot = await db().collection(SYSTEMS_COLLECTION).where("teamId", "==", teamId).limit(limit).get();
-      return snapshot.docs.map((doc) => ({ id: doc.id, data: mapTeamSystemDates(doc.data()) }));
+      return snapshot.docs.map((doc) => ({ id: doc.id, data: openTeamSystemDocument(doc.id, mapTeamSystemDates(doc.data())) }));
     },
     async listMembershipsByRefs(teamId, refs) {
       if (refs.length === 0) return [];

@@ -1,6 +1,6 @@
 /**
  * Local Firebase Emulator switch for browser verification (browser/README-style harness in
- * docs/features/team-experience-redesign/VERIFICATION.md). Fail-closed by design:
+ * docs/archive/features/team-experience-redesign/VERIFICATION.md). Fail-closed by design:
  *
  * - Off unless the emulator URL is set explicitly.
  * - Refused in production builds (`NODE_ENV === "production"`).

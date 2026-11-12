@@ -3,7 +3,8 @@ import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import type { IsAppAdminDeps } from "../domain/app-admin";
 import { normalizeEmail } from "../domain/normalize-email";
-import { invitationDocId, readInvitationStatusFor } from "../domain/team-invitation";
+import { readInvitationStatusFor } from "../domain/team-invitation";
+import { invitationDocIdForEmail, openInvitationDocument } from "../domain/team-invitation-content-codec";
 import { requireAppAdmin } from "./require-app-admin";
 import { type AuthRefusal } from "../../auth/server/auth-refusal";
 const INVITATIONS_COLLECTION = "teamInvitations";
@@ -19,14 +20,14 @@ function getDefaultCollection(): CancelInvitationCollection {
     async get(teamId, email) {
       const snapshot = await getFirestoreDb()
         .collection(INVITATIONS_COLLECTION)
-        .doc(invitationDocId(teamId, email))
+        .doc(invitationDocIdForEmail(teamId, email))
         .get();
-      return snapshot.exists ? snapshot.data() : undefined;
+      return snapshot.exists ? openInvitationDocument(teamId, snapshot.data()) : undefined;
     },
     async markCanceled(teamId, email, now) {
       await getFirestoreDb()
         .collection(INVITATIONS_COLLECTION)
-        .doc(invitationDocId(teamId, email))
+        .doc(invitationDocIdForEmail(teamId, email))
         .update({ status: "canceled", updatedAt: now });
     },
   };
@@ -47,7 +48,7 @@ export interface CancelInvitationDeps {
 }
 
 /**
- * Cancels a pending invitation (docs/features/team-management/SPEC.md —
+ * Cancels a pending invitation (docs/archive/features/team-management/SPEC.md —
  * BR-21). Only an app admin may call this successfully. Idempotent: a
  * missing invitation, or one that is already `"accepted"`/`"canceled"`,
  * succeeds as a no-op rather than erroring — there is nothing left to

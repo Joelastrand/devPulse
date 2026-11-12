@@ -73,7 +73,7 @@ export async function readOwnerConversation(
     const raw = await deps.store.getOwner(ownerUid, conversationId);
     if (raw === undefined) return NOT_FOUND;
 
-    const classification = classifyOwnerDocument(raw, deps.codec);
+    const classification = classifyOwnerDocument(raw, deps.codec, { ownerUid, conversationId });
     if (classification.kind !== "valid") return NOT_FOUND;
     const record: StoredConversation = classification.record;
 

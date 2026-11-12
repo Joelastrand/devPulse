@@ -3,7 +3,7 @@
  * creation/correction UI (`app/admin/skills/page.tsx`), per the copy-module
  * convention established in `teams/copy.ts`.
  *
- * Owner decision 4 (docs/features/team-skill-tree/SPEC.md): "skill" is the
+ * Owner decision 4 (docs/archive/features/team-skill-tree/SPEC.md): "skill" is the
  * only technical identifier used anywhere in this feature's routes, files,
  * types, and Firestore fields. Natural Norwegian wording such as
  * "Kompetanseområder"/"Rett opp" is localization, not a competing technical
@@ -18,10 +18,10 @@ export const adminSkillsCopy = {
   forbidden: "Du har ikke tilgang til denne siden.",
   error: "Noe gikk galt under lasting av kompetanseområder. Prøv igjen senere.",
   empty: "Ingen kompetanseområder ennå.",
-  /** Purely derived from the already-loaded catalog list — no new fetch (docs/features/ui-refresh/SPEC.md — BR-19). */
+  /** Purely derived from the already-loaded catalog list — no new fetch (docs/archive/features/ui-refresh/SPEC.md — BR-19). */
   summary: (count: number) => `${count} kompetanseområder`,
   creation: {
-    /** Accessible name for the progressive-disclosure toggle that reveals this form (docs/features/ui-refresh/SPEC.md — BR-12), mirroring `adminCopy.teams.newTeamButton`'s "Nytt X" convention. */
+    /** Accessible name for the progressive-disclosure toggle that reveals this form (docs/archive/features/ui-refresh/SPEC.md — BR-12), mirroring `adminCopy.teams.newTeamButton`'s "Nytt X" convention. */
     toggleButton: "Nytt kompetanseområde",
     sectionTitle: "Nytt kompetanseområde",
     nameLabel: "Navn på kompetanseområdet",
@@ -30,7 +30,7 @@ export const adminSkillsCopy = {
     removeStageButton: "Fjern stadium",
     submitButton: "Opprett kompetanseområde",
     submittingButton: "Oppretter…",
-    /** Closes the form without creating anything (docs/features/ui-refresh/SPEC.md — BR-14). */
+    /** Closes the form without creating anything (docs/archive/features/ui-refresh/SPEC.md — BR-14). */
     cancelButton: "Avbryt",
     error: {
       invalidInput: "Kontroller navnet og alle stadienavn (3–100 tegn hver, 2–20 stadier totalt).",
@@ -98,7 +98,7 @@ export const teamSkillTrackingCopy = {
 
 /**
  * Norwegian user-facing copy for the `/admin/skills` cross-team overview
- * section (docs/features/org-skill-progress-overview/SPEC.md — TASK-002,
+ * section (docs/archive/features/org-skill-progress-overview/SPEC.md — TASK-002,
  * `OrgSkillProgressOverview.tsx`). `disabledLabel` reuses the exact
  * "Deaktivert" string `teams/copy.ts`'s `statusDisabled` already establishes
  * for the same concept, rather than duplicating a second, independent copy
@@ -117,7 +117,7 @@ export const orgSkillProgressOverviewCopy = {
 /**
  * Norwegian user-facing copy for the `/teams/[teamId]` "Kompetanseområder"
  * section (`TeamSkillSection.tsx`) — originally read-only (Phase 7,
- * TASK-007), extended with a member self-report control by docs/features/
+ * TASK-007), extended with a member self-report control by docs/archive/features/
  * skill-progress-self-report/SPEC.md (TASK-002, BR-10 through BR-12). Same
  * "skill" (technical) / "Kompetanseområder" (UI copy) split as
  * `adminSkillsCopy`/`teamSkillTrackingCopy` (Owner decision 4). `report`'s
@@ -127,7 +127,7 @@ export const orgSkillProgressOverviewCopy = {
  */
 export const teamSkillSectionCopy = {
   sectionTitle: "Kompetanseområder",
-  /** Link to the team Roadmap route (docs/features/team-roadmap/SPEC.md — BR-3). */
+  /** Link to the team Roadmap route (docs/archive/features/team-roadmap/SPEC.md — BR-3). */
   seeRoadmap: "Se roadmap",
   loading: "Laster kompetanseområder…",
   error: "Noe gikk galt under lasting av kompetanseområder. Prøv igjen senere.",
@@ -143,7 +143,7 @@ export const teamSkillSectionCopy = {
 } as const;
 
 /**
- * Norwegian copy for `SkillProgressPath` (docs/features/gamified-skill-tree/
+ * Norwegian copy for `SkillProgressPath` (docs/archive/features/gamified-skill-tree/
  * SPEC.md — BR-9, BR-10, BR-15). State labels are positional relative to the
  * team's *current* step; "Fullført" is deliberately not used because
  * `SkillProgress` stores no history. `notStarted` reuses the exact "Ikke

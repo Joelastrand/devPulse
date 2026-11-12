@@ -100,7 +100,7 @@ export async function readSelectableMembers(
     // The caller's own owner subtree is the ownership test: a foreign or absent document is not found here.
     const raw = await deps.store.getOwner(ownerUid, conversationId);
     if (raw === undefined) return NOT_FOUND;
-    const classification = classifyOwnerDocument(raw, deps.codec);
+    const classification = classifyOwnerDocument(raw, deps.codec, { ownerUid, conversationId });
     if (classification.kind !== "valid") return NOT_FOUND;
     const { teamId, status } = classification.record;
 

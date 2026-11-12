@@ -1,6 +1,12 @@
-import type { EncryptedPayload } from "../../lib/encryption/encryption";
+import { openRoadmapItemDocument } from "../roadmap/domain/roadmap-item-content-codec";
+import { openSkillProgressDocument } from "../skill-trees/server/skill-progress-content-codec";
+import { openTeamDocument } from "../teams/domain/team-content-codec";
+import { openSkillTreeDocument } from "../skill-trees/domain/skill-tree-content-codec";
+import { openSurveyDocument } from "../surveys/server/survey-content-codec";
+import { readRecordEnvelope, type RecordEnvelope } from "../../lib/encryption/record-envelope";
 import { validateChallengeText } from "../challenges/domain/challenge-text";
-import { isValidChallenge } from "../challenges/domain/challenge";
+import { challengeContext, isValidChallenge } from "../challenges/domain/challenge";
+import { surveyResponseContext } from "../surveys/domain/response-context";
 import { parseRoadmapItem, roadmapItemDocId } from "../roadmap/domain/roadmap-item";
 import { isValidSkillProgress } from "../skill-trees/domain/skill-progress";
 import { isValidSkillTree } from "../skill-trees/domain/skill-tree";
@@ -21,7 +27,7 @@ import {
 } from "./plan";
 
 /**
- * Preflight, manifest classification and dry-run model (docs/features/
+ * Preflight, manifest classification and dry-run model (docs/archive/features/
  * demo-team/SPEC.md — "Manifest classification and conflict handling",
  * "Encryption", "Dry-run semantics"; BR-4–BR-6, BR-12, BR-21, BR-23–BR-29,
  * BR-31). Everything external is injected: the crypto pair, a `get(path)`-only
@@ -57,8 +63,8 @@ export interface DemoPresenterLookup {
 }
 
 export interface DemoCrypto {
-  encrypt(plaintext: string): EncryptedPayload;
-  decrypt(payload: EncryptedPayload): string;
+  sealRecord(plaintext: string, context: string): RecordEnvelope;
+  openRecord(envelope: RecordEnvelope, context: string): string;
 }
 
 // ---------------------------------------------------------------------------
@@ -127,11 +133,12 @@ export interface DemoPreflightInput {
 // ---------------------------------------------------------------------------
 
 const CRYPTO_PROBE = "demo-seed-local-crypto-probe";
+const PROBE_CONTEXT = "demo-seed-crypto-probe";
 
 /** Encrypt a harmless probe, decrypt it, compare, discard. Proves only the local key works. */
 export function runLocalCryptoPreflight(crypto: DemoCrypto): boolean {
   try {
-    return crypto.decrypt(crypto.encrypt(CRYPTO_PROBE)) === CRYPTO_PROBE;
+    return crypto.openRecord(crypto.sealRecord(CRYPTO_PROBE, PROBE_CONTEXT), PROBE_CONTEXT) === CRYPTO_PROBE;
   } catch {
     return false;
   }
@@ -160,9 +167,18 @@ function isValidDate(value: unknown): value is Date {
   return value instanceof Date && !Number.isNaN(value.getTime());
 }
 
-function classifyTeam(existing: Record<string, unknown>): Verdict {
+function classifyTeam(existing: Record<string, unknown>, docId: string, crypto: DemoCrypto): Verdict {
+  // A plaintext name or a missing envelope is a malformed document; an envelope that does not open is undecryptable.
+  if (Object.hasOwn(existing, "name") || readRecordEnvelope(existing.content) === null) return conflict("malformed-shape");
+  let opened: unknown;
+  try {
+    opened = openTeamDocument(docId, existing, crypto.openRecord);
+  } catch {
+    return conflict("undecryptable");
+  }
+  if (opened === null) return conflict("undecryptable");
   if (
-    !isNonEmptyString(existing.name) ||
+    !isNonEmptyString((opened as Record<string, unknown>).name) ||
     !isValidTeamStatus(existing.status) ||
     !isValidDate(existing.createdAt) ||
     !isNonEmptyString(existing.createdBy)
@@ -181,11 +197,20 @@ function classifyMembership(existing: Record<string, unknown>, expected: Record<
   return OK;
 }
 
-function classifySurvey(existing: Record<string, unknown>, docId: string): Verdict {
-  if (!isValidSurvey({ ...existing, surveyId: docId }, { surveyId: docId })) {
+function classifySurvey(existing: Record<string, unknown>, docId: string, crypto: DemoCrypto): Verdict {
+  // Scope is plaintext metadata, so it is checked before anything is decrypted.
+  if (existing.teamId !== DEMO_TEAM_ID) return conflict("scope-mismatch");
+  if (readRecordEnvelope(existing.content) === null) return conflict("malformed-shape");
+  let opened: unknown;
+  try {
+    opened = openSurveyDocument(docId, existing, crypto.openRecord);
+  } catch {
+    return conflict("undecryptable");
+  }
+  if (opened === null) return conflict("undecryptable");
+  if (!isValidSurvey({ ...(opened as Record<string, unknown>), surveyId: docId }, { surveyId: docId })) {
     return conflict("malformed-shape");
   }
-  if (existing.teamId !== DEMO_TEAM_ID) return conflict("scope-mismatch");
   if (existing.createdBy !== DEMO_AUDIT_ACTOR) return conflict("foreign-creator");
   if (existing.accessMode !== "authenticated" || existing.minimumResponses !== DEMO_MINIMUM_RESPONSES) {
     return conflict("scope-mismatch");
@@ -198,24 +223,10 @@ function hasEncryptedShape(existing: Record<string, unknown>): boolean {
     isNonEmptyString(existing.ciphertext) &&
     isNonEmptyString(existing.iv) &&
     isNonEmptyString(existing.authTag) &&
-    existing.keyVersion === "v1" &&
+    existing.keyVersion === "v2" &&
+    existing.keyId === "k1" &&
     isValidDate(existing.submittedAt)
   );
-}
-
-/** Decrypts with the active key purely to validate; the plaintext is judged and dropped, never returned. */
-function decryptsTo(existing: Record<string, unknown>, crypto: DemoCrypto, accept: (plain: string) => boolean): boolean {
-  try {
-    const plain = crypto.decrypt({
-      ciphertext: existing.ciphertext as string,
-      iv: existing.iv as string,
-      authTag: existing.authTag as string,
-      keyVersion: "v1",
-    });
-    return accept(plain);
-  } catch {
-    return false;
-  }
 }
 
 function isValidAnswerPayload(plain: string): boolean {
@@ -230,6 +241,7 @@ function classifyResponse(
   existing: Record<string, unknown>,
   expected: Record<string, unknown>,
   crypto: DemoCrypto,
+  docId: string,
 ): Verdict {
   const existingKeys = Object.keys(existing).sort().join(",");
   const expectedKeys = Object.keys(expected).sort().join(",");
@@ -237,7 +249,36 @@ function classifyResponse(
   if (existing.surveyId !== expected.surveyId || existing.teamId !== DEMO_TEAM_ID) {
     return conflict("scope-mismatch");
   }
-  return decryptsTo(existing, crypto, isValidAnswerPayload) ? OK : conflict("undecryptable");
+  return openRecordTo(existing, surveyResponseContext(DEMO_TEAM_ID, String(existing.surveyId), docId), crypto, isValidAnswerPayload)
+    ? OK
+    : conflict("undecryptable");
+}
+
+/**
+ * Opens a v2 record with the active key and its record context (AAD), purely to validate. The plaintext is judged and
+ * dropped, never returned. A wrong key, a tampered value or a value moved to another record all fail to open.
+ */
+function openRecordTo(
+  existing: Record<string, unknown>,
+  context: string,
+  crypto: DemoCrypto,
+  accept: (plain: string) => boolean,
+): boolean {
+  try {
+    const plain = crypto.openRecord(
+      {
+        ciphertext: existing.ciphertext as string,
+        iv: existing.iv as string,
+        authTag: existing.authTag as string,
+        keyVersion: "v2",
+        keyId: "k1",
+      },
+      context,
+    );
+    return accept(plain);
+  } catch {
+    return false;
+  }
 }
 
 function classifyChallenge(existing: Record<string, unknown>, docId: string, crypto: DemoCrypto): Verdict {
@@ -245,7 +286,7 @@ function classifyChallenge(existing: Record<string, unknown>, docId: string, cry
     return conflict("malformed-shape");
   }
   if (existing.teamId !== DEMO_TEAM_ID) return conflict("scope-mismatch");
-  return decryptsTo(existing, crypto, (plain) => validateChallengeText(plain).ok)
+  return openRecordTo(existing, challengeContext(DEMO_TEAM_ID, docId), crypto, (plain) => validateChallengeText(plain).ok)
     ? OK
     : conflict("undecryptable");
 }
@@ -254,31 +295,75 @@ function nodeIds(tree: Record<string, unknown>): string {
   return (tree.nodes as { nodeId: string }[]).map((n) => n.nodeId).join(",");
 }
 
-function classifySkillTree(existing: Record<string, unknown>, expected: Record<string, unknown>): Verdict {
-  if (!isValidSkillTree(existing)) return conflict("malformed-shape");
+function classifySkillTree(
+  existing: Record<string, unknown>,
+  expected: Record<string, unknown>,
+  docId: string,
+  crypto: DemoCrypto,
+): Verdict {
+  // Plaintext structure first: identifiers and order are not sealed, and a plaintext name or label is a malformed document.
+  if (!hasPlaintextStructure(existing)) return conflict("malformed-shape");
   if (existing.createdBy !== DEMO_AUDIT_ACTOR) return conflict("foreign-creator");
-  return nodeIds(existing) === nodeIds(expected) ? OK : conflict("structure-mismatch");
+  if (nodeIds(existing) !== nodeIds(expected)) return conflict("structure-mismatch");
+  if (readRecordEnvelope(existing.content) === null) return conflict("malformed-shape");
+  let opened: unknown;
+  try {
+    opened = openSkillTreeDocument(docId, existing, crypto.openRecord);
+  } catch {
+    return conflict("undecryptable");
+  }
+  if (opened === null) return conflict("undecryptable");
+  return isValidSkillTree(opened) ? OK : conflict("malformed-shape");
 }
 
-function classifySkillProgress(existing: Record<string, unknown>, expected: Record<string, unknown>): Verdict {
-  if (!isValidSkillProgress(existing)) return conflict("malformed-shape");
-  if (existing.teamId !== DEMO_TEAM_ID || existing.treeId !== expected.treeId) {
-    return conflict("scope-mismatch");
+function hasPlaintextStructure(existing: Record<string, unknown>): boolean {
+  if (Object.hasOwn(existing, "name")) return false;
+  if (!Array.isArray(existing.nodes)) return false;
+  return existing.nodes.every(
+    (node) => typeof node === "object" && node !== null && typeof (node as { nodeId?: unknown }).nodeId === "string" && !Object.hasOwn(node, "label"),
+  );
+}
+
+function classifySkillProgress(
+  existing: Record<string, unknown>,
+  expected: Record<string, unknown>,
+  docId: string,
+  crypto: DemoCrypto,
+): Verdict {
+  // Scope is plaintext metadata, so it is checked first. A plaintext stage or a missing envelope is malformed; an envelope
+  // that does not open is undecryptable.
+  if (existing.teamId !== DEMO_TEAM_ID || existing.treeId !== expected.treeId) return conflict("scope-mismatch");
+  if (Object.hasOwn(existing, "currentNodeId") || readRecordEnvelope(existing.content) === null) return conflict("malformed-shape");
+  let opened: unknown;
+  try {
+    opened = openSkillProgressDocument(existing, crypto.openRecord);
+  } catch {
+    return conflict("undecryptable");
   }
-  return OK;
+  if (opened === null) return conflict("undecryptable");
+  return isValidSkillProgress(opened) ? OK : conflict("malformed-shape");
 }
 
 /** Compatible = valid roadmap shape for this team/tree/doc id, created by the seed. Later presenter edits are tolerated. */
-function classifyRoadmapItem(existing: Record<string, unknown>, expected: Record<string, unknown>, docId: string): Verdict {
-  const parsed = parseRoadmapItem(existing);
-  if (parsed === null) return conflict("malformed-shape");
+function classifyRoadmapItem(existing: Record<string, unknown>, expected: Record<string, unknown>, docId: string, crypto: DemoCrypto): Verdict {
+  // Scope is plaintext metadata, so it is checked before anything is decrypted.
   if (
-    parsed.teamId !== DEMO_TEAM_ID ||
-    parsed.treeId !== expected.treeId ||
-    docId !== roadmapItemDocId(DEMO_TEAM_ID, parsed.treeId)
+    existing.teamId !== DEMO_TEAM_ID ||
+    existing.treeId !== expected.treeId ||
+    docId !== roadmapItemDocId(DEMO_TEAM_ID, String(existing.treeId))
   ) {
     return conflict("scope-mismatch");
   }
+  if (readRecordEnvelope(existing.content) === null) return conflict("malformed-shape");
+  let opened: unknown;
+  try {
+    opened = openRoadmapItemDocument(existing, crypto.openRecord);
+  } catch {
+    return conflict("undecryptable");
+  }
+  if (opened === null) return conflict("undecryptable");
+  const parsed = parseRoadmapItem(opened as Record<string, unknown>);
+  if (parsed === null) return conflict("malformed-shape");
   return parsed.createdBy === DEMO_AUDIT_ACTOR ? OK : conflict("foreign-creator");
 }
 
@@ -289,21 +374,21 @@ function classifyExisting(op: PlannedOperation, data: unknown, crypto: DemoCrypt
 
   switch (op.collection) {
     case "teams":
-      return classifyTeam(existing);
+      return classifyTeam(existing, op.docId, crypto);
     case "teamMemberships":
       return classifyMembership(existing, expected);
     case "surveys":
-      return classifySurvey(existing, op.docId);
+      return classifySurvey(existing, op.docId, crypto);
     case "surveyResponses":
-      return classifyResponse(existing, expected, crypto);
+      return classifyResponse(existing, expected, crypto, op.docId);
     case "challenges":
       return classifyChallenge(existing, op.docId, crypto);
     case "skillTrees":
-      return classifySkillTree(existing, expected);
+      return classifySkillTree(existing, expected, op.docId, crypto);
     case "skillProgress":
-      return classifySkillProgress(existing, expected);
+      return classifySkillProgress(existing, expected, op.docId, crypto);
     case "roadmapItems":
-      return classifyRoadmapItem(existing, expected, op.docId);
+      return classifyRoadmapItem(existing, expected, op.docId, crypto);
   }
 }
 

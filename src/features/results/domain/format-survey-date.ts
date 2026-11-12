@@ -1,6 +1,6 @@
 /**
  * Presentation-only date helpers for the survey-instance results/history
- * view (docs/features/managed-surveys/SPEC.md — "Results/history model",
+ * view (docs/archive/features/managed-surveys/SPEC.md — "Results/history model",
  * "Chart X-axis decision"). Pure, no persistence, no server dependency —
  * `formatRelativeSurveyDate` is always computed client-side from the
  * current date at render time, never persisted or fetched (SPEC's explicit

@@ -1,5 +1,6 @@
 import "server-only";
-import { decrypt, type EncryptedPayload } from "../../../lib/encryption/encryption";
+import { decryptRecord, type RecordEnvelope } from "../../../lib/encryption/record-envelope";
+import { surveyResponseContext } from "../domain/response-context";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
@@ -44,7 +45,7 @@ export interface SurveyQuestionResultsCollections {
   /** Raw `surveys/{surveyId}` data, or `undefined` if no such document exists. */
   getSurvey(surveyId: string): Promise<unknown>;
   /** Raw `surveyResponses` documents for one survey. Validated by this module before use. */
-  listResponses(surveyId: string): Promise<unknown[]>;
+  listResponses(surveyId: string): Promise<Array<{ id: string; data: unknown }>>;
 }
 
 export interface GetSurveyQuestionResultsDeps {
@@ -53,7 +54,7 @@ export interface GetSurveyQuestionResultsDeps {
   isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   authCollection?: AuthorizeTeamAccessCollection;
   collections?: SurveyQuestionResultsCollections;
-  decryptPayload?: (payload: EncryptedPayload) => string;
+  decryptPayload?: (envelope: RecordEnvelope, context: string) => string;
 }
 
 function getDefaultCollections(): SurveyQuestionResultsCollections {
@@ -67,7 +68,7 @@ function getDefaultCollections(): SurveyQuestionResultsCollections {
         .collection(SURVEY_RESPONSES_COLLECTION)
         .where("surveyId", "==", surveyId)
         .get();
-      return snapshot.docs.map((doc) => doc.data());
+      return snapshot.docs.map((doc) => ({ id: doc.id, data: doc.data() }));
     },
   };
 }
@@ -82,7 +83,7 @@ function toHeader(survey: Survey): SurveyResultsHeader {
   };
 }
 
-function isEncryptedRecord(value: unknown, surveyId: string, teamId: string): value is EncryptedPayload & {
+function isEncryptedRecord(value: unknown, surveyId: string, teamId: string): value is RecordEnvelope & {
   surveyId: string;
   teamId: string;
 } {
@@ -96,7 +97,8 @@ function isEncryptedRecord(value: unknown, surveyId: string, teamId: string): va
     typeof record.ciphertext === "string" &&
     typeof record.iv === "string" &&
     typeof record.authTag === "string" &&
-    typeof record.keyVersion === "string"
+    record.keyVersion === "v2" &&
+    record.keyId === "k1"
   );
 }
 
@@ -159,26 +161,31 @@ export async function getSurveyQuestionResults(
     return { ok: true, status: "not_closed", survey: header };
   }
 
-  let rawResponses: unknown[];
+  let rawResponses: Array<{ id: string; data: unknown }>;
   try {
     rawResponses = await collections.listResponses(surveyId);
   } catch {
     return { ok: false, error: "read_failed" };
   }
 
-  const decryptFn = deps.decryptPayload ?? decrypt;
+  const decryptFn = deps.decryptPayload ?? decryptRecord;
   const responses: Record<string, AnswerValue>[] = [];
-  for (const raw of rawResponses) {
-    if (!isEncryptedRecord(raw, surveyId, teamId)) {
+  for (const { id: responseId, data } of rawResponses) {
+    if (!isEncryptedRecord(data, surveyId, teamId)) {
       continue;
     }
+    const raw = data;
     try {
-      const plaintext = decryptFn({
-        ciphertext: raw.ciphertext,
-        iv: raw.iv,
-        authTag: raw.authTag,
-        keyVersion: raw.keyVersion as EncryptedPayload["keyVersion"],
-      });
+      const plaintext = decryptFn(
+        {
+          ciphertext: raw.ciphertext,
+          iv: raw.iv,
+          authTag: raw.authTag,
+          keyVersion: raw.keyVersion,
+          keyId: raw.keyId,
+        },
+        surveyResponseContext(teamId, surveyId, responseId),
+      );
       const answers = decodeResponsePayload(survey, plaintext);
       if (answers !== null) {
         responses.push(answers);

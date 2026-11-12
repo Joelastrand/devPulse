@@ -1,5 +1,18 @@
+import { sealedProfileFixture } from "../../profiles/domain/user-profile-test-fixtures";
 import { FieldValue } from "firebase-admin/firestore";
+import { randomBytes } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { invitationDocIdForEmail, toPersistedInvitation } from "../domain/team-invitation-content-codec";
+
+vi.stubEnv("ENCRYPTION_KEY", randomBytes(32).toString("base64"));
+
+function invitationDocIdForEmailPath(teamId: string, email: string): string {
+  return `teamInvitations/${invitationDocIdForEmail(teamId, email)}`;
+}
+
+function sealedInvitation(teamId: string, email: string, invitedBy: string) {
+  return toPersistedInvitation(teamId, { teamId, email, status: "pending", invitedBy, createdAt: NOW });
+}
 
 type Doc = Record<string, unknown>;
 
@@ -9,7 +22,7 @@ type Doc = Record<string, unknown>;
  * document). It lets the *production* default collections of the existing
  * grant/remove/authorize code run unchanged, so this file verifies that
  * adding the optional team `role` field changed none of their behaviour
- * (docs/features/member-identity-and-team-roles/SPEC.md — BR-21, BR-26,
+ * (docs/archive/features/member-identity-and-team-roles/SPEC.md — BR-21, BR-26,
  * BR-34). No real Firebase is contacted.
  */
 const store = new Map<string, Doc>();
@@ -206,13 +219,7 @@ describe("existing membership grant paths never write or inherit a role", () => 
   });
 
   it("resolveInvitations creates a plain member", async () => {
-    store.set("teamInvitations/team-1__anna@example.com", {
-      teamId: "team-1",
-      email: "anna@example.com",
-      status: "pending",
-      invitedBy: "admin-1",
-      createdAt: NOW,
-    });
+    store.set(invitationDocIdForEmailPath("team-1", "anna@example.com"), sealedInvitation("team-1", "anna@example.com", "admin-1"));
 
     const result = await resolveInvitations(
       { uid: "user-1", email: "anna@example.com", emailVerified: true },
@@ -256,13 +263,7 @@ describe("memberRef lifecycle (team-skill-planning TASK-001)", () => {
     await grant();
     store.set("teamAccessRequests/user-2__team-1", { uid: "user-2", teamId: "team-1", status: "pending", createdAt: NOW });
     await approveAccessRequest("t", "user-2", "team-1", adminDeps);
-    store.set("teamInvitations/team-1__anna@example.com", {
-      teamId: "team-1",
-      email: "anna@example.com",
-      status: "pending",
-      invitedBy: "admin-1",
-      createdAt: NOW,
-    });
+    store.set(invitationDocIdForEmailPath("team-1", "anna@example.com"), sealedInvitation("team-1", "anna@example.com", "admin-1"));
     await resolveInvitations({ uid: "user-3", email: "anna@example.com", emailVerified: true }, { now: NOW });
 
     const refs = ["user-1", "user-2", "user-3"].map((uid) => store.get(`teamMemberships/${uid}__team-1`)?.memberRef);
@@ -409,8 +410,8 @@ describe("listTeamRoster against the production Firestore reads", () => {
     store.set("teamMemberships/user-1__team-1", membership("user-1", { createdAt: timestamp(NOW) }));
     store.set("teamMemberships/user-2__team-1", membership("user-2", { role: "teamadmin", roleUpdatedBy: "admin-secret" }));
     store.set("teamMemberships/user-3__team-2", { ...membership("user-3"), teamId: "team-2" });
-    store.set("userProfiles/user-1", { displayName: "Anna Berg", createdAt: NOW, updatedAt: NOW });
-    store.set("userProfiles/user-3", { displayName: "Other Team Person", createdAt: NOW, updatedAt: NOW });
+    store.set("userProfiles/user-1", sealedProfileFixture("user-1", { displayName: "Anna Berg", createdAt: NOW, updatedAt: NOW }) as Record<string, unknown>);
+    store.set("userProfiles/user-3", sealedProfileFixture("user-3", { displayName: "Other Team Person", createdAt: NOW, updatedAt: NOW }) as Record<string, unknown>);
 
     const result = await listTeamRoster("t", "team-1", { verifyToken });
 

@@ -1,6 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { decrypt, encrypt } from "../../../lib/encryption/encryption";
+import { decryptRecord, encryptRecord } from "../../../lib/encryption/record-envelope";
+import { forumReplyContext } from "../domain/forum-reply";
+import { forumThreadContext } from "../domain/forum-thread";
 import { authorTag } from "../domain/author-tag";
 import type { ErasedForumThreadRecord } from "../domain/forum-erased-thread";
 import { createReply, type CreateReplyDeps, type ForumRepliesCollection, type MembershipReader, type TeamStatusReader } from "./create-reply";
@@ -40,7 +42,7 @@ function repliesReader(docs: RawReplyDoc[]): ForumRepliesReader {
 }
 
 function activeReply(id: string, authorUid: string, body: string, createdAt: string): RawReplyDoc {
-  const encoded = encrypt(body);
+  const encoded = encryptRecord(body, forumReplyContext(TEAM_ID, THREAD_ID, id));
   return {
     id,
     data: { teamId: TEAM_ID, threadId: THREAD_ID, authorUid, createdAt: new Date(createdAt), ...encoded },
@@ -139,7 +141,7 @@ describe("getThreadWithReplies on an erased-thread placeholder (TASK-015)", () =
   });
 
   it("never decrypts the placeholder, because it has no content", async () => {
-    const decryptContent = vi.fn(decrypt);
+    const decryptContent = vi.fn(decryptRecord);
     await getThreadWithReplies("token", TEAM_ID, THREAD_ID, readDeps({ decryptContent }));
 
     expect(decryptContent).not.toHaveBeenCalled();
@@ -168,8 +170,8 @@ describe("getThreadWithReplies on an erased-thread placeholder (TASK-015)", () =
   });
 
   it("fails closed for a record with erased status plus active content, and never decrypts it", async () => {
-    const encoded = encrypt(JSON.stringify({ title: "leak?", body: "content" }));
-    const decryptContent = vi.fn(decrypt);
+    const encoded = encryptRecord(JSON.stringify({ title: "leak?", body: "content" }), forumThreadContext(TEAM_ID, THREAD_ID));
+    const decryptContent = vi.fn(decryptRecord);
     const result = await getThreadWithReplies(
       "token",
       TEAM_ID,
@@ -224,7 +226,8 @@ describe("createReply against an erased-thread placeholder (TASK-015)", () => {
   it("returns not_found and writes no reply", async () => {
     const collection: ForumRepliesCollection & { writes: unknown[] } = {
       writes: [],
-      add: vi.fn(async (record) => {
+      reserveId: () => "generated-reply-1",
+      create: vi.fn((_replyId: string, record: unknown) => {
         collection.writes.push(record);
       }),
     };

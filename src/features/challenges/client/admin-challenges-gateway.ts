@@ -1,6 +1,6 @@
 /**
  * Client gateway for `/admin/teams/[teamId]`'s Anonymous Challenges
- * management section (docs/features/anonymous-challenges/SPEC.md —
+ * management section (docs/archive/features/anonymous-challenges/SPEC.md —
  * TASK-006). Thin `fetch` wrappers around the admin-only
  * `app/api/admin/teams/[teamId]/challenges/...` routes, mirroring
  * `admin-survey-gateway.ts`'s established shape-validation-before-trust

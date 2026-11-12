@@ -1,7 +1,7 @@
 /**
  * The shape `POST /api/surveys/[surveyId]/responses` returns, mirroring
  * `submitSurveyResponse`'s own `SubmitSurveyResponseResult` one-for-one
- * (docs/features/managed-surveys/SPEC.md — TASK-006). Never carries a
+ * (docs/archive/features/managed-surveys/SPEC.md — TASK-006). Never carries a
  * generated response/participation id — SPEC step 10.
  */
 export type SubmitSurveyResponseFetchResult =

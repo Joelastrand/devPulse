@@ -3,6 +3,9 @@ import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { membershipDocId } from "../../teams/domain/team-membership";
 import type { TeamSkillRecord } from "../domain/team-skill";
 import { teamSkillAssessmentDocId, type TeamSkillAssessmentRecord } from "../domain/team-skill-assessment";
+import { openAssessmentDocument, sealAssessmentLevel } from "./assessment-level-codec";
+import { openManualAssessmentDocument, sealManualAssessmentFields } from "./manual-assessment-codec";
+import { openTeamSkillDocument, toPersistedTeamSkill } from "./team-skill-codec";
 import {
   TEAM_MANUAL_ASSESSMENTS_COLLECTION,
   teamManualAssessmentDocId,
@@ -31,8 +34,8 @@ export interface TeamSkillTx {
   listSkills(teamId: string, limit: number): Promise<RawDoc[]>;
   getSkill(skillId: string): Promise<unknown>;
   putSkill(skillId: string, record: TeamSkillRecord): void;
-  /** Raw `teamSkillAssessments/{uid}__{skillId}` data, or `undefined` when absent. */
-  getAssessment(uid: string, skillId: string): Promise<unknown>;
+  /** Raw `teamSkillAssessments/{uid}__{skillId}` data with its level opened, or `undefined` when absent. */
+  getAssessment(uid: string, teamId: string, skillId: string): Promise<unknown>;
   /** The caller's own ratings in one team (`where uid ==`, `where teamId ==`), at most `limit`. */
   listOwnAssessments(uid: string, teamId: string, limit: number): Promise<RawDoc[]>;
   putAssessment(record: TeamSkillAssessmentRecord): void;
@@ -49,6 +52,12 @@ export interface TeamSkillStore {
   /** A fresh stable identity: a Firestore auto-id, alphanumeric by construction. */
   newSkillId(): string;
   runTransaction<T>(work: (tx: TeamSkillTx) => Promise<T>): Promise<T>;
+}
+
+/** The stored skill id of an own-rating document, used only to bind its record context before validation. */
+function skillIdOf(data: unknown): string {
+  const skillId = typeof data === "object" && data !== null ? (data as Record<string, unknown>).skillId : undefined;
+  return typeof skillId === "string" ? skillId : "";
 }
 
 function mapDates(data: unknown): unknown {
@@ -83,18 +92,19 @@ export function getDefaultTeamSkillStore(): TeamSkillStore {
           },
           async listSkills(teamId, limit) {
             const snapshot = await tx.get(db.collection(TEAM_SKILLS_COLLECTION).where("teamId", "==", teamId).limit(limit));
-            return snapshot.docs.map((doc) => ({ id: doc.id, data: mapDates(doc.data()) }));
+            return snapshot.docs.map((doc) => ({ id: doc.id, data: openTeamSkillDocument(doc.id, mapDates(doc.data())) }));
           },
           async getSkill(skillId) {
             const snapshot = await tx.get(db.collection(TEAM_SKILLS_COLLECTION).doc(skillId));
-            return snapshot.exists ? mapDates(snapshot.data()) : undefined;
+            return snapshot.exists ? openTeamSkillDocument(skillId, mapDates(snapshot.data())) : undefined;
           },
           putSkill(skillId, record) {
-            tx.set(db.collection(TEAM_SKILLS_COLLECTION).doc(skillId), record);
+            // Business content is sealed in one envelope; identifiers, version, flags and timestamps stay plaintext.
+            tx.set(db.collection(TEAM_SKILLS_COLLECTION).doc(skillId), toPersistedTeamSkill(skillId, record));
           },
-          async getAssessment(uid, skillId) {
+          async getAssessment(uid, teamId, skillId) {
             const snapshot = await tx.get(db.collection(TEAM_SKILL_ASSESSMENTS_COLLECTION).doc(teamSkillAssessmentDocId(uid, skillId)));
-            return snapshot.exists ? mapDates(snapshot.data()) : undefined;
+            return snapshot.exists ? openAssessmentDocument(uid, teamId, skillId, mapDates(snapshot.data())) : undefined;
           },
           async listOwnAssessments(uid, teamId, limit) {
             const snapshot = await tx.get(
@@ -104,24 +114,35 @@ export function getDefaultTeamSkillStore(): TeamSkillStore {
                 .where("teamId", "==", teamId)
                 .limit(limit),
             );
-            return snapshot.docs.map((doc) => ({ id: doc.id, data: mapDates(doc.data()) }));
+            return snapshot.docs.map((doc) => ({
+              id: doc.id,
+              data: openAssessmentDocument(uid, teamId, skillIdOf(doc.data()), mapDates(doc.data())),
+            }));
           },
           putAssessment(record) {
-            tx.set(db.collection(TEAM_SKILL_ASSESSMENTS_COLLECTION).doc(teamSkillAssessmentDocId(record.uid, record.skillId)), record);
+            // The rating is sealed; identifiers, criteria version and timestamps stay plaintext.
+            const { level, ...rest } = record;
+            const sealed = { ...rest, level: sealAssessmentLevel(record.uid, record.teamId, record.skillId, level) };
+            tx.set(db.collection(TEAM_SKILL_ASSESSMENTS_COLLECTION).doc(teamSkillAssessmentDocId(record.uid, record.skillId)), sealed);
           },
           deleteAssessment(uid, skillId) {
             tx.delete(db.collection(TEAM_SKILL_ASSESSMENTS_COLLECTION).doc(teamSkillAssessmentDocId(uid, skillId)));
           },
           async getManualAssessment(teamId, skillId) {
             const snapshot = await tx.get(db.collection(TEAM_MANUAL_ASSESSMENTS_COLLECTION).doc(teamManualAssessmentDocId(teamId, skillId)));
-            return snapshot.exists ? mapDates(snapshot.data()) : undefined;
+            return snapshot.exists ? openManualAssessmentDocument(teamId, skillId, mapDates(snapshot.data())) : undefined;
           },
           async listManualAssessments(teamId, limit) {
             const snapshot = await tx.get(db.collection(TEAM_MANUAL_ASSESSMENTS_COLLECTION).where("teamId", "==", teamId).limit(limit));
-            return snapshot.docs.map((doc) => ({ id: doc.id, data: mapDates(doc.data()) }));
+            return snapshot.docs.map((doc) => {
+              const skillId = skillIdOf(doc.data());
+              return { id: doc.id, data: openManualAssessmentDocument(teamId, skillId, mapDates(doc.data())) };
+            });
           },
           putManualAssessment(record) {
-            tx.set(db.collection(TEAM_MANUAL_ASSESSMENTS_COLLECTION).doc(teamManualAssessmentDocId(record.teamId, record.skillId)), record);
+            // The agreed level and note are sealed; identifiers, version, timestamp and audit actor stay plaintext.
+            const sealed = { ...record, ...sealManualAssessmentFields(record.teamId, record.skillId, { level: record.level, note: record.note }) };
+            tx.set(db.collection(TEAM_MANUAL_ASSESSMENTS_COLLECTION).doc(teamManualAssessmentDocId(record.teamId, record.skillId)), sealed);
           },
           deleteManualAssessment(teamId, skillId) {
             tx.delete(db.collection(TEAM_MANUAL_ASSESSMENTS_COLLECTION).doc(teamManualAssessmentDocId(teamId, skillId)));

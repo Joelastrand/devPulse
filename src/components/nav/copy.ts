@@ -1,7 +1,7 @@
 /**
  * Norwegian copy for the site-wide navigation header (`SiteHeader`), per
  * the copy-module convention established in TASK-001
- * (docs/features/product-ux-shell/SPEC.md — BR-2).
+ * (docs/archive/features/product-ux-shell/SPEC.md — BR-2).
  */
 export const navCopy = {
   brand: "DevPulse",

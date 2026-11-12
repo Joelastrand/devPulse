@@ -1,6 +1,6 @@
 /**
  * Client gateway for `/teams/[teamId]`'s "Pågående undersøkelse" section
- * (docs/features/managed-surveys/SPEC.md — TASK-010). A thin `fetch`
+ * (docs/archive/features/managed-surveys/SPEC.md — TASK-010). A thin `fetch`
  * wrapper around `GET /api/teams/[teamId]/current-survey`, mirroring
  * `team-results-gateway.ts`/`survey-participation-gateway.ts`'s established
  * shape-validation-before-trust convention — an unrecognized/malformed

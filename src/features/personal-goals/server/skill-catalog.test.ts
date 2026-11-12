@@ -1,3 +1,5 @@
+import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../../skill-trees/domain/skill-tree-test-fixtures";
+stubSkillTreeEncryptionKey();
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   SKILL_TREE_READ_CHUNK_SIZE,
@@ -41,7 +43,9 @@ const valid = (index: number, name = `Skill ${id(index)}`): RawCatalogDoc => ({ 
 const malformed = (index: number): RawCatalogDoc => ({ id: id(index), data: { name: "LEAKED-RAW", nodes: "x" } });
 
 /** In-memory reader over an ordered raw list; records every call. */
-function fakeReader(ordered: RawCatalogDoc[]) {
+function fakeReader(plain: RawCatalogDoc[]) {
+  // Trees are read sealed, as in production: each document is sealed under its own id.
+  const ordered: RawCatalogDoc[] = plain.map((d) => ({ id: d.id, data: sealedSkillTreeFixture(d.id, d.data) as Record<string, unknown> }));
   const calls = { list: [] as number[], get: [] as string[], many: [] as string[][] };
   const find = (treeId: string): RawTreeRead => ({ id: treeId, data: ordered.find((d) => d.id === treeId)?.data });
   const reader: SkillCatalogReader = {

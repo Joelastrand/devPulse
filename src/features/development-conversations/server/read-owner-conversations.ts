@@ -72,7 +72,7 @@ export async function readOwnerConversations(ownerUid: string, deps: ReadOwnerCo
     const valid: Array<{ id: string; record: StoredConversation }> = [];
     const recovery: OwnerRecoveryItem[] = [];
     for (const document of documents) {
-      const classification = classifyOwnerDocument(document.raw, deps.codec);
+      const classification = classifyOwnerDocument(document.raw, deps.codec, { ownerUid, conversationId: document.id });
       if (classification.kind === "valid") {
         valid.push({ id: document.id, record: classification.record });
       } else {

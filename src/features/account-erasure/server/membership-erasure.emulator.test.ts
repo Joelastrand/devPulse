@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { deleteApp, initializeApp, type App } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
+import { openRoadmapItemDocument, toPersistedRoadmapItem } from "../../roadmap/domain/roadmap-item-content-codec";
+import { toPersistedTeamSystem } from "../../team-systems/server/team-system-codec";
 import { createMembershipPort } from "./erasure-adapters-team";
 import { createMembershipStepHandler } from "./membership-erasure";
 
@@ -51,17 +53,28 @@ const MEMBERSHIP_IDS = [`${UID}__${TEAM}`, `${OTHER_UID}__${TEAM}`];
 async function seed(database: Firestore): Promise<void> {
   await database.collection("teamMemberships").doc(`${UID}__${TEAM}`).set({ uid: UID, teamId: TEAM, memberRef: REF, role: "member" });
   await database.collection("teamMemberships").doc(`${OTHER_UID}__${TEAM}`).set({ uid: OTHER_UID, teamId: TEAM, memberRef: OTHER_REF, role: "member" });
+  // Business content is sealed (encrypted-only collections). The owner index is written by the same codec as the app.
   const roadmap = database.collection("roadmapItems");
-  await roadmap.doc("memb-item-1").set({ teamId: TEAM, ownerRef: REF, title: "Synthetic item 1" });
-  await roadmap.doc("memb-item-2").set({ teamId: TEAM, ownerRef: REF, title: "Synthetic item 2" });
-  await roadmap.doc("memb-item-other-person").set({ teamId: TEAM, ownerRef: OTHER_REF, title: "Synthetic other person" });
-  await roadmap.doc("memb-item-other-team").set({ teamId: OTHER_TEAM, ownerRef: REF, title: "Synthetic other team" });
+  const item = (teamId: string, ownerRef: string) => ({ teamId, treeId: "tree-synthetic", ownerRef, status: "planned", priority: "medium" });
+  await roadmap.doc("memb-item-1").set(toPersistedRoadmapItem(item(TEAM, REF)));
+  await roadmap.doc("memb-item-2").set(toPersistedRoadmapItem(item(TEAM, REF)));
+  await roadmap.doc("memb-item-other-person").set(toPersistedRoadmapItem(item(TEAM, OTHER_REF)));
+  await roadmap.doc("memb-item-other-team").set(toPersistedRoadmapItem(item(OTHER_TEAM, REF)));
   const systems = database.collection("teamSystems");
-  await systems.doc("memb-system-1").set({ teamId: TEAM, knowledgeMemberRefs: [REF, OTHER_REF], name: "Synthetic system" });
-  await systems.doc("memb-system-other-team").set({ teamId: OTHER_TEAM, knowledgeMemberRefs: [REF], name: "Synthetic other team system" });
+  await systems.doc("memb-system-1").set(toPersistedTeamSystem("memb-system-1", { teamId: TEAM, knowledgeMemberRefs: [REF, OTHER_REF], name: "Synthetic system", description: null }));
+  await systems
+    .doc("memb-system-other-team")
+    .set(toPersistedTeamSystem("memb-system-other-team", { teamId: OTHER_TEAM, knowledgeMemberRefs: [REF], name: "Synthetic other team system", description: null }));
   const participations = database.collection("teamProjectParticipations");
   await participations.doc("memb-part-1").set({ teamId: TEAM, memberRef: REF, projectId: "p-synthetic" });
   await participations.doc("memb-part-other-person").set({ teamId: TEAM, memberRef: OTHER_REF, projectId: "p-synthetic" });
+}
+
+/** The plan's owner handle, opened from its sealed content (`ownerRef` is no longer a plaintext field). */
+async function readOwnerRef(database: Firestore, id: string): Promise<unknown> {
+  const snapshot = await database.collection("roadmapItems").doc(id).get();
+  const opened = openRoadmapItemDocument(snapshot.data());
+  return typeof opened === "object" && opened !== null ? (opened as Record<string, unknown>).ownerRef : undefined;
 }
 
 async function clean(database: Firestore): Promise<void> {
@@ -110,8 +123,9 @@ describe.skipIf(!CONFIGURED)("membership erasure on the Firestore Emulator (owne
     await runStep(10);
 
     expect((await database.collection("teamMemberships").doc(`${UID}__${TEAM}`).get()).exists).toBe(false);
-    expect((await database.collection("roadmapItems").doc("memb-item-1").get()).data()?.ownerRef).toBeNull();
-    expect((await database.collection("roadmapItems").doc("memb-item-2").get()).data()?.ownerRef).toBeNull();
+    // A detached plan has no owner: the key is removed (domain `ownerRef` is optional), not set to null.
+    expect(await readOwnerRef(database, "memb-item-1")).toBeUndefined();
+    expect(await readOwnerRef(database, "memb-item-2")).toBeUndefined();
     expect((await database.collection("teamSystems").doc("memb-system-1").get()).data()?.knowledgeMemberRefs).toEqual([OTHER_REF]);
     expect((await database.collection("teamProjectParticipations").doc("memb-part-1").get()).exists).toBe(false);
   });
@@ -127,8 +141,8 @@ describe.skipIf(!CONFIGURED)("membership erasure on the Firestore Emulator (owne
   it("leaves another person's references and another team's records untouched", async () => {
     await runStep(10);
 
-    expect((await database.collection("roadmapItems").doc("memb-item-other-person").get()).data()?.ownerRef).toBe(OTHER_REF);
-    expect((await database.collection("roadmapItems").doc("memb-item-other-team").get()).data()?.ownerRef).toBe(REF);
+    expect(await readOwnerRef(database, "memb-item-other-person")).toBe(OTHER_REF);
+    expect(await readOwnerRef(database, "memb-item-other-team")).toBe(REF);
     expect((await database.collection("teamSystems").doc("memb-system-other-team").get()).data()?.knowledgeMemberRefs).toEqual([REF]);
     expect((await database.collection("teamProjectParticipations").doc("memb-part-other-person").get()).exists).toBe(true);
     expect((await database.collection("teamMemberships").doc(`${OTHER_UID}__${TEAM}`).get()).exists).toBe(true);

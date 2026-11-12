@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { SKILL_CONTRIBUTION_NOTICE_VERSION, TEAM_SKILL_COHORT_SCAN_MAX } from "../../team-skills/domain/skill-coverage-policy";
 import { membershipDocId } from "../../teams/domain/team-membership";
@@ -5,6 +6,10 @@ import { createFakeTeamSkillStore } from "./fake-team-skill-store";
 import { createGetTeamOwnedSkillAggregate, type GetTeamOwnedSkillAggregateDeps } from "./get-team-owned-skill-aggregate";
 import { readTeamSkillRatingsBatch } from "./read-team-skill-ratings-batch";
 import { teamSkillAssessmentDocId } from "../domain/team-skill-assessment";
+import type { TeamSkillLevel } from "../domain/team-skill";
+import { sealAssessmentLevel } from "./assessment-level-codec";
+
+vi.stubEnv("ENCRYPTION_KEY", randomBytes(32).toString("base64"));
 
 vi.mock("../../../lib/firebase/admin", () => ({
   getAdminAuth: () => {
@@ -59,6 +64,13 @@ function contributors(prefix: string, count: number, level: number, criteriaVers
   return { uids, assessments: uids.map((uid) => [uid, level, criteriaVersion] as const) };
 }
 
+/** Seals a fixture rating's level exactly as the store does. Invalid levels are sealed too, so they still fail validation. */
+function sealedRating(uid: string, skillId: string, doc: Raw | undefined): Raw | undefined {
+  if (doc === undefined || !Object.hasOwn(doc, "level")) return doc;
+  const level = doc.level as TeamSkillLevel;
+  return { ...doc, level: sealAssessmentLevel(uid, String(doc.teamId), skillId, level) };
+}
+
 interface Scenario {
   skills?: Record<string, Raw>;
   scan?: Array<{ id: string; data: Raw }>;
@@ -87,7 +99,8 @@ function setup(scenario: Scenario = {}) {
       readTeamSkillRatingsBatch(uids, teamId, targets, {
         readRaw: async (keys) => {
           if (scenario.rawFailure) throw new Error("boom");
-          return keys.map(({ uid, skillId }) => rawAssessments.get(teamSkillAssessmentDocId(uid, skillId)));
+          // Stored ratings are sealed on write; the fixture seals each level the same way before the reader opens it.
+          return keys.map(({ uid, skillId }) => sealedRating(uid, skillId, rawAssessments.get(teamSkillAssessmentDocId(uid, skillId))));
         },
       }),
   };

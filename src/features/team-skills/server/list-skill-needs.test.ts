@@ -1,3 +1,5 @@
+import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../../skill-trees/domain/skill-tree-test-fixtures";
+stubSkillTreeEncryptionKey();
 import { describe, expect, it, vi } from "vitest";
 import { skillNeedDocId, type SkillNeedRecord } from "../domain/skill-need";
 import { listSkillNeeds, type ListSkillNeedsDeps } from "./list-skill-needs";
@@ -89,11 +91,11 @@ function setup(s: Setup) {
   const catalogReader: SkillNeedCatalogReader = {
     async listOrderedByCreatedAt(limit) {
       if (s.failCatalog) throw new Error("boom");
-      return (s.catalogDocs ?? []).slice(0, limit);
+      return (s.catalogDocs ?? []).slice(0, limit).map((d) => ({ id: d.id, data: sealedSkillTreeFixture(d.id, d.data) }));
     },
     async getSkillTree(treeId) {
       if (s.failTree) throw new Error("boom");
-      return s.trees?.[treeId];
+      return sealedSkillTreeFixture(treeId, s.trees?.[treeId]);
     },
   };
   const deps: ListSkillNeedsDeps = {

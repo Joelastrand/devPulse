@@ -8,13 +8,13 @@ const BASE_CLASSNAME =
 
 /**
  * Shared calm, operational status/relationship-text treatment
- * (docs/features/ui-refresh/SPEC.md — BR-10), replacing this codebase's
+ * (docs/archive/features/ui-refresh/SPEC.md — BR-10), replacing this codebase's
  * previously plain-text status labels (team active/disabled, a team's
  * relationship, challenge status, skill-tracking not-started/disabled).
  * `children` is always the status text itself — this component has no
  * color-only mode and no `tone`/`variant` prop: none of the confirmed
  * candidate call sites currently distinguish status by color, so none is
- * introduced here (`docs/UI-UX.md` — "never rely on color alone to convey
+ * introduced here (`docs/archive/UI-UX-2026-11-11.md` — "never rely on color alone to convey
  * meaning"). Deliberately not applied to the SkillTree stage/progression
  * list itself (SPEC BR-11) — that presentation is out of this feature's
  * scope entirely.

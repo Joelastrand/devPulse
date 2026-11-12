@@ -6,6 +6,7 @@ import type { ConversationStatus } from "../domain/conversation-status";
 import type { SharedGoalSnapshot } from "../domain/shared-goal-snapshot";
 import type { SharedEvidenceSnapshot } from "../domain/shared-evidence-snapshot";
 import type { FakeContentCodec } from "./fake-content-codec";
+import { conversationContext } from "../domain/stored-owner-conversation";
 import type { FakeTeamEligibilityState } from "./fake-team-eligibility";
 
 /**
@@ -66,7 +67,10 @@ export async function seedOwnerConversation(
     sharedGoals: options.sharedGoals ?? [],
     sharedEvidence: options.sharedEvidence ?? [],
   };
-  const encoded = codec.encodeContent(content);
+  const encoded = codec.encodeContent(
+    content,
+    conversationContext(options.ownerUid ?? OWNER_UID, options.conversationId),
+  );
   if (!encoded.ok) throw new Error("fixture key unavailable");
 
   const createdAt = options.createdAt ?? NOW;

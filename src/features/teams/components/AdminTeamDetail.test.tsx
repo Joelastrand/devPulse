@@ -266,7 +266,7 @@ describe("AdminTeamDetail", () => {
     expect(screen.getByLabelText(/e-postadresse/i)).toHaveProperty("value", "new@example.com");
   });
 
-  it("wires aria-invalid and aria-describedby on the invite-email field's error state (docs/features/ui-refresh/SPEC.md — BR-9)", async () => {
+  it("wires aria-invalid and aria-describedby on the invite-email field's error state (docs/archive/features/ui-refresh/SPEC.md — BR-9)", async () => {
     const user = userEvent.setup();
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     mockOk();
@@ -290,7 +290,7 @@ describe("AdminTeamDetail", () => {
 
     render(<AdminTeamDetail teamId="team-1" />);
     // The invite field is reachable immediately, with no prior "expand"
-    // interaction (docs/features/ui-refresh/SPEC.md — BR-13).
+    // interaction (docs/archive/features/ui-refresh/SPEC.md — BR-13).
     const emailField = await screen.findByLabelText(/e-postadresse/i);
 
     // Scoped to the invite section itself (`section > form`, not the whole
@@ -637,7 +637,7 @@ describe("AdminTeamDetail survey management", () => {
     await screen.findByText(/ingen undersøkelser/i);
 
     // The active/archived survey lists remain the default-visible view
-    // while the creation form is collapsed (docs/features/ui-refresh/
+    // while the creation form is collapsed (docs/archive/features/ui-refresh/
     // SPEC.md — BR-12).
     expect(screen.queryByLabelText(/tittel/i)).toBeNull();
     const toggle = screen.getByRole("button", { name: /ny undersøkelse/i });
@@ -701,7 +701,7 @@ describe("AdminTeamDetail survey management", () => {
     expect(screen.getByLabelText(/minste antall svar/i)).toHaveProperty("value", "5");
   });
 
-  it("associates the minimum-responses hint with its input via aria-describedby (docs/features/ui-refresh/SPEC.md — BR-21)", async () => {
+  it("associates the minimum-responses hint with its input via aria-describedby (docs/archive/features/ui-refresh/SPEC.md — BR-21)", async () => {
     const user = userEvent.setup();
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     mockOk({ surveys: [] });
@@ -813,7 +813,7 @@ describe("AdminTeamDetail survey management", () => {
     );
   });
 
-  it("wires aria-invalid/aria-describedby on the survey-creation fields to the create-error alert (docs/features/ui-refresh/SPEC.md — BR-9)", async () => {
+  it("wires aria-invalid/aria-describedby on the survey-creation fields to the create-error alert (docs/archive/features/ui-refresh/SPEC.md — BR-9)", async () => {
     const user = userEvent.setup();
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     mockOk({ surveys: [] });
@@ -870,7 +870,7 @@ describe("AdminTeamDetail survey management", () => {
     await screen.findByText(/lenke kopiert/i);
   });
 
-  it("shows a visible, non-sensitive failure state when copying the survey link fails (docs/features/ui-refresh/SPEC.md — BR-22)", async () => {
+  it("shows a visible, non-sensitive failure state when copying the survey link fails (docs/archive/features/ui-refresh/SPEC.md — BR-22)", async () => {
     const user = userEvent.setup();
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     mockOk({

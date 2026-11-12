@@ -97,7 +97,7 @@ export type SetTeamVisibilityResult =
   | { ok: false; error: AuthRefusal | "invalid_input" | "not_found" | "forbidden" | "team_disabled" | "erasure_in_progress" | "persistence_failed" };
 
 /**
- * Changes a team's public/private visibility (docs/features/teamadmin-and-team-visibility/SPEC.md). Authorized server-side
+ * Changes a team's public/private visibility (docs/archive/features/teamadmin-and-team-visibility/SPEC.md). Authorized server-side
  * from the verified identity: a superadmin, or a genuine `teamadmin` of the same team, on an `active` team. The caller
  * never supplies a role. Writes only `visibility` and `visibilityUpdatedAt`; no actor uid is stored, so the write
  * creates no new linkage for account erasure.

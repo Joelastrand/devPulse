@@ -35,7 +35,7 @@ function saveErrorMessage(error: Exclude<SaveOwnProfileResult, { ok: true }>["er
 }
 
 /**
- * The signed-in user's own display-name form (docs/features/member-identity-
+ * The signed-in user's own display-name form (docs/archive/features/member-identity-
  * and-team-roles/SPEC.md — BR-30). Auth state and stale-response protection
  * come from the shared `useAuthGatedResource` generation guard; the server
  * (`/api/me/profile`) is the only authority on validity and identity, so the

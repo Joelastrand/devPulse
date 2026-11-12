@@ -31,7 +31,7 @@ function owner(overrides: Record<string, unknown> = {}): Record<string, unknown>
     ciphertext: "AAAA",
     iv: "AAAAAAAAAAAAAAAA",
     authTag: "AAAAAAAAAAAAAAAAAAAAAA==",
-    keyVersion: "v1",
+    keyVersion: "v2", keyId: "k1",
     keyCheck: "A".repeat(43) + "=",
     ...overrides,
   };

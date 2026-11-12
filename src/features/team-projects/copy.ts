@@ -1,6 +1,6 @@
 import type { ProjectEffectiveStatus, ProjectLifecycleStatus, ProjectPriority } from "./domain/team-project";
 
-/** Norwegian UI copy for the team project roadmap (docs/features/team-experience-redesign, TASK-005). */
+/** Norwegian UI copy for the team project roadmap (docs/archive/features/team-experience-redesign, TASK-005). */
 export const teamProjectsCopy = {
   section: {
     plan: "Prosjektplan",

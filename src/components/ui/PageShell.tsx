@@ -6,7 +6,7 @@ export type PageShellWidth = "sm" | "lg" | "2xl" | "3xl" | "wide";
 
 /**
  * The existing width tokens map onto the Product Experience containers
- * (docs/features/product-experience/SPEC.md — Breakpoints and containers).
+ * (docs/archive/features/product-experience/SPEC.md — Breakpoints and containers).
  * `wide` (admin) uses the main container: the SPEC defines no separate wide
  * width, so the admin pages share main's 1200 px cap.
  */

@@ -1,3 +1,5 @@
+import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../domain/skill-tree-test-fixtures";
+stubSkillTreeEncryptionKey();
 import { describe, expect, it, vi } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type { RawSkillTreeDoc, SkillTreesReader } from "./list-skill-trees";
@@ -38,7 +40,7 @@ function verifyTokenReturning(identity: VerifiedIdentity) {
 function treeDoc(id: string, createdAt: Date, overrides: Record<string, unknown> = {}): RawSkillTreeDoc {
   return {
     id,
-    data: {
+    data: sealedSkillTreeFixture(id, {
       name: `Tree ${id}`,
       nodes: [
         { nodeId: "node-0", label: "Stage A", order: 0 },
@@ -47,7 +49,7 @@ function treeDoc(id: string, createdAt: Date, overrides: Record<string, unknown>
       createdAt,
       createdBy: "some-admin",
       ...overrides,
-    },
+    }) as Record<string, unknown>,
   };
 }
 

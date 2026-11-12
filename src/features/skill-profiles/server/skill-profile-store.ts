@@ -3,6 +3,7 @@ import { FieldPath, FieldValue } from "firebase-admin/firestore";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { runFencedTransaction } from "../../auth/server/erasure-write-fence";
 import type { SelfAssessedLevel } from "../domain/self-assessed-level";
+import { openSkillProfileDocument, sealSkillLevel } from "./skill-level-codec";
 
 const SKILL_PROFILES_COLLECTION = "skillProfiles";
 const SKILL_TREES_COLLECTION = "skillTrees";
@@ -70,17 +71,23 @@ export async function readSkillProfilesBatch(uids: readonly string[]): Promise<A
   for (let start = 0; start < readable.length; start += SKILL_PROFILE_READ_CHUNK_SIZE) {
     chunks.push(readable.slice(start, start + SKILL_PROFILE_READ_CHUNK_SIZE));
   }
-  const snapshots = await Promise.all(
+  const snapshotChunks = await Promise.all(
     chunks.map((chunk) => db.getAll(...chunk.map((uid) => db.collection(SKILL_PROFILES_COLLECTION).doc(uid)))),
   );
-  return snapshots.flat().map((snapshot) => (snapshot.exists ? snapshot.data() : undefined));
+  // Levels are opened per owner: the record context includes the uid, so each document is opened with its own id.
+  return snapshotChunks.flatMap((snapshots, chunkIndex) =>
+    snapshots.map((snapshot, index) => {
+      const uid = chunks[chunkIndex][index];
+      return openSkillProfileDocument(uid, snapshot.exists ? snapshot.data() : undefined);
+    }),
+  );
 }
 
 export function getDefaultSkillProfileStore(): SkillProfileStore {
   return {
     async read(uid) {
       const snapshot = await getFirestoreDb().collection(SKILL_PROFILES_COLLECTION).doc(uid).get();
-      return snapshot.exists ? snapshot.data() : undefined;
+      return openSkillProfileDocument(uid, snapshot.exists ? snapshot.data() : undefined);
     },
     async delete(uid) {
       const db = getFirestoreDb();
@@ -98,7 +105,7 @@ export function getDefaultSkillProfileStore(): SkillProfileStore {
         work({
           async readProfile() {
             const snapshot = await tx.get(profileRef);
-            return snapshot.exists ? snapshot.data() : undefined;
+            return openSkillProfileDocument(uid, snapshot.exists ? snapshot.data() : undefined);
           },
           async readSkillTree(treeId) {
             const snapshot = await tx.get(db.collection(SKILL_TREES_COLLECTION).doc(treeId));
@@ -106,7 +113,8 @@ export function getDefaultSkillProfileStore(): SkillProfileStore {
           },
           setLevel(treeId, level, stamps) {
             // Nested merge-set: only `levels.<treeId>` is touched (tree ids contain no dots).
-            tx.set(profileRef, { levels: { [treeId]: level }, ...stamps }, { merge: true });
+            // The level is sealed as its own record envelope; the plaintext number is never written.
+            tx.set(profileRef, { levels: { [treeId]: sealSkillLevel(uid, treeId, level) }, ...stamps }, { merge: true });
           },
           removeLevel(treeId, stamps) {
             tx.update(

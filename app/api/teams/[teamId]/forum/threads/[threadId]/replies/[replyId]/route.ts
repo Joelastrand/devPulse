@@ -5,7 +5,7 @@ import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
- * Tombstones one reply (docs/features/team-forum/SPEC.md — TASK-005,
+ * Tombstones one reply (docs/archive/features/team-forum/SPEC.md — TASK-005,
  * "API/DTO contract"). Thin delegate — `deleteReply` owns every
  * authorization/idempotency decision, including BR-27's unconditional
  * idempotent success for a retry against an already-tombstoned,

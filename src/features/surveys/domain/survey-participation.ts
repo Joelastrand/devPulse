@@ -1,5 +1,5 @@
 /**
- * A Firestore `surveyParticipations` document (docs/features/
+ * A Firestore `surveyParticipations` document (docs/archive/features/
  * managed-surveys/SPEC.md — "Authentication vs anonymity distinction").
  * Exists only for `authenticated`-mode surveys, used exclusively to detect
  * a second accepted submission from the same identity (BR-21/BR-22).

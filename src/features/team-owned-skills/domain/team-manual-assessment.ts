@@ -1,5 +1,5 @@
 /**
- * Collaborative (manual) team competence assessment of one canonical team skill (docs/features/team-owned-skills/SPEC.md
+ * Collaborative (manual) team competence assessment of one canonical team skill (docs/archive/features/team-owned-skills/SPEC.md
  * §12; unified team competence decision, 2026-11-11).
  *
  * A team administrator records the level the team agreed on for one `teamSkills` area. It is a directly entered team-level

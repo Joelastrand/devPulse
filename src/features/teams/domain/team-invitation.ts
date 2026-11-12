@@ -10,7 +10,7 @@ export function isValidInvitationStatus(value: unknown): value is InvitationStat
 }
 
 /**
- * A Firestore `teamInvitations` document (docs/features/team-management/
+ * A Firestore `teamInvitations` document (docs/archive/features/team-management/
  * SPEC.md — Architecture decisions → "Firestore collections"). `email` is
  * always normalized (trim + lowercase) before storage — used only for
  * matching a future verified sign-in, never copied into `teamMemberships`.
@@ -31,13 +31,12 @@ export interface TeamInvitationRecord {
 }
 
 /**
- * Builds the deterministic `teamInvitations` document id for one (teamId,
- * normalizedEmail) pair — the identity this feature uses to prevent
- * duplicate active invitations (BR-19) and to resolve a pending invitation
- * (BR-20). Used only as a uniqueness/lookup key, never parsed back apart.
+ * Builds the deterministic `teamInvitations` document id from a team and an email blind index (see
+ * `team-invitation-content-codec.ts`). The id is the uniqueness and lookup key for BR-19 and BR-20; it is never parsed back
+ * apart. Use `invitationDocIdForEmail` to build it from an email.
  */
-export function invitationDocId(teamId: string, normalizedEmail: string): string {
-  return `${teamId}__${normalizedEmail}`;
+export function invitationDocId(teamId: string, emailIndex: string): string {
+  return `${teamId}__${emailIndex}`;
 }
 
 /**

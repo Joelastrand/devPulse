@@ -69,7 +69,7 @@ export default async function MySkillsPage({
         {view === "rediger" ? (
           <div className="flex flex-col gap-10">
             <SkillProfilePage />
-            {/* Team-owned skills (docs/features/team-owned-skills): one block per team the person belongs to. */}
+            {/* Team-owned skills (docs/archive/features/team-owned-skills): one block per team the person belongs to. */}
             <OwnTeamSkillsSection />
           </div>
         ) : null}

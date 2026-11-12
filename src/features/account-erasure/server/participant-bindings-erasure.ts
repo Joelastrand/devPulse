@@ -5,6 +5,7 @@ import type { ConversationContent } from "../../development-conversations/domain
 import type { ConversationStore, ConversationTransaction, OwnerDocumentPatch } from "../../development-conversations/server/conversation-store-types";
 import type { EncodeContentResult } from "../../development-conversations/server/content-codec";
 import { classifyOwnerDocument, type OwnerReadCodec } from "../../development-conversations/server/owner-read";
+import { conversationContext } from "../../development-conversations/domain/stored-owner-conversation";
 import { ErasureStepFailure, type BatchResult, type StepHandler } from "./erasure-runner";
 
 /**
@@ -48,7 +49,7 @@ export interface ParticipantBindingDiscovery {
 }
 
 /** The codec this step needs: the classifier's decrypt seam (OwnerReadCodec) and the production encoder. */
-export type ParticipantBindingCodec = OwnerReadCodec & { encodeContent(content: ConversationContent): EncodeContentResult };
+export type ParticipantBindingCodec = OwnerReadCodec & { encodeContent(content: ConversationContent, context: string): EncodeContentResult };
 
 export interface ParticipantBindingsDeps {
   readonly store: ConversationStore;
@@ -102,7 +103,7 @@ async function eraseInTransaction(
   }
 
   // The decrypt seam may throw on a key outage. That is an operational failure, so it is reported as one, below.
-  const classification = classifyOwnerDocument(raw, deps.codec);
+  const classification = classifyOwnerDocument(raw, deps.codec, { ownerUid, conversationId });
   if (classification.kind !== "valid") {
     return { ok: false, error: "payload_unreadable" };
   }
@@ -115,7 +116,10 @@ async function eraseInTransaction(
     return { ok: true, outcome: "skipped" };
   }
 
-  const encoded = deps.codec.encodeContent({ ...record.content, participantNotes: "" });
+  const encoded = deps.codec.encodeContent(
+    { ...record.content, participantNotes: "" },
+    conversationContext(ownerUid, conversationId),
+  );
   if (!encoded.ok) {
     return { ok: false, error: "store_unavailable" };
   }

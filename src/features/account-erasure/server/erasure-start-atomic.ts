@@ -17,7 +17,7 @@ import { parseErasureRecord, toStoredErasureRecord, type ErasureRecord } from ".
  * Starts an erasure: creates the fence record and, when the account is an active superadmin, revokes that privilege. Both
  * writes happen in ONE Firestore transaction, so either both commit or neither does.
  *
- * Why this shape (docs/features/account-erasure/SPEC.md, superadmin start rule): the earlier order committed the revoke in
+ * Why this shape (docs/archive/features/account-erasure/SPEC.md, superadmin start rule): the earlier order committed the revoke in
  * one transaction and created the fence in a second. A failed fence creation then left the person demoted with no erasure
  * in progress. A single transaction removes that gap without a cross-transaction claim: Firestore applies the reads and
  * writes of one transaction atomically, and a conflicting concurrent registry write makes this transaction retry.

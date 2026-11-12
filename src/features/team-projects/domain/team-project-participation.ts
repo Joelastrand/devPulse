@@ -2,7 +2,7 @@ import { isMemberRef } from "../../teams/domain/member-ref";
 import { isValidPlanDate } from "../../roadmap/domain/roadmap-dates";
 
 /**
- * Project participation (docs/features/team-experience-redesign SPEC — BR-8, BR-12, BR-13; TASKS TASK-004).
+ * Project participation (docs/archive/features/team-experience-redesign SPEC — BR-8, BR-12, BR-13; TASKS TASK-004).
  *
  * A participation records that one team member is planned to work on one team project for a calendar interval.
  * It is planning data only: there is no utilization, capacity, productivity or performance field, and nothing here

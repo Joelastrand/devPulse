@@ -1,3 +1,6 @@
+import { openSurveyDocument, toPersistedSurvey } from "./survey-content-codec";
+import { persistedSurveyFixture, stubSurveyEncryptionKey } from "./survey-test-fixtures";
+stubSurveyEncryptionKey();
 import { describe, expect, it, vi } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import { getBuiltInTemplate } from "../domain/templates";
@@ -37,7 +40,10 @@ function surveyDoc(overrides: Record<string, unknown> = {}): Record<string, unkn
 }
 
 function fakeDraftStore(initial: Record<string, unknown>): SurveyDraftStore & { docs: Map<string, unknown> } {
-  const docs = new Map<string, unknown>(Object.entries(initial));
+  // Stored documents are sealed, as in production: the store opens them before `mutate` and seals the result on write.
+  const docs = new Map<string, unknown>(
+    Object.entries(initial).map(([id, doc]) => [id, persistedSurveyFixture(id, doc as Record<string, unknown>)]),
+  );
   return {
     docs,
     runUpdate: vi.fn(async (surveyId, _actorUid, mutate) => {
@@ -45,10 +51,15 @@ function fakeDraftStore(initial: Record<string, unknown>): SurveyDraftStore & { 
       if (!outcome.ok) {
         return outcome;
       }
-      docs.set(surveyId, outcome.document);
+      docs.set(surveyId, toPersistedSurvey(surveyId, outcome.document));
       return { ok: true as const };
     }),
   };
+}
+
+/** The stored document, opened the way the production read path opens it. */
+function openedStored(store: { docs: Map<string, unknown> }): Record<string, unknown> {
+  return openSurveyDocument(SURVEY_ID, store.docs.get(SURVEY_ID)) as Record<string, unknown>;
 }
 
 function updateDeps(store: SurveyDraftStore, overrides: Partial<UpdateSurveyDraftDeps> = {}): UpdateSurveyDraftDeps {
@@ -71,7 +82,7 @@ describe("updateSurveyDraft", () => {
     const result = await updateSurveyDraft("token", TEAM_ID, SURVEY_ID, VALID_PATCH, updateDeps(store));
 
     expect(result).toEqual({ ok: true });
-    const saved = store.docs.get(SURVEY_ID) as Record<string, unknown>;
+    const saved = openedStored(store);
     expect(saved.title).toBe("Oktoberpuls");
     expect(saved.description).toBe("Kort om hvordan uken har vært.");
     expect(saved.questionSetVersion).toBe(CONFIGURABLE_QUESTION_SET_VERSION);
@@ -86,7 +97,7 @@ describe("updateSurveyDraft", () => {
 
     await updateSurveyDraft("token", TEAM_ID, SURVEY_ID, { title: null, description: null }, updateDeps(store));
 
-    const saved = store.docs.get(SURVEY_ID) as Record<string, unknown>;
+    const saved = openedStored(store);
     expect(saved).not.toHaveProperty("title");
     expect(saved).not.toHaveProperty("description");
   });
@@ -98,7 +109,7 @@ describe("updateSurveyDraft", () => {
     const result = await updateSurveyDraft("token", TEAM_ID, SURVEY_ID, VALID_PATCH, updateDeps(store));
 
     expect(result).toEqual({ ok: false, error: "not_editable" });
-    expect(store.docs.get(SURVEY_ID)).toBe(original);
+    expect(openedStored(store)).toEqual(original);
   });
 
   it("updates only title and description of a published survey and keeps its questions and dates", async () => {
@@ -121,7 +132,7 @@ describe("updateSurveyDraft", () => {
     );
 
     expect(result).toEqual({ ok: true });
-    const saved = store.docs.get(SURVEY_ID) as Record<string, unknown>;
+    const saved = openedStored(store);
     expect(saved.title).toBe("Ny tittel");
     expect(saved.description).toBe("Ny beskrivelse");
     expect(saved.questions).toEqual(questions);
@@ -147,7 +158,7 @@ describe("updateSurveyDraft", () => {
     );
 
     expect(result).toEqual({ ok: false, error: "not_editable" });
-    expect(store.docs.get(SURVEY_ID)).toBe(original);
+    expect(openedStored(store)).toEqual(original);
   });
 
   it("refuses to edit the metadata of an archived survey", async () => {
@@ -161,7 +172,7 @@ describe("updateSurveyDraft", () => {
     const result = await updateSurveyDraft("token", TEAM_ID, SURVEY_ID, { title: "Ny" }, updateDeps(store));
 
     expect(result).toEqual({ ok: false, error: "not_editable" });
-    expect(store.docs.get(SURVEY_ID)).toBe(original);
+    expect(openedStored(store)).toEqual(original);
   });
 
   it("refuses to change the access mode or the minimum-response threshold", async () => {
@@ -194,7 +205,7 @@ describe("updateSurveyDraft", () => {
     const result = await updateSurveyDraft("token", TEAM_ID, SURVEY_ID, patch, updateDeps(store));
 
     expect(result).toEqual({ ok: false, error: "free_text_must_be_optional" });
-    expect(store.docs.get(SURVEY_ID)).toEqual(surveyDoc());
+    expect(openedStored(store)).toEqual(surveyDoc());
   });
 
   it("rejects a non-admin caller before reading the survey", async () => {
@@ -236,7 +247,7 @@ function duplicateDeps(source: unknown, create: CreateSurveyDeps): DuplicateSurv
   return {
     verifyToken: verifyAs(ADMIN_TOKEN_IDENTITY),
     isSuperadmin: isAdmin,
-    readSurvey: vi.fn(async () => source),
+    readSurvey: vi.fn(async () => (source === undefined ? undefined : persistedSurveyFixture(SURVEY_ID, source as Record<string, unknown>))),
     createDeps: create,
   };
 }
@@ -307,11 +318,11 @@ function resultsDeps(
           : undefined,
     },
     collections: {
-      getSurvey: async () => survey,
-      listResponses: async () => responses,
+      getSurvey: async () => persistedSurveyFixture(SURVEY_ID, survey),
+      listResponses: async () => responses.map((data, i) => ({ id: `response-${i + 1}`, data })),
     },
     // Decryption is replaced by identity: each fake response already carries its plaintext.
-    decryptPayload: (payload) => payload.ciphertext,
+    decryptPayload: (envelope) => envelope.ciphertext,
     ...overrides,
   };
 }
@@ -327,7 +338,8 @@ function encryptedFor(survey: Record<string, unknown>, answers: unknown): unknow
     ciphertext: plaintext,
     iv: "aXY=",
     authTag: "dGFn",
-    keyVersion: "v1",
+    keyVersion: "v2",
+    keyId: "k1",
   };
 }
 

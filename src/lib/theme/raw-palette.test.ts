@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import allowList from "./raw-palette-allowlist.json";
 
 /**
- * Raw colour guard (docs/features/product-experience/SPEC.md — Token
+ * Raw colour guard (docs/archive/features/product-experience/SPEC.md — Token
  * contract). Colour values belong in app/globals.css. Existing raw uses are
  * listed in raw-palette-allowlist.json and must shrink as surfaces migrate;
  * the list is compared exactly, so a stale count fails as well as a new one.

@@ -21,6 +21,7 @@ import {
   type PlanProgress,
 } from "../domain/competence-plan";
 import type { SelfAssessedLevel } from "../../skill-profiles/domain/self-assessed-level";
+import { openCompetencePlanDocument, toPersistedCompetencePlan } from "./competence-plan-codec";
 import type { RoadmapPriority } from "../../roadmap/domain/roadmap-item";
 
 const PLANS_COLLECTION = "teamCompetencePlans";
@@ -119,7 +120,10 @@ function getDefaultReadStore(): CompetencePlanReadStore {
         .where("teamId", "==", teamId)
         .limit(limit)
         .get();
-      return snapshot.docs.map((doc) => ({ id: doc.id, data: mapDates(doc.data(), ["createdAt", "updatedAt"]) }));
+      return snapshot.docs.map((doc) => ({
+        id: doc.id,
+        data: openCompetencePlanDocument(doc.id, mapDates(doc.data(), ["createdAt", "updatedAt"])),
+      }));
     },
   };
 }
@@ -137,10 +141,11 @@ function toFirestoreTx(db: Firestore, tx: Transaction): CompetencePlanWriteTx {
     },
     async getPlan(planId) {
       const snapshot = await tx.get(plans().doc(planId));
-      return snapshot.exists ? mapDates(snapshot.data(), ["createdAt", "updatedAt"]) : undefined;
+      return snapshot.exists ? openCompetencePlanDocument(planId, mapDates(snapshot.data(), ["createdAt", "updatedAt"])) : undefined;
     },
     putPlan(planId, record) {
-      tx.set(plans().doc(planId), record);
+      // Title and milestones are sealed; identity, stage, priority, archive flag and timestamps stay plaintext.
+      tx.set(plans().doc(planId), toPersistedCompetencePlan(planId, record));
     },
   };
 }

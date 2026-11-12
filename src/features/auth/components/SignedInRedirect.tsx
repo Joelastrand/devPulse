@@ -12,7 +12,7 @@ interface SignedInRedirectProps {
 
 /**
  * Sends a visitor who is already signed in away from `/sign-in`
- * (docs/features/managed-surveys/SPEC.md — BR-40). Only the first auth
+ * (docs/archive/features/managed-surveys/SPEC.md — BR-40). Only the first auth
  * emission is acted on, so a sign-in completed on this page still shows the
  * existing success message with its continue link instead of redirecting
  * unexpectedly.

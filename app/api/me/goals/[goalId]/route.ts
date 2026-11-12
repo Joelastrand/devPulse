@@ -26,7 +26,7 @@ const UPDATE_ERROR_STATUS: Record<Extract<UpdatePersonalGoalResult, { ok: false 
 type RouteContext = { params: Promise<{ goalId: string }> };
 
 /**
- * One own goal (docs/features/personal-development-goals/SPEC.md — BR-5, BR-22…BR-28). Thin: the only
+ * One own goal (docs/archive/features/personal-development-goals/SPEC.md — BR-5, BR-22…BR-28). Thin: the only
  * subject is the uid of the verified bearer token; the path selects a goal id and nothing else. The id is
  * handed to the operations unvalidated, because they own its addressability (BR-27a) and differ on purpose:
  * `PATCH` hides a missing or malformed goal as `goal_not_found`, `DELETE` is idempotent. `PATCH` and `DELETE` only.

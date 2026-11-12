@@ -50,7 +50,7 @@ export function createFakeTeamSkillStore(initial: Partial<FakeTeamSkillState> = 
     putSkill(skillId, record: TeamSkillRecord) {
       state.skills[skillId] = { ...record };
     },
-    async getAssessment(uid, skillId) {
+    async getAssessment(uid, _teamId, skillId) {
       const doc = state.assessments[teamSkillAssessmentDocId(uid, skillId)];
       return doc && { ...doc };
     },

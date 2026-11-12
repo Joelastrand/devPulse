@@ -1,3 +1,4 @@
+import { openTeamDocument } from "../domain/team-content-codec";
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { isValidTeamStatus } from "../domain/team";
@@ -34,7 +35,7 @@ function getDefaultCollection(): ActiveTeamsCollection {
         .get();
       return snapshot.docs.map((doc) => ({
         id: doc.id,
-        name: doc.data().name,
+        name: (openTeamDocument(doc.id, doc.data()) as { name?: unknown } | null | undefined)?.name,
         status: doc.data().status,
       }));
     },
@@ -52,9 +53,9 @@ export interface ListActiveTeamsDeps {
 /**
  * Read of the currently active teams, used by `getTeamsOverview` (`/teams`).
  * Originally also the pulse survey's team selector/submission-validation
- * source (docs/features/team-management/SPEC.md — TASK-006); that consumer
+ * source (docs/archive/features/team-management/SPEC.md — TASK-006); that consumer
  * was retired along with the rest of `src/features/pulse-survey/`
- * (docs/features/managed-surveys/SPEC.md — TASK-014). Exposes only
+ * (docs/archive/features/managed-surveys/SPEC.md — TASK-014). Exposes only
  * `{teamId, name}`: no status, membership, admin, invitation, or
  * access-request data. A malformed individual document (missing/invalid
  * `status` or a non-string or blank `name`) is excluded rather than failing

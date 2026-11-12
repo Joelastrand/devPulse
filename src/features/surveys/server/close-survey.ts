@@ -1,3 +1,4 @@
+import { openSurveyDocument } from "./survey-content-codec";
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
@@ -72,7 +73,8 @@ function getDefaultDb(): CloseSurveyDb {
 export type CloseSurveyOutcome = "closed" | "already_closed" | "survey_not_found" | "not_open" | "erasure_in_progress";
 
 /** Maps raw Firestore document data (Timestamp fields included) into the candidate shape `isValidSurvey` expects. */
-function toCandidateSurvey(surveyId: string, data: unknown): unknown {
+function toCandidateSurvey(surveyId: string, raw: unknown): unknown {
+  const data = openSurveyDocument(surveyId, raw);
   if (typeof data !== "object" || data === null) {
     return undefined;
   }
@@ -107,7 +109,7 @@ function toDateOrUndefined(value: unknown): unknown {
 
 /**
  * The whole close decision, run inside one Firestore transaction
- * (docs/features/managed-surveys/SPEC.md — "One open survey per team" →
+ * (docs/archive/features/managed-surveys/SPEC.md — "One open survey per team" →
  * "Close"). Resolves and fail-closed-validates the target survey
  * (TASK-001's `isValidSurvey`) — `teamId` for the coordination lookup below
  * is always taken from this fetched, validated survey record, never a
@@ -228,7 +230,7 @@ export interface CloseSurveyDeps {
 }
 
 /**
- * Closes an `open` survey (docs/features/managed-surveys/SPEC.md — BR-7).
+ * Closes an `open` survey (docs/archive/features/managed-surveys/SPEC.md — BR-7).
  * Only an app admin may call this successfully — reuses `requireAppAdmin`
  * unchanged. Unlike `openSurvey`/`createSurvey`, this takes no `teamId`
  * parameter: the survey's own persisted `teamId` (resolved only after the

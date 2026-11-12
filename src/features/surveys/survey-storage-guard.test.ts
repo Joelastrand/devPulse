@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 /**
- * Answers are held in memory only (docs/features/product-experience/SPEC.md —
+ * Answers are held in memory only (docs/archive/features/product-experience/SPEC.md —
  * Interruption and recovery). No storage API of any kind may appear in the
  * survey feature or the survey route group.
  */

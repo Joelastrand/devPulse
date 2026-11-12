@@ -1,3 +1,5 @@
+import { persistedSurveyFixture, stubSurveyEncryptionKey } from "./survey-test-fixtures";
+stubSurveyEncryptionKey();
 import { describe, expect, it, vi } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type {
@@ -50,7 +52,7 @@ function fakeSurveyDocStore(data: Record<string, unknown> | undefined): FakeSurv
     deletedIds,
     archivedWrites,
     async get(): Promise<DeleteOrArchiveSurveyDocSnapshot> {
-      return { exists: data !== undefined, data: () => data };
+      return { exists: data !== undefined, data: () => (data === undefined ? undefined : persistedSurveyFixture(SURVEY_ID, data)) };
     },
     async delete(surveyId) {
       deletedIds.push(surveyId);
@@ -263,7 +265,7 @@ describe("deleteOrArchiveSurvey", () => {
     const surveyDocs: SurveyDocStore = {
       get: vi.fn().mockResolvedValue({
         exists: true,
-        data: () => surveyData({ closedAt: new Date("2026-02-01T00:00:00Z") }),
+        data: () => persistedSurveyFixture(SURVEY_ID, surveyData({ closedAt: new Date("2026-02-01T00:00:00Z") })),
       }),
       delete: vi.fn().mockRejectedValue(new Error("simulated firestore outage")),
       setArchivedAt: vi.fn(),
@@ -283,7 +285,7 @@ describe("deleteOrArchiveSurvey", () => {
     const surveyDocs: SurveyDocStore = {
       get: vi.fn().mockResolvedValue({
         exists: true,
-        data: () => surveyData({ closedAt: new Date("2026-02-01T00:00:00Z") }),
+        data: () => persistedSurveyFixture(SURVEY_ID, surveyData({ closedAt: new Date("2026-02-01T00:00:00Z") })),
       }),
       delete: vi.fn(),
       setArchivedAt: vi.fn().mockRejectedValue(new Error("simulated firestore outage")),

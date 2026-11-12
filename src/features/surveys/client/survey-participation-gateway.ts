@@ -19,7 +19,7 @@ export interface SurveyParticipationSummary {
 /**
  * The shape `GET /api/surveys/[surveyId]` returns, mirroring
  * `resolveSurveyForParticipation`'s outcome one-for-one
- * (docs/features/managed-surveys/SPEC.md — TASK-005). `not_found`,
+ * (docs/archive/features/managed-surveys/SPEC.md — TASK-005). `not_found`,
  * `sign_in_required`, and `forbidden` never carry a `survey` field — there
  * is nothing safe to attach for those outcomes.
  */

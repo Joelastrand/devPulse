@@ -16,7 +16,7 @@ function normalizePathname(pathname: string | null): string | null {
 
 /**
  * Route-level team navigation with the five team tabs of
- * docs/features/team-experience-redesign/SPEC.md (BR-30):
+ * docs/archive/features/team-experience-redesign/SPEC.md (BR-30):
  * `Oversikt · Roadmap · Kompetanseplan · Teamkompetanse · Systemoversikt`.
  * `aria-current="page"` is set on an exact pathname match only — no prefix
  * matching, so other sub-routes (e.g. the forum thread page) and unknown

@@ -8,7 +8,7 @@ import { StatusBadge, type StatusTone } from "../StatusBadge";
 
 /**
  * Presentation primitives shared by the visual-redesign page compositions
- * (docs/features/visual-redesign/SPEC.md — AD-3, BR-5, BR-33). Each takes
+ * (docs/archive/features/visual-redesign/SPEC.md — AD-3, BR-5, BR-33). Each takes
  * already-resolved values. None fetches data, decides a status or derives a
  * metric: callers pass text, numbers and a tone they already have.
  */

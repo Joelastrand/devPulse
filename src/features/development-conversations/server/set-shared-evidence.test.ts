@@ -10,9 +10,11 @@ import { OTHER_OWNER_UID, NOW, OWNER_UID, seedOwnerConversation } from "./owner-
 import type { OwnedEvidenceReader } from "./owned-evidence-seam";
 import { setSharedEvidence, type SetSharedEvidenceDeps } from "./set-shared-evidence";
 import type { StoredEnvelope } from "../domain/stored-owner-conversation";
+import { conversationContext } from "../domain/stored-owner-conversation";
 
 /** Synthetic fixtures only (invariant 15). No real person, team or wellbeing data. */
 const CONVERSATION_ID = "conv-1";
+const CTX = conversationContext(OWNER_UID, CONVERSATION_ID);
 /** The owner read version of the fixture (its `updatedAt` is `NOW`). */
 const FRESH = NOW.toISOString();
 const CAPTURED_AT = new Date("2026-10-01T08:00:00.000Z");
@@ -133,9 +135,9 @@ async function storedContent(store: FakeConversationStore, codec: FakeContentCod
     iv: raw.iv,
     authTag: raw.authTag,
     keyVersion: raw.keyVersion,
-    keyCheck: raw.keyCheck,
+    keyId: "k1", keyCheck: raw.keyCheck,
   } as StoredEnvelope;
-  const decoded = codec.decodeContent(envelope);
+  const decoded = codec.decodeContent(envelope, CTX);
   if (!decoded.ok) throw new Error("fixture content unreadable");
   return decoded.content;
 }

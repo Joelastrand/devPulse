@@ -23,7 +23,7 @@ export function describedByIds(...ids: Array<string | undefined>): string | unde
  * The single shared visual/focus treatment for a native text-style form
  * control (`TextField`/`TextArea`/`Select`), consolidating the near-identical
  * Tailwind string this codebase previously duplicated across roughly a dozen
- * hand-rolled inputs/textareas/selects (docs/features/ui-refresh/SPEC.md —
+ * hand-rolled inputs/textareas/selects (docs/archive/features/ui-refresh/SPEC.md —
  * "Problem", BR-6).
  */
 // Focus comes from the global :focus-visible rule (app/globals.css).

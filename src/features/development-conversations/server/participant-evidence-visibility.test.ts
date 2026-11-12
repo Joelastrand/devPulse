@@ -5,6 +5,7 @@ import { createFakeConversationStore, type FakeConversationStore } from "./fake-
 import { createFakeTeamEligibilityReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
 import { NOW, OWNER_UID, PARTICIPANT_UID, TEAM_ID, rosterTeam, seedOwnerConversation } from "./owner-read-test-support";
 import { readParticipantConversation, type ReadParticipantConversationDeps } from "./read-participant-conversation";
+import { conversationContext } from "../domain/stored-owner-conversation";
 
 /**
  * Participant visibility of owner-selected evidence (SPEC BR-46, BR-49, BR-72; SECURITY-REVIEW N-E3, D2-SI-8). Synthetic
@@ -12,6 +13,7 @@ import { readParticipantConversation, type ReadParticipantConversationDeps } fro
  */
 
 const CONVERSATION_ID = "conv-1";
+const CTX = conversationContext(OWNER_UID, CONVERSATION_ID);
 const TEAM_NAME = "Synthetic team";
 const CAPTURED_AT = new Date("2026-10-10T08:00:00.000Z");
 
@@ -106,7 +108,7 @@ describe("revocation hides evidence on the next read and keeps it stored (BR-49,
 
     const raw = await store.getOwner(OWNER_UID, CONVERSATION_ID);
     expect(raw).toBeDefined();
-    const decoded = raw ? codec.decodeContent({ ciphertext: raw.ciphertext, iv: raw.iv, authTag: raw.authTag, keyVersion: raw.keyVersion, keyCheck: raw.keyCheck } as never) : null;
+    const decoded = raw ? codec.decodeContent({ ciphertext: raw.ciphertext, iv: raw.iv, authTag: raw.authTag, keyVersion: raw.keyVersion, keyId: "k1", keyCheck: raw.keyCheck } as never, CTX) : null;
     expect(decoded && decoded.ok && decoded.content.sharedEvidence).toEqual([EVIDENCE]);
   });
 });

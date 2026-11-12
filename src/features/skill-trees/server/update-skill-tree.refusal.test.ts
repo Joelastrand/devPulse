@@ -14,6 +14,11 @@ const ADMIN_UID = "admin-35b";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const ADMIN_EMAIL = "admin35b@example.com";
 const TREE_ID = "tree-35b";
+import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../domain/skill-tree-test-fixtures";
+import { openSkillTreeDocument } from "../domain/skill-tree-content-codec";
+
+stubSkillTreeEncryptionKey();
+
 const TREE_PATH = `skillTrees/${TREE_ID}`;
 const ADMIN_FENCE = `accountErasures/${ADMIN_UID}`;
 
@@ -50,15 +55,18 @@ const verifyToken = vi.fn().mockResolvedValue({ uid: ADMIN_UID, email: ADMIN_EMA
 const isSuperadmin = isAdminUid;
 
 function seedTree(): void {
-  docs.set(TREE_PATH, {
-    name: "Container adoption",
-    nodes: [
-      { nodeId: "node-0", label: "Start", order: 0 },
-      { nodeId: "node-1", label: "Next", order: 1 },
-    ],
-    createdAt: new Date("2026-01-01T00:00:00Z"),
-    createdBy: "admin-0",
-  });
+  docs.set(
+    TREE_PATH,
+    sealedSkillTreeFixture(TREE_ID, {
+      name: "Container adoption",
+      nodes: [
+        { nodeId: "node-0", label: "Start", order: 0 },
+        { nodeId: "node-1", label: "Next", order: 1 },
+      ],
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+      createdBy: "admin-0",
+    }) as Data,
+  );
 }
 
 beforeEach(() => {
@@ -86,6 +94,6 @@ describe("skill-tree update is refused while the acting admin's erasure record e
 
     expect(result).toEqual({ ok: true });
     expect(writes).toEqual([`update|${TREE_PATH}`]);
-    expect(docs.get(TREE_PATH)).toMatchObject({ name: "Renamed", updatedBy: ADMIN_UID });
+    expect(openSkillTreeDocument(TREE_ID, docs.get(TREE_PATH))).toMatchObject({ name: "Renamed", updatedBy: ADMIN_UID });
   });
 });

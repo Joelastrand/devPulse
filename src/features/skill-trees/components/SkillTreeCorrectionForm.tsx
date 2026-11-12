@@ -34,7 +34,7 @@ function errorMessage(error: string): string {
 }
 
 /**
- * The TASK-005 SkillTree cosmetic-correction form (docs/features/
+ * The TASK-005 SkillTree cosmetic-correction form (docs/archive/features/
  * team-skill-tree/SPEC.md — "Cosmetic tree correction", BR-31, BR-32, BR-34):
  * pre-filled with the target tree's current `name`/labels, with **no
  * add/remove-row control anywhere in its rendered output** — the row count

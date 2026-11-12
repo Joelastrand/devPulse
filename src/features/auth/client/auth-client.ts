@@ -108,7 +108,7 @@ export type SignOutResult = { ok: true } | { ok: false; error: "sign_out_failed"
  * Signs the current user out via the Firebase client SDK. `observeIdToken`
  * subscribers are notified of the resulting `null` token on their own —
  * this function does not (and must not) update any UI state directly
- * (docs/features/product-ux-shell/SPEC.md — TASK-005).
+ * (docs/archive/features/product-ux-shell/SPEC.md — TASK-005).
  */
 export async function signOut(deps: AuthActionDeps = {}): Promise<SignOutResult> {
   const gateway = deps.gateway ?? getDefaultGateway();

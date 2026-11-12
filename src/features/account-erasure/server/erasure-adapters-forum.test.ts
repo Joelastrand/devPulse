@@ -16,11 +16,11 @@ let db: FakeAdminFirestore;
 const CREATED = new Date("2026-10-01T00:00:00Z");
 /** A valid encrypted thread record (synthetic values; the forum step never decrypts). */
 function threadRecord(authorUid: string, extra: Record<string, unknown> = {}) {
-  return { teamId: TEAM, authorUid, ciphertext: "c-ct", iv: "c-iv", authTag: "c-tag", keyVersion: "v1", createdAt: CREATED, ...extra };
+  return { teamId: TEAM, authorUid, ciphertext: "c-ct", iv: "c-iv", authTag: "c-tag", keyVersion: "v2", keyId: "k1", createdAt: CREATED, ...extra };
 }
 /** A valid encrypted active reply record. */
 function replyRecord(threadId: string, authorUid: string, extra: Record<string, unknown> = {}) {
-  return { teamId: TEAM, threadId, authorUid, ciphertext: "r-ct", iv: "r-iv", authTag: "r-tag", keyVersion: "v1", createdAt: CREATED, ...extra };
+  return { teamId: TEAM, threadId, authorUid, ciphertext: "r-ct", iv: "r-iv", authTag: "r-tag", keyVersion: "v2", keyId: "k1", createdAt: CREATED, ...extra };
 }
 
 beforeEach(() => {

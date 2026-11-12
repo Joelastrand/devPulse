@@ -1,10 +1,10 @@
 import "server-only";
-import { encrypt } from "../../../lib/encryption/encryption";
+import { encryptRecord } from "../../../lib/encryption/record-envelope";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import { isValidTeamStatus } from "../../teams/domain/team";
 import { isValidMembershipFor, membershipDocId } from "../../teams/domain/team-membership";
-import type { ChallengeKeyVersion } from "../domain/challenge";
+import { challengeContext, type ChallengeKeyId, type ChallengeKeyVersion } from "../domain/challenge";
 import { validateChallengeText } from "../domain/challenge-text";
 import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 import { runFencedTransaction, writeRefusalFor } from "../../auth/server/erasure-write-fence";
@@ -15,7 +15,7 @@ const MEMBERSHIPS_COLLECTION = "teamMemberships";
 
 /**
  * The persisted shape of one `challenges` document at creation time
- * (docs/features/anonymous-challenges/SPEC.md — "Data model"). No
+ * (docs/archive/features/anonymous-challenges/SPEC.md — "Data model"). No
  * `challengeId` field (mirrors `SurveyRecord`'s own-id-excluded convention —
  * the id is Firestore's auto-generated document id). No `resolvedAt`/
  * `resolvedBy`/`archivedAt`/`archivedBy` — those are only ever set later,
@@ -29,16 +29,18 @@ export interface ChallengeRecord {
   iv: string;
   authTag: string;
   keyVersion: ChallengeKeyVersion;
+  keyId: ChallengeKeyId;
   submittedAt: Date;
 }
 
 /**
- * The write seam this operation depends on, satisfied in production by a
- * Firestore `CollectionReference` (whose `.add()` assigns the opaque,
- * auto-generated document id) and by an in-memory fake in tests.
+ * The write seam this operation depends on. The document id is reserved first, because the challenge text is sealed with
+ * AAD `challenge:<teamId>:<challengeId>` and so the id must exist before encryption. Production reserves a Firestore
+ * auto-id; tests use a fixed id.
  */
 export interface ChallengesCollection {
-  add(record: ChallengeRecord): Promise<{ id: string }>;
+  reserveId(): string;
+  create(challengeId: string, record: ChallengeRecord): Promise<void>;
 }
 
 /**
@@ -47,13 +49,15 @@ export interface ChallengesCollection {
  */
 function getDefaultChallengesCollection(actorUid: string): ChallengesCollection {
   return {
-    async add(record) {
+    reserveId() {
+      return getFirestoreDb().collection(CHALLENGES_COLLECTION).doc().id;
+    },
+    async create(challengeId, record) {
       const db = getFirestoreDb();
-      const ref = db.collection(CHALLENGES_COLLECTION).doc();
+      const ref = db.collection(CHALLENGES_COLLECTION).doc(challengeId);
       await runFencedTransaction(db, actorUid, async (tx) => {
         tx.create(ref, record);
       });
-      return { id: ref.id };
     },
   };
 }
@@ -123,7 +127,7 @@ export interface SubmitChallengeDeps {
 }
 
 /**
- * Submits one anonymous challenge for `teamId` (docs/features/
+ * Submits one anonymous challenge for `teamId` (docs/archive/features/
  * anonymous-challenges/SPEC.md — BR-1, BR-2, BR-4, BR-5, BR-7, BR-8, BR-33).
  * `teamId` is always the caller's trusted server/route scope — this
  * function accepts no `teamId`-shaped request field, so there is nothing in
@@ -205,9 +209,18 @@ export async function submitChallenge(
     return { ok: false, error: "team_disabled" };
   }
 
+  const collection = deps.collection ?? getDefaultChallengesCollection(verified.identity.uid);
+  let challengeId: string;
+  try {
+    challengeId = collection.reserveId();
+  } catch {
+    return { ok: false, error: "persistence_failed" };
+  }
+
+  // The AAD names this exact document, so the sealed text cannot be moved to another challenge or team.
   let encrypted;
   try {
-    encrypted = encrypt(validated.text);
+    encrypted = encryptRecord(validated.text, challengeContext(teamId, challengeId));
   } catch {
     return { ok: false, error: "encryption_failed" };
   }
@@ -218,12 +231,12 @@ export async function submitChallenge(
     iv: encrypted.iv,
     authTag: encrypted.authTag,
     keyVersion: encrypted.keyVersion,
+    keyId: encrypted.keyId,
     submittedAt: deps.now ?? new Date(),
   };
 
-  const collection = deps.collection ?? getDefaultChallengesCollection(verified.identity.uid);
   try {
-    await collection.add(record);
+    await collection.create(challengeId, record);
     return { ok: true };
   } catch (error) {
     return { ok: false, error: writeRefusalFor(error) };

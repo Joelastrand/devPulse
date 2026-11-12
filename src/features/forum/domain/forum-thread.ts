@@ -1,16 +1,23 @@
 /**
  * The exact key-version literal `src/lib/encryption/encryption.ts` ever
  * produces. Declared independently here (not imported from that module) so
- * this domain module stays framework/I-O free (docs/features/team-forum/
+ * this domain module stays framework/I-O free (docs/archive/features/team-forum/
  * SPEC.md — "Data model").
  */
-export type ForumThreadKeyVersion = "v1";
+export type ForumThreadKeyVersion = "v2";
+export type ForumKeyId = "k1";
 
-const FORUM_THREAD_KEY_VERSION: ForumThreadKeyVersion = "v1";
+const FORUM_THREAD_KEY_VERSION: ForumThreadKeyVersion = "v2";
+const FORUM_KEY_ID: ForumKeyId = "k1";
+
+/** AAD of one thread's sealed title and body: this team and this thread document. */
+export function forumThreadContext(teamId: string, threadId: string): string {
+  return `forum-thread:${teamId}:${threadId}`;
+}
 
 /**
  * The canonical, persisted `forumThreads/{threadId}` document shape
- * (docs/features/team-forum/SPEC.md — "Data model"). `threadId` itself is
+ * (docs/archive/features/team-forum/SPEC.md — "Data model"). `threadId` itself is
  * the Firestore document id, never a field on this record.
  *
  * A thread has no tombstone shape at all — it either exists (this shape) or
@@ -26,6 +33,7 @@ export interface ForumThreadRecord {
   iv: string;
   authTag: string;
   keyVersion: ForumThreadKeyVersion;
+  keyId: ForumKeyId;
   createdAt: Date;
 }
 
@@ -40,7 +48,7 @@ export interface ForumThreadRecord {
  * that isn't the exact literal `"v1"`; a missing/invalid `createdAt`; and —
  * unlike this codebase's general "extra fields are tolerated" convention —
  * a candidate carrying a `deletedAt` or `deletedBy` field of any kind. A
- * thread schema has no such fields at all (docs/features/team-forum/
+ * thread schema has no such fields at all (docs/archive/features/team-forum/
  * SPEC.md — "Data model", "Lifecycle/moderation"), so their mere presence
  * is itself a malformed-shape rejection, never silently ignored.
  */
@@ -68,6 +76,7 @@ export function isValidForumThread(data: unknown): data is ForumThreadRecord {
     isNonEmptyString(record.iv) &&
     isNonEmptyString(record.authTag) &&
     record.keyVersion === FORUM_THREAD_KEY_VERSION &&
+    record.keyId === FORUM_KEY_ID &&
     isValidDate(record.createdAt)
   );
 }

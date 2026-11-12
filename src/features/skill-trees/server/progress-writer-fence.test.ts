@@ -1,3 +1,6 @@
+import { sealedProgressFixture, stageOfProgressUpdate } from "../domain/skill-tree-test-fixtures";
+import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../domain/skill-tree-test-fixtures";
+stubSkillTreeEncryptionKey();
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SkillProgressRecord } from "../domain/skill-progress";
 import { skillProgressDocId } from "../domain/skill-progress";
@@ -60,7 +63,7 @@ const TREE = "tree-1";
 const PROGRESS = `skillProgress/${skillProgressDocId(TEAM, TREE)}`;
 const verifyToken = vi.fn().mockResolvedValue({ uid: ADMIN_UID, email: ADMIN_EMAIL, email_verified: true });
 const isSuperadmin = isAdminUid;
-const treeReader = { get: async () => ({ exists: true, data: () => tree }) };
+const treeReader = { get: async () => ({ exists: true, data: () => sealedSkillTreeFixture(TREE, tree) }) };
 const tree = {
   name: "Container adoption",
   nodes: [
@@ -78,7 +81,7 @@ function progress(): SkillProgressRecord {
 }
 
 function seedProgress(): void {
-  db.docs.set(PROGRESS, progress() as unknown as Doc);
+  db.docs.set(PROGRESS, sealedProgressFixture(progress()) as Doc);
 }
 
 function raiseErasure(): void {
@@ -123,7 +126,7 @@ describe("team skill-progress writers are refused while the admin's erasure reco
       ok: false,
       error: "erasure_in_progress",
     });
-    expect(db.docs.get(PROGRESS)?.currentNodeId).toBe("node-0");
+    expect(stageOfProgressUpdate(TEAM, TREE, db.docs.get(PROGRESS) ?? {})).toBe("node-0");
   });
 
   it("report refuses with erasure_in_progress and leaves the stage unchanged", async () => {
@@ -136,13 +139,13 @@ describe("team skill-progress writers are refused while the admin's erasure reco
       ok: false,
       error: "erasure_in_progress",
     });
-    expect(db.docs.get(PROGRESS)?.currentNodeId).toBe("node-0");
+    expect(stageOfProgressUpdate(TEAM, TREE, db.docs.get(PROGRESS) ?? {})).toBe("node-0");
   });
 
   it("without an erasure record, update still writes the stage (unchanged behaviour)", async () => {
     seedProgress();
 
     expect(await updateTeamSkillProgress("t", TEAM, TREE, "node-1", deps)).toEqual({ ok: true });
-    expect(db.docs.get(PROGRESS)?.currentNodeId).toBe("node-1");
+    expect(stageOfProgressUpdate(TEAM, TREE, db.docs.get(PROGRESS) ?? {})).toBe("node-1");
   });
 });

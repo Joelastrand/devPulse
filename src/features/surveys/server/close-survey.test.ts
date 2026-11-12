@@ -1,9 +1,12 @@
+import { sealSeedDocument, stubSurveyEncryptionKey } from "./survey-test-fixtures";
 import { describe, expect, it, vi } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type { CloseSurveyDb, CloseSurveyDeps, CloseSurveyTransaction } from "./close-survey";
 import { closeSurvey } from "./close-survey";
 import type { OpenSurveyDb } from "./open-survey";
 import { openSurvey } from "./open-survey";
+
+stubSurveyEncryptionKey();
 
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_UID = "admin-1";
@@ -50,7 +53,7 @@ type PendingWrite = { kind: "set"; data: Record<string, unknown> } | { kind: "up
 function createInMemoryFirestore(seed: Record<string, Record<string, unknown>> = {}) {
   const store = new Map<string, { data: Record<string, unknown>; version: number }>();
   for (const [path, data] of Object.entries(seed)) {
-    store.set(path, { data, version: 1 });
+    store.set(path, { data: sealSeedDocument(path, data), version: 1 });
   }
   let totalAttempts = 0;
   let totalCommittedWrites = 0;

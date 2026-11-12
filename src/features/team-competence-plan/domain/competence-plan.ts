@@ -4,7 +4,7 @@ import { isRoadmapPriority, type RoadmapPriority } from "../../roadmap/domain/ro
 import { isValidPlanDate } from "../../roadmap/domain/roadmap-dates";
 
 /**
- * Team competence development plan (docs/features/team-experience-redesign SPEC — BR-15, BR-16, BR-17; TASK-006).
+ * Team competence development plan (docs/archive/features/team-experience-redesign SPEC — BR-15, BR-16, BR-17; TASK-006).
  *
  * A plan is a team-level development goal for one admin-assigned competence area: a priority, a TARGET stage (the
  * existing four assessment levels, reused as-is) and an ordered list of planned milestones. A target stage is a goal,

@@ -1,3 +1,5 @@
+import { persistedSurveyFixture, stubSurveyEncryptionKey } from "./survey-test-fixtures";
+stubSurveyEncryptionKey();
 import { describe, expect, it, vi } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type { ListTeamSurveysDeps, RawSurveyDoc, TeamSurveysCollection } from "./list-team-surveys";
@@ -35,14 +37,14 @@ function fakeCollection(docs: RawSurveyDoc[]): TeamSurveysCollection & { calls: 
 function surveyDoc(id: string, overrides: Record<string, unknown> = {}): RawSurveyDoc {
   return {
     id,
-    data: {
+    data: persistedSurveyFixture(id, {
       teamId: TEAM_ID,
       accessMode: "public",
       minimumResponses: 5,
       createdAt: new Date("2026-01-01T00:00:00Z"),
       createdBy: ADMIN_UID,
       ...overrides,
-    },
+    }),
   };
 }
 

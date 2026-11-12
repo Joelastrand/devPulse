@@ -1,3 +1,4 @@
+import { openSkillTreeDocument } from "../../skill-trees/domain/skill-tree-content-codec";
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { isValidSkillTree } from "../../skill-trees/domain/skill-tree";
@@ -57,7 +58,8 @@ export interface SkillCatalogFailure {
 }
 
 /** D1-local copy of the C1 candidate mapping (BR-37): `Timestamp → Date`; unexpected shapes are left for the validator to reject. */
-function toCandidateSkillTree(data: unknown): unknown {
+function toCandidateSkillTree(treeId: string, raw: unknown): unknown {
+  const data = openSkillTreeDocument(treeId, raw);
   if (typeof data !== "object" || data === null) return undefined;
   const record = data as Record<string, unknown>;
   return { ...record, createdAt: toDateOrUndefined(record.createdAt), updatedAt: toDateOrUndefined(record.updatedAt) };
@@ -73,8 +75,8 @@ function toDateOrUndefined(value: unknown): unknown {
 }
 
 /** The validated tree name, or `null` when the document is absent or not a valid SkillTree. Never repairs. */
-function validTreeName(data: unknown): string | null {
-  const candidate = toCandidateSkillTree(data);
+function validTreeName(treeId: string, data: unknown): string | null {
+  const candidate = toCandidateSkillTree(treeId, data);
   return isValidSkillTree(candidate) ? candidate.name : null;
 }
 
@@ -132,7 +134,7 @@ export async function readSkillOptions(
   }
   const options: SkillOptionDto[] = [];
   for (const { id, data } of raw.slice(0, SKILL_OPTIONS_WINDOW)) {
-    const name = validTreeName(data);
+    const name = validTreeName(id, data);
     if (name !== null) options.push({ treeId: id, name });
   }
   options.sort(compareOptions);
@@ -155,7 +157,7 @@ export async function readSkillTreeName(
   if (!isReadableDocumentId(treeId)) return { ok: true, name: null };
   try {
     const read = await reader.getById(treeId);
-    return { ok: true, name: validTreeName(read.data) };
+    return { ok: true, name: validTreeName(treeId, read.data) };
   } catch {
     return { ok: false };
   }
@@ -184,7 +186,7 @@ export async function resolveSkillNames(
   let resolved: Map<string, string | null>;
   try {
     const reads = (await Promise.all(chunks.map((chunk) => reader.getManyByIds(chunk)))).flat();
-    resolved = new Map(reads.map((read) => [read.id, validTreeName(read.data)]));
+    resolved = new Map(reads.map((read) => [read.id, validTreeName(read.id, read.data)]));
   } catch {
     return { ok: false };
   }

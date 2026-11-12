@@ -1,3 +1,5 @@
+import { openSkillProgressDocument, skillProgressContentUpdate } from "./skill-progress-content-codec";
+import { openSkillTreeDocument } from "../domain/skill-tree-content-codec";
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
@@ -77,7 +79,7 @@ function getDefaultSkillProgressDocStore(actorUid: string): SkillProgressDocStor
   return {
     async get(docId) {
       const snapshot = await getFirestoreDb().collection(SKILL_PROGRESS_COLLECTION).doc(docId).get();
-      return { exists: snapshot.exists, data: () => snapshot.data() };
+      return { exists: snapshot.exists, data: () => openSkillProgressDocument(snapshot.data()) };
     },
     async update(docId, data) {
       const db = getFirestoreDb();
@@ -120,7 +122,8 @@ function getDefaultSkillTreeReader(): SkillTreeReader {
 }
 
 /** Maps raw Firestore document data (Timestamp fields included) into the candidate shape `isValidSkillTree` expects. */
-function toCandidateSkillTree(data: unknown): unknown {
+function toCandidateSkillTree(treeId: string, raw: unknown): unknown {
+  const data = openSkillTreeDocument(treeId, raw);
   if (typeof data !== "object" || data === null) {
     return undefined;
   }
@@ -173,7 +176,7 @@ export interface ReportTeamSkillProgressDeps {
 
 /**
  * Sets a team's current stage for a tree the team already tracks, on behalf
- * of a genuine team member (docs/features/skill-progress-self-report/
+ * of a genuine team member (docs/archive/features/skill-progress-self-report/
  * SPEC.md — BR-1 through BR-7, BR-9). This is a **second, additive** write
  * path for `skillProgress.currentNodeId`, distinct from the app-admin-only
  * `updateTeamSkillProgress` — kept as a separate operation/file so each
@@ -288,7 +291,7 @@ export async function reportTeamSkillProgress(
     return { ok: false, error: "persistence_failed" };
   }
 
-  const treeCandidate = toCandidateSkillTree(treeSnapshot.exists ? treeSnapshot.data() : undefined);
+  const treeCandidate = toCandidateSkillTree(treeId, treeSnapshot.exists ? treeSnapshot.data() : undefined);
   if (!isValidSkillTree(treeCandidate)) {
     return { ok: false, error: "tree_not_found" };
   }
@@ -300,7 +303,11 @@ export async function reportTeamSkillProgress(
 
   const now = deps.now ?? new Date();
   try {
-    await progress.update(docId, { currentNodeId: nodeId, updatedAt: now, updatedBy: verified.identity.uid });
+    await progress.update(docId, {
+      ...skillProgressContentUpdate(teamId, treeId, nodeId),
+      updatedAt: now,
+      updatedBy: verified.identity.uid,
+    });
     return { ok: true };
   } catch (error) {
     return { ok: false, error: writeRefusalFor(error) };

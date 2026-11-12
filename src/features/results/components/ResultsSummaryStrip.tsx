@@ -30,7 +30,7 @@ function formatMean(value: number): string {
 }
 
 /**
- * Summary strip at the head of the results section (docs/features/product-experience/
+ * Summary strip at the head of the results section (docs/archive/features/product-experience/
  * SPEC.md — Chart and analytics presentation). It uses only the published results
  * already loaded. A change is shown only when the latest and the previous survey are
  * both published. A withheld value is never shown as a number or as zero.

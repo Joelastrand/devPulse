@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { deleteApp, initializeApp, type App } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
+import { encryptRecord } from "../../../lib/encryption/record-envelope";
+import { forumReplyContext } from "../../forum/domain/forum-reply";
 import { ErasureWriteRefused, runFencedTransaction } from "./erasure-write-fence";
 import { createForumPort } from "../../account-erasure/server/erasure-adapters-forum";
 import { runForumBatch } from "../../account-erasure/server/forum-erasure";
@@ -49,16 +51,21 @@ vi.mock("../../../lib/firebase/admin", () => ({
   },
 }));
 
-/** A well-formed active reply (BR-56 active shape). Synthetic ciphertext only. */
-function activeReply(authorUid: string) {
+/**
+ * A well-formed active reply (BR-56 active shape). The body is sealed with the same v2 envelope and record context the app
+ * uses, so the erasure step can open it. Synthetic text only.
+ */
+function activeReply(authorUid: string, replyId: string) {
+  const sealed = encryptRecord("Synthetisk svar", forumReplyContext(TEAM_ID, THREAD_ID, replyId));
   return {
     teamId: TEAM_ID,
     threadId: THREAD_ID,
     authorUid,
-    ciphertext: "c3ludGhldGlj",
-    iv: "aXY=",
-    authTag: "dGFn",
-    keyVersion: "v1",
+    ciphertext: sealed.ciphertext,
+    iv: sealed.iv,
+    authTag: sealed.authTag,
+    keyVersion: sealed.keyVersion,
+    keyId: sealed.keyId,
     createdAt: new Date("2026-11-01T10:00:00Z"),
   };
 }
@@ -111,7 +118,7 @@ describe.skipIf(!CONFIGURED)("D-EMU: erasure fence ordering on the real Firestor
   it("1. a write committed before the fence is tombstoned by the sweep and leaves no authored data", async () => {
     // The fence is absent, so this protected write commits.
     await runFencedTransaction(database, UID, async (tx) => {
-      tx.create(replyRef(database, replyIds[0]), activeReply(UID));
+      tx.create(replyRef(database, replyIds[0]), activeReply(UID, replyIds[0]));
     });
     expect((await replyRef(database, replyIds[0]).get()).exists).toBe(true);
 
@@ -129,7 +136,7 @@ describe.skipIf(!CONFIGURED)("D-EMU: erasure fence ordering on the real Firestor
 
     await expect(
       runFencedTransaction(database, UID, async (tx) => {
-        tx.create(replyRef(database, replyIds[1]), activeReply(UID));
+        tx.create(replyRef(database, replyIds[1]), activeReply(UID, replyIds[1]));
       }),
     ).rejects.toBeInstanceOf(ErasureWriteRefused);
 
@@ -141,7 +148,7 @@ describe.skipIf(!CONFIGURED)("D-EMU: erasure fence ordering on the real Firestor
     // order: the write is refused, or it commits before the fence and the sweep must remove it.
     const [write, fence] = await Promise.allSettled([
       runFencedTransaction(database, UID, async (tx) => {
-        tx.create(replyRef(database, replyIds[2]), activeReply(UID));
+        tx.create(replyRef(database, replyIds[2]), activeReply(UID, replyIds[2]));
       }),
       fenceRef(database, UID).create({ status: "in_progress", step: "forum" }),
     ]);
@@ -160,10 +167,10 @@ describe.skipIf(!CONFIGURED)("D-EMU: erasure fence ordering on the real Firestor
 
   it("4. a sweep that has not finished is never reported as done", async () => {
     await runFencedTransaction(database, UID, async (tx) => {
-      tx.create(replyRef(database, replyIds[3]), activeReply(UID));
+      tx.create(replyRef(database, replyIds[3]), activeReply(UID, replyIds[3]));
     });
     await runFencedTransaction(database, UID, async (tx) => {
-      tx.create(replyRef(database, replyIds[4]), activeReply(UID));
+      tx.create(replyRef(database, replyIds[4]), activeReply(UID, replyIds[4]));
     });
     await fenceRef(database, UID).create({ status: "in_progress", step: "forum" });
 
@@ -177,7 +184,7 @@ describe.skipIf(!CONFIGURED)("D-EMU: erasure fence ordering on the real Firestor
   it("does not touch another uid's protected replies during the sweep", async () => {
     const otherReply = `race-other-${OTHER_UID}`;
     await runFencedTransaction(database, OTHER_UID, async (tx) => {
-      tx.create(replyRef(database, otherReply), activeReply(OTHER_UID));
+      tx.create(replyRef(database, otherReply), activeReply(OTHER_UID, otherReply));
     });
     await fenceRef(database, UID).create({ status: "in_progress", step: "forum" });
     await sweepForumToCompletion(UID);

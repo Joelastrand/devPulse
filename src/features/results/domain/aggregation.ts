@@ -1,5 +1,5 @@
 import "server-only";
-import { decrypt, type EncryptedPayload } from "../../../lib/encryption/encryption";
+import { decryptRecord, type RecordEnvelope } from "../../../lib/encryption/record-envelope";
 
 const ANSWER_COUNT = 3;
 const MIN_ANSWER = 1;
@@ -12,7 +12,11 @@ export interface DimensionMeans {
 }
 
 /** The encrypted-record shape this module needs — a subset of the persisted Phase 1 record. */
-export type CandidateResponseRecord = EncryptedPayload;
+/**
+ * One stored response's v2 envelope, plus the record context (AAD) its reader rebuilt from the document path. The context is
+ * never persisted; the reader derives it from the response's own team, survey and document id.
+ */
+export type CandidateResponseRecord = RecordEnvelope & { context: string };
 
 export type SurveyAggregateResult =
   | { surveyId: string; status: "insufficient" }
@@ -21,7 +25,7 @@ export type SurveyAggregateResult =
 /**
  * Computes one survey instance's publishable aggregate from its candidate
  * `SurveyResponse` records, using that survey's own persisted
- * `minimumResponses` (docs/features/managed-surveys/SPEC.md — "Per-survey
+ * `minimumResponses` (docs/archive/features/managed-surveys/SPEC.md — "Per-survey
  * result threshold"). Deliberately takes no default for `minimumResponses`
  * — the now-retired calendar-period aggregation fell back to a single
  * global threshold constant; every survey's own threshold is mandatory
@@ -76,7 +80,7 @@ function decodeCandidate(
   record: CandidateResponseRecord,
 ): [number, number, number] | null {
   try {
-    const plaintext = decrypt(record);
+    const plaintext = decryptRecord(record, record.context);
     const parsed: unknown = JSON.parse(plaintext);
     return isValidAnswerTuple(parsed) ? parsed : null;
   } catch {

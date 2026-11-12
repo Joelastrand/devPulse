@@ -63,12 +63,12 @@ export async function listSelectableEvidence(
     const achievements = await store.list(ownerUid, "achievements", achievementSchema.cap + 1);
     const items: SelectableEvidenceItem[] = [];
     for (const raw of responsibilities.slice(0, responsibilitySchema.cap)) {
-      const read = readStoredRecord(raw, responsibilitySchema);
+      const read = readStoredRecord(raw, responsibilitySchema, ownerUid);
       if (read.kind === "key") return { ok: false, error: "persistence_failed" };
       if (read.kind === "ok") items.push({ kind: "responsibility", id: raw.id, title: read.content.title, status: read.content.status });
     }
     for (const raw of achievements.slice(0, achievementSchema.cap)) {
-      const read = readStoredRecord(raw, achievementSchema);
+      const read = readStoredRecord(raw, achievementSchema, ownerUid);
       if (read.kind === "key") return { ok: false, error: "persistence_failed" };
       if (read.kind === "ok") items.push({ kind: "achievement", id: raw.id, title: read.content.title, status: null });
     }
@@ -99,7 +99,7 @@ export async function readOwnedEvidenceSource(
   if (raw === undefined) return { ok: false, error: "not_found" };
 
   if (kind === "responsibility") {
-    const read = readStoredRecord(raw, responsibilitySchema);
+    const read = readStoredRecord(raw, responsibilitySchema, ownerUid);
     if (read.kind === "key") return { ok: false, error: "persistence_failed" };
     if (read.kind !== "ok") return { ok: false, error: "not_found" };
     const c = read.content;
@@ -117,7 +117,7 @@ export async function readOwnedEvidenceSource(
     };
   }
 
-  const read = readStoredRecord(raw, achievementSchema);
+  const read = readStoredRecord(raw, achievementSchema, ownerUid);
   if (read.kind === "key") return { ok: false, error: "persistence_failed" };
   if (read.kind !== "ok") return { ok: false, error: "not_found" };
   const c = read.content;

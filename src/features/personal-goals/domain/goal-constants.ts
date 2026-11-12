@@ -28,6 +28,12 @@ export const GOAL_PERSISTED_KEYS = [
   "completedAt",
 ] as const;
 
+/**
+ * Exactly the keys of a stored goal document. Business content (title, treeId, targetDate) lives only inside the
+ * encrypted `content` envelope; lifecycle fields stay plaintext. `completedAt` only when completed.
+ */
+export const GOAL_STORED_DOCUMENT_KEYS = ["content", "status", "createdAt", "updatedAt", "completedAt"] as const;
+
 /** Exactly the keys of a `GoalDto` (BR-24). */
 export const GOAL_DTO_KEYS = [
   "id",

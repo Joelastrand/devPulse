@@ -1,3 +1,4 @@
+import { openSurveyDocument, toPersistedSurvey } from "./survey-content-codec";
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { type AuthRefusal } from "../../auth/server/auth-refusal";
@@ -74,7 +75,7 @@ export function getDefaultSurveyDraftStore(): SurveyDraftStore {
         if (!outcome.ok) {
           return outcome;
         }
-        tx.set(ref, outcome.document);
+        tx.set(ref, toPersistedSurvey(surveyId, outcome.document));
         return { ok: true as const };
       });
     },
@@ -253,6 +254,8 @@ export async function updateSurveyDraft(
       if (!isValidSurvey(candidate, { surveyId })) {
         return { ok: false, error: "survey_not_found" };
       }
+      // `raw` is sealed; the builders below work on the opened document and the store seals the result on write.
+      const opened = openSurveyDocument(surveyId, raw) as Record<string, unknown>;
       const survey: Survey = candidate;
       if (survey.teamId !== teamId) {
         return { ok: false, error: "survey_not_found" };
@@ -266,12 +269,12 @@ export async function updateSurveyDraft(
         if (!metadataOnly) {
           return { ok: false, error: "not_editable" };
         }
-        return buildPublishedMetadataDocument(raw as Record<string, unknown>, survey, parsed.patch);
+        return buildPublishedMetadataDocument(opened, survey, parsed.patch);
       }
       if (effectiveLifecycle(survey, now) !== "scheduled") {
         return { ok: false, error: "not_editable" };
       }
-      const built = buildDraftDocument(raw as Record<string, unknown>, survey, parsed.patch);
+      const built = buildDraftDocument(opened, survey, parsed.patch);
       if (!built.ok) {
         return built;
       }

@@ -34,7 +34,7 @@ type RowStatusMap = Readonly<Record<string, RowStatus | undefined>>;
 type SkillFilter = "all" | "assessed" | "unassessed";
 
 /**
- * The signed-in person's own skill list (docs/features/individual-
+ * The signed-in person's own skill list (docs/archive/features/individual-
  * skill-self-assessment/SPEC.md — BR-16, BR-25, BR-27, BR-30, BR-31). Data comes
  * only from the own-skills API via the gateway; the server DTO (including its
  * order and `truncated` flag) is rendered as given. Each row saves immediately

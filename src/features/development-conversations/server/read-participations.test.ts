@@ -52,7 +52,7 @@ function setup(state: FakeTeamEligibilityState = rosterTeam([OWNER_UID, PARTICIP
         counts.probe += 1;
         return codec.probeKey();
       },
-      decryptForClassification: (envelope) => codec.decryptForClassification(envelope),
+      decryptForClassification: (envelope, context) => codec.decryptForClassification(envelope, context),
     },
     teamReader: {
       getTeamStatus: async (teamId) => {

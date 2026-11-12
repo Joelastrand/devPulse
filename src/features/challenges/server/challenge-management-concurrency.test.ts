@@ -7,7 +7,7 @@ import type { ChallengeDocStore as ResolveChallengeDocStore } from "./resolve-ch
 import { resolveChallenge } from "./resolve-challenge";
 
 /**
- * Models this feature's accepted concurrency posture (docs/features/
+ * Models this feature's accepted concurrency posture (docs/archive/features/
  * anonymous-challenges/SPEC.md — "Edge cases and failure behavior",
  * "Accepted residual risks" #7): `resolveChallenge`/`archiveChallenge` use
  * no Firestore transaction, so two concurrent calls can both read the
@@ -50,7 +50,7 @@ function challengeData(overrides: Record<string, unknown> = {}): Record<string, 
     ciphertext: "ciphertext-bytes",
     iv: "iv-bytes",
     authTag: "auth-tag-bytes",
-    keyVersion: "v1",
+    keyVersion: "v2", keyId: "k1",
     submittedAt: new Date("2026-01-01T00:00:00Z"),
     ...overrides,
   };

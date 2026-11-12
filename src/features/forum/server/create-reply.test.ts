@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { decrypt } from "../../../lib/encryption/encryption";
+import { decryptRecord } from "../../../lib/encryption/record-envelope";
+import { forumReplyContext } from "../domain/forum-reply";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type { ActiveForumReply } from "../domain/forum-reply";
 import type { ForumThreadRecord } from "../domain/forum-thread";
@@ -37,11 +38,15 @@ function verifyTokenReturning(verified: VerifiedIdentity) {
   });
 }
 
-function fakeForumRepliesCollection(): ForumRepliesCollection & { writes: ActiveForumReply[] } {
+function fakeForumRepliesCollection(): ForumRepliesCollection & { writes: ActiveForumReply[]; ids: string[] } {
   const writes: ActiveForumReply[] = [];
+  const ids: string[] = [];
   return {
     writes,
-    add: vi.fn(async (record: ActiveForumReply) => {
+    ids,
+    reserveId: vi.fn(() => `generated-reply-${writes.length + 1}`),
+    create: vi.fn((replyId: string, record: ActiveForumReply) => {
+      ids.push(replyId);
       writes.push(record);
     }),
   };
@@ -102,7 +107,8 @@ function threadRecord(overrides: Partial<ForumThreadRecord> = {}): ForumThreadRe
     ciphertext: "not-used",
     iv: "not-used",
     authTag: "not-used",
-    keyVersion: "v1",
+    keyVersion: "v2",
+    keyId: "k1",
     createdAt: new Date("2026-08-15T00:00:00Z"),
     ...overrides,
   };
@@ -149,7 +155,8 @@ describe("createReply", () => {
     expect(typeof stored.ciphertext).toBe("string");
     expect(typeof stored.iv).toBe("string");
     expect(typeof stored.authTag).toBe("string");
-    expect(stored.keyVersion).toBe("v1");
+    expect(stored.keyVersion).toBe("v2");
+    expect(stored.keyId).toBe("k1");
   });
 
   it("persists exactly the ActiveForumReply shape — teamId, threadId, authorUid, encrypted fields, createdAt — and nothing else", async () => {
@@ -158,7 +165,7 @@ describe("createReply", () => {
 
     const stored = collection.writes[0];
     expect(Object.keys(stored).sort()).toEqual(
-      ["authTag", "authorUid", "ciphertext", "createdAt", "iv", "keyVersion", "teamId", "threadId"].sort(),
+      ["authTag", "authorUid", "ciphertext", "createdAt", "iv", "keyId", "keyVersion", "teamId", "threadId"].sort(),
     );
   });
 
@@ -168,12 +175,7 @@ describe("createReply", () => {
     await createReply("token", TEAM_ID, THREAD_ID, paddedBody, baseDeps({ collection }));
 
     const stored = collection.writes[0];
-    const decrypted = decrypt({
-      ciphertext: stored.ciphertext,
-      iv: stored.iv,
-      authTag: stored.authTag,
-      keyVersion: stored.keyVersion,
-    });
+    const decrypted = decryptRecord(stored, forumReplyContext(TEAM_ID, THREAD_ID, collection.ids[0]));
     expect(decrypted).toBe(VALID_BODY);
 
     const serialized = JSON.stringify(stored);
@@ -551,7 +553,10 @@ describe("createReply", () => {
 
   it("reports persistence_failed, not a fabricated success, when the Firestore write fails", async () => {
     const collection: ForumRepliesCollection = {
-      add: vi.fn().mockRejectedValue(new Error("simulated firestore outage")),
+      reserveId: () => "generated-reply-1",
+      create: vi.fn(() => {
+        throw new Error("simulated firestore outage");
+      }),
     };
 
     const result = await createReply("token", TEAM_ID, THREAD_ID, VALID_BODY, baseDeps({ collection }));
@@ -636,7 +641,10 @@ describe("createReply", () => {
     vi.stubEnv("ENCRYPTION_KEY", randomBytes(32).toString("base64"));
 
     const failingCollection: ForumRepliesCollection = {
-      add: vi.fn().mockRejectedValue(new Error("simulated firestore outage")),
+      reserveId: () => "generated-reply-1",
+      create: vi.fn(() => {
+        throw new Error("simulated firestore outage");
+      }),
     };
     await createReply("token", TEAM_ID, THREAD_ID, VALID_BODY, baseDeps({ collection: failingCollection }));
 

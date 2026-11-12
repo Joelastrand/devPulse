@@ -1,3 +1,4 @@
+import { openSurveyDocument } from "../../surveys/server/survey-content-codec";
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
@@ -17,6 +18,7 @@ import {
   type DimensionMeans,
 } from "../domain/aggregation";
 import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
+import { surveyResponseContext } from "../../surveys/domain/response-context";
 
 const SURVEYS_COLLECTION = "surveys";
 const SURVEY_RESPONSES_COLLECTION = "surveyResponses";
@@ -24,7 +26,7 @@ const TREND_WINDOW_SIZE = 12;
 
 /**
  * One survey instance's entry in a team's results/history
- * (docs/features/managed-surveys/SPEC.md — "Results/history model"). Never
+ * (docs/archive/features/managed-surveys/SPEC.md — "Results/history model"). Never
  * includes `createdBy`, encrypted payloads, or any `SurveyParticipation`
  * data (SPEC → "Response minimization, made explicit"). Below threshold,
  * `minimumResponses` is still present — the configured threshold is not
@@ -63,9 +65,22 @@ export interface RawSurveyDoc {
  * scoped query actually belongs to the team it's being aggregated for
  * (post-review fix — "do not trust Firestore query scoping alone").
  */
-export interface RawSurveyResponseDoc extends CandidateResponseRecord {
+export interface RawSurveyResponseDoc {
+  /** The response's own Firestore document id: part of the record context, never part of the stored fields. */
+  id: string;
   surveyId: string;
   teamId: string;
+  ciphertext: string;
+  iv: string;
+  authTag: string;
+  keyVersion: "v2";
+  keyId: "k1";
+}
+
+/** One raw `surveyResponses` document paired with its own id, as the reader returns it. */
+export interface RawSurveyResponseEntry {
+  id: string;
+  data: unknown;
 }
 
 function isNonEmptyString(value: unknown): value is string {
@@ -85,7 +100,7 @@ function isNonEmptyString(value: unknown): value is string {
  * own shape, so there is exactly one corruption policy for this operation,
  * not two.
  */
-function isValidRawSurveyResponse(data: unknown): data is RawSurveyResponseDoc {
+function isValidRawSurveyResponse(data: unknown): data is Omit<RawSurveyResponseDoc, "id"> {
   if (typeof data !== "object" || data === null) {
     return false;
   }
@@ -98,7 +113,8 @@ function isValidRawSurveyResponse(data: unknown): data is RawSurveyResponseDoc {
     typeof record.ciphertext === "string" &&
     typeof record.iv === "string" &&
     typeof record.authTag === "string" &&
-    typeof record.keyVersion === "string"
+    record.keyVersion === "v2" &&
+    record.keyId === "k1"
   );
 }
 
@@ -114,10 +130,10 @@ function isValidRawSurveyResponse(data: unknown): data is RawSurveyResponseDoc {
  */
 export interface GetTeamSurveyResultsCollections {
   listRawSurveysForTeam(teamId: string): Promise<RawSurveyDoc[]>;
-  listResponsesForSurveyIds(surveyIds: readonly string[]): Promise<unknown[]>;
+  listResponsesForSurveyIds(surveyIds: readonly string[]): Promise<RawSurveyResponseEntry[]>;
   /**
    * Lazily persists `closedAt` for a survey that is `closed` purely because
-   * its `endAt` has passed (docs/features/managed-surveys/SPEC.md —
+   * its `endAt` has passed (docs/archive/features/managed-surveys/SPEC.md —
    * "Sorting/display date"). Best-effort: a failure here never fails the
    * overall read — the in-memory `date` computed for this response is used
    * regardless of whether the write actually lands.
@@ -142,7 +158,7 @@ function getDefaultCollections(): GetTeamSurveyResultsCollections {
         .collection(SURVEY_RESPONSES_COLLECTION)
         .where("surveyId", "in", surveyIds as string[])
         .get();
-      return snapshot.docs.map((doc) => doc.data());
+      return snapshot.docs.map((doc) => ({ id: doc.id, data: doc.data() }));
     },
     async backfillClosedAt(surveyId, closedAt) {
       await getFirestoreDb().collection(SURVEYS_COLLECTION).doc(surveyId).update({ closedAt });
@@ -151,7 +167,8 @@ function getDefaultCollections(): GetTeamSurveyResultsCollections {
 }
 
 /** Maps raw Firestore document data (Timestamp fields included) into the candidate shape `isValidSurvey` expects. */
-function toCandidateSurvey(surveyId: string, data: unknown): unknown {
+function toCandidateSurvey(surveyId: string, raw: unknown): unknown {
+  const data = openSurveyDocument(surveyId, raw);
   if (typeof data !== "object" || data === null) {
     return undefined;
   }
@@ -198,7 +215,7 @@ export interface GetTeamSurveyResultsDeps {
 
 /**
  * Resolves a signed-in caller's survey-instance results/history for one
- * team (docs/features/managed-surveys/SPEC.md — BR-25 through BR-28,
+ * team (docs/archive/features/managed-surveys/SPEC.md — BR-25 through BR-28,
  * BR-42), replacing the calendar-period-scoped `getTeamResults`. The
  * results-viewing authorization boundary is reused completely unchanged
  * from the existing operation (`authorizeTeamAccess`, admin-or-member) —
@@ -322,7 +339,7 @@ export async function getTeamSurveyResults(
   }
 
   const surveyIds = windowed.map(({ survey }) => survey.surveyId);
-  let rawResponses: unknown[];
+  let rawResponses: RawSurveyResponseEntry[];
   try {
     rawResponses = await collections.listResponsesForSurveyIds(surveyIds);
   } catch {
@@ -335,14 +352,15 @@ export async function getTeamSurveyResults(
   const surveysById = new Map(windowed.map(({ survey }) => [survey.surveyId, survey]));
 
   const responsesBySurveyId = new Map<string, CandidateResponseRecord[]>();
-  for (const raw of rawResponses) {
+  for (const { id: responseId, data } of rawResponses) {
     // Structurally malformed (missing/wrong-typed `surveyId`, `teamId`, or
     // any encrypted-payload field) → excluded, the same fail-closed-by-
     // exclusion policy `decodeCandidate` already applies to undecryptable
     // ciphertext, applied one layer earlier to the document's own shape.
-    if (!isValidRawSurveyResponse(raw)) {
+    if (!isValidRawSurveyResponse(data)) {
       continue;
     }
+    const raw = { ...data, id: responseId };
 
     const owningSurvey = surveysById.get(raw.surveyId);
     // A response is eligible for a survey only if it actually names that
@@ -362,6 +380,8 @@ export async function getTeamSurveyResults(
       iv: raw.iv,
       authTag: raw.authTag,
       keyVersion: raw.keyVersion,
+      keyId: raw.keyId,
+      context: surveyResponseContext(raw.teamId, raw.surveyId, raw.id),
     });
     responsesBySurveyId.set(raw.surveyId, existing);
   }

@@ -21,6 +21,7 @@ import {
 import { bindingMatches } from "./member-ref-binding";
 import { classifyOwnerDocument, type OwnerReadCodec } from "./owner-read";
 import { readGenuineActiveMembership } from "./team-eligibility";
+import { conversationContext } from "../domain/stored-owner-conversation";
 
 /**
  * Participant responses (SPEC BR-15, BR-17, BR-18, BR-48, BR-50 (3), CL-21, IMPL-1, D2-SI-3, D2-SI-8; TASK-016).
@@ -40,7 +41,7 @@ import { readGenuineActiveMembership } from "./team-eligibility";
 export interface RespondToParticipationDeps {
   store: ConversationStore;
   /** The codec operations the leave path needs: the probe, the classifier's decrypt seam and the encoder. */
-  codec: OwnerReadCodec & { encodeContent(content: ConversationContent): EncodeContentResult };
+  codec: OwnerReadCodec & { encodeContent(content: ConversationContent, context: string): EncodeContentResult };
   /** Server time for `participantAcceptedAt` and `updatedAt`. Injected so tests can fix it. */
   clock: () => Date;
 }
@@ -161,12 +162,12 @@ function leaveAccepted(
   if (!deps.codec.probeKey().ok) return FAILED;
 
   // IMPL-1: an unreadable or malformed payload writes nothing. It is never replaced with a blank payload.
-  const classification = classifyOwnerDocument(raw, deps.codec);
+  const classification = classifyOwnerDocument(raw, deps.codec, { ownerUid, conversationId });
   if (classification.kind !== "valid") return NOT_FOUND;
 
   // BR-16 effects: the notes are deleted (written as the empty note), owner content is carried over unchanged.
   const content: ConversationContent = { ...classification.record.content, participantNotes: "" };
-  const encoded = deps.codec.encodeContent(content);
+  const encoded = deps.codec.encodeContent(content, conversationContext(ownerUid, conversationId));
   if (!encoded.ok) return FAILED;
 
   tx.updateOwner(ownerUid, conversationId, {

@@ -1,5 +1,7 @@
+import { detachedRoadmapItem, roadmapOwnerIndex } from "../../roadmap/domain/roadmap-item-content-codec";
 import "server-only";
 import { FieldPath } from "firebase-admin/firestore";
+import { invitationEmailIndex } from "../../teams/domain/team-invitation-content-codec";
 import { invitationBelongsToErasedPerson } from "./invitation-match";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import type { MembershipErasurePort, MembershipTransaction } from "./membership-erasure";
@@ -9,10 +11,8 @@ import type { InvitationTransaction, InvitationsErasurePort } from "./invitation
  * Production Admin SDK adapters for the team-owned erasure steps: memberships (I-9, A-5) and invitations and access requests
  * (I-10, I-11, A-9, A-10) (TASK-038).
  *
- * Invitation matching by document id: a stored id has the shape `teamId__normalizedEmail`, which Firestore cannot filter by
- * suffix. The adapter therefore also scans the invitation document ids (keys only, no field data) and keeps those ending in
- * `__${normalizedEmail}`. Cost, recorded in VERIFICATION.md: one keys-only read of the whole `teamInvitations` collection per
- * `invitationIdsFor` call. It is correct and idempotent, and it does not invent a `normalizedEmail` field.
+ * Invitation matching by blind index: the stored address is sealed, and `emailIndex` (a keyed HMAC of the normalized address)
+ * is the only searchable value. The adapter queries that exact index and by `resolvedUid`; no scan is needed.
  */
 
 const MEMBERSHIPS = "teamMemberships";
@@ -36,6 +36,8 @@ export function createMembershipPort(): MembershipErasurePort {
   return {
     async runTransaction<T>(work: (tx: MembershipTransaction) => Promise<T>): Promise<T> {
       const db = getFirestoreDb();
+      // Sealed roadmap plans prepared by roadmapItemIdsOwnedBy and written by clearRoadmapOwnerRef, in the same attempt.
+      const detachedRoadmapItems = new Map<string, Record<string, unknown>>();
       return db.runTransaction((tx) =>
         work({
           async getMembership(membershipId) {
@@ -43,14 +45,26 @@ export function createMembershipPort(): MembershipErasurePort {
             return snapshot.exists ? snapshot.data() : undefined;
           },
           async roadmapItemIdsOwnedBy(teamId, memberRef, limit) {
-            // A transactional query: the ownerRef list is read in the same transaction as the membership delete.
+            // A transactional query on the keyed owner index. Every owned plan is read here, before any write, and its
+            // sealed form without the owner is prepared; clearRoadmapOwnerRef writes exactly that form.
             const snapshot = await tx.get(
-              db.collection(ROADMAP_ITEMS).where("teamId", "==", teamId).where("ownerRef", "==", memberRef).limit(limit),
+              db
+                .collection(ROADMAP_ITEMS)
+                .where("teamId", "==", teamId)
+                .where("ownerRefIndex", "==", roadmapOwnerIndex(teamId, memberRef))
+                .limit(limit),
             );
-            return snapshot.docs.map((doc) => doc.id);
+            return snapshot.docs.map((doc) => {
+              const detached = detachedRoadmapItem(doc.data(), memberRef);
+              if (detached === null) throw new Error("roadmap_item_unreadable");
+              detachedRoadmapItems.set(doc.id, detached);
+              return doc.id;
+            });
           },
           clearRoadmapOwnerRef(itemId) {
-            tx.update(db.collection(ROADMAP_ITEMS).doc(itemId), { ownerRef: null });
+            const detached = detachedRoadmapItems.get(itemId);
+            if (detached === undefined) throw new Error("roadmap_item_unreadable");
+            tx.set(db.collection(ROADMAP_ITEMS).doc(itemId), detached);
           },
           async systemsKnowingMemberRef(teamId, memberRef, limit) {
             // A-14: transactional, so a system that gains this ref concurrently conflicts with the membership delete.
@@ -145,14 +159,16 @@ export function createInvitationsPort(): InvitationsErasurePort {
     async invitationIdsFor(normalizedEmail, uid, limit) {
       assertUidSegment(uid);
       const db = getFirestoreDb();
-      const byEmail = await db.collection(INVITATIONS).where("email", "==", normalizedEmail).select().limit(limit).get();
+      // The stored address is sealed. The exact blind index finds current invitations; malformed ones (no usable emailIndex)
+      // are attributed by their exact id, which a keys-only scan finds. Only owned candidates are returned, one read per match.
+      const index = invitationEmailIndex(normalizedEmail);
+      const byEmail = await db.collection(INVITATIONS).where("emailIndex", "==", index).select().limit(limit).get();
       const byResolved = await db.collection(INVITATIONS).where("resolvedUid", "==", uid).select().limit(limit).get();
-      // Full documents, not keys only: ownership needs the stored e-mail and teamId (invitation-match.ts). The read is bounded
-      // by the collection size; see the module note. A suffix match with a different stored e-mail is not returned.
-      const all = await db.collection(INVITATIONS).get();
-      const byId = all.docs
-        .filter((doc) => invitationBelongsToErasedPerson(doc.id, doc.data() as Record<string, unknown>, normalizedEmail, uid))
-        .map((doc) => doc.id);
+      const keys = await db.collection(INVITATIONS).select().get();
+      const suffixSnapshots = await Promise.all(keys.docs.filter((doc) => doc.id.endsWith(`__${index}`)).map((doc) => doc.ref.get()));
+      const byId = suffixSnapshots
+        .filter((snap) => snap.exists && invitationBelongsToErasedPerson(snap.id, snap.data() as Record<string, unknown>, normalizedEmail, uid))
+        .map((snap) => snap.id);
       return [...new Set([...byEmail.docs, ...byResolved.docs].map((doc) => doc.id).concat(byId))].slice(0, limit);
     },
     async accessRequestIdsResolvedBy(uid, limit) {

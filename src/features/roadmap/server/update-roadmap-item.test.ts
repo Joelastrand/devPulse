@@ -87,7 +87,7 @@ function baseWorld(item: Record<string, unknown> | null = plan()): World {
   };
 }
 
-type Write = { docId: string; patch: RoadmapPatch };
+type Write = { docId: string; patch: RoadmapPatch; record: unknown };
 
 function build(world: World, uid = "user-1") {
   const writes: Write[] = [];
@@ -110,8 +110,8 @@ function build(world: World, uid = "user-1") {
       touchMembership: (uid, teamId, memberRef) => {
         ownerTouches.push({ uid, teamId, memberRef });
       },
-      update: (docId, patch) => {
-        pending.push({ docId, patch });
+      writePlan: (docId, patch, record) => {
+        pending.push({ docId, patch, record });
       },
     };
   };

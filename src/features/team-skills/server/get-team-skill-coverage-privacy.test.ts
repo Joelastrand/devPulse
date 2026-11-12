@@ -1,3 +1,5 @@
+import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../../skill-trees/domain/skill-tree-test-fixtures";
+stubSkillTreeEncryptionKey();
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { readSkillLevelsBatch } from "../../skill-profiles/server/read-skill-levels-batch";
@@ -93,7 +95,7 @@ function setup(s: Setup) {
       throw new Error("catalog list must not be used");
     },
     async getSkillTree(treeId) {
-      return s.trees?.[treeId];
+      return sealedSkillTreeFixture(treeId, s.trees?.[treeId]);
     },
   };
   const listMembershipsForCoverage = vi.fn(async (_t: string, limit: number) => (s.memberships ?? []).slice(0, limit));

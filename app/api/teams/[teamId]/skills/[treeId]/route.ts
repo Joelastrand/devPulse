@@ -4,7 +4,7 @@ import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
- * `/teams/[teamId]`'s member-facing self-report endpoint (docs/features/
+ * `/teams/[teamId]`'s member-facing self-report endpoint (docs/archive/features/
  * skill-progress-self-report/SPEC.md — TASK-002, BR-14). `PATCH` is a thin
  * delegate to `reportTeamSkillProgress` (TASK-001) — `teamId`/`treeId` come
  * only from the route params (route-authoritative, never body-supplied) and

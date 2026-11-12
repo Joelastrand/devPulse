@@ -1,7 +1,7 @@
 import { isPlainObject, isTeamSkillLevel, isWellFormedTeamSkillId, type TeamSkillLevel } from "./team-skill";
 
 /**
- * A person's private rating of one team skill (docs/features/team-owned-skills/SPEC.md §3.2). One document per
+ * A person's private rating of one team skill (docs/archive/features/team-owned-skills/SPEC.md §3.2). One document per
  * (person, team skill): `teamSkillAssessments/{uid}__{skillId}`. Pure: no Firestore access.
  *
  * Why one document per rating rather than a map per person: a map keyed by skill id would need dynamic keys inside

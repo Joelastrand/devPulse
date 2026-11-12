@@ -10,7 +10,7 @@ import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal
 const TEAMS_COLLECTION = "teams";
 const MEMBERSHIPS_COLLECTION = "teamMemberships";
 
-/** Memberships read per roster call (docs/features/member-identity-and-team-roles/SPEC.md — BR-13). One extra is requested to detect truncation. */
+/** Memberships read per roster call (docs/archive/features/member-identity-and-team-roles/SPEC.md — BR-13). One extra is requested to detect truncation. */
 export const TEAM_ROSTER_MAX_MEMBERS = 500;
 
 /**

@@ -7,7 +7,7 @@ import { fetchTeamsOverview } from "../../teams/client/teams-overview-gateway";
 import { resultsCopy } from "../copy";
 
 /**
- * `/results` compatibility redirect (docs/features/team-management/SPEC.md
+ * `/results` compatibility redirect (docs/archive/features/team-management/SPEC.md
  * — BR-33, BR-34; TASK-011). There is no server-side session to redirect
  * from (SPEC → Architecture decisions → "No server-side session"), so this
  * resolves auth state client-side and reuses the existing, unchanged

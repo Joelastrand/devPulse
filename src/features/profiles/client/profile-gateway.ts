@@ -1,5 +1,5 @@
 /**
- * Client gateway for the signed-in user's own display name (docs/features/
+ * Client gateway for the signed-in user's own display name (docs/archive/features/
  * member-identity-and-team-roles/SPEC.md — BR-1 through BR-3): thin `fetch`
  * wrappers around `GET`/`PUT`/`DELETE /api/me/profile`. The subject is
  * always the token's own identity — no `uid` or e-mail is ever sent. Each

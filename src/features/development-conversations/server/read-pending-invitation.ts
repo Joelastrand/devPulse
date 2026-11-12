@@ -1,3 +1,4 @@
+import { openTeamDocument } from "../../teams/domain/team-content-codec";
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { isPlainObject, isNonEmptyString } from "../domain/stored-shape";
@@ -67,7 +68,8 @@ export function createFirestoreTeamNameReader(): TeamNameReader {
     async getTeamName(teamId) {
       const snapshot = await getFirestoreDb().collection("teams").doc(teamId).get();
       const data: unknown = snapshot.data();
-      return isPlainObject(data) ? data.name : undefined;
+      const opened = openTeamDocument(teamId, data);
+      return isPlainObject(opened) ? opened.name : undefined;
     },
   };
 }

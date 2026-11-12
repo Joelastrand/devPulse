@@ -80,7 +80,7 @@ describe("fetchAdminChallenges default gateway", () => {
               ciphertext: "identity-canary-ciphertext",
               iv: "identity-canary-iv",
               authTag: "identity-canary-authtag",
-              keyVersion: "v1",
+              keyVersion: "v2",
             },
           ],
         }),

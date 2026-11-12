@@ -7,7 +7,7 @@ import {
 import { getBuiltInTemplate, isBuiltInTemplateId } from "./templates";
 
 /**
- * The validated shape of a survey-creation request body (docs/features/
+ * The validated shape of a survey-creation request body (docs/archive/features/
  * managed-surveys/SPEC.md — "Admin creation/management flow", step 1).
  * `teamId` is deliberately not part of this shape: the target team is the
  * admin page's own route scope, resolved and re-authorized server-side by
@@ -17,7 +17,7 @@ import { getBuiltInTemplate, isBuiltInTemplateId } from "./templates";
  * always sends a value (pre-filled with `DEFAULT_MINIMUM_RESPONSES`), but
  * this validator never assumes that default for a missing/invalid value:
  * client input is always untrusted, and the server independently validates
- * it (docs/features/managed-surveys/SPEC.md — "Per-survey result
+ * it (docs/archive/features/managed-surveys/SPEC.md — "Per-survey result
  * threshold").
  */
 export interface CreateSurveyInput {
@@ -55,7 +55,7 @@ export type ValidateCreateSurveyInputResult =
  * validation only.
  *
  * `accessMode` is required and must be one of `SurveyAccessMode`'s exact
- * values (never a default — docs/features/managed-surveys/SPEC.md —
+ * values (never a default — docs/archive/features/managed-surveys/SPEC.md —
  * "Survey access modes": "No pre-selected default"). `minimumResponses` is
  * likewise required and must satisfy `isValidMinimumResponses` (an integer
  * in `[3, 20]`) — a missing, non-integer, or out-of-range value is

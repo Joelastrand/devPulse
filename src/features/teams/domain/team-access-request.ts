@@ -14,7 +14,7 @@ export function isValidAccessRequestStatus(value: unknown): value is AccessReque
 }
 
 /**
- * A Firestore `teamAccessRequests` document (docs/features/team-management/
+ * A Firestore `teamAccessRequests` document (docs/archive/features/team-management/
  * SPEC.md — Architecture decisions → "Firestore collections"). Deliberately
  * no persisted email — `uid`-keyed like `teamMemberships`; the requester's
  * email (for admin display only) is resolved on demand from Firebase Auth,

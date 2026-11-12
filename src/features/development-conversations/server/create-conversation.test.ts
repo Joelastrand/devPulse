@@ -152,7 +152,7 @@ describe("createConversation: input and caps (BR-37, BR-39)", () => {
           ciphertext: "c",
           iv: "i",
           authTag: "t",
-          keyVersion: "v1",
+          keyVersion: "v2", keyId: "k1",
           keyCheck: "k",
         });
       });

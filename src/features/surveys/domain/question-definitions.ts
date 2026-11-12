@@ -1,5 +1,5 @@
 /**
- * Configurable survey question definitions (docs/features/team-survey-builder/
+ * Configurable survey question definitions (docs/archive/features/team-survey-builder/
  * SPEC.md — "Question types", "Compatibility", "Privacy contract for free
  * text"). Pure domain logic: no Firestore, no I/O, no clock.
  *

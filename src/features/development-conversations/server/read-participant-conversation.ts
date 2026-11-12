@@ -97,7 +97,7 @@ export async function readParticipantConversation(
     // BR-53: the key is probed on this request, then the payload is decrypted and validated. A key failure throws out
     // of the classifier and is caught below as persistence_failed. Malformed or unauthenticated content is not found.
     if (!deps.codec.probeKey().ok) return FAILED;
-    const classification = classifyOwnerDocument(rawOwner, deps.codec);
+    const classification = classifyOwnerDocument(rawOwner, deps.codec, { ownerUid, conversationId });
     if (classification.kind !== "valid") return NOT_FOUND;
     const record = classification.record;
 

@@ -18,6 +18,7 @@ import { acceptInvitation, leaveParticipation, type RespondToParticipationDeps }
 import { setSharedGoals, type SetSharedGoalsDeps } from "./set-shared-goals";
 import { updateOwnerSections, type UpdateOwnerSectionsDeps } from "./update-owner-sections";
 import { writeParticipantNotes, type WriteParticipantNotesDeps } from "./write-participant-notes";
+import { conversationContext } from "../domain/stored-owner-conversation";
 
 /**
  * Deterministic concurrency and lifecycle race suite (SPEC BR-48, BR-49, BR-50 (1) to (6), BR-13, BR-17, BR-28; TASK-022).
@@ -36,6 +37,7 @@ import { writeParticipantNotes, type WriteParticipantNotesDeps } from "./write-p
 
 // Synthetic fixtures only (invariant 15). Every uid, team, title and goal is fictional.
 const CONVERSATION_ID = "conv-1";
+const CTX = conversationContext(OWNER_UID, CONVERSATION_ID);
 const CANDIDATE_UID = "candidate-2";
 const CANDIDATE_REF = "zyxwvtsrqpnmkjhgfedcba9876";
 const REJOINED_REF = "abcdefghjkmnpqrstvwxyz0123";
@@ -150,8 +152,8 @@ function contentOf(codec: FakeContentCodec, raw: RawConversationData): Conversat
     iv: raw.iv,
     authTag: raw.authTag,
     keyVersion: raw.keyVersion,
-    keyCheck: raw.keyCheck,
-  } as StoredEnvelope);
+    keyId: "k1", keyCheck: raw.keyCheck,
+  } as StoredEnvelope, CTX);
   if (!result.ok) throw new Error("fixture payload does not decode");
   return result.content;
 }

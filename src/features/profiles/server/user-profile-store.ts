@@ -1,3 +1,4 @@
+import { openUserProfileDocument, toPersistedUserProfile } from "../domain/user-profile-content-codec";
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { runFencedTransaction } from "../../auth/server/erasure-write-fence";
@@ -52,7 +53,7 @@ export function getDefaultUserProfileStore(): UserProfileStore {
   return {
     async read(uid) {
       const snapshot = await getFirestoreDb().collection(USER_PROFILES_COLLECTION).doc(uid).get();
-      return snapshot.exists ? toProfileCandidate(snapshot.data()) : undefined;
+      return snapshot.exists ? toProfileCandidate(openUserProfileDocument(uid, snapshot.data())) : undefined;
     },
     async upsert(uid, build) {
       const db = getFirestoreDb();
@@ -60,7 +61,8 @@ export function getDefaultUserProfileStore(): UserProfileStore {
       // The erasure fence is read first, in the same transaction (TASK-025, BR-4(b)).
       await runFencedTransaction(db, uid, async (tx) => {
         const snapshot = await tx.get(ref);
-        tx.set(ref, build(snapshot.exists ? toProfileCandidate(snapshot.data()) : undefined));
+        const built = build(snapshot.exists ? toProfileCandidate(openUserProfileDocument(uid, snapshot.data())) : undefined);
+        tx.set(ref, toPersistedUserProfile(uid, built as Record<string, unknown> & { displayName: string }));
       });
     },
     async remove(uid) {

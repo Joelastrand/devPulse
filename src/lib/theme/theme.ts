@@ -1,5 +1,5 @@
 /**
- * Viewer theme preference (docs/features/product-experience/SPEC.md — Theme
+ * Viewer theme preference (docs/archive/features/product-experience/SPEC.md — Theme
  * strategy). One local key holds one of three values. It is a viewer
  * convenience only: it is never sent to a server, never linked to identity
  * and never produces telemetry.

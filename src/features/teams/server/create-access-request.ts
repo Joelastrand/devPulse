@@ -25,7 +25,7 @@ export interface CreateAccessRequestCollection {
   /**
    * Transactional read-modify-write spanning the single deterministic
    * `teamAccessRequests/{uid}__{teamId}` document *and* the
-   * `teamMemberships/{uid}__{teamId}` document (docs/features/
+   * `teamMemberships/{uid}__{teamId}` document (docs/archive/features/
    * team-management/SPEC.md — Edge cases → "Concurrent approval and a
    * duplicate request for the same pending access request"): re-reads
    * both *inside* the transaction. If membership now exists — even if it
@@ -102,7 +102,7 @@ export interface CreateAccessRequestDeps {
 
 /**
  * Submits an access request for a team on behalf of the caller's own
- * verified identity (docs/features/team-management/SPEC.md — BR-23
+ * verified identity (docs/archive/features/team-management/SPEC.md — BR-23
  * through BR-25, BR-28). Identity always comes from a revocation-checked
  * `verifyIdToken` — never a client-supplied uid/email.
  *

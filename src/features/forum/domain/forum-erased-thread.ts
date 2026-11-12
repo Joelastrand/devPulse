@@ -1,5 +1,5 @@
 /**
- * The erased-thread placeholder (docs/features/account-erasure/SPEC.md — "Erased-thread placeholder shape", TASK-014).
+ * The erased-thread placeholder (docs/archive/features/account-erasure/SPEC.md — "Erased-thread placeholder shape", TASK-014).
  * Only the account-erasure forum step creates this shape. It is deliberately distinct from `ForumThreadRecord`: it has
  * no title, body, ciphertext, `authorUid`, or `authorTag`, so no active-thread reader can accept it by accident.
  *

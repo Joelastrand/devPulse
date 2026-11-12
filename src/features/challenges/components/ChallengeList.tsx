@@ -14,7 +14,7 @@ export type ChallengeListState =
 
 /**
  * `/teams/[teamId]`'s read-only, member-facing challenge list
- * (docs/features/anonymous-challenges/SPEC.md — BR-9, BR-27). Renders
+ * (docs/archive/features/anonymous-challenges/SPEC.md — BR-9, BR-27). Renders
  * **exactly** what `listTeamChallengesForMember` (via
  * `fetchTeamChallenges`/the gateway's shape validation) returned — an
  * `archived` challenge can never reach this component at all, since

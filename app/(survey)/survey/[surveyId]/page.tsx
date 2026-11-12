@@ -3,7 +3,7 @@ import { PageShell } from "../../../../src/components/ui/PageShell";
 import { SurveyParticipationView } from "../../../../src/features/surveys/components/SurveyParticipationView";
 
 /**
- * One URL shape for both access modes (docs/features/managed-surveys/
+ * One URL shape for both access modes (docs/archive/features/managed-surveys/
  * SPEC.md — BR-10). Kept thin: every lifecycle/access-mode/authorization
  * decision is `SurveyParticipationView`'s server-backed resolution, never
  * duplicated here.

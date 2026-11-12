@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 // Static check of the executable rules only. Client denial is also verified by the emulator suite, which is not run here
-// (no Java runtime; see docs/features/superadmin-registry/VERIFICATION.md).
+// (no Java runtime; see docs/archive/features/superadmin-registry/VERIFICATION.md).
 function stripComments(rules: string): string {
   return rules.replace(/\/\/.*$/gm, "");
 }

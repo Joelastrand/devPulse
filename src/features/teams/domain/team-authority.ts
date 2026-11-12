@@ -1,7 +1,7 @@
 import { isValidMembershipFor, membershipRoleOf } from "./team-membership";
 
 /**
- * Team visibility (docs/features/teamadmin-and-team-visibility/SPEC.md).
+ * Team visibility (docs/archive/features/teamadmin-and-team-visibility/SPEC.md).
  * A missing or malformed persisted value is `private`: only an explicit,
  * valid `"public"` ever exposes a team to anonymous readers.
  */

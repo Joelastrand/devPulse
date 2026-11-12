@@ -1,6 +1,7 @@
 import "server-only";
-import type { EncryptedPayload } from "../../../lib/encryption/encryption";
-import { decrypt } from "../../../lib/encryption/encryption";
+import type { RecordEnvelope } from "../../../lib/encryption/record-envelope";
+import { decryptRecord } from "../../../lib/encryption/record-envelope";
+import { forumThreadContext } from "../domain/forum-thread";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import {
@@ -18,7 +19,7 @@ export const LIST_TEAM_THREADS_LIMIT = 200;
 
 /**
  * The minimal, response-minimized DTO returned by `listTeamThreads`
- * (docs/features/team-forum/SPEC.md — "API/DTO contract"). Deliberately
+ * (docs/archive/features/team-forum/SPEC.md — "API/DTO contract"). Deliberately
  * excludes `authorUid` and every encrypted field — a reader sees only
  * `authorTag` and `isOwnThread` (BR-13). `createdAt` is a full-precision ISO
  * timestamp (no date-only truncation, unlike Anonymous Challenges — see
@@ -129,11 +130,11 @@ export interface ListTeamThreadsDeps {
   isSuperadmin?: AuthorizeTeamAccessDeps["isSuperadmin"];
   authCollection?: AuthorizeTeamAccessDeps["collection"];
   reader?: ThreadsReader;
-  decryptContent?: (payload: EncryptedPayload) => string;
+  decryptContent?: (envelope: RecordEnvelope, context: string) => string;
 }
 
 /**
- * Backs `/teams/[teamId]`'s forum thread list (docs/features/team-forum/
+ * Backs `/teams/[teamId]`'s forum thread list (docs/archive/features/team-forum/
  * SPEC.md — BR-15, BR-18, BR-19, BR-20, BR-21, BR-34). Requires
  * `authorizeTeamAccess` to resolve to `"admin"` or `"member"` for `teamId`
  * — the same broader viewing boundary `listTeamChallengesForMember` already
@@ -190,7 +191,7 @@ export async function listTeamThreads(
     return { ok: false, error: "read_failed" };
   }
 
-  const decryptContent = deps.decryptContent ?? decrypt;
+  const decryptContent = deps.decryptContent ?? decryptRecord;
   const threads: ThreadSummaryView[] = [];
 
   for (const { id, data } of rawDocs) {
@@ -214,7 +215,8 @@ export async function listTeamThreads(
         iv: record.iv,
         authTag: record.authTag,
         keyVersion: record.keyVersion,
-      });
+        keyId: record.keyId,
+      }, forumThreadContext(teamId, id));
       content = parseThreadContent(decrypted);
     } catch {
       // Skip, don't throw or fall back to ciphertext (BR-20) — never

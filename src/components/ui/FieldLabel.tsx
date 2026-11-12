@@ -6,7 +6,7 @@ export interface FieldLabelProps {
 }
 
 /**
- * Label for the form primitives (docs/features/product-experience/SPEC.md —
+ * Label for the form primitives (docs/archive/features/product-experience/SPEC.md —
  * Form hierarchy). The optional marker is text, and it is part of the
  * accessible name, so the field is announced as optional too.
  */

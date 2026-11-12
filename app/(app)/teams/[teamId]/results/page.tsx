@@ -5,7 +5,7 @@ import { TeamResultsView } from "../../../../../src/features/teams/components/Te
 import { teamsCopy } from "../../../../../src/features/teams/copy";
 
 /**
- * `/teams/[teamId]/results` (docs/features/team-experience-redesign SPEC — BR-5).
+ * `/teams/[teamId]/results` (docs/archive/features/team-experience-redesign SPEC — BR-5).
  * Survey history, trends and the long competence ladder moved here from the
  * Oversikt. The server page only renders the shared header and a back link;
  * the authorized data is loaded client-side through the existing results and

@@ -69,8 +69,9 @@ export interface InventoryRow {
 
 const uid = (name: string): InventoryField => ({ name, kind: "uid" });
 const memberRef = (name: string): InventoryField => ({ name, kind: "memberRef" });
+/** An e-mail that persists only as a keyed blind index (`emailIndex`); the address itself is sealed. */
 const email = (name: string): InventoryField => ({ name, kind: "email" });
-/** An e-mail that persists only as the `__<normalizedEmail>` tail of an invitation document ID (`teamId__email`). */
+/** A keyed blind index that persists only as the `__<index>` tail of an invitation document ID (`teamId__emailIndex`). */
 const docIdEmail = (name: string): InventoryField => ({ name, kind: "email", location: "docIdSuffix" });
 const plain = (name: string): InventoryField => ({ name, kind: "none" });
 
@@ -124,7 +125,7 @@ const PERSON_OWNED: readonly InventoryRow[] = [
     collection: "teamInvitations",
     locator: "uidField",
     class: "DELETE",
-    fields: [email("email"), docIdEmail("normalizedEmail"), uid("resolvedUid")],
+    fields: [email("emailIndex"), docIdEmail("normalizedEmail"), uid("resolvedUid")],
   },
   {
     id: "I-12",
@@ -144,7 +145,7 @@ const PERSON_OWNED: readonly InventoryRow[] = [
   // Personal role workspace, first increment (SECURITY-REVIEW §11.3). Owner subtrees; encrypted content; no key needed to delete.
   { id: "I-17", collection: "userDevelopment/{uid}/responsibilities", locator: "subtree", class: "DELETE", fields: [] },
   { id: "I-18", collection: "userDevelopment/{uid}/achievements", locator: "subtree", class: "DELETE", fields: [] },
-  // I-19 (docs/features/team-owned-skills/SPEC.md §7): a person's private team-skill ratings, one document per
+  // I-19 (docs/archive/features/team-owned-skills/SPEC.md §7): a person's private team-skill ratings, one document per
   // (person, team skill). Located by the stored `uid` field, not by the id, so the sweep is a field equality.
   { id: "I-19", collection: "teamSkillAssessments", locator: "uidField", class: "DELETE", fields: [uid("uid")] },
 ];
@@ -222,7 +223,7 @@ const ACTOR_AUDIT: readonly InventoryRow[] = [
     class: "DELETE",
     fields: [memberRef("memberRef")],
   },
-  // A-17 (docs/features/team-owned-skills/SPEC.md §7): the acting admin of a team-owned skill definition is audit only.
+  // A-17 (docs/archive/features/team-owned-skills/SPEC.md §7): the acting admin of a team-owned skill definition is audit only.
   {
     id: "A-17",
     collection: "teamSkills",
@@ -230,7 +231,7 @@ const ACTOR_AUDIT: readonly InventoryRow[] = [
     class: "ANONYMIZE",
     fields: [uid("createdBy"), uid("updatedBy")],
   },
-  // A-19 (docs/features/team-owned-skills/SPEC.md §12): the acting administrator of a collaborative team level is audit only.
+  // A-19 (docs/archive/features/team-owned-skills/SPEC.md §12): the acting administrator of a collaborative team level is audit only.
   {
     id: "A-19",
     collection: "teamManualAssessments",

@@ -1,7 +1,7 @@
 import "server-only";
 import { parseConversationContent, type ConversationContent } from "../domain/content-payload";
 import type { DecryptOutcome, StoredEnvelope } from "../domain/stored-owner-conversation";
-import { STORED_KEY_VERSION } from "../domain/stored-owner-conversation";
+import { STORED_KEY_ID, STORED_KEY_VERSION } from "../domain/stored-owner-conversation";
 import type { DecodeContentResult, EncodeContentResult, KeyFailure, ProbeKeyResult } from "./content-codec";
 
 /**
@@ -21,15 +21,16 @@ const FAKE_KEY_CHECK = "A".repeat(43) + "=";
 
 export interface FakeContentCodec {
   probeKey(): ProbeKeyResult;
-  encodeContent(content: ConversationContent): EncodeContentResult;
-  decodeContent(envelope: StoredEnvelope): DecodeContentResult;
-  decryptForClassification(envelope: StoredEnvelope): DecryptOutcome;
+  encodeContent(content: ConversationContent, context: string): EncodeContentResult;
+  decodeContent(envelope: StoredEnvelope, context: string): DecodeContentResult;
+  decryptForClassification(envelope: StoredEnvelope, context: string): DecryptOutcome;
   /** Simulates a key outage or a key mismatch; `null` restores normal operation. */
   setKeyFailure(failure: KeyFailure | null): void;
 }
 
 export function createFakeContentCodec(): FakeContentCodec {
-  const store = new Map<string, string>();
+  /** Held per handle with the record context it was sealed under, as the real codec binds the AAD. */
+  const store = new Map<string, { text: string; context: string }>();
   let nextHandle = 1;
   let keyFailure: KeyFailure | null = null;
 
@@ -39,46 +40,51 @@ export function createFakeContentCodec(): FakeContentCodec {
       iv: FAKE_IV,
       authTag: FAKE_AUTH_TAG,
       keyVersion: STORED_KEY_VERSION,
+      keyId: STORED_KEY_ID,
       keyCheck: FAKE_KEY_CHECK,
     };
   }
 
-  /** The stored JSON text for an envelope, or `null` when the handle is unknown (treated as an authentication failure). */
-  function lookup(envelope: StoredEnvelope): string | null {
+  /**
+   * The stored JSON text for an envelope, or `null` when the handle is unknown or was sealed under another record context
+   * (both are treated as an authentication failure, as the real codec does for a substituted record).
+   */
+  function lookup(envelope: StoredEnvelope, context: string): string | null {
     const handle = Buffer.from(envelope.ciphertext, "base64").toString("utf8");
-    return store.get(handle) ?? null;
+    const entry = store.get(handle);
+    return entry !== undefined && entry.context === context ? entry.text : null;
   }
 
   return {
     probeKey() {
       return keyFailure === "key_unavailable" ? { ok: false, error: "key_unavailable" } : { ok: true };
     },
-    encodeContent(content) {
+    encodeContent(content, context) {
       if (keyFailure === "key_unavailable") {
         return { ok: false, error: "key_unavailable" };
       }
       const handle = `fake-handle-${nextHandle}`;
       nextHandle += 1;
       // JSON form, as the real codec writes it: `capturedAt` becomes an ISO string.
-      store.set(handle, JSON.stringify(content));
+      store.set(handle, { text: JSON.stringify(content), context });
       return { ok: true, content: envelopeFor(handle) };
     },
-    decodeContent(envelope) {
+    decodeContent(envelope, context) {
       if (keyFailure !== null) {
         return { ok: false, error: keyFailure };
       }
-      const text = lookup(envelope);
+      const text = lookup(envelope, context);
       if (text === null) {
         return { ok: false, error: "payload_unauthenticated" };
       }
       const parsed = parseConversationContent(JSON.parse(text));
       return parsed.ok ? { ok: true, content: parsed.content } : { ok: false, error: "malformed_payload" };
     },
-    decryptForClassification(envelope) {
+    decryptForClassification(envelope, context) {
       if (keyFailure !== null) {
         throw new Error(keyFailure);
       }
-      const text = lookup(envelope);
+      const text = lookup(envelope, context);
       if (text === null) {
         return { status: "authentication_failed" };
       }

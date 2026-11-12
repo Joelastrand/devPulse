@@ -29,9 +29,9 @@ export interface AppShellProps {
 
 /**
  * Application shell for authenticated routes
- * (docs/features/product-experience/SPEC.md — Application shell, Structure).
+ * (docs/archive/features/product-experience/SPEC.md — Application shell, Structure).
  * It replaces the former top header (`SiteHeader`), which is superseded
- * (docs/features/product-ux-shell/SPEC.md). From `md` up it renders a 248 px
+ * (docs/archive/features/product-ux-shell/SPEC.md). From `md` up it renders a 248 px
  * sidebar. Below `md` it renders a top bar with a Meny trigger that opens
  * `MobileDrawer`. The page content sits inside `data-app-content`, which is
  * made inert and aria-hidden while the drawer is open.

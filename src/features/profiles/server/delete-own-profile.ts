@@ -14,7 +14,7 @@ export interface DeleteOwnProfileDeps {
 }
 
 /**
- * Hard-deletes the caller's own `userProfiles` document (docs/features/
+ * Hard-deletes the caller's own `userProfiles` document (docs/archive/features/
  * member-identity-and-team-roles/SPEC.md — BR-3). Idempotent. This removes
  * only the display name — it is not account deletion and never touches the
  * Firebase Auth account or any other collection.

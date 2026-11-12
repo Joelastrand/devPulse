@@ -4,6 +4,7 @@ import type { ConversationContent } from "../domain/content-payload";
 import { normalizePlannedFor } from "../domain/plan-date";
 import { normalizeTitle } from "../domain/text-rules";
 import { encodeContent as encodeContentWithKey, probeKey as probeKeyOnce } from "./content-codec";
+import { conversationContext } from "../domain/stored-owner-conversation";
 import type { EncodeContentResult, ProbeKeyResult } from "./content-codec";
 import { writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import { getDefaultConversationStore } from "./conversation-store";
@@ -24,7 +25,7 @@ import {
 /** The only codec operations create needs. The real codec module and the test fake both satisfy it. */
 export interface CreateConversationCodec {
   probeKey(): ProbeKeyResult;
-  encodeContent(content: ConversationContent): EncodeContentResult;
+  encodeContent(content: ConversationContent, context: string): EncodeContentResult;
 }
 
 export interface CreateConversationDeps {
@@ -106,12 +107,18 @@ export async function createConversation(
     sharedGoals: [],
     sharedEvidence: [],
   };
-  const encoded = deps.codec.encodeContent(content);
+  // The id is reserved before sealing, because the content is bound to this document by AAD.
+  let conversationId: string;
+  try {
+    conversationId = deps.store.newOwnerId(ownerUid);
+  } catch {
+    return { ok: false, error: "persistence_failed" };
+  }
+  const encoded = deps.codec.encodeContent(content, conversationContext(ownerUid, conversationId));
   if (!encoded.ok) return { ok: false, error: "persistence_failed" };
 
   const now = deps.clock();
   try {
-    const conversationId = deps.store.newOwnerId(ownerUid);
     await deps.store.runOwnerTransaction(ownerUid, async (tx) => {
       tx.createOwner(ownerUid, conversationId, {
         teamId,

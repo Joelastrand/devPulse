@@ -35,7 +35,7 @@ const PADDING_CLASSNAMES: Record<CardPadding, string> = {
  * Shared "bordered rounded box" primitive consolidating this codebase's
  * three near-duplicate panel treatments — list-row card (`bordered`/`sm`),
  * result-summary panel (`bordered`/`md`), and auth/survey-form panel
- * (`elevated`/`lg`) — per docs/features/product-ux-shell/SPEC.md BR-10. No
+ * (`elevated`/`lg`) — per docs/archive/features/product-ux-shell/SPEC.md BR-10. No
  * business logic; purely a styled container.
  */
 export function Card({

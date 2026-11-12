@@ -1,3 +1,4 @@
+import { openSurveyDocument } from "./survey-content-codec";
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
@@ -17,7 +18,7 @@ const SURVEYS_COLLECTION = "surveys";
 
 /**
  * One survey row for `/admin/teams/[teamId]`'s survey-management section
- * (docs/features/managed-surveys/SPEC.md — BR-33). Deliberately excludes
+ * (docs/archive/features/managed-surveys/SPEC.md — BR-33). Deliberately excludes
  * `archivedAt` itself (a plain `archived` boolean is all the UI needs to
  * split "active" from "archived"), and never includes encrypted payloads,
  * raw responses, or any `surveyParticipations` data — this task's list
@@ -82,7 +83,8 @@ function getDefaultCollection(): TeamSurveysCollection {
 }
 
 /** Maps raw Firestore document data (Timestamp fields included) into the candidate shape `isValidSurvey` expects. */
-function toCandidateSurvey(surveyId: string, data: unknown): unknown {
+function toCandidateSurvey(surveyId: string, raw: unknown): unknown {
+  const data = openSurveyDocument(surveyId, raw);
   if (typeof data !== "object" || data === null) {
     return undefined;
   }
@@ -147,7 +149,7 @@ export interface ListTeamSurveysDeps {
 }
 
 /**
- * Lists a team's surveys for an app admin (docs/features/managed-surveys/
+ * Lists a team's surveys for an app admin (docs/archive/features/managed-surveys/
  * SPEC.md — BR-33). Only an app admin may call this successfully — reuses
  * `requireAppAdmin` unchanged. Returns every valid survey belonging to
  * `teamId` (newest-created first), each with its derived lifecycle

@@ -1,3 +1,5 @@
+import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../domain/skill-tree-test-fixtures";
+stubSkillTreeEncryptionKey();
 import { describe, expect, it, vi } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type { SkillProgressRecord } from "../domain/skill-progress";
@@ -44,8 +46,8 @@ function validTreeData(overrides: Record<string, unknown> = {}): Record<string, 
 
 function fakeTreeReader(data: Record<string, unknown> | undefined): SkillTreeReader {
   return {
-    async get(): Promise<StartTeamSkillTrackingDocSnapshot> {
-      return { exists: data !== undefined, data: () => data };
+    async get(treeId): Promise<StartTeamSkillTrackingDocSnapshot> {
+      return { exists: data !== undefined, data: () => (data === undefined ? undefined : sealedSkillTreeFixture(treeId, data)) };
     },
   };
 }

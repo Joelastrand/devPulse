@@ -1,6 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { encrypt } from "../../../lib/encryption/encryption";
+import { encryptRecord } from "../../../lib/encryption/record-envelope";
+import { surveyResponseContext } from "../../surveys/domain/response-context";
+import { persistedSurveyFixture, stubSurveyEncryptionKey } from "../../surveys/server/survey-test-fixtures";
+stubSurveyEncryptionKey();
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type { AuthorizeTeamAccessCollection } from "../../teams/server/authorize-team-access";
 import type {
@@ -8,6 +11,7 @@ import type {
   GetTeamSurveyResultsDeps,
   RawSurveyDoc,
   RawSurveyResponseDoc,
+  RawSurveyResponseEntry,
 } from "./get-team-survey-results";
 import { getTeamSurveyResults } from "./get-team-survey-results";
 
@@ -54,19 +58,25 @@ function fakeAuthCollection(state: AuthState): AuthorizeTeamAccessCollection {
 function surveyDoc(id: string, overrides: Record<string, unknown> = {}): RawSurveyDoc {
   return {
     id,
-    data: {
+    data: persistedSurveyFixture(id, {
       teamId: TEAM_A,
       accessMode: "public",
       minimumResponses: 5,
       createdAt: new Date("2026-01-01T00:00:00Z"),
       createdBy: "admin-1",
       ...overrides,
-    },
+    }),
   };
 }
 
-function encryptedAnswers(answers: [number, number, number]) {
-  return encrypt(JSON.stringify(answers));
+/** A sealed v2 response document whose answers are bound to its own id, survey and team (AAD). */
+function sealedResponse(id: string, surveyId: string, teamId: string, answers: [number, number, number]): RawSurveyResponseDoc {
+  return { id, surveyId, teamId, ...encryptRecord(JSON.stringify(answers), surveyResponseContext(teamId, surveyId, id)) };
+}
+
+/** The reader's entries: each raw document paired with its own Firestore id. */
+function entriesOf(docs: readonly unknown[]): RawSurveyResponseEntry[] {
+  return docs.map((doc) => ({ id: (doc as { id: string }).id, data: doc }));
 }
 
 function nResponsesFor(surveyId: string, n: number, teamId: string = TEAM_A): RawSurveyResponseDoc[] {
@@ -82,11 +92,7 @@ function nResponsesFor(surveyId: string, n: number, teamId: string = TEAM_A): Ra
     [4, 4, 4],
     [5, 5, 5],
   ];
-  return Array.from({ length: n }, (_, i) => ({
-    surveyId,
-    teamId,
-    ...encryptedAnswers(shapes[i % shapes.length]),
-  }));
+  return Array.from({ length: n }, (_, i) => sealedResponse(`${surveyId}-r${i + 1}`, surveyId, teamId, shapes[i % shapes.length]));
 }
 
 /**
@@ -97,7 +103,7 @@ function nResponsesFor(surveyId: string, n: number, teamId: string = TEAM_A): Ra
  * `minimumResponses` or contribute to its aggregate (post-review fix).
  */
 function wrongTeamResponse(surveyId: string): RawSurveyResponseDoc {
-  return { surveyId, teamId: TEAM_B, ...encryptedAnswers([5, 5, 5]) };
+  return sealedResponse(`${surveyId}-wrong-team`, surveyId, TEAM_B, [5, 5, 5]);
 }
 
 interface FakeCollectionsState {
@@ -122,7 +128,7 @@ function fakeCollections(
     async listResponsesForSurveyIds(surveyIds) {
       responsesQueryCalls.push(surveyIds);
       const all = Object.values(state.responsesBySurveyId ?? {}).flat();
-      return all.filter((r) => surveyIds.includes(r.surveyId));
+      return entriesOf(all.filter((r) => surveyIds.includes(r.surveyId)));
     },
     async backfillClosedAt(surveyId, closedAt) {
       backfillCalls.push({ surveyId, closedAt });
@@ -521,12 +527,12 @@ describe("getTeamSurveyResults", () => {
           return [surveyDoc("s1", { closedAt: NOW, minimumResponses: 3 })];
         },
         async listResponsesForSurveyIds() {
-          return [
+          return entriesOf([
             ...nResponsesFor("s1", 2),
             // Missing `teamId` entirely — structurally malformed, must be
             // excluded exactly like a mismatched or undecryptable record.
-            { surveyId: "s1", ...encryptedAnswers([1, 1, 1]) },
-          ];
+            { id: "s1-malformed", surveyId: "s1", ...encryptRecord(JSON.stringify([1, 1, 1]), surveyResponseContext(TEAM_A, "s1", "s1-malformed")) },
+          ]);
         },
         async backfillClosedAt() {},
       };
@@ -567,7 +573,7 @@ describe("getTeamSurveyResults", () => {
         return [surveyDoc("expired", { endAt: new Date("2026-08-10T00:00:00Z") })];
       },
       async listResponsesForSurveyIds() {
-        return nResponsesFor("expired", 5);
+        return entriesOf(nResponsesFor("expired", 5));
       },
       async backfillClosedAt() {
         throw new Error("simulated firestore outage");

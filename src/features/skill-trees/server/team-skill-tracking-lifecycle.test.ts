@@ -1,9 +1,14 @@
+import { stageOfProgressUpdate } from "../domain/skill-tree-test-fixtures";
+import { openSkillProgressDocument, toPersistedSkillProgress } from "./skill-progress-content-codec";
+import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../domain/skill-tree-test-fixtures";
+stubSkillTreeEncryptionKey();
 import { describe, expect, it, vi } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import { startTeamSkillTracking } from "./start-team-skill-tracking";
 import { updateTeamSkillProgress } from "./update-team-skill-progress";
 import { stopTeamSkillTracking } from "./stop-team-skill-tracking";
 import { updateSkillTree } from "./update-skill-tree";
+import { openSkillTreeDocument } from "../domain/skill-tree-content-codec";
 
 /**
  * A shared, in-memory Firestore-like store for exactly the two collections
@@ -14,16 +19,17 @@ import { updateSkillTree } from "./update-skill-tree";
  * (e.g. `challenge-management-concurrency.test.ts`) rather than each
  * operation's own isolated per-call fake.
  */
-function inMemoryCollection() {
+function inMemoryCollection(kind: "tree" | "progress") {
   const docs = new Map<string, Record<string, unknown>>();
   return {
     docs,
     async get(id: string) {
       const data = docs.get(id);
-      return { exists: data !== undefined, data: () => data };
+      // The production store opens progress documents; tree documents are opened by their own candidate mapper.
+      return { exists: data !== undefined, data: () => (kind === "progress" ? openSkillProgressDocument(data) : data) };
     },
     async set(id: string, record: unknown) {
-      docs.set(id, record as Record<string, unknown>);
+      docs.set(id, toPersistedSkillProgress(record as Parameters<typeof toPersistedSkillProgress>[0]));
     },
     async update(id: string, patch: unknown) {
       const existing = docs.get(id);
@@ -55,8 +61,8 @@ function verifyTokenReturning(identity: VerifiedIdentity) {
 
 describe("team skill tracking lifecycle", () => {
   it("start (active team) -> update forward -> update backward -> stop -> start again produces a fresh currentNodeId: null", async () => {
-    const trees = inMemoryCollection();
-    const progress = inMemoryCollection();
+    const trees = inMemoryCollection("tree");
+    const progress = inMemoryCollection("progress");
     trees.docs.set(TREE_ID, {
       name: "Container adoption",
       nodes: [
@@ -67,6 +73,7 @@ describe("team skill tracking lifecycle", () => {
       createdAt: new Date("2025-01-01T00:00:00Z"),
       createdBy: "original-admin",
     });
+    trees.docs.set(TREE_ID, sealedSkillTreeFixture(TREE_ID, trees.docs.get(TREE_ID)) as Record<string, unknown>);
 
     const deps = {
       verifyToken: verifyTokenReturning(verifiedIdentity()),
@@ -80,7 +87,7 @@ describe("team skill tracking lifecycle", () => {
       { ...deps, treeReader: trees, teamStatusReader: { getTeamStatus: async () => "active" }, progress, now: new Date("2026-01-01T00:00:00Z") },
     );
     expect(started).toEqual({ ok: true });
-    expect(progress.docs.get(`${TEAM_ID}__${TREE_ID}`)?.currentNodeId).toBeNull();
+    expect(stageOfProgressUpdate(TEAM_ID, TREE_ID, progress.docs.get(`${TEAM_ID}__${TREE_ID}`) ?? {})).toBeNull();
 
     const movedForward = await updateTeamSkillProgress(
       "token",
@@ -90,7 +97,7 @@ describe("team skill tracking lifecycle", () => {
       { ...deps, progress, treeReader: trees, now: new Date("2026-02-01T00:00:00Z") },
     );
     expect(movedForward).toEqual({ ok: true });
-    expect(progress.docs.get(`${TEAM_ID}__${TREE_ID}`)?.currentNodeId).toBe("node-2");
+    expect(stageOfProgressUpdate(TEAM_ID, TREE_ID, progress.docs.get(`${TEAM_ID}__${TREE_ID}`) ?? {})).toBe("node-2");
 
     const movedBackward = await updateTeamSkillProgress(
       "token",
@@ -100,7 +107,7 @@ describe("team skill tracking lifecycle", () => {
       { ...deps, progress, treeReader: trees, now: new Date("2026-03-01T00:00:00Z") },
     );
     expect(movedBackward).toEqual({ ok: true });
-    expect(progress.docs.get(`${TEAM_ID}__${TREE_ID}`)?.currentNodeId).toBe("node-1");
+    expect(stageOfProgressUpdate(TEAM_ID, TREE_ID, progress.docs.get(`${TEAM_ID}__${TREE_ID}`) ?? {})).toBe("node-1");
 
     const stopped = await stopTeamSkillTracking("token", TEAM_ID, TREE_ID, { ...deps, progress });
     expect(stopped).toEqual({ ok: true });
@@ -115,11 +122,11 @@ describe("team skill tracking lifecycle", () => {
       { ...deps, treeReader: trees, teamStatusReader: { getTeamStatus: async () => "active" }, progress, now: new Date("2026-04-01T00:00:00Z") },
     );
     expect(restarted).toEqual({ ok: true });
-    expect(progress.docs.get(`${TEAM_ID}__${TREE_ID}`)?.currentNodeId).toBeNull();
+    expect(stageOfProgressUpdate(TEAM_ID, TREE_ID, progress.docs.get(`${TEAM_ID}__${TREE_ID}`) ?? {})).toBeNull();
   });
 
   it("stopping is idempotent, then a repeated stop returns the same success with no recreated record", async () => {
-    const progress = inMemoryCollection();
+    const progress = inMemoryCollection("progress");
     const deps = {
       verifyToken: verifyTokenReturning(verifiedIdentity()),
       isSuperadmin: isAdminUid,
@@ -135,8 +142,8 @@ describe("team skill tracking lifecycle", () => {
   });
 
   it("a team's currentNodeId remains valid after a cosmetic correction to the tracked tree (BR-35 partial regression)", async () => {
-    const trees = inMemoryCollection();
-    const progress = inMemoryCollection();
+    const trees = inMemoryCollection("tree");
+    const progress = inMemoryCollection("progress");
     trees.docs.set(TREE_ID, {
       name: "Container adoption",
       nodes: [
@@ -146,6 +153,7 @@ describe("team skill tracking lifecycle", () => {
       createdAt: new Date("2025-01-01T00:00:00Z"),
       createdBy: "original-admin",
     });
+    trees.docs.set(TREE_ID, sealedSkillTreeFixture(TREE_ID, trees.docs.get(TREE_ID)) as Record<string, unknown>);
 
     const deps = {
       verifyToken: verifyTokenReturning(verifiedIdentity()),
@@ -165,7 +173,7 @@ describe("team skill tracking lifecycle", () => {
       treeReader: trees,
       now: new Date("2026-01-02T00:00:00Z"),
     });
-    expect(progress.docs.get(`${TEAM_ID}__${TREE_ID}`)?.currentNodeId).toBe("node-1");
+    expect(stageOfProgressUpdate(TEAM_ID, TREE_ID, progress.docs.get(`${TEAM_ID}__${TREE_ID}`) ?? {})).toBe("node-1");
 
     const corrected = await updateSkillTree(
       "token",
@@ -182,9 +190,9 @@ describe("team skill tracking lifecycle", () => {
     // owns the full three-operation BR-35 regression (start ->
     // updateSkillTree -> getTeamSkillProgress); this proves the two-
     // operation slice available at this task's boundary.
-    const correctedTree = trees.docs.get(TREE_ID) as { nodes: Array<{ nodeId: string; label: string }> };
+    const correctedTree = openSkillTreeDocument(TREE_ID, trees.docs.get(TREE_ID)) as { nodes: Array<{ nodeId: string; label: string }> };
     const trackedNode = correctedTree.nodes.find((node) => node.nodeId === "node-1");
     expect(trackedNode).toEqual({ nodeId: "node-1", label: "Evaluate options (fixed typo)", order: 1 });
-    expect(progress.docs.get(`${TEAM_ID}__${TREE_ID}`)?.currentNodeId).toBe("node-1");
+    expect(stageOfProgressUpdate(TEAM_ID, TREE_ID, progress.docs.get(`${TEAM_ID}__${TREE_ID}`) ?? {})).toBe("node-1");
   });
 });

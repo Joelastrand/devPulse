@@ -1,3 +1,4 @@
+import { sealedProfileFixture } from "../../profiles/domain/user-profile-test-fixtures";
 import { describe, expect, it, vi } from "vitest";
 import type { AuthorizeTeamAccessCollection } from "../../teams/server/authorize-team-access";
 import { MEMBER_REF_LOOKUP_CHUNK_SIZE } from "../domain/team-system";
@@ -84,7 +85,7 @@ function build(world: World, callerUid = "uid-user-1", options: { verifyFails?: 
     store,
     profileReader: {
       async readBatch(uids) {
-        return uids.map((uid) => ({ uid, data: world.profiles?.[uid] ? { displayName: world.profiles[uid], createdAt: T0, updatedAt: T0 } : undefined }));
+        return uids.map((uid) => ({ uid, data: world.profiles?.[uid] ? sealedProfileFixture(uid, { displayName: world.profiles[uid], createdAt: T0, updatedAt: T0 }) : undefined }));
       },
     },
   };

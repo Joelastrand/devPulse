@@ -41,7 +41,7 @@ export interface RemoveTeamMemberDeps {
 
 /**
  * Removes one member's `teamMemberships` document. Only an app admin may
- * call this successfully (docs/features/team-management/SPEC.md — BR-29).
+ * call this successfully (docs/archive/features/team-management/SPEC.md — BR-29).
  * Deleting a nonexistent membership succeeds (Firestore's delete is
  * idempotent) — removal is safe to call more than once. Access for the
  * removed `uid` is revoked starting with their very next

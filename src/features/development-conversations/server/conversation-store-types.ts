@@ -4,7 +4,7 @@ import "server-only";
 import { READ_WINDOW } from "../domain/conversation-constants";
 import { isConversationId } from "../domain/conversation-id";
 import type { ConversationStatus } from "../domain/conversation-status";
-import { STORED_KEY_VERSION } from "../domain/stored-owner-conversation";
+import { STORED_KEY_ID, STORED_KEY_VERSION } from "../domain/stored-owner-conversation";
 import type { TeamEligibilityReader } from "./team-eligibility";
 
 /**
@@ -64,7 +64,7 @@ export function participationDocumentPath(callerUid: string, conversationId: str
   return [USER_DEVELOPMENT_COLLECTION, callerUid, PARTICIPATION_INDEX_SUBCOLLECTION, conversationId];
 }
 
-/** Canonical owner document keys (TASK-002, BR-51). Sixteen, `keyCheck` included, and no conversationId field. */
+/** Canonical owner document keys (BR-51, v2 envelope). Seventeen, `keyId` and `keyCheck` included, and no conversationId field. */
 export const OWNER_DOCUMENT_KEYS = [
   "teamId",
   "participantUid",
@@ -81,6 +81,7 @@ export const OWNER_DOCUMENT_KEYS = [
   "iv",
   "authTag",
   "keyVersion",
+  "keyId",
   "keyCheck",
 ] as const;
 
@@ -89,7 +90,7 @@ export const PARTICIPATION_INDEX_KEYS = ["ownerUid", "invitedAt"] as const;
 
 /**
  * The owner document as written. The envelope fields are flat, exactly as the codec returns them (`keyCheck` is the
- * sixteenth key, BR-51, CL-27). The store never computes, compares or repairs `keyCheck`.
+ * key check of the v2 envelope, BR-51, CL-27). The store never computes, compares or repairs `keyCheck`.
  */
 export interface OwnerDocumentWrite {
   teamId: string | null;
@@ -107,6 +108,7 @@ export interface OwnerDocumentWrite {
   iv: string;
   authTag: string;
   keyVersion: typeof STORED_KEY_VERSION;
+  keyId: typeof STORED_KEY_ID;
   keyCheck: string;
 }
 
@@ -258,6 +260,7 @@ export function toOwnerRecord(doc: OwnerDocumentWrite): Record<(typeof OWNER_DOC
     iv: requireKey(doc, "iv"),
     authTag: requireKey(doc, "authTag"),
     keyVersion: requireKey(doc, "keyVersion"),
+    keyId: requireKey(doc, "keyId"),
     keyCheck: requireKey(doc, "keyCheck"),
   };
 }

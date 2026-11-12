@@ -8,7 +8,7 @@ const BEARER_PATTERN = /^Bearer (.+)$/;
  * Admin-only survey removal endpoint: `DELETE` permanently deletes a
  * closed, zero-response survey, or archives it if it has one or more
  * responses — the choice is always server-determined
- * (docs/features/managed-surveys/SPEC.md — BR-35, BR-36, BR-37), never a
+ * (docs/archive/features/managed-surveys/SPEC.md — BR-35, BR-36, BR-37), never a
  * client-supplied action. Kept thin — authorization, the response-count
  * branch, and persistence all live in `deleteOrArchiveSurvey`
  * (`.claude/rules/nextjs-react.md`). `teamId`/`surveyId` come from the URL

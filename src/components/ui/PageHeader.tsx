@@ -22,7 +22,7 @@ const TITLE_SIZE_CLASSNAMES: Record<PageHeaderSize, string> = {
 };
 
 /**
- * Shared page-header primitive (docs/features/product-experience/SPEC.md —
+ * Shared page-header primitive (docs/archive/features/product-experience/SPEC.md —
  * Page composition). Always renders exactly one `<h1>`, the page's top-level
  * heading, and never a lower level. The eyebrow and primary action are
  * optional and text-led, so no page gets a second heading or a second action.

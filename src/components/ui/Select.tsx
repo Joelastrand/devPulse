@@ -17,7 +17,7 @@ export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
 
 /**
  * Shared simple single-select primitive, the `<select>` counterpart to
- * `TextField` (docs/features/ui-refresh/SPEC.md — BR-6, BR-8, BR-9). The
+ * `TextField` (docs/archive/features/ui-refresh/SPEC.md — BR-6, BR-8, BR-9). The
  * caller supplies its own `<option>` children exactly as it already does
  * with a native `<select>` — this component owns no option list, no
  * multi-select behavior, and no validation logic; native props (`value`,

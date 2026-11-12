@@ -17,7 +17,7 @@ const ERROR_STATUS: Record<string, number> = {
 
 /**
  * Thin, unauthenticated-reachable submission endpoint backing
- * `/survey/{surveyId}` (docs/features/managed-surveys/SPEC.md — TASK-006's
+ * `/survey/{surveyId}` (docs/archive/features/managed-surveys/SPEC.md — TASK-006's
  * submission contract). A missing/invalid Authorization header is not
  * itself rejected here — `public` surveys need none;
  * `submitSurveyResponse` resolves a missing/invalid token to

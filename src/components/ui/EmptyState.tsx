@@ -7,7 +7,7 @@ export interface EmptyStateProps extends HTMLAttributes<HTMLParagraphElement> {
 
 /**
  * Shared "no X yet" primitive replacing this codebase's ad hoc empty-list
- * paragraphs, per docs/features/product-ux-shell/SPEC.md BR-12. `role`
+ * paragraphs, per docs/archive/features/product-ux-shell/SPEC.md BR-12. `role`
  * defaults to `status`, matching every existing instance — an empty list is
  * a non-urgent state, not an error.
  */

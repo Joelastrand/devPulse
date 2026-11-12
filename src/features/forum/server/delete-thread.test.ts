@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import * as encryptionModule from "../../../lib/encryption/encryption";
+import * as recordEnvelopeModule from "../../../lib/encryption/record-envelope";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import { createThread } from "./create-thread";
 import type { ForumThreadsCollection } from "./create-thread";
@@ -48,7 +48,8 @@ function threadRecord(overrides: Record<string, unknown> = {}): Record<string, u
     ciphertext: "ciphertext-bytes",
     iv: "iv-bytes",
     authTag: "auth-tag-bytes",
-    keyVersion: "v1",
+    keyVersion: "v2",
+    keyId: "k1",
     createdAt: new Date("2026-08-01T00:00:00Z"),
     ...overrides,
   };
@@ -366,7 +367,7 @@ describe("deleteThread", () => {
   });
 
   it("never calls decrypt on any path", async () => {
-    const decryptSpy = vi.spyOn(encryptionModule, "decrypt");
+    const decryptSpy = vi.spyOn(recordEnvelopeModule, "decryptRecord");
     const threadDocs = fakeThreadDocStore(threadRecord());
     await deleteThread("token", TEAM_ID, THREAD_ID, baseDeps({ threadDocs }));
 
@@ -413,11 +414,12 @@ describe("deleteThread", () => {
       const docs = new Map<string, Record<string, unknown>>();
       let counter = 0;
       return {
-        async add(record) {
+        reserveId() {
           counter += 1;
-          const id = `thread-${counter}`;
-          docs.set(id, { ...record });
-          return { id };
+          return `thread-${counter}`;
+        },
+        create(threadId, record) {
+          docs.set(threadId, { ...record });
         },
         async listRecentForTeam(teamId) {
           return [...docs.entries()]

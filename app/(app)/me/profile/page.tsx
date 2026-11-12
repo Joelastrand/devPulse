@@ -12,7 +12,7 @@ import { ErasureEntryLink } from "../../../../src/features/account-erasure/compo
 import { ChevronRight, IdCard, Pencil, Users, UserRound } from "lucide-react";
 
 /**
- * Profile workspace (docs/design/references/13-my-profile.png). Only supported
+ * Profile workspace (docs/archive/design/references/13-my-profile.png). Only supported
  * fields appear: the display name form, team membership and account actions.
  * The avatar is a neutral placeholder because no profile photo exists.
  */

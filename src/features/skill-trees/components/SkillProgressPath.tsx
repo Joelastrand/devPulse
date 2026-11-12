@@ -3,7 +3,7 @@ import { skillProgressPathCopy } from "../copy";
 
 /**
  * Positional stage state, relative to the team's *current* step only
- * (docs/features/gamified-skill-tree/SPEC.md — BR-1). Never stored and never
+ * (docs/archive/features/gamified-skill-tree/SPEC.md — BR-1). Never stored and never
  * a claim of completion: `earlier` means "before the current step".
  */
 export type StageState = "earlier" | "current" | "upcoming";

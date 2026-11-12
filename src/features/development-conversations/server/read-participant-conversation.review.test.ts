@@ -5,10 +5,12 @@ import { createFakeConversationStore, type FakeConversationStore } from "./fake-
 import { createFakeTeamEligibilityReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
 import { NOW, OWNER_UID, PARTICIPANT_MEMBER_REF, PARTICIPANT_UID, TEAM_ID, rosterTeam, seedOwnerConversation } from "./owner-read-test-support";
 import { readParticipantConversation, type ReadParticipantConversationDeps } from "./read-participant-conversation";
+import { conversationContext } from "../domain/stored-owner-conversation";
 
 // Synthetic fixtures only (invariant 15). Focused TASK-017 review coverage: denial before crypto, read failures,
 // memberRef values, pending and completed, and no-write guarantees. The happy path lives in read-participant-conversation.test.ts.
 const CONVERSATION_ID = "conv-1";
+const CTX = conversationContext(OWNER_UID, CONVERSATION_ID);
 const REJOINED_REF = "abcdefghjkmnpqrstvwxyz0123";
 const NOT_FOUND = { ok: false, error: "conversation_not_found" };
 const PERSISTENCE_FAILED = { ok: false, error: "persistence_failed" };
@@ -85,7 +87,7 @@ function spyCodec(codec: FakeContentCodec): { calls: { probe: number; decrypt: n
     },
     decryptForClassification: (envelope) => {
       calls.decrypt += 1;
-      return codec.decryptForClassification(envelope);
+      return codec.decryptForClassification(envelope, CTX);
     },
   };
   return { calls, spied };

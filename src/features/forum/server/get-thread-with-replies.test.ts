@@ -1,7 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { EncryptedPayload } from "../../../lib/encryption/encryption";
-import { decrypt, encrypt } from "../../../lib/encryption/encryption";
+import type { RecordEnvelope } from "../../../lib/encryption/record-envelope";
+import { decryptRecord, encryptRecord } from "../../../lib/encryption/record-envelope";
+import { forumReplyContext } from "../domain/forum-reply";
+import { forumThreadContext } from "../domain/forum-thread";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type { AuthorizeTeamAccessCollection } from "../../teams/server/authorize-team-access";
 import { authorTag } from "../domain/author-tag";
@@ -41,8 +43,8 @@ function verifyTokenReturning(identity: VerifiedIdentity) {
   });
 }
 
-function encryptedThreadContent(title: string, body: string): EncryptedPayload {
-  return encrypt(JSON.stringify({ title, body }));
+function encryptedThreadContent(title: string, body: string): RecordEnvelope {
+  return encryptRecord(JSON.stringify({ title, body }), forumThreadContext(TEAM_ID, THREAD_ID));
 }
 
 function threadDoc(
@@ -54,7 +56,7 @@ function threadDoc(
     teamId: TEAM_ID,
     authorUid: "thread-author",
     createdAt: new Date("2026-08-01T00:00:00Z"),
-    ...(encoded ?? { ciphertext: "not-used", iv: "not-used", authTag: "not-used", keyVersion: "v1" }),
+    ...(encoded ?? { ciphertext: "not-used", iv: "not-used", authTag: "not-used", keyVersion: "v2", keyId: "k1" }),
     ...overrides,
   };
 }
@@ -64,7 +66,7 @@ function activeReplyDoc(
   body: string | undefined,
   overrides: Record<string, unknown> = {},
 ): RawReplyDoc {
-  const encoded = body !== undefined ? encrypt(body) : undefined;
+  const encoded = body !== undefined ? encryptRecord(body, forumReplyContext(TEAM_ID, THREAD_ID, id)) : undefined;
   return {
     id,
     data: {
@@ -72,7 +74,7 @@ function activeReplyDoc(
       threadId: THREAD_ID,
       authorUid: MEMBER_UID,
       createdAt: new Date("2026-08-02T00:00:00Z"),
-      ...(encoded ?? { ciphertext: "not-used", iv: "not-used", authTag: "not-used", keyVersion: "v1" }),
+      ...(encoded ?? { ciphertext: "not-used", iv: "not-used", authTag: "not-used", keyVersion: "v2", keyId: "k1" }),
       ...overrides,
     },
   };
@@ -151,12 +153,12 @@ function fakeAuthCollection(state: {
   };
 }
 
-function spyDecrypt(): ((payload: EncryptedPayload) => string) & { calls: EncryptedPayload[] } {
-  const calls: EncryptedPayload[] = [];
-  const fn = ((payload: EncryptedPayload) => {
-    calls.push(payload);
-    return decrypt(payload);
-  }) as ((payload: EncryptedPayload) => string) & { calls: EncryptedPayload[] };
+function spyDecrypt(): ((envelope: RecordEnvelope, context: string) => string) & { calls: RecordEnvelope[] } {
+  const calls: RecordEnvelope[] = [];
+  const fn = ((envelope: RecordEnvelope, context: string) => {
+    calls.push(envelope);
+    return decryptRecord(envelope, context);
+  }) as ((envelope: RecordEnvelope, context: string) => string) & { calls: RecordEnvelope[] };
   fn.calls = calls;
   return fn;
 }

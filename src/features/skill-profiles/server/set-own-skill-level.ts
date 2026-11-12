@@ -61,7 +61,7 @@ export async function setOwnSkillLevel(
       if (!readSkillProfileRecord(existing).readable) return { ok: false, error: "profile_unreadable" };
 
       const tree = await tx.readSkillTree(treeId);
-      if (!isValidSkillTree(toCandidateSkillTree(tree))) return { ok: false, error: "skill_unavailable" };
+      if (!isValidSkillTree(toCandidateSkillTree(treeId, tree))) return { ok: false, error: "skill_unavailable" };
 
       tx.setLevel(treeId, level, stampsForWrite(existing, now));
       return { ok: true, level };

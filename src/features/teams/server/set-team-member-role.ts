@@ -96,7 +96,7 @@ function isSafeId(value: unknown): value is string {
 
 /**
  * Grants or revokes the teamadmin role of a current team member, or returns them to an ordinary
- * member (docs/features/member-identity-and-team-roles/SPEC.md — BR-16,
+ * member (docs/archive/features/member-identity-and-team-roles/SPEC.md — BR-16,
  * BR-18 through BR-23). App-admin-only via `requireAppAdmin`; the caller's
  * role and the team's status are never client-supplied.
  *

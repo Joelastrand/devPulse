@@ -1,6 +1,8 @@
 import "server-only";
-import type { EncryptedPayload } from "../../../lib/encryption/encryption";
-import { decrypt } from "../../../lib/encryption/encryption";
+import type { RecordEnvelope } from "../../../lib/encryption/record-envelope";
+import { decryptRecord } from "../../../lib/encryption/record-envelope";
+import { forumThreadContext } from "../domain/forum-thread";
+import { forumReplyContext } from "../domain/forum-reply";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import {
@@ -43,7 +45,7 @@ export interface ThreadDetailView {
 }
 
 /**
- * A reply's response DTO (docs/features/team-forum/SPEC.md — "API/DTO
+ * A reply's response DTO (docs/archive/features/team-forum/SPEC.md — "API/DTO
  * contract") — a discriminated union mirroring TASK-001's active/tombstone
  * split. A tombstoned reply carries no `body`/`authorTag`/`isOwnReply`
  * information at all (`null`/`false`), never the original content.
@@ -217,11 +219,11 @@ export interface GetThreadWithRepliesDeps {
   authCollection?: AuthorizeTeamAccessDeps["collection"];
   threadReader?: ForumThreadReader;
   repliesReader?: ForumRepliesReader;
-  decryptContent?: (payload: EncryptedPayload) => string;
+  decryptContent?: (envelope: RecordEnvelope, context: string) => string;
 }
 
 /**
- * Backs a team's thread detail view (docs/features/team-forum/SPEC.md —
+ * Backs a team's thread detail view (docs/archive/features/team-forum/SPEC.md —
  * BR-16, BR-17, BR-18, BR-19, BR-20, BR-26, BR-34, BR-35, BR-52, BR-56).
  * Requires the same `authorizeTeamAccess` boundary as `listTeamThreads`
  * (`"admin"`/`"member"` required; `"denied"` → `forbidden`; a `read_failed`
@@ -314,7 +316,7 @@ export async function getThreadWithReplies(
     return { ok: false, error: "not_found" };
   }
 
-  const decryptContent = deps.decryptContent ?? decrypt;
+  const decryptContent = deps.decryptContent ?? decryptRecord;
 
   let threadContent: DecryptedThreadContent | null;
   try {
@@ -323,7 +325,8 @@ export async function getThreadWithReplies(
       iv: candidateThread.iv,
       authTag: candidateThread.authTag,
       keyVersion: candidateThread.keyVersion,
-    });
+      keyId: candidateThread.keyId,
+    }, forumThreadContext(teamId, threadId));
     threadContent = parseThreadContent(decrypted);
   } catch {
     threadContent = null;
@@ -363,7 +366,7 @@ async function readReplyViews(
   deps: GetThreadWithRepliesDeps,
 ): Promise<ReplyView[] | null> {
   const repliesReader = deps.repliesReader ?? getDefaultForumRepliesReader();
-  const decryptContent = deps.decryptContent ?? decrypt;
+  const decryptContent = deps.decryptContent ?? decryptRecord;
 
   let rawReplies: RawReplyDoc[];
   try {
@@ -409,7 +412,8 @@ async function readReplyViews(
         iv: candidate.iv,
         authTag: candidate.authTag,
         keyVersion: candidate.keyVersion,
-      });
+        keyId: candidate.keyId,
+      }, forumReplyContext(teamId, threadId, id));
     } catch {
       // Skip, don't throw or fall back to ciphertext (BR-20) — never
       // logged, since the thrown error could echo ciphertext/IV bytes.

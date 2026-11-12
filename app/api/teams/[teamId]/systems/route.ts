@@ -5,7 +5,7 @@ import { authRefusalStatus, isAuthRefusal } from "../../../../../src/features/au
 import { extractBearerToken, WRITE_STATUS } from "../../../../../src/features/team-systems/server/http";
 
 /**
- * Team system list (docs/features/team-system-overview/SPEC.md — BR-2).
+ * Team system list (docs/archive/features/team-system-overview/SPEC.md — BR-2).
  * Thin delegate: `teamId` comes from the URL path only; every decision lives in
  * `listTeamSystems`. Responses carry error codes only.
  */

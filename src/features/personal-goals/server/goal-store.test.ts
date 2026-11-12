@@ -249,15 +249,15 @@ describe("goal store (Admin SDK) — create and canonical keys (BR-6, BR-7, BR-1
     expect(log).toEqual(["runTransaction", "tx.get|accountErasures/u1", `tx.create|userDevelopment/u1/goals/${id}`]);
     expect(written).toHaveLength(1);
     expect(written[0].op).toBe("create");
-    expect(Object.keys(written[0].data).sort()).toEqual(["createdAt", "status", "title", "updatedAt"]);
+    expect(Object.keys(written[0].data).sort()).toEqual(["content", "createdAt", "status", "updatedAt"]);
   });
 
   it("writes optional keys only when set and completedAt iff completed", async () => {
     const { written } = install();
     await store.create("u1", activeGoal({ treeId: "tree-1", targetDate: "2026-12-31" }));
     await store.create("u1", completedGoal());
-    expect(Object.keys(written[0].data).sort()).toEqual(["createdAt", "status", "targetDate", "title", "treeId", "updatedAt"]);
-    expect(Object.keys(written[1].data).sort()).toEqual(["completedAt", "createdAt", "status", "title", "updatedAt"]);
+    expect(Object.keys(written[0].data).sort()).toEqual(["content", "createdAt", "status", "updatedAt"]);
+    expect(Object.keys(written[1].data).sort()).toEqual(["completedAt", "content", "createdAt", "status", "updatedAt"]);
     for (const { data } of written) {
       for (const forbidden of ["uid", "ownerUid", "email", "teamId", "memberRef", "sharing", "consent"]) {
         expect(data).not.toHaveProperty(forbidden);
@@ -303,7 +303,7 @@ describe("goal store (Admin SDK) — create and canonical keys (BR-6, BR-7, BR-1
     const { written } = install();
     const polluted = { ...activeGoal(), ownerUid: "u1", uid: "u1", teamId: "t", sharing: true } as unknown as Goal;
     await store.create("u1", polluted);
-    expect(Object.keys(written[0].data).sort()).toEqual(["createdAt", "status", "title", "updatedAt"]);
+    expect(Object.keys(written[0].data).sort()).toEqual(["content", "createdAt", "status", "updatedAt"]);
   });
 
   it("refuses an injected id that is not addressable before writing", async () => {
@@ -324,9 +324,9 @@ describe("goal store (Admin SDK) — reads, round trip and fail-closed parsing",
   it("maps stored Timestamps back to Dates; a written goal parses back to the same domain meaning", async () => {
     const written = install();
     const goal = completedGoal();
-    await store.create("u1", goal);
+    const id = await store.create("u1", goal);
     install({ docData: written.written[0].data });
-    const raw = await store.get("u1", "goal1");
+    const raw = await store.get("u1", id);
     expect(raw?.createdAt).toBeInstanceOf(Date);
     expect(raw?.createdAt).not.toBeInstanceOf(Timestamp);
     const parsed = parseStoredGoal(raw);
@@ -378,7 +378,7 @@ describe("goal store (Admin SDK) — transaction and delete", () => {
       "tx.get|userDevelopment/u1/goals/goal1",
       "tx.set|userDevelopment/u1/goals/goal1",
     ]);
-    expect(Object.keys(written[0].data).sort()).toEqual(["completedAt", "createdAt", "status", "title", "updatedAt"]);
+    expect(Object.keys(written[0].data).sort()).toEqual(["completedAt", "content", "createdAt", "status", "updatedAt"]);
   });
 
   it("returns the work result and refuses to write a goal that was not read as existing", async () => {
@@ -426,5 +426,32 @@ describe("goal store (Admin SDK) — erasure fence on every write (TASK-026, BR-
     expect(work).not.toHaveBeenCalled();
     expect(log).toEqual(["runTransaction", "tx.get|accountErasures/u1"]);
     expect(written).toEqual([]);
+  });
+});
+
+describe("goal store (Admin SDK) — encrypted business content (storage boundary)", () => {
+  it("never persists the goal title as plaintext", async () => {
+    const { written } = install();
+    await store.create("u1", activeGoal({ title: "Synthetic title marker" }));
+    expect(JSON.stringify(written[0].data)).not.toContain("Synthetic title marker");
+    expect(written[0].data).not.toHaveProperty("title");
+  });
+
+  it("refuses a content envelope moved from another goal (context binding)", async () => {
+    const { written } = install();
+    await store.create("u1", activeGoal({ title: "Moved title" }));
+    install({ docData: written[0].data });
+    const raw = await store.get("u1", "some-other-goal-id");
+    expect(parseStoredGoal(raw).ok).toBe(false);
+  });
+
+  it("fails closed with key_unavailable when ENCRYPTION_KEY is missing", async () => {
+    vi.stubEnv("ENCRYPTION_KEY", "");
+    try {
+      install();
+      await expect(store.create("u1", activeGoal())).rejects.toMatchObject({ code: "key_unavailable" });
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });

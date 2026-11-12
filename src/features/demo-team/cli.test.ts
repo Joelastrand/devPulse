@@ -13,18 +13,24 @@ describe("crypto adapter", () => {
   beforeEach(() => vi.stubEnv("ENCRYPTION_KEY", ENCRYPTION_KEY));
   afterEach(() => vi.unstubAllEnvs());
 
-  it("round-trips through the repository's real encryption with a fresh IV each time", () => {
-    const a = demoCrypto.encrypt("synthetic probe");
-    const b = demoCrypto.encrypt("synthetic probe");
-    expect(a.keyVersion).toBe("v1");
+  it("round-trips through the repository's real v2 record envelope with a fresh IV each time", () => {
+    const a = demoCrypto.sealRecord("synthetic probe", "demo-test-context");
+    const b = demoCrypto.sealRecord("synthetic probe", "demo-test-context");
+    expect(a.keyVersion).toBe("v2");
+    expect(a.keyId).toBe("k1");
     expect(a.iv).not.toBe(b.iv);
-    expect(demoCrypto.decrypt(a)).toBe("synthetic probe");
+    expect(demoCrypto.openRecord(a, "demo-test-context")).toBe("synthetic probe");
+  });
+
+  it("refuses to open a record under another context (cross-record substitution)", () => {
+    const sealed = demoCrypto.sealRecord("synthetic probe", "demo-test-context");
+    expect(() => demoCrypto.openRecord(sealed, "demo-other-context")).toThrow();
   });
 
   it("fails closed without echoing the key or plaintext when the key is unusable", () => {
-    const payload = demoCrypto.encrypt("synthetic probe");
+    const payload = demoCrypto.sealRecord("synthetic probe", "demo-test-context");
     vi.stubEnv("ENCRYPTION_KEY", Buffer.alloc(32, 9).toString("base64"));
-    for (const action of [() => demoCrypto.decrypt(payload), () => { vi.stubEnv("ENCRYPTION_KEY", ""); demoCrypto.encrypt("synthetic probe"); }]) {
+    for (const action of [() => demoCrypto.openRecord(payload, "demo-test-context"), () => { vi.stubEnv("ENCRYPTION_KEY", ""); demoCrypto.sealRecord("synthetic probe", "demo-test-context"); }]) {
       let message = "";
       try {
         action();
@@ -37,9 +43,9 @@ describe("crypto adapter", () => {
     }
   });
 
-  it("does not reimplement cryptography (delegates to lib/encryption)", () => {
+  it("does not reimplement cryptography (delegates to lib/encryption/record-envelope)", () => {
     const source = readFileSync(join(__dirname, "crypto.ts"), "utf8");
-    expect(source).toContain('from "../../lib/encryption/encryption"');
+    expect(source).toContain('from "../../lib/encryption/record-envelope"');
     expect(source).not.toMatch(/createCipheriv|createDecipheriv|randomBytes/);
   });
 });

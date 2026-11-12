@@ -1,3 +1,5 @@
+import { sealSeedDocument, stubSurveyEncryptionKey } from "./survey-test-fixtures";
+stubSurveyEncryptionKey();
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { closeSurvey } from "./close-survey";
 import { createSurvey } from "./create-survey";
@@ -119,7 +121,7 @@ describe("admin survey delete and archive writes are refused while the admin's e
   const noResponses = { hasAnyResponses: async () => false };
 
   it("delete refuses with erasure_in_progress and removes nothing", async () => {
-    docs.set(SURVEY_PATH, surveyFixture);
+    docs.set(SURVEY_PATH, sealSeedDocument(SURVEY_PATH, surveyFixture));
     docs.set(ADMIN_FENCE, { status: "in_progress", step: "forum" });
 
     const result = await deleteOrArchiveSurvey("t", TEAM_ID, "survey-1", {
@@ -134,7 +136,7 @@ describe("admin survey delete and archive writes are refused while the admin's e
   });
 
   it("archive refuses with erasure_in_progress and stamps no archivedAt", async () => {
-    docs.set(SURVEY_PATH, surveyFixture);
+    docs.set(SURVEY_PATH, sealSeedDocument(SURVEY_PATH, surveyFixture));
     docs.set(ADMIN_FENCE, { status: "in_progress", step: "forum" });
 
     const result = await deleteOrArchiveSurvey("t", TEAM_ID, "survey-1", {
@@ -150,7 +152,7 @@ describe("admin survey delete and archive writes are refused while the admin's e
 
   it("delete without an erasure record removes the survey (unchanged behaviour)", async () => {
     docs.delete(ADMIN_FENCE);
-    docs.set(SURVEY_PATH, surveyFixture);
+    docs.set(SURVEY_PATH, sealSeedDocument(SURVEY_PATH, surveyFixture));
 
     const result = await deleteOrArchiveSurvey("t", TEAM_ID, "survey-1", {
       verifyToken,

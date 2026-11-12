@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   classifyStoredConversation,
   KEY_CHECK_BYTES,
-  KEY_CHECK_CONTEXT,
+  STORED_KEY_ID,
+  STORED_KEY_VERSION,
   STORED_OWNER_PLAIN_KEYS,
   type DecryptOutcome,
   type StoredEnvelope,
@@ -57,7 +58,7 @@ function validOwnerDoc(overrides: Record<string, unknown> = {}): Record<string, 
     ciphertext: SYNTHETIC_CIPHERTEXT,
     iv: SYNTHETIC_IV,
     authTag: SYNTHETIC_TAG,
-    keyVersion: "v1",
+    keyVersion: "v2", keyId: "k1",
     keyCheck: SYNTHETIC_KEY_CHECK,
     ...overrides,
   };
@@ -72,7 +73,7 @@ function classify(raw: unknown, outcome: DecryptOutcome = decryptedValid()) {
 }
 
 describe("stored owner conversation plain key set (BR-51)", () => {
-  it("is exactly the sixteen BR-51 plain fields and holds no content field", () => {
+  it("is exactly the seventeen BR-51 plain fields and holds no content field", () => {
     expect([...STORED_OWNER_PLAIN_KEYS]).toEqual([
       "teamId",
       "participantUid",
@@ -89,16 +90,18 @@ describe("stored owner conversation plain key set (BR-51)", () => {
       "iv",
       "authTag",
       "keyVersion",
+      "keyId",
       "keyCheck",
     ]);
-    expect(STORED_OWNER_PLAIN_KEYS).toHaveLength(16);
+    expect(STORED_OWNER_PLAIN_KEYS).toHaveLength(17);
     for (const forbidden of ["title", "ownerNotes", "nextSteps", "participantNotes", "sharedGoals"]) {
       expect(STORED_OWNER_PLAIN_KEYS).not.toContain(forbidden);
     }
   });
 
-  it("pins the keyCheck context and its decoded length (CL-27)", () => {
-    expect(KEY_CHECK_CONTEXT).toBe("devpulse.d2.conversation-key-check.v1");
+  it("pins the v2 envelope literals and the decoded key-check length (CL-27)", () => {
+    expect(STORED_KEY_VERSION).toBe("v2");
+    expect(STORED_KEY_ID).toBe("k1");
     expect(KEY_CHECK_BYTES).toBe(32);
   });
 
@@ -124,7 +127,7 @@ describe("classifyStoredConversation: keyCheck structural form (CL-27)", () => {
     const decrypt = vi.fn<(envelope: StoredEnvelope) => DecryptOutcome>(() => decryptedValid());
     classifyStoredConversation(validOwnerDoc(), decrypt);
     expect(decrypt).toHaveBeenCalledTimes(1);
-    expect(decrypt.mock.calls[0]?.[0]).toMatchObject({ keyCheck: SYNTHETIC_KEY_CHECK, keyVersion: "v1" });
+    expect(decrypt.mock.calls[0]?.[0]).toMatchObject({ keyCheck: SYNTHETIC_KEY_CHECK, keyVersion: "v2" });
   });
 
   it("accepts any structurally valid keyCheck as stored metadata, without comparing it to a key", () => {
@@ -135,7 +138,7 @@ describe("classifyStoredConversation: keyCheck structural form (CL-27)", () => {
 
   it("does not classify a document as unreadable from its keyCheck alone", () => {
     expect(classify(validOwnerDoc({ keyCheck: "Q".repeat(43) + "=" })).kind).toBe("valid");
-    expect(classify(validOwnerDoc({ keyCheck: "Q".repeat(43) + "=" }), { status: "authentication_failed" })).toEqual({
+    expect(classify(validOwnerDoc({ keyId: "k1", keyCheck: "Q".repeat(43) + "=" }), { status: "authentication_failed" })).toEqual({
       kind: "unreadable_payload",
     });
   });
@@ -156,7 +159,7 @@ describe("classifyStoredConversation: keyCheck structural form (CL-27)", () => {
     ["keyCheck not base64", () => validOwnerDoc({ keyCheck: "!".repeat(43) + "=" }), "key_check"],
     ["keyCheck with non-zero unused trailing bits", () => validOwnerDoc({ keyCheck: "A".repeat(42) + "B=" }), "key_check"],
     ["keyCheck with a line break", () => validOwnerDoc({ keyCheck: "A".repeat(43) + "=\n" }), "key_check"],
-    ["keyCheck as a Buffer-like object", () => validOwnerDoc({ keyCheck: { length: 32 } }), "key_check"],
+    ["keyCheck as a Buffer-like object", () => validOwnerDoc({ keyId: "k1", keyCheck: { length: 32 } }), "key_check"],
   ])("rejects %s before any decryption", (_name, build, reason) => {
     const decrypt = vi.fn(() => decryptedValid());
     expect(classifyStoredConversation(build(), decrypt)).toEqual({ kind: "malformed", reason });
@@ -165,7 +168,7 @@ describe("classifyStoredConversation: keyCheck structural form (CL-27)", () => {
 
   it("treats a malformed keyCheck as malformed even when the caller would report authentication failure", () => {
     const outcome = vi.fn((): DecryptOutcome => ({ status: "authentication_failed" }));
-    expect(classifyStoredConversation(validOwnerDoc({ keyCheck: null }), outcome)).toEqual({
+    expect(classifyStoredConversation(validOwnerDoc({ keyId: "k1", keyCheck: null }), outcome)).toEqual({
       kind: "malformed",
       reason: "key_check",
     });
@@ -315,7 +318,8 @@ describe("classifyStoredConversation: malformed plain shape never decrypts", () 
       participantState: "pending",
       participantInvitedAt: INVITED,
     })],
-    ["keyVersion other than v1", () => validOwnerDoc({ keyVersion: "v2" })],
+    ["keyVersion other than v2", () => validOwnerDoc({ keyVersion: "v1" })],
+    ["keyId other than k1", () => validOwnerDoc({ keyId: "k2" })],
     ["ciphertext not base64", () => validOwnerDoc({ ciphertext: "not base64!" })],
     ["ciphertext empty", () => validOwnerDoc({ ciphertext: "" })],
     ["iv of 11 bytes", () => validOwnerDoc({ iv: "AAAAAAAAAAAAAAA=" })],

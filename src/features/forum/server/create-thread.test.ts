@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { decrypt } from "../../../lib/encryption/encryption";
+import { decryptRecord } from "../../../lib/encryption/record-envelope";
+import { forumThreadContext } from "../domain/forum-thread";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import * as createThreadModule from "./create-thread";
 import type {
@@ -33,13 +34,16 @@ function verifyTokenReturning(verified: VerifiedIdentity) {
   });
 }
 
-function fakeForumThreadsCollection(): ForumThreadsCollection & { writes: ForumThreadRecord[] } {
+function fakeForumThreadsCollection(): ForumThreadsCollection & { writes: ForumThreadRecord[]; ids: string[] } {
   const writes: ForumThreadRecord[] = [];
+  const ids: string[] = [];
   return {
     writes,
-    add: vi.fn(async (record: ForumThreadRecord) => {
+    ids,
+    reserveId: vi.fn(() => `generated-thread-${writes.length + 1}`),
+    create: vi.fn((threadId: string, record: ForumThreadRecord) => {
+      ids.push(threadId);
       writes.push(record);
-      return { id: `generated-thread-${writes.length}` };
     }),
   };
 }
@@ -108,7 +112,8 @@ describe("createThread", () => {
     expect(typeof stored.ciphertext).toBe("string");
     expect(typeof stored.iv).toBe("string");
     expect(typeof stored.authTag).toBe("string");
-    expect(stored.keyVersion).toBe("v1");
+    expect(stored.keyVersion).toBe("v2");
+    expect(stored.keyId).toBe("k1");
   });
 
   it("persists exactly the intended creation shape — teamId, authorUid, encrypted fields, createdAt — and nothing else", async () => {
@@ -117,7 +122,7 @@ describe("createThread", () => {
 
     const stored = collection.writes[0];
     expect(Object.keys(stored).sort()).toEqual(
-      ["authTag", "authorUid", "ciphertext", "createdAt", "iv", "keyVersion", "teamId"].sort(),
+      ["authTag", "authorUid", "ciphertext", "createdAt", "iv", "keyId", "keyVersion", "teamId"].sort(),
     );
   });
 
@@ -128,12 +133,7 @@ describe("createThread", () => {
     await createThread("token", TEAM_ID, paddedTitle, paddedBody, baseDeps({ collection }));
 
     const stored = collection.writes[0];
-    const decrypted = decrypt({
-      ciphertext: stored.ciphertext,
-      iv: stored.iv,
-      authTag: stored.authTag,
-      keyVersion: stored.keyVersion,
-    });
+    const decrypted = decryptRecord(stored, forumThreadContext(TEAM_ID, collection.ids[0]));
     expect(JSON.parse(decrypted)).toEqual({ title: paddedTitle.trim(), body: paddedBody.trim() });
 
     const serialized = JSON.stringify(stored);
@@ -409,11 +409,12 @@ describe("createThread", () => {
     expect(serialized).not.toContain(VALID_BODY);
   });
 
-  it("persists exactly keyVersion 'v1', matching encryption.ts's own output", async () => {
+  it("persists exactly the v2 record envelope (keyVersion 'v2', keyId 'k1')", async () => {
     const collection = fakeForumThreadsCollection();
     await createThread("token", TEAM_ID, VALID_TITLE, VALID_BODY, baseDeps({ collection }));
 
-    expect(collection.writes[0].keyVersion).toBe("v1");
+    expect(collection.writes[0].keyVersion).toBe("v2");
+    expect(collection.writes[0].keyId).toBe("k1");
   });
 
   it("fails closed with encryption_failed and writes nothing when ENCRYPTION_KEY is missing", async () => {
@@ -428,7 +429,10 @@ describe("createThread", () => {
 
   it("reports persistence_failed, not a fabricated success, when the Firestore write fails", async () => {
     const collection: ForumThreadsCollection = {
-      add: vi.fn().mockRejectedValue(new Error("simulated firestore outage")),
+      reserveId: () => "generated-thread-1",
+      create: vi.fn(() => {
+        throw new Error("simulated firestore outage");
+      }),
     };
 
     const result = await createThread("token", TEAM_ID, VALID_TITLE, VALID_BODY, baseDeps({ collection }));
@@ -504,7 +508,10 @@ describe("createThread", () => {
     vi.stubEnv("ENCRYPTION_KEY", randomBytes(32).toString("base64"));
 
     const failingCollection: ForumThreadsCollection = {
-      add: vi.fn().mockRejectedValue(new Error("simulated firestore outage")),
+      reserveId: () => "generated-thread-1",
+      create: vi.fn(() => {
+        throw new Error("simulated firestore outage");
+      }),
     };
     await createThread("token", TEAM_ID, VALID_TITLE, VALID_BODY, baseDeps({ collection: failingCollection }));
 

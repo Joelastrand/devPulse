@@ -14,7 +14,7 @@ export const MAX_DESCRIPTION_LENGTH = 1000;
 const SURVEY_ACCESS_MODES: readonly SurveyAccessMode[] = ["public", "authenticated"];
 
 /**
- * Per-survey result-publication threshold (docs/features/managed-surveys/
+ * Per-survey result-publication threshold (docs/archive/features/managed-surveys/
  * SPEC.md — "Per-survey result threshold"). Replaces the single, global
  * `MIN_RESPONSE_THRESHOLD` for the publication decision: every survey
  * persists its own `minimumResponses`, validated and immutable at
@@ -49,7 +49,7 @@ export function isValidMinimumResponses(value: unknown): value is number {
 /**
  * Runtime-validates a raw value as a `SurveyAccessMode` before it drives any
  * authorization/rendering decision — never trusted via an unchecked cast,
- * never inferred from route/auth state (docs/features/managed-surveys/
+ * never inferred from route/auth state (docs/archive/features/managed-surveys/
  * SPEC.md — "Survey access modes"). Fail-closed: returns `false` (never
  * throws) for `undefined`, any other string, or a non-string value.
  */
@@ -68,7 +68,7 @@ export function isValidSurveyAccessMode(value: unknown): value is SurveyAccessMo
 export type SurveyLifecycle = "scheduled" | "open" | "closed";
 
 /**
- * The canonical, persisted `Survey` domain shape (docs/features/
+ * The canonical, persisted `Survey` domain shape (docs/archive/features/
  * managed-surveys/SPEC.md — "Data model"). `surveyId` is a stable,
  * opaque, server-generated identifier (a Firestore auto-generated document
  * ID) — never derived from `title`/`teamId`, never client-supplied.

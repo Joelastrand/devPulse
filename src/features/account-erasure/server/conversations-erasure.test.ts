@@ -27,7 +27,7 @@ const rawOwner = (participantUid: string | null, overrides: Record<string, unkno
   ciphertext: "owner-ciphertext",
   iv: "iv",
   authTag: "tag",
-  keyVersion: "v1",
+  keyVersion: "v2", keyId: "k1",
   keyCheck: "check",
   ...overrides,
 });

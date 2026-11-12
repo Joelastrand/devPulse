@@ -1,3 +1,6 @@
+import { openSkillProgressDocument } from "../../skill-trees/server/skill-progress-content-codec";
+import { openRoadmapItemDocument, toPersistedRoadmapItem } from "../domain/roadmap-item-content-codec";
+import { openSkillTreeDocument } from "../../skill-trees/domain/skill-tree-content-codec";
 import "server-only";
 import type { Transaction } from "firebase-admin/firestore";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
@@ -121,16 +124,16 @@ function runCreateRoadmapTransaction<T>(
         const snapshot = await tx.get(db.collection(MEMBERSHIPS_COLLECTION).doc(membershipDocId(uid, teamId)));
         return snapshot.exists ? snapshot.data() : undefined;
       },
-      getSkillProgress: (docId) => data(db.collection(SKILL_PROGRESS_COLLECTION).doc(docId), ["updatedAt"]),
-      getSkillTree: (treeId) => data(db.collection(SKILL_TREES_COLLECTION).doc(treeId), ["createdAt", "updatedAt"]),
-      getRoadmapItem: (docId) =>
-        data(db.collection(ROADMAP_COLLECTION).doc(docId), ["createdAt", "updatedAt", "completedAt", "archivedAt"]),
+      getSkillProgress: async (docId) => openSkillProgressDocument(await data(db.collection(SKILL_PROGRESS_COLLECTION).doc(docId), ["updatedAt"])),
+      getSkillTree: async (treeId) => openSkillTreeDocument(treeId, await data(db.collection(SKILL_TREES_COLLECTION).doc(treeId), ["createdAt", "updatedAt"])),
+      getRoadmapItem: async (docId) =>
+        openRoadmapItemDocument(await data(db.collection(ROADMAP_COLLECTION).doc(docId), ["createdAt", "updatedAt", "archivedAt"])),
       async listMemberships(teamId, limit) {
         const snapshot = await tx.get(db.collection(MEMBERSHIPS_COLLECTION).where("teamId", "==", teamId).limit(limit));
         return snapshot.docs.map((doc) => doc.data());
       },
       create(docId, record) {
-        tx.create(db.collection(ROADMAP_COLLECTION).doc(docId), record);
+        tx.create(db.collection(ROADMAP_COLLECTION).doc(docId), toPersistedRoadmapItem({ ...record }));
       },
       touchMembership(uid, teamId, memberRef) {
         tx.update(db.collection(MEMBERSHIPS_COLLECTION).doc(membershipDocId(uid, teamId)), { memberRef });

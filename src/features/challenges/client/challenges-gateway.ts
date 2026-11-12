@@ -1,6 +1,6 @@
 /**
  * Client gateway for `/teams/[teamId]`'s member-facing challenge section
- * (docs/features/anonymous-challenges/SPEC.md — TASK-005). Thin `fetch`
+ * (docs/archive/features/anonymous-challenges/SPEC.md — TASK-005). Thin `fetch`
  * wrappers around `GET`/`POST /api/teams/[teamId]/challenges`, mirroring
  * `current-team-survey-gateway.ts`/`submit-survey-response-gateway.ts`'s
  * established shape-validation-before-trust convention — a malformed or
@@ -9,7 +9,7 @@
  *
  * `MEMBER_CHALLENGE_STATUSES` intentionally accepts only `"open"`/
  * `"resolved"` — the two lifecycle states this operation's server contract
- * (`listTeamChallengesForMember`) ever returns (docs/features/
+ * (`listTeamChallengesForMember`) ever returns (docs/archive/features/
  * anonymous-challenges/SPEC.md — BR-9). Mirrors
  * `current-team-survey-gateway.ts`'s own narrower-than-the-domain `LIFECYCLES`
  * set: this is ordinary response-shape validation for *this* operation's

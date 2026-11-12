@@ -1,5 +1,5 @@
 /**
- * The persisted shape of `teamSurveyState/{teamId}` (docs/features/
+ * The persisted shape of `teamSurveyState/{teamId}` (docs/archive/features/
  * managed-surveys/SPEC.md — "One open survey per team"): the sole
  * enforcement point for "at most one genuinely open survey per team",
  * keyed by a deterministic document ID (`teamId` itself) so `openSurvey`'s

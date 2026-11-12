@@ -8,6 +8,7 @@ import { createFakeConversationStore, type FakeConversationStore } from "../../d
 import { issueErasureOwnerCleanupCapability } from "../../development-conversations/server/erasure-owner-cleanup-capability";
 import type { ConversationContent } from "../../development-conversations/domain/content-payload";
 import type { SharedEvidenceSnapshot } from "../../development-conversations/domain/shared-evidence-snapshot";
+import { conversationContext } from "../../development-conversations/domain/stored-owner-conversation";
 import { NOW, OWNER_UID, PARTICIPANT_UID } from "../../development-conversations/server/owner-read-test-support";
 import { eraseParticipantBinding, type ParticipantBindingCodec, type ParticipantBindingsDeps } from "./participant-bindings-erasure";
 
@@ -63,7 +64,7 @@ async function seedBound(store: FakeConversationStore): Promise<void> {
     sharedGoals: [],
     sharedEvidence: [EVIDENCE],
   };
-  const encoded = contentCodec.encodeContent(content);
+  const encoded = contentCodec.encodeContent(content, conversationContext(OWNER_UID, CONVERSATION));
   if (!encoded.ok) throw new Error("fixture key unavailable");
   await store.runOwnerTransaction(OWNER_UID, async (tx) => {
     tx.createOwner(OWNER_UID, CONVERSATION, {
@@ -91,13 +92,17 @@ async function rawOwner(store: FakeConversationStore): Promise<Record<string, un
 }
 
 function decodeRaw(raw: Record<string, unknown>): ConversationContent {
-  const decoded = contentCodec.decodeContent({
-    ciphertext: raw.ciphertext as string,
-    iv: raw.iv as string,
-    authTag: raw.authTag as string,
-    keyVersion: raw.keyVersion as "v1",
-    keyCheck: raw.keyCheck as string,
-  } as Parameters<typeof contentCodec.decodeContent>[0]);
+  const decoded = contentCodec.decodeContent(
+    {
+      ciphertext: raw.ciphertext as string,
+      iv: raw.iv as string,
+      authTag: raw.authTag as string,
+      keyVersion: "v2",
+      keyId: "k1",
+      keyCheck: raw.keyCheck as string,
+    },
+    conversationContext(OWNER_UID, CONVERSATION),
+  );
   if (!decoded.ok) throw new Error(`stored payload does not decode: ${decoded.error}`);
   return decoded.content;
 }

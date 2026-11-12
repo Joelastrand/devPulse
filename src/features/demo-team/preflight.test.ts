@@ -1,8 +1,14 @@
+import { openRoadmapItemDocument, toPersistedRoadmapItem } from "../roadmap/domain/roadmap-item-content-codec";
+import { openTeamDocument, toPersistedTeam } from "../teams/domain/team-content-codec";
+import { openSkillTreeDocument, toPersistedSkillTree } from "../skill-trees/domain/skill-tree-content-codec";
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { decrypt, encrypt } from "../../lib/encryption/encryption";
+import { decryptRecord, encryptRecord } from "../../lib/encryption/record-envelope";
+import { openSkillProgressDocument, toPersistedSkillProgress } from "../skill-trees/server/skill-progress-content-codec";
+import { challengeContext } from "../challenges/domain/challenge";
+import { surveyResponseContext } from "../surveys/domain/response-context";
 import type { DemoSeedConfig } from "./config";
 import { buildDemoSeedPlan, type PlannedOperation } from "./plan";
 import {
@@ -26,7 +32,10 @@ const ROADMAP_PATHS = [
   "roadmapItems/demo-team__demo-skill-delivery",
 ];
 
-const realCrypto: DemoCrypto = { encrypt, decrypt };
+const realCrypto: DemoCrypto = {
+  sealRecord: (plaintext, context) => encryptRecord(plaintext, context),
+  openRecord: (envelope, context) => decryptRecord(envelope, context),
+};
 
 beforeEach(() => {
   vi.stubEnv("ENCRYPTION_KEY", randomBytes(32).toString("base64"));
@@ -36,7 +45,7 @@ afterEach(() => {
 });
 
 function buildPlan() {
-  return buildDemoSeedPlan({ presenterUid: PRESENTER, asOf: AS_OF, encrypt });
+  return buildDemoSeedPlan({ presenterUid: PRESENTER, asOf: AS_OF, sealRecord: realCrypto.sealRecord });
 }
 
 type Store = Map<string, unknown>;
@@ -101,16 +110,16 @@ describe("local crypto preflight (BR-26)", () => {
     expect(runLocalCryptoPreflight(realCrypto)).toBe(true);
   });
 
-  it("fails when encrypt throws, decrypt throws, or the round-trip differs", () => {
+  it("fails when sealing throws, opening throws, or the round-trip differs", () => {
     const real = realCrypto;
-    expect(runLocalCryptoPreflight({ encrypt: () => { throw new Error("no key"); }, decrypt: real.decrypt })).toBe(false);
-    expect(runLocalCryptoPreflight({ encrypt: real.encrypt, decrypt: () => { throw new Error("bad"); } })).toBe(false);
-    expect(runLocalCryptoPreflight({ encrypt: real.encrypt, decrypt: () => "something else" })).toBe(false);
+    expect(runLocalCryptoPreflight({ ...real, sealRecord: () => { throw new Error("no key"); } })).toBe(false);
+    expect(runLocalCryptoPreflight({ ...real, openRecord: () => { throw new Error("bad"); } })).toBe(false);
+    expect(runLocalCryptoPreflight({ ...real, openRecord: () => "something else" })).toBe(false);
   });
 
   it("aborts offline and online with zero reads and no plan when crypto fails", async () => {
     const { operations, manifest } = buildPlan();
-    const broken: DemoCrypto = { encrypt: () => { throw new Error("KEY-TEXT-LEAK"); }, decrypt };
+    const broken: DemoCrypto = { ...realCrypto, sealRecord: () => { throw new Error("KEY-TEXT-LEAK"); } };
     const r = fakeReader(new Map());
     const p = fakePresenter();
 
@@ -322,11 +331,14 @@ describe("classification — compatible but edited records (BR-21, BR-23)", () =
   }
 
   it("progress moved by the presenter (real updatedBy) stays COMPATIBLE and is set back", async () => {
-    const { result } = await withEdit("skillProgress/demo-team__demo-skill-testing", (d) => ({
-      ...d,
-      currentNodeId: "node-4",
-      updatedBy: "some-real-admin-uid",
-    }));
+    // A stage edit is a sealed-content edit: the record is re-sealed exactly as a real update writes it.
+    const { result } = await withEdit("skillProgress/demo-team__demo-skill-testing", (d) =>
+      toPersistedSkillProgress({
+        ...(openSkillProgressDocument(d, decryptRecord) as { teamId: string; treeId: string } & Record<string, unknown>),
+        currentNodeId: "node-4",
+        updatedBy: "some-real-admin-uid",
+      } as { teamId: string; treeId: string; currentNodeId: string | null } & Record<string, unknown>),
+    );
     expect(result.ok).toBe(true);
     expect(classificationOf(result, "skillProgress/demo-team__demo-skill-testing")).toMatchObject({
       state: "COMPATIBLE",
@@ -353,15 +365,22 @@ describe("classification — compatible but edited records (BR-21, BR-23)", () =
   });
 
   it("an edited team name and an edited tree label with an updatedBy pair stay COMPATIBLE", async () => {
-    const team = await withEdit("teams/demo-team", (d) => ({ ...d, name: "Omdøpt demo" }));
+    const team = await withEdit("teams/demo-team", (d) => toPersistedTeam("demo-team", { ...(openTeamDocument("demo-team", d) as Record<string, unknown>), name: "Omdøpt demo" }));
     expect(team.result.ok).toBe(true);
 
-    const tree = await withEdit("skillTrees/demo-skill-delivery", (d) => ({
-      ...d,
-      nodes: (d.nodes as { label: string }[]).map((n, i) => (i === 0 ? { ...n, label: "Endret" } : n)),
-      updatedAt: new Date("2026-03-02T00:00:00.000Z"),
-      updatedBy: "some-real-admin-uid",
-    }));
+    // A label edit is a sealed-content edit: the tree is re-sealed exactly as a real update writes it.
+    const tree = await withEdit("skillTrees/demo-skill-delivery", (d) => {
+      const opened = openSkillTreeDocument("demo-skill-delivery", d) as { name: string; nodes: { nodeId: string; label: string; order: number }[] } & Record<string, unknown>;
+      const nodes = (opened.nodes as { nodeId: string; label: string; order: number }[]).map((n, i) =>
+        i === 0 ? { ...n, label: "Endret" } : n,
+      );
+      return toPersistedSkillTree("demo-skill-delivery", {
+        ...opened,
+        nodes,
+        updatedAt: new Date("2026-03-02T00:00:00.000Z"),
+        updatedBy: "some-real-admin-uid",
+      });
+    });
     expect(tree.result.ok).toBe(true);
   });
 });
@@ -399,12 +418,12 @@ describe("classification — conflicts abort with no planned writes (BR-23, BR-2
     { name: "scheduled id occupied by another team's survey", path: PATHS.scheduled, reason: "scope-mismatch", edit: (d) => ({ ...d, teamId: "other-team" }) },
     { name: "response with an extra identity field", path: PATHS.response, reason: "malformed-shape", edit: (d) => ({ ...d, uid: "someone" }) },
     { name: "response for another survey", path: PATHS.response, reason: "scope-mismatch", edit: (d) => ({ ...d, surveyId: "demo-survey-02" }) },
-    { name: "response with wrong keyVersion", path: PATHS.response, reason: "malformed-shape", edit: (d) => ({ ...d, keyVersion: "v2" }) },
+    { name: "response with wrong keyVersion", path: PATHS.response, reason: "malformed-shape", edit: (d) => ({ ...d, keyVersion: "v1" }) },
     { name: "undecryptable response", path: PATHS.response, reason: "undecryptable", edit: (d) => ({ ...d, authTag: Buffer.alloc(16).toString("base64") }) },
-    { name: "response that decrypts to an invalid answer tuple", path: PATHS.response, reason: "undecryptable", edit: (d) => ({ ...d, ...encrypt("[9,9,9]") }) },
-    { name: "response that decrypts to non-JSON", path: PATHS.response, reason: "undecryptable", edit: (d) => ({ ...d, ...encrypt("not json") }) },
+    { name: "response that decrypts to an invalid answer tuple", path: PATHS.response, reason: "undecryptable", edit: (d) => ({ ...d, ...realCrypto.sealRecord("[9,9,9]", surveyResponseContext("demo-team", "demo-survey-01", "demo-response-s01-r01")) }) },
+    { name: "response that decrypts to non-JSON", path: PATHS.response, reason: "undecryptable", edit: (d) => ({ ...d, ...realCrypto.sealRecord("not json", surveyResponseContext("demo-team", "demo-survey-01", "demo-response-s01-r01")) }) },
     { name: "undecryptable challenge", path: PATHS.challenge, reason: "undecryptable", edit: (d) => ({ ...d, ciphertext: Buffer.from("garbage-bytes").toString("base64") }) },
-    { name: "challenge whose text is invalid", path: PATHS.challenge, reason: "undecryptable", edit: (d) => ({ ...d, ...encrypt("ab") }) },
+    { name: "challenge whose text is invalid", path: PATHS.challenge, reason: "undecryptable", edit: (d) => ({ ...d, ...realCrypto.sealRecord("ab", challengeContext("demo-team", "demo-challenge-02")) }) },
     { name: "challenge of another team", path: PATHS.challenge, reason: "scope-mismatch", edit: (d) => ({ ...d, teamId: "other-team" }) },
     { name: "challenge with a half lifecycle pair", path: PATHS.challenge, reason: "malformed-shape", edit: (d) => ({ ...d, resolvedAt: new Date() }) },
     { name: "tree with fewer nodes (structure mismatch)", path: PATHS.tree, reason: "structure-mismatch", edit: (d) => ({ ...d, nodes: (d.nodes as unknown[]).slice(0, 3) }) },
@@ -456,7 +475,13 @@ describe("classification — conflicts abort with no planned writes (BR-23, BR-2
     expect(result.ok).toBe(false);
     const reasons = new Set(result.classifications.filter((c) => c.state === "CONFLICT").map((c) => c.reason));
     expect(reasons).toEqual(new Set(["undecryptable"]));
-    expect(result.classifications.filter((c) => c.state === "CONFLICT")).toHaveLength(64);
+    // Survey documents now carry sealed content, so they are undecryptable under another key as well (previously 64).
+    const surveyOperations = operations.filter((op) => op.collection === "surveys").length;
+    const skillTreeOperations = operations.filter((op) => op.collection === "skillTrees").length;
+    const teamOperations = operations.filter((op) => op.collection === "teams").length;
+    const progressOperations = operations.filter((op) => op.collection === "skillProgress").length;
+    const roadmapOperations = operations.filter((op) => op.collection === "roadmapItems").length;
+    expect(result.classifications.filter((c) => c.state === "CONFLICT")).toHaveLength(64 + surveyOperations + skillTreeOperations + teamOperations + progressOperations + roadmapOperations);
   });
 });
 
@@ -580,7 +605,7 @@ describe("dry-run report (BR-4, BR-28, BR-31)", () => {
       config: onlineConfig,
       operations,
       manifest,
-      crypto: { encrypt: () => { throw new Error(PRIVATE_KEY_SENTINEL); }, decrypt },
+      crypto: { ...realCrypto, sealRecord: () => { throw new Error(PRIVATE_KEY_SENTINEL); } },
     });
     const text = formatDemoDryRunReport({ config: fullConfig, operations, result }).join("\n");
     expect(text).toContain("Local crypto round-trip: FAILED");
@@ -624,7 +649,9 @@ describe("classification — roadmap plans (team-skill-planning TASK-011)", () =
   async function withRoadmapEdit(edit: (data: Record<string, unknown>) => Record<string, unknown>) {
     const { operations } = buildPlan();
     const store = correctStore(operations);
-    store.set(TESTING, edit(store.get(TESTING) as Record<string, unknown>));
+    // The edit works on the opened plan; the result is re-sealed exactly as a real update writes it.
+    const opened = openRoadmapItemDocument(store.get(TESTING), decryptRecord) as Record<string, unknown>;
+    store.set(TESTING, toPersistedRoadmapItem(edit(opened)));
     return preflightOnline(store);
   }
 

@@ -7,7 +7,7 @@ const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
  * Admin-only survey-management endpoint for one team: `GET` lists the
- * team's surveys (docs/features/managed-surveys/SPEC.md — BR-33), `POST`
+ * team's surveys (docs/archive/features/managed-surveys/SPEC.md — BR-33), `POST`
  * creates a new one, always scoped to this route's own `teamId` (BR-34).
  * Kept thin — authorization, team-active checks, and persistence all live
  * in `listTeamSurveys`/`createSurvey` (`.claude/rules/nextjs-react.md`).

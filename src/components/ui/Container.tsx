@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { cx } from "./class-names";
 
 /**
- * Named content containers (docs/features/product-experience/SPEC.md —
+ * Named content containers (docs/archive/features/product-experience/SPEC.md —
  * Breakpoints and containers). Widths are tokens in app/globals.css. They sit
  * beside `PageShell`, which existing pages keep until their migration tasks.
  */

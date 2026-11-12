@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { decrypt } from "../../../lib/encryption/encryption";
+import { decryptRecord } from "../../../lib/encryption/record-envelope";
+import { challengeContext } from "../domain/challenge";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import * as submitChallengeModule from "./submit-challenge";
 import type {
@@ -31,13 +32,21 @@ function verifyTokenReturning(verified: VerifiedIdentity) {
   });
 }
 
-function fakeChallengesCollection(): ChallengesCollection & { writes: ChallengeRecord[] } {
+const FIXED_CHALLENGE_ID = "generated-challenge-1";
+
+function fakeChallengesCollection(): ChallengesCollection & {
+  writes: ChallengeRecord[];
+  created: Array<{ challengeId: string; record: ChallengeRecord }>;
+} {
   const writes: ChallengeRecord[] = [];
+  const created: Array<{ challengeId: string; record: ChallengeRecord }> = [];
   return {
     writes,
-    add: vi.fn(async (record: ChallengeRecord) => {
+    created,
+    reserveId: vi.fn(() => FIXED_CHALLENGE_ID),
+    create: vi.fn(async (challengeId: string, record: ChallengeRecord) => {
+      created.push({ challengeId, record });
       writes.push(record);
-      return { id: `generated-challenge-${writes.length}` };
     }),
   };
 }
@@ -100,7 +109,7 @@ describe("submitChallenge", () => {
     expect(typeof stored.ciphertext).toBe("string");
     expect(typeof stored.iv).toBe("string");
     expect(typeof stored.authTag).toBe("string");
-    expect(stored.keyVersion).toBe("v1");
+    expect(stored.keyVersion).toBe("v2");
   });
 
   it("persists exactly the intended creation shape — teamId, encrypted fields, submittedAt — and nothing else", async () => {
@@ -109,7 +118,7 @@ describe("submitChallenge", () => {
 
     const stored = collection.writes[0];
     expect(Object.keys(stored).sort()).toEqual(
-      ["authTag", "ciphertext", "iv", "keyVersion", "submittedAt", "teamId"].sort(),
+      ["authTag", "ciphertext", "iv", "keyId", "keyVersion", "submittedAt", "teamId"].sort(),
     );
   });
 
@@ -119,12 +128,7 @@ describe("submitChallenge", () => {
     await submitChallenge("token", TEAM_ID, paddedText, baseDeps({ collection }));
 
     const stored = collection.writes[0];
-    const decrypted = decrypt({
-      ciphertext: stored.ciphertext,
-      iv: stored.iv,
-      authTag: stored.authTag,
-      keyVersion: stored.keyVersion,
-    });
+    const decrypted = decryptRecord(stored, challengeContext(TEAM_ID, FIXED_CHALLENGE_ID));
     expect(decrypted).toBe(paddedText.trim());
     const serialized = JSON.stringify(stored);
     expect(serialized).not.toContain("Code review regularly");
@@ -398,11 +402,24 @@ describe("submitChallenge", () => {
     expect(collection.writes[0].ciphertext).not.toBe(VALID_TEXT);
   });
 
-  it("persists exactly keyVersion 'v1', matching TASK-001's ChallengeKeyVersion and encryption.ts's own output", async () => {
+  it("persists exactly the v2 record envelope (keyVersion 'v2', keyId 'k1'), matching the domain validator", async () => {
     const collection = fakeChallengesCollection();
     await submitChallenge("token", TEAM_ID, VALID_TEXT, baseDeps({ collection }));
 
-    expect(collection.writes[0].keyVersion).toBe("v1");
+    expect(collection.writes[0].keyVersion).toBe("v2");
+    expect(collection.writes[0].keyId).toBe("k1");
+  });
+
+  it("seals the text with the AAD of the reserved document id, so it cannot be opened under another challenge id", async () => {
+    const collection = fakeChallengesCollection();
+    await submitChallenge("token", TEAM_ID, VALID_TEXT, baseDeps({ collection }));
+
+    const stored = collection.writes[0];
+    expect(collection.created[0].challengeId).toBe(FIXED_CHALLENGE_ID);
+    expect(() =>
+      decryptRecord(stored, challengeContext(TEAM_ID, "some-other-challenge-id")),
+    ).toThrow();
+    expect(decryptRecord(stored, challengeContext(TEAM_ID, FIXED_CHALLENGE_ID))).toBe(VALID_TEXT);
   });
 
   it("fails closed with encryption_failed and writes nothing when ENCRYPTION_KEY is missing", async () => {
@@ -417,7 +434,8 @@ describe("submitChallenge", () => {
 
   it("reports persistence_failed, not a fabricated success, when the Firestore write fails", async () => {
     const collection: ChallengesCollection = {
-      add: vi.fn().mockRejectedValue(new Error("simulated firestore outage")),
+      reserveId: () => FIXED_CHALLENGE_ID,
+      create: vi.fn().mockRejectedValue(new Error("simulated firestore outage")),
     };
 
     const result = await submitChallenge("token", TEAM_ID, VALID_TEXT, baseDeps({ collection }));
@@ -491,7 +509,8 @@ describe("submitChallenge", () => {
     vi.stubEnv("ENCRYPTION_KEY", randomBytes(32).toString("base64"));
 
     const failingCollection: ChallengesCollection = {
-      add: vi.fn().mockRejectedValue(new Error("simulated firestore outage")),
+      reserveId: () => FIXED_CHALLENGE_ID,
+      create: vi.fn().mockRejectedValue(new Error("simulated firestore outage")),
     };
     await submitChallenge("token", TEAM_ID, VALID_TEXT, baseDeps({ collection: failingCollection }));
 

@@ -1,3 +1,4 @@
+import { toPersistedTeam } from "../domain/team-content-codec";
 import "server-only";
 import { runFencedTransaction, writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
@@ -13,7 +14,7 @@ const COLLECTION_NAME = "teams";
 export interface TeamRecord {
   name: string;
   status: TeamStatus;
-  /** Always `private` at creation (docs/features/teamadmin-and-team-visibility/SPEC.md). */
+  /** Always `private` at creation (docs/archive/features/teamadmin-and-team-visibility/SPEC.md). */
   visibility: TeamVisibility;
   createdAt: Date;
   createdBy: string;
@@ -36,7 +37,7 @@ function getDefaultCollection(actorUid: string): TeamsCollection {
       const db = getFirestoreDb();
       const ref = db.collection(COLLECTION_NAME).doc();
       await runFencedTransaction(db, actorUid, async (tx) => {
-        tx.create(ref, record);
+        tx.create(ref, toPersistedTeam(ref.id, { ...record }));
       });
       return { id: ref.id };
     },
@@ -59,7 +60,7 @@ export interface CreateTeamDeps {
 
 /**
  * Creates a new `active` team. Only an app admin may call this
- * successfully (docs/features/team-management/SPEC.md — BR-1, BR-2). The
+ * successfully (docs/archive/features/team-management/SPEC.md — BR-1, BR-2). The
  * resulting `teamId` is Firestore's auto-generated document ID — never
  * derived from `name` (SPEC → Architecture decisions → "Team identifier
  * scheme").

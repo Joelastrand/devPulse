@@ -21,7 +21,7 @@ function thread(authorUid: string): Record<string, unknown> {
     ciphertext: "ct-thread",
     iv: "iv-thread",
     authTag: "tag-thread",
-    keyVersion: "v1",
+    keyVersion: "v2", keyId: "k1",
     createdAt: T0,
   };
 }
@@ -34,7 +34,7 @@ function activeReply(threadId: string, authorUid: string, createdAt: Date = T1):
     ciphertext: `ct-${authorUid}`,
     iv: "iv-reply",
     authTag: "tag-reply",
-    keyVersion: "v1",
+    keyVersion: "v2", keyId: "k1",
     createdAt,
   };
 }

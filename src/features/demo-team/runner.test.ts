@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { toPersistedTeam } from "../teams/domain/team-content-codec";
 import { DemoAdapterError, type DemoOnlineAdapters } from "./adapters";
 import { demoCrypto } from "./crypto";
 import { runDemoSeed, stripForwardedSeparator, type DemoRunnerInput } from "./runner";
@@ -250,7 +252,7 @@ describe("write mode (fake adapters only)", () => {
   it("writes only manifest paths, from the eight collections, with no undefined values", async () => {
     const online = fakeOnline();
     await run(WRITE_ARGS, online).result;
-    const { manifest } = buildDemoSeedPlan({ presenterUid: PRESENTER, asOf: new Date("2026-03-16T00:00:00.000Z"), encrypt: demoCrypto.encrypt });
+    const { manifest } = buildDemoSeedPlan({ presenterUid: PRESENTER, asOf: new Date("2026-03-16T00:00:00.000Z"), sealRecord: demoCrypto.sealRecord });
     expect([...online.store.keys()].sort()).toEqual(manifest.map((m) => m.path).sort());
 
     const hasUndefined = (value: unknown): boolean =>
@@ -289,9 +291,9 @@ describe("write mode (fake adapters only)", () => {
   });
 
   it("a conflict → exit 1, zero batches, nothing written", async () => {
-    const online = fakeOnline({
-      initial: { "teams/demo-team": { name: "Someone else", status: "active", createdAt: new Date(), createdBy: "real-user" } },
-    });
+    vi.stubEnv("ENCRYPTION_KEY", randomBytes(32).toString("base64"));
+    const foreign = toPersistedTeam("demo-team", { name: "Someone else", status: "active", createdAt: new Date(), createdBy: "real-user" });
+    const online = fakeOnline({ initial: { "teams/demo-team": foreign } });
     const out = await run(WRITE_ARGS, online).result;
 
     expect(out.exitCode).toBe(1);

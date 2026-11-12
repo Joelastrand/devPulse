@@ -1,10 +1,12 @@
 import "server-only";
-import { encrypt } from "../../../lib/encryption/encryption";
+import { encryptRecord, RecordEnvelopeError } from "../../../lib/encryption/record-envelope";
+import { surveyResponseContext } from "../domain/response-context";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { type VerifiedIdentity, verifyIdToken, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import { isValidTeamStatus } from "../../teams/domain/team";
 import { isValidMembershipFor, membershipDocId } from "../../teams/domain/team-membership";
 import { encodeResponsePayload } from "../domain/response-payload";
+import { openSurveyDocument } from "./survey-content-codec";
 import { participationDocId, type SurveyParticipationRecord } from "../domain/survey-participation";
 import { effectiveLifecycle, isValidSurvey, type Survey } from "../domain/survey";
 import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
@@ -40,14 +42,15 @@ function responsePath(responseId: string): string {
   return `${SURVEY_RESPONSES_COLLECTION}/${responseId}`;
 }
 
-/** The persisted shape of one `surveyResponses` document (docs/features/managed-surveys/SPEC.md — "Firestore/index implications"). No identity field, no IP, no user agent, for either access mode. */
+/** The persisted shape of one `surveyResponses` document (docs/archive/features/managed-surveys/SPEC.md — "Firestore/index implications"). No identity field, no IP, no user agent, for either access mode. */
 export interface SurveyResponseRecord {
   surveyId: string;
   teamId: string;
   ciphertext: string;
   iv: string;
   authTag: string;
-  keyVersion: string;
+  keyVersion: "v2";
+  keyId: "k1";
   submittedAt: Date;
 }
 
@@ -151,7 +154,7 @@ export type SubmitOutcome =
 
 /**
  * The whole submission decision, run inside one Firestore transaction
- * (docs/features/managed-surveys/SPEC.md — "Survey submission contract" →
+ * (docs/archive/features/managed-surveys/SPEC.md — "Survey submission contract" →
  * Phase B). Every read happens before any write (Firestore's own
  * transaction requirement, and what lets a detected write conflict retry
  * the entire decision with fresh reads): survey → lifecycle → owning
@@ -189,10 +192,14 @@ async function decideAndApplySubmission(
   const { surveyId, rawAnswers, identity, now, newResponseId } = params;
 
   const surveySnapshot = await tx.get(surveyPath(surveyId));
-  const candidate = toCandidateSurvey(
-    surveyId,
-    surveySnapshot.exists ? surveySnapshot.data() : undefined,
-  );
+  let openedSurvey: unknown;
+  try {
+    openedSurvey = openSurveyDocument(surveyId, surveySnapshot.exists ? surveySnapshot.data() : undefined);
+  } catch (error) {
+    if (error instanceof RecordEnvelopeError && error.code === "key_unavailable") return "encryption_failed";
+    throw error;
+  }
+  const candidate = toCandidateSurvey(surveyId, openedSurvey);
   if (!isValidSurvey(candidate, { surveyId })) {
     return "invalid_submission";
   }
@@ -246,9 +253,11 @@ async function decideAndApplySubmission(
   // Every read is complete at this point — everything below is a write, so
   // this ordering is what a real Firestore transaction requires and what
   // makes a detected conflict retry cleanly with fresh reads above.
+  // The response id is minted before sealing, because the answers are bound to this document by AAD.
+  const responseId = newResponseId();
   let encrypted;
   try {
-    encrypted = encrypt(payload);
+    encrypted = encryptRecord(payload, surveyResponseContext(survey.teamId, surveyId, responseId));
   } catch {
     return "encryption_failed";
   }
@@ -260,9 +269,10 @@ async function decideAndApplySubmission(
     iv: encrypted.iv,
     authTag: encrypted.authTag,
     keyVersion: encrypted.keyVersion,
+    keyId: encrypted.keyId,
     submittedAt: now,
   };
-  tx.set(responsePath(newResponseId()), responseRecord as unknown as Record<string, unknown>);
+  tx.set(responsePath(responseId), responseRecord as unknown as Record<string, unknown>);
 
   if (survey.accessMode === "authenticated" && identity !== null) {
     const participationRecord: SurveyParticipationRecord = {
@@ -305,7 +315,7 @@ export interface SubmitSurveyResponseDeps {
 }
 
 /**
- * Submits one respondent's answers to `surveyId` (docs/features/
+ * Submits one respondent's answers to `surveyId` (docs/archive/features/
  * managed-surveys/SPEC.md — BR-17 through BR-24, BR-41's submission half).
  *
  * Phase A (outside any transaction, no persistence side effect): validates

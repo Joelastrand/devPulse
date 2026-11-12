@@ -58,6 +58,7 @@ vi.mock("../../../lib/firebase/admin", () => ({
 }));
 
 import { readSkillProfilesBatch, SKILL_PROFILE_READ_CHUNK_SIZE } from "./skill-profile-store";
+import { sealSkillLevel } from "./skill-level-codec";
 
 beforeEach(() => {
   access.state.docs.clear();
@@ -70,9 +71,9 @@ beforeEach(() => {
 
 describe("readSkillProfilesBatch (raw reader)", () => {
   it("reads exactly the requested documents by id and returns their raw data, undefined when absent", async () => {
-    access.state.docs.set("uid-a", { levels: { t: 2 }, futureField: 1 });
+    access.state.docs.set("uid-a", { levels: { t: sealSkillLevel("uid-a", "t", 2) }, futureField: 1 });
     access.state.docs.set("uid-b", { levels: "garbage" });
-    access.state.docs.set("uid-not-requested", { levels: { t: 4 } });
+    access.state.docs.set("uid-not-requested", { levels: { t: sealSkillLevel("uid-not-requested", "t", 4) } });
 
     const result = await readSkillProfilesBatch(["uid-a", "uid-b", "uid-missing"]);
 
@@ -106,7 +107,7 @@ describe("readSkillProfilesBatch (raw reader)", () => {
   });
 
   it("skips uids that are not valid document ids instead of failing or widening the read", async () => {
-    access.state.docs.set("uid-a", { levels: { t: 3 } });
+    access.state.docs.set("uid-a", { levels: { t: sealSkillLevel("uid-a", "t", 3) } });
     const result = await readSkillProfilesBatch(["", "a/b", ".", "..", "__x__", "uid-a"]);
     expect(access.state.getAllCalls).toEqual([["uid-a"]]);
     expect(result).toEqual([{ levels: { t: 3 } }]);

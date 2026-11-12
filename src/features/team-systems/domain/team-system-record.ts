@@ -1,5 +1,5 @@
 /**
- * Persisted `teamSystems/{systemId}` shape (docs/features/team-system-overview/
+ * Persisted `teamSystems/{systemId}` shape (docs/archive/features/team-system-overview/
  * SPEC.md — D-1, BR-6). Stored data is untrusted until `parseTeamSystemRecord`
  * accepts it: a malformed document is skipped, never partially shown.
  */

@@ -19,7 +19,7 @@ const SUBMIT_ERROR_STATUS: Record<string, number> = {
 
 /**
  * `/teams/[teamId]`'s member-facing challenge endpoints
- * (docs/features/anonymous-challenges/SPEC.md — TASK-005). `GET` always
+ * (docs/archive/features/anonymous-challenges/SPEC.md — TASK-005). `GET` always
  * delegates to `listTeamChallengesForMember` — **never**
  * `listTeamChallengesForAdmin`, even for a caller who happens to be an app
  * admin, since this route always serves the team page's member-scoped view

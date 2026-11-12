@@ -29,7 +29,7 @@ function isValidLength(rawValue: string, min: number, max: number): boolean {
 }
 
 /**
- * `/teams/[teamId]`'s "Start en ny tråd" form (docs/features/team-forum/
+ * `/teams/[teamId]`'s "Start en ny tråd" form (docs/archive/features/team-forum/
  * SPEC.md — BR-37, BR-43, BR-44). Sends only `title`/`body` — no
  * uid/email/teamId-override/lifecycle field of any kind; `createThread`'s
  * server operation derives identity and team eligibility entirely on its

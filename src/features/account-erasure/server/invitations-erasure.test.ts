@@ -1,4 +1,6 @@
+import { randomBytes } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
+import { invitationEmailIndex } from "../../teams/domain/team-invitation-content-codec";
 import { invitationBelongsToErasedPerson } from "./invitation-match";
 
 vi.mock("server-only", () => ({}));
@@ -21,9 +23,19 @@ const NORMALIZED = "dev@example.com";
 
 type Doc = Record<string, unknown>;
 
+// One fixed key for the file: blind indexes are computed in the fixtures and in the step.
+vi.stubEnv("ENCRYPTION_KEY", randomBytes(32).toString("base64"));
+
+/** A stored invitation as the production write stores it: the e-mail is replaced by its blind index. */
+function indexed(doc: Doc): Doc {
+  if (typeof doc.email !== "string") return doc;
+  const { email, ...rest } = doc;
+  return { ...rest, emailIndex: invitationEmailIndex(email as string) };
+}
+
 function fakeInvitationsStore(options: { requests?: Record<string, Doc>; invitations?: Record<string, Doc> } = {}) {
   const requests = new Map<string, Doc>(Object.entries(options.requests ?? {}));
-  const invitations = new Map<string, Doc>(Object.entries(options.invitations ?? {}));
+  const invitations = new Map<string, Doc>(Object.entries(options.invitations ?? {}).map(([id, doc]) => [id, indexed(doc)]));
   const log: string[] = [];
 
   const tx: InvitationTransaction = {
@@ -67,7 +79,7 @@ function fakeInvitationsStore(options: { requests?: Record<string, Doc>; invitat
     },
     async invitationIdsFor(normalizedEmail, uid, limit) {
       return [...invitations.entries()]
-        .filter(([id, doc]) => doc.email === normalizedEmail || invitationBelongsToErasedPerson(id, doc, normalizedEmail, uid))
+        .filter(([id, doc]) => doc.emailIndex === invitationEmailIndex(normalizedEmail) || invitationBelongsToErasedPerson(id, doc, normalizedEmail, uid))
         .map(([id]) => id)
         .slice(0, limit);
     },
@@ -128,13 +140,13 @@ describe("invitations and access-requests erasure step (TASK-017)", () => {
   it("deletes an invitation whose exact document id carries the erased email when no stored e-mail field exists", async () => {
     const store = fakeInvitationsStore({
       invitations: {
-        [`${TEAM}__${NORMALIZED}`]: { teamId: TEAM, status: "pending", invitedBy: OTHER_UID },
+        [`${TEAM}__${invitationEmailIndex(NORMALIZED)}`]: { teamId: TEAM, status: "pending", invitedBy: OTHER_UID },
       },
     });
 
     await runToDone(depsFor(store.port), UID);
 
-    expect(store.invitations.has(`${TEAM}__${NORMALIZED}`)).toBe(false);
+    expect(store.invitations.has(`${TEAM}__${invitationEmailIndex(NORMALIZED)}`)).toBe(false);
   });
 
   it("keeps an invitation whose id ends with the erased address but whose stored e-mail is a different person (TASK-038 finding 2)", async () => {
@@ -161,7 +173,7 @@ describe("invitations and access-requests erasure step (TASK-017)", () => {
 
     await runToDone(depsFor(store.port), UID);
 
-    expect(store.invitations.get("inv-other")).toEqual({ email: "other@example.com", status: "pending", invitedBy: OTHER_UID });
+    expect(store.invitations.get("inv-other")).toEqual(indexed({ email: "other@example.com", status: "pending", invitedBy: OTHER_UID }));
   });
 
   it("nulls resolvedBy on others' access requests and keeps the record", async () => {
@@ -181,7 +193,7 @@ describe("invitations and access-requests erasure step (TASK-017)", () => {
 
     await runToDone(depsFor(store.port), UID);
 
-    expect(store.invitations.get("inv-other")).toMatchObject({ email: "other@example.com", status: "pending", invitedBy: null });
+    expect(store.invitations.get("inv-other")).toMatchObject(indexed({ email: "other@example.com", status: "pending", invitedBy: null }));
   });
 
   it("orders the work: own access requests and matching invitations are deleted before any null-out of others' records", async () => {

@@ -1,5 +1,8 @@
+import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../../skill-trees/domain/skill-tree-test-fixtures";
+stubSkillTreeEncryptionKey();
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { toPersistedSkillTree } from "../../skill-trees/domain/skill-tree-content-codec";
 import { resolveAreaNames, toTreeCandidate, type SkillTreeNameReader } from "./area-names";
 
 /** A valid stored SkillTree as a raw Firestore read returns it, with timestamps already `Date`s. */
@@ -30,7 +33,7 @@ function fakeCatalog(trees: Record<string, unknown> = {}) {
         failNext = false;
         throw new Error("simulated Firestore failure with a secret path");
       }
-      return trees[treeId] === undefined ? undefined : structuredClone(trees[treeId]);
+      return trees[treeId] === undefined ? undefined : sealedSkillTreeFixture(treeId, structuredClone(trees[treeId]));
     },
   };
   return {
@@ -181,14 +184,14 @@ describe("toTreeCandidate", () => {
     const createdAt = new Date("2026-08-01T08:00:00.000Z");
     const timestampLike = { toDate: () => createdAt };
 
-    const candidate = toTreeCandidate({ ...treeData(), createdAt: timestampLike });
+    const candidate = toTreeCandidate("tree-1", toPersistedSkillTree("tree-1", { ...treeData(), createdAt: timestampLike } as unknown as Parameters<typeof toPersistedSkillTree>[1]));
 
     expect(candidate).toMatchObject({ name: "Kodekvalitet", createdAt });
   });
 
   it("returns undefined for a non-object document", () => {
-    expect(toTreeCandidate(undefined)).toBeUndefined();
-    expect(toTreeCandidate("tree")).toBeUndefined();
+    expect(toTreeCandidate("tree-1", undefined)).toBeUndefined();
+    expect(toTreeCandidate("tree-1", "tree")).toBeUndefined();
   });
 });
 

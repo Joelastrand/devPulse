@@ -4,7 +4,7 @@ import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
- * Admin-only challenge-delete endpoint (docs/features/
+ * Admin-only challenge-delete endpoint (docs/archive/features/
  * anonymous-challenges/SPEC.md — TASK-006, BR-16, BR-20). `DELETE`
  * permanently removes the target challenge, regardless of its current
  * status — no response-count-style precondition, unlike survey removal

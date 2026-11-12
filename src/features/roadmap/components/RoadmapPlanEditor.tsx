@@ -68,7 +68,7 @@ function errorText(error: RoadmapMutationError): string {
 
 /**
  * Plan summary plus the inline planning controls of one Kompetanseområde
- * (docs/features/team-skill-planning/SPEC.md — BR-31, BR-33). Controls exist
+ * (docs/archive/features/team-skill-planning/SPEC.md — BR-31, BR-33). Controls exist
  * only when the server-provided `canEdit` is true (a UI affordance, never
  * authorization). Plan existence comes from the fetched state passed in, so a
  * completed plan hidden behind "Fullførte" never makes the area look unplanned.

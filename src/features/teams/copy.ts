@@ -2,7 +2,7 @@
  * Norwegian user-facing copy for the authenticated teams screens
  * (`app/teams/page.tsx`, `app/teams/[teamId]/page.tsx`, `TeamsOverview`,
  * `TeamDetail`), per the copy-module convention established in TASK-001
- * (docs/features/product-ux-shell/SPEC.md — BR-2).
+ * (docs/archive/features/product-ux-shell/SPEC.md — BR-2).
  *
  * `requestAccessError` is shared by both `TeamsOverview` and `TeamDetail`
  * (via `request-access-messages.ts`) so the request-access affordance reads
@@ -34,7 +34,7 @@ export const teamsCopy = {
     competenceAreas: (count: number) => `${count} ${count === 1 ? "kompetanseområde" : "kompetanseområder"}`,
     /**
      * The two presentation-only visual zones `TeamDetail` groups its
-     * already-rendered sections into (docs/features/ui-refresh/SPEC.md —
+     * already-rendered sections into (docs/archive/features/ui-refresh/SPEC.md —
      * BR-15) — purely a heading/grouping label, never a new data concept,
      * route, or fetch boundary.
      */
@@ -48,7 +48,7 @@ export const teamsCopy = {
         "Den forrige forespørselen din om å bli med i dette teamet ble ikke godkjent.",
     },
   },
-  /** Route-level team navigation (docs/features/team-roadmap/SPEC.md — BR-2). */
+  /** Route-level team navigation (docs/archive/features/team-roadmap/SPEC.md — BR-2). */
   nav: {
     label: "Teamnavigasjon",
     overview: "Oversikt",
@@ -73,7 +73,7 @@ export const teamsCopy = {
     error: "Resultatene kunne ikke lastes. Prøv igjen senere.",
     signIn: "Logg inn for å se resultatene for teamet.",
   },
-  /** The collapsed, read-only member roster on `/teams/[teamId]` (docs/features/member-identity-and-team-roles/SPEC.md — BR-31). */
+  /** The collapsed, read-only member roster on `/teams/[teamId]` (docs/archive/features/member-identity-and-team-roles/SPEC.md — BR-31). */
   roster: {
     title: "Medlemmer",
     toggleButton: "Medlemsliste",
@@ -108,11 +108,11 @@ export const teamsCopy = {
  * Norwegian user-facing copy for the admin screens
  * (`app/admin/teams/page.tsx`, `app/admin/teams/[teamId]/page.tsx`,
  * `AdminTeams`, `AdminTeamDetail`), per the copy-module convention
- * established in TASK-001 (docs/features/product-ux-shell/SPEC.md — BR-2).
+ * established in TASK-001 (docs/archive/features/product-ux-shell/SPEC.md — BR-2).
  *
  * `forbidden` is deliberately generic on both screens — it must never
  * confirm or deny whether the caller's email is on the server-only
- * superadmin registry (docs/features/team-management/SPEC.md —
+ * superadmin registry (docs/archive/features/team-management/SPEC.md —
  * BR-15/BR-16), so localizing it must not make it any more specific than
  * the English wording it replaces.
  */
@@ -135,7 +135,7 @@ export const adminCopy = {
       invalidName: "Skriv inn et teamnavn.",
       generic: "Noe gikk galt under opprettelsen av teamet. Prøv igjen.",
     },
-    /** Purely derived from the already-loaded team list — no new fetch (docs/features/ui-refresh/SPEC.md — BR-19). */
+    /** Purely derived from the already-loaded team list — no new fetch (docs/archive/features/ui-refresh/SPEC.md — BR-19). */
     summary: (active: number, disabled: number) => `${active} aktive · ${disabled} deaktiverte`,
     statusActive: "Aktivt",
     statusDisabled: "Deaktivert",

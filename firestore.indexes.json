@@ -4,7 +4,7 @@
       "collectionGroup": "teamInvitations",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "email", "order": "ASCENDING" },
+        { "fieldPath": "emailIndex", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" }
       ]
     },

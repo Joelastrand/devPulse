@@ -83,14 +83,14 @@ describe("OrgSkillProgressOverview", () => {
     expect(charlieRow?.textContent).toContain("Deaktivert");
   });
 
-  it("renders the disabled-team label via the shared Badge primitive (docs/features/ui-refresh/SPEC.md — BR-10)", () => {
+  it("renders the disabled-team label via the shared Badge primitive (docs/archive/features/ui-refresh/SPEC.md — BR-10)", () => {
     render(<OrgSkillProgressOverview state={{ status: "loaded", trees: [MULTI_TEAM_TREE] }} />);
 
     const badge = screen.getByText("Deaktivert");
     expect(badge.tagName).toBe("SPAN");
   });
 
-  it("leaves the stage/progression label as plain text, never Badged (docs/features/ui-refresh/SPEC.md — BR-11)", () => {
+  it("leaves the stage/progression label as plain text, never Badged (docs/archive/features/ui-refresh/SPEC.md — BR-11)", () => {
     render(<OrgSkillProgressOverview state={{ status: "loaded", trees: [MULTI_TEAM_TREE] }} />);
 
     const stageLabel = screen.getByText(/fundamentals/i);

@@ -1,164 +1,73 @@
 # DevPulse
 
-DevPulse is an internal application for developer/team wellbeing and delivery health, starting with short recurring pulse surveys.
+DevPulse is an internal application for team competence, delivery and personal development. Individuals keep a private
+record of their skills, goals and development conversations. Teams get a shared view of competence, roadmap, systems,
+projects and anonymous pulse surveys, with privacy thresholds that keep individuals out of team-level results.
 
-The product focuses on team-level trends and sustainable delivery rather than individual performance measurement. DevPulse is also a practical proof of concept for disciplined AI-assisted software development.
+- Interface language: Norwegian (Bokmål).
+- Status: an internal application in a private test environment. Account erasure is implemented but not yet operationally
+  deployed. See [`docs/KNOWN-LIMITATIONS.md`](docs/KNOWN-LIMITATIONS.md).
 
-See `docs/PRODUCT.md` for the product vision, scope, and non-goals.
+## Main capabilities
+
+- **Personal development:** self-assessed skills with a personal radar, private goals, owner-driven development
+  conversations, personal responsibilities and achievements.
+- **Teams:** membership and access requests, a team overview, and a team administrator role per team.
+- **Team competence:** a team-owned skill catalog with four-level criteria, private self-assessments shared by consent, an
+  automatic team profile (at least three contributors per skill), agreed levels, and a radar.
+- **Kompetanseplan:** team development plans with milestones, independent of the competence catalog.
+- **Roadmap, systems and projects:** planned work per competency area, a seven-attribute system overview, and planned
+  project participation.
+- **Surveys:** anonymous, encrypted pulse surveys with per-survey response thresholds.
+- **Administration:** superadmin registry, team management, organizational roles, and the skill-tree catalog.
+
+## Technology
+
+- Next.js 16 (App Router), React 19, strict TypeScript, Tailwind CSS 4.
+- Firebase: Auth (client), Firestore and Auth token verification (Admin SDK, server only).
+- AES-256-GCM application-level encryption for sensitive free text and survey answers.
+- pnpm, Vitest, Playwright, ESLint.
 
 ## Getting started
 
 ```bash
 pnpm install
-pnpm dev
+cp .env.local.example .env.local   # fill in values; never commit .env.local
+pnpm dev                           # http://localhost:3000
 ```
 
-Open `http://localhost:3000`.
-
-## Scripts
-
-Use `package.json` as the source of truth for available commands.
+Full setup, environment variables, emulator use and operational scripts: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 
 Common commands:
 
 ```bash
-pnpm dev
-pnpm build
-pnpm start
-pnpm lint
-pnpm typecheck
+pnpm dev            # development server
+pnpm typecheck      # TypeScript check
+pnpm lint           # ESLint
+pnpm test           # Vitest unit, component and emulator-gated suites
+pnpm verify:browser # Playwright browser specs (requires a running app)
 ```
-
-Run additional checks such as `pnpm test` only when the corresponding script exists.
-
-pnpm is the package manager for this repository. `pnpm-lock.yaml` is the lockfile.
-
-## AI-assisted development
-
-DevPulse uses a repository-driven Claude Code workflow. Requirements, task state, durable decisions, coding rules, and security invariants live in the repository so work can continue in a fresh AI session without depending on previous conversation history.
-
-The repository has six workflow skills:
-
-- `plan-feature`
-- `split-tasks`
-- `implement-task`
-- `review-change`
-- `debug`
-- `security-review`
-
-It also has five path-scoped coding rules:
-
-- `typescript`
-- `nextjs-react`
-- `architecture`
-- `security`
-- `tests`
-
-For the practical step-by-step process, example prompts, session boundaries, rules, feature implementation loop, debugging, and security reviews, see **`docs/AI-WORKFLOW.md`**.
-
-## Claude Code instruction model
-
-```text
-CLAUDE.md
-  → universal repository and workflow rules
-
-.claude/rules/
-  → path-scoped coding constraints
-
-.claude/skills/
-  → procedures for carrying out work
-
-docs/
-  → durable product/system truth
-
-docs/features/<feature-id>/SPEC.md
-  → feature requirements
-
-docs/features/<feature-id>/TASKS.md
-  → task definitions and task state
-
-git
-  → what actually changed
-```
-
-Avoid duplicating the same rule across these layers.
-
-### Coding rules
-
-```text
-.claude/rules/
-├── typescript.md
-├── nextjs-react.md
-├── architecture.md
-├── security.md
-└── tests.md
-```
-
-Rules are intentionally small and path-scoped. They should capture durable constraints Claude is likely to violate without guidance, not duplicate what TypeScript, ESLint, formatting, or other tooling already enforces.
-
-`docs/SECURITY.md` remains authoritative for security/privacy policy.
 
 ## Documentation
 
-- `docs/PRODUCT.md` — product purpose, scope, and non-goals
-- `docs/ARCHITECTURE.md` — architecture decisions and technical boundaries
-- `docs/SECURITY.md` — authoritative security/privacy invariants
-- `docs/DATA-MODEL.md` — conceptual data model
-- `docs/ROADMAP.md` — product phases and planned direction
-- `docs/DEVELOPMENT.md` — development conventions
-- `docs/AI-WORKFLOW.md` — practical Claude Code workflow
-- `docs/features/<feature-id>/SPEC.md` — feature requirements and behavioral contract
-- `docs/features/<feature-id>/TASKS.md` — feature tasks and task state
+| Document | Contents |
+| --- | --- |
+| [`docs/PRODUCT.md`](docs/PRODUCT.md) | Users, feature inventory, key workflows |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Stack, layout, request path, feature slices, Firebase integration |
+| [`docs/ROUTES.md`](docs/ROUTES.md) | Pages, navigation, redirects, API route groups and access |
+| [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) | Firestore collections, document IDs, validation, retention and erasure |
+| [`docs/SECURITY.md`](docs/SECURITY.md) | Authentication, authorization, privacy thresholds, encryption, erasure |
+| [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | Setup, environment, emulators, scripts, operational tools |
+| [`docs/TESTING.md`](docs/TESTING.md) | Test layers, guards, expected-fail cases, what is not tested |
+| [`docs/KNOWN-LIMITATIONS.md`](docs/KNOWN-LIMITATIONS.md) | Verified gaps, operational limits and technical debt |
+| [`docs/AI-WORKFLOW.md`](docs/AI-WORKFLOW.md) | Claude Code workflow used in this repository |
+| [`docs/operations/`](docs/operations/) | Account-erasure runbook, superadmin bootstrap |
+| [`docs/archive/`](docs/archive/README.md) | Historical specifications and superseded documents. Not current guidance |
 
-Repository-wide agent instructions live in `CLAUDE.md` and `AGENTS.md`.
-
-## Repository as memory
-
-```text
-CLAUDE.md                          → universal rules
-.claude/rules/                    → path-scoped coding rules
-.claude/skills/*/SKILL.md         → workflow procedures
-docs/PRODUCT.md                    → durable product intent
-docs/ARCHITECTURE.md               → durable architecture decisions
-docs/SECURITY.md                   → security/privacy invariants
-docs/DATA-MODEL.md                 → conceptual data model
-docs/features/<feature-id>/SPEC.md → feature requirements
-docs/features/<feature-id>/TASKS.md→ task definitions and state
-git                                → what actually changed
-```
-
-## Project structure
-
-The intended application architecture favors vertical feature slices:
-
-```text
-app/                       Existing Next.js App Router code
-src/
-├── app/                   Target App Router location when adopted explicitly
-├── features/              Feature-owned domain/application/UI code
-│   └── <feature>/
-├── components/
-│   └── ui/                Reusable presentation primitives
-└── lib/                   Genuinely shared infrastructure
-
-docs/
-.claude/
-├── rules/
-└── skills/
-```
-
-Do not mass-move existing files merely to match this diagram. Structural migrations should be explicit work.
-
-## Technology
-
-DevPulse is a Next.js application written in strict TypeScript.
-
-Firebase is the selected backend platform. Architecture, data-model, and security decisions belong in `docs/ARCHITECTURE.md`, `docs/DATA-MODEL.md`, and `docs/SECURITY.md`.
-
-pnpm is the repository package manager.
+Repository-wide agent instructions are in `CLAUDE.md` and `AGENTS.md`.
 
 ## Security and privacy
 
-DevPulse handles potentially sensitive wellbeing information. Security and privacy are architectural requirements, not a final implementation step.
-
-`docs/SECURITY.md` is authoritative. Do not use real employee/wellbeing data in development or test fixtures, do not commit secrets, and do not weaken anonymity, access-control, encryption, or minimum-cohort protections for implementation convenience.
+DevPulse handles sensitive wellbeing information. `docs/SECURITY.md` is authoritative for what the code enforces. Do not use
+real employee data in development or test fixtures, do not commit secrets, and do not weaken anonymity, access control,
+encryption or minimum-response protections for convenience.

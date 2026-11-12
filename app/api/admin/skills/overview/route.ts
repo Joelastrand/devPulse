@@ -4,7 +4,7 @@ import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
- * Admin-only cross-team skill-progress overview endpoint (docs/features/
+ * Admin-only cross-team skill-progress overview endpoint (docs/archive/features/
  * org-skill-progress-overview/SPEC.md — TASK-002, "API/DTO contracts").
  * `GET`-only — no query string or body input exists for this route to parse.
  * Kept thin: extracts the bearer token, calls `getOrgSkillProgressOverview`,

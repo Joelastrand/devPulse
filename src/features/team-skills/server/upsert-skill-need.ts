@@ -72,7 +72,7 @@ export async function upsertSkillNeed(
       if (!isWellFormedTreeId(treeId)) return { ok: false, error: "skill_unavailable" };
 
       const docId = skillNeedDocId(teamId, treeId);
-      const tree = toCandidateSkillTree(await tx.getSkillTree(treeId));
+      const tree = toCandidateSkillTree(treeId, await tx.getSkillTree(treeId));
       if (!isValidSkillTree(tree)) return { ok: false, error: "skill_unavailable" };
       const existing = await tx.getNeed(docId);
 

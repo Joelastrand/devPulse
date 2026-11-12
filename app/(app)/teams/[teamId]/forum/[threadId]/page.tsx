@@ -4,7 +4,7 @@ import { ThreadDetail } from "../../../../../../src/features/forum/components/Th
 import { isForumEnabled } from "../../../../../../src/features/forum/server/is-forum-enabled";
 
 /**
- * Gated on `isForumEnabled()` (docs/features/team-forum/SPEC.md — "Feature
+ * Gated on `isForumEnabled()` (docs/archive/features/team-forum/SPEC.md — "Feature
  * flag"): while disabled, this resolves to the same `notFound()` outcome as
  * a genuinely nonexistent thread — `ThreadDetail` is never rendered, so no
  * Forum client code mounts and no Forum data fetch starts. This is a

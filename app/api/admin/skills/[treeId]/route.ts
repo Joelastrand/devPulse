@@ -4,7 +4,7 @@ import { type AuthRefusal, authRefusalStatus, isAuthRefusal } from "../../../../
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
- * Admin-only SkillTree cosmetic-correction endpoint (docs/features/
+ * Admin-only SkillTree cosmetic-correction endpoint (docs/archive/features/
  * team-skill-tree/SPEC.md — "Cosmetic tree correction", BR-31, BR-32). Kept
  * thin — `treeId` comes only from the route param (route-authoritative,
  * never body-supplied); the request body is read for exactly `{name,

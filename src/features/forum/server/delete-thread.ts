@@ -12,7 +12,7 @@ const FORUM_REPLIES_COLLECTION = "forumReplies";
 
 /**
  * The maximum number of reply documents `deleteThread`'s cascade deletes in
- * one Firestore `WriteBatch` per loop iteration (docs/features/team-forum/
+ * one Firestore `WriteBatch` per loop iteration (docs/archive/features/team-forum/
  * SPEC.md — BR-54). Firestore's own per-batch write-count limit is 500, so
  * this size keeps every batch safely within it by construction.
  */
@@ -54,7 +54,7 @@ function getDefaultForumThreadDocStore(): ForumThreadDocStore {
 }
 
 /**
- * The cascade-delete seam for a thread's replies (docs/features/team-forum/
+ * The cascade-delete seam for a thread's replies (docs/archive/features/team-forum/
  * SPEC.md — BR-54). `deleteNextBatch` queries up to
  * `DELETE_THREAD_CASCADE_BATCH_SIZE` reply documents for `threadId` (no
  * ordering needed) and deletes every one of them in a single Firestore
@@ -146,7 +146,7 @@ export interface DeleteThreadDeps {
 }
 
 /**
- * Permanently deletes a thread and every one of its replies (docs/features/
+ * Permanently deletes a thread and every one of its replies (docs/archive/features/
  * team-forum/SPEC.md — "Server operations" → `deleteThread`; BR-23 through
  * BR-25, BR-27, BR-31, BR-32, BR-54, BR-55). This is a genuine hard delete,
  * not a soft-delete/tombstone — per Owner Decision 2, a deleted thread's

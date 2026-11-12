@@ -1,231 +1,187 @@
-# DevPulse — Conceptual Data Model
+# DevPulse — Data Model (Firestore, current implementation)
 
-This file describes DevPulse's conceptual data model. Some collection
-shapes below are now durably decided and implemented — for those, the
-relevant `docs/features/<feature-id>/SPEC.md` remains authoritative for
-exact field names, state transitions, and required indexes; this file
-tracks the conceptual shape and privacy implications, not the schema
-source of truth. Concepts not yet implemented are marked accordingly in
-the Status column below.
-See `docs/SECURITY.md` for the invariants these concepts must respect.
+Source of truth: the repository code (`src/features/*/domain`, `src/features/*/server`), `firestore.rules`,
+`firestore.indexes.json` and the erasure inventory `src/features/account-erasure/server/inventory.ts`. All collections are
+accessed by the Admin SDK on the server. Client SDK access is denied for every collection (`firestore.rules`).
 
-| Concept | Status | Purpose | Personal data? | Sensitive data? | Encryption likely? |
-|---|---|---|---|---|---|
-| User | Implemented (Firebase Authentication) | An individual account (identity, via Firebase Auth) | Yes | No | No |
-| Team | Implemented (Firestore-backed) | A group users belong to, for access scoping. Firestore-backed as of `docs/features/team-management/SPEC.md`: `teams/{teamId}` (`teamId` server-generated/opaque, `name`, `status: active/disabled`, `createdAt`, `createdBy`), admin-managed, server-only via the Firebase Admin SDK. `listActiveTeams` (`src/features/teams/server/list-active-teams.ts`) exposes only `{teamId, name}` for `active` teams and backs the `/teams` overview; every managed-survey operation instead scopes to one already-known `teamId` directly (an admin page route, or a survey's own persisted `teamId`), never a team-selection listing. The four legacy `ALLOWED_TEAM_IDS` values (from the retired pulse survey) are seeded once, with those exact strings as document IDs, via an app-admin-only, idempotent seed operation (`seed-legacy-teams.ts`). | No | No | No |
-| TeamMembership | Implemented (Firestore-backed) | Links a User to a Team, for authorization. Firestore-backed as of `docs/features/team-management/SPEC.md`: `teamMemberships/{uid}__{teamId}` (`uid`, `teamId`, `createdAt`, `createdVia`, `grantedBy`) — `uid`-keyed, never email-keyed; server-only via the Firebase Admin SDK. **Team role, added additively by `docs/features/member-identity-and-team-roles/SPEC.md` (F0)**: three optional fields — `role: "lead"`, `roleUpdatedAt`, `roleUpdatedBy` (the acting app admin's `uid`, never returned to a member). An absent `role` is an ordinary member and `"member"` is never stored; only exactly `"lead"` classifies as lead (`membershipRoleOf`), any other/malformed value is fail-safe `member`. Several leads per team are allowed, and there is no singleton manager. Assigning lead is app-admin-only and requires an `active` team; demoting deletes `role` (the two audit fields may remain as the last change); removing the membership ends lead status because the role lives on the document, and every grant path writes a fixed record without `role`. Existing documents need no migration. This is **team authorization metadata, not a general RBAC system** and never a professional role (a future `roleDefinitions`/`userRoles` concept must use separate collections and `professionalRole*` names). `authorizeTeamAccess` (`src/features/teams/server/authorize-team-access.ts`) is the sole authorization boundary that reads it. **Member reference, added additively by `docs/features/team-skill-planning/SPEC.md` (A0)**: one optional field `memberRef` — an opaque, team-scoped, 26-character random string (128 bits from a CSPRNG; never derived from `uid`, `teamId` or e-mail). It is a *planning selector identity only* — never authentication or authorization evidence, and never in the F0 member roster. It is written only by `applyMembershipGrant` at grant time and by the admin-only, idempotent "prepare member references" operation for legacy memberships (no `GET` ever writes it); removing the membership destroys it, and a re-grant receives a fresh one. Existing documents need no migration; role changes leave it untouched. **Skill contribution, added additively by `docs/features/team-skill-needs-and-matrix/SPEC.md` (C2)**: one optional object `skillContribution: { noticeVersion, consentedAt }` — the member's own opt-in, for this team only, to count their C1 self-assessments towards privacy-thresholded team coverage. Presence is the opt-in (no `enabled` flag, no negative state, no history); it is effective only with an exact key set, a `noticeVersion` equal to the current constant and a valid timestamp, so a notice-version bump lapses all participation. It is written and deleted only by the owner (a single-field transaction), is destroyed with the membership, is absent after a rejoin, is unchanged by a re-grant, role change or `memberRef` preparation, and is never returned by any membership-derived response (`consentedAt` is never returned or used for a decision). Existing documents need no migration (absent = not contributing). | Yes (linkage) | No | No |
-| TeamInvitation | Implemented (Firestore-backed) | An admin-initiated, email-addressed, pending grant of team membership. Firestore-backed as of `docs/features/team-management/SPEC.md`: `teamInvitations/{teamId}__{normalizedEmail}` (`teamId`, `email`, `status: pending/accepted/canceled`, `invitedBy`, `createdAt`, `updatedAt`, `resolvedAt?`, `resolvedUid?`) — email-keyed only for matching a future verified sign-in, never copied into `teamMemberships`; server-only via the Firebase Admin SDK. `resolveInvitations` (`src/features/teams/server/resolve-invitations.ts`) resolves a pending invitation into a `uid`-based membership. | Yes (invited email) | No | No |
-| TeamAccessRequest | Implemented (Firestore-backed) | A non-member's in-app request to join a team, resolved by an app admin into an approval (creates membership) or rejection (creates none). Firestore-backed as of `docs/features/team-management/SPEC.md`: `teamAccessRequests/{uid}__{teamId}` (`teamId`, `uid`, `status: pending/approved/rejected`, `createdAt`, `resolvedAt?`, `resolvedBy?`) — `uid`-keyed, deliberately no persisted email (requester email for admin display is resolved on demand from Firebase Auth, mirroring `TeamMembership`'s member-email pattern); server-only via the Firebase Admin SDK. `approveAccessRequest`/`rejectAccessRequest` (`src/features/teams/server/`) transactionally transition a request and, on approval, atomically grant the corresponding `uid`-based membership via the same `applyMembershipGrant` primitive `resolveInvitations` uses. | Yes (linkage) | No | No |
-| Survey | Implemented (Firestore-backed, `docs/features/managed-surveys/SPEC.md`) | An admin-created, team-owned survey instance: `surveys/{surveyId}` (`teamId`, `title?`, `accessMode: public/authenticated`, `minimumResponses`, `startAt?`, `endAt?`, `openedAt?`, `closedAt?`, `archivedAt?`, `createdAt`, `createdBy`) — `surveyId` is an opaque, server-generated Firestore document ID. The fixed three-question Flow/Stress/Fun 1-5 answer set itself remains an implicit code-level constant, unchanged from Phase 1. Answerability (`scheduled`/`open`/`closed`) is always derived, never a stored status field (see `docs/ARCHITECTURE.md` → "Survey lifecycle"). | No | No | No |
-| TeamSurveyState | Implemented (Firestore-backed, write-side coordination only) | `teamSurveyState/{teamId}` (`activeSurveyId: string \| null`, `updatedAt`) — enforces "at most one genuinely open survey per team" inside `openSurvey`'s/`closeSurvey`'s Firestore transactions; never read by any results/discovery path. | No | No | No |
-| SurveyResponse | Implemented (Firestore-backed, `surveyResponses`) | One anonymous, encrypted set of answers to a Survey: `{surveyId, teamId, ciphertext, iv, authTag, keyVersion, submittedAt}` — random document ID, identical shape for either access mode. Replaces the retired `pulseSurveyResponses` (`docs/features/pulse-survey/SPEC.md`). | No (must not contain identity fields) | Yes | Yes |
-| SurveyParticipation | Implemented (Firestore-backed), `authenticated`-mode surveys only | `surveyParticipations/{uid}__{surveyId}` (`{uid, surveyId}` only — deliberately no `submittedAt` or any other field), used solely to reject a second accepted submission from the same identity (BR-21/BR-22). Never joined to the specific `SurveyResponse` document it accompanies by any query, API, or UI this application provides (BR-18). Does not exist for `public` surveys. | Yes (linkage) | No | No |
-| SurveyAggregate | Implemented as a computed value only (no persisted Firestore document/collection — computed server-side on demand per request; see `docs/features/managed-surveys/SPEC.md`) | Team/survey-instance-level rollup of a closed survey's responses, published only at or above that survey's own `minimumResponses` | No | Possibly (small-team re-identification risk) | No (derived; source responses are encrypted) |
-| AnonymousChallenge | Implemented (Firestore-backed, `docs/features/anonymous-challenges/SPEC.md`) | A team member's free-text problem/friction/improvement report, scoped to one team, with no submitter identity ever persisted. Firestore-backed as of Phase 5: `challenges/{challengeId}` (`teamId`, `ciphertext`, `iv`, `authTag`, `keyVersion`, `submittedAt`, `resolvedAt?`, `resolvedBy?`, `archivedAt?`, `archivedBy?`) — `challengeId` is an opaque, Firestore-auto-generated document ID; `resolvedBy`/`archivedBy` identify the *acting admin*, never the submitter, and are never returned by any API response. Derived lifecycle (`"open" \| "resolved" \| "archived"`, `effectiveChallengeStatus`) is computed identically everywhere from `resolvedAt`/`archivedAt`, never a stored status field. Unlike `SurveyResponse`, content is individually visible to any authorized team member/admin once decrypted server-side — only submitter identity is unrecoverable, not content (see `docs/ARCHITECTURE.md`). Server-only via the Firebase Admin SDK; `firestore.rules` denies client-SDK access. | No (must not contain identity fields) | Yes (highly sensitive) | Yes |
-| ForumThread | Implemented (Firestore-backed, `docs/features/team-forum/SPEC.md`) | A titled, team-scoped discussion thread, created by a real team member, with ordinary (not anonymous) attribution. Firestore-backed as of Phase 6: `forumThreads/{threadId}` (`teamId`, `authorUid`, `ciphertext` — decrypts to `{title, body}` — `iv`, `authTag`, `keyVersion`, `createdAt`); `threadId` is an opaque, Firestore-auto-generated document ID. `authorUid` is the only identity field ever persisted, and the *only* raw identity value that exists anywhere for this feature — it is never returned by any API response. A reader instead sees `authorTag`, a deterministic, non-contact-reachable pseudonym computed on demand as `uppercase(hex(SHA-256(\`${teamId}:${authorUid}\`)).slice(0, 6))` (`src/features/forum/domain/author-tag.ts`) — no email, display name, or other identity field is ever persisted or shown. A thread has no tombstone/soft-delete shape at all: `deleteThread` is a genuine Firestore document deletion of the thread, cascading to hard-delete every one of its replies too (see `ForumReply`) — not an update, and not merely a read-side exclusion. Server-only via the Firebase Admin SDK; `firestore.rules` denies client-SDK access. | Yes (`authorUid`, never exposed to any client) | Yes | Yes |
-| ForumReply | Implemented (Firestore-backed, `docs/features/team-forum/SPEC.md`) | A flat (non-nested) reply to exactly one `ForumThread`, with the same `authorTag` pseudonymous-attribution mechanism as `ForumThread`. Firestore-backed as of Phase 6, two valid shapes only (`isValidForumReply`, `src/features/forum/domain/forum-reply.ts`): **active** — `forumReplies/{replyId}` (`teamId` — denormalized from the parent thread at creation, independently cross-checked against it on every access — `threadId`, `authorUid`, `ciphertext`, `iv`, `authTag`, `keyVersion`, `createdAt`); **tombstoned**, reached by deleting one reply outside a thread's own cascade — `teamId`, `threadId`, `createdAt`, `deletedAt`, `deletedBy` only, with `ciphertext`/`iv`/`authTag`/`keyVersion`/`authorUid` physically removed via Firestore `FieldValue.delete()` (not merely withheld from a response), so a deleted reply's plaintext is impossible to recover from the document ever again. `deletedBy` (the acting deleter's `uid` — the reply's own author or an app admin) is retained for internal accountability only and is never returned by any API response. A thread's reply count is capped at 500, enforced at creation time via a Firestore `.count()` read, so `getThreadWithReplies` always returns a thread's complete reply set. Server-only via the Firebase Admin SDK; `firestore.rules` denies client-SDK access. | Yes (`authorUid` while active, `deletedBy` on a tombstone — neither ever exposed to any client) | Yes | Yes |
-| SkillTree | Implemented (Firestore-backed, `docs/features/team-skill-tree/SPEC.md`) | An admin-defined, org-wide, named capability-maturity progression — an ordered, count/order-immutable list of 2-20 stages, not owned by any one team. Firestore-backed: `skillTrees/{treeId}` (`treeId` opaque, Firestore-auto-generated; `name`, `nodes: [{nodeId, label, order}]`, `createdAt`, `createdBy`, `updatedAt?`, `updatedBy?` — the last two paired-optional, present only once a tree has been cosmetically corrected). Node `nodeId`/`order`/count are permanently immutable after creation; only a tree's `name` and its nodes' `label` text may later be cosmetically corrected (`updateSkillTree`) — no structural editing or deletion exists in v1. No separate `SkillNode` collection: nodes are embedded as an ordered array on their parent document, since a node has no independent lifecycle. Server-only via the Firebase Admin SDK; `firestore.rules` denies client-SDK access. `createdBy`/`updatedBy` identify the *acting admin*, never returned by any API response. | No | No (short, structured admin-authored taxonomy text — see Notes) | No |
-| SkillProgress | Implemented (Firestore-backed, `docs/features/team-skill-tree/SPEC.md`; write path extended by `docs/features/skill-progress-self-report/SPEC.md`, Phase 8) | Exactly one team's tracking record against exactly one SkillTree — never a person's; this feature has no individual-level data anywhere. Firestore-backed: `skillProgress/{teamId}__{treeId}` (deterministic composite key, mirrors `teamMemberships/{uid}__{teamId}`; `teamId`, `treeId`, `currentNodeId: string \| null`, `updatedAt`, `updatedBy`). `currentNodeId: null` means "tracked, not yet started." Created by `startTeamSkillTracking` (app-admin-only, rejected for a `disabled` team), updated by either `updateTeamSkillProgress` (app-admin-only, allowed regardless of team status) or `reportTeamSkillProgress` (Phase 8 — any real team member, rejected for a non-`active` team), and hard-deleted with no tombstone by `stopTeamSkillTracking` (app-admin-only, also allowed regardless of team status) — a later restart creates a fresh record with `currentNodeId: null` again, with no history retained anywhere. Tree/tracking-lifecycle writes (create/correct a tree; start/stop tracking) remain app-admin-only; only the current-stage write itself has two authorized actors as of Phase 8. `updatedBy` identifies whichever authenticated account most recently wrote the value — an admin or a member alike, with no field distinguishing which — and is never returned by any API response. Server-only via the Firebase Admin SDK; `firestore.rules` denies client-SDK access. | No | No | No |
-| RoadmapItem | Implemented (Firestore-backed, `docs/features/team-skill-planning/SPEC.md`, Feature A) | One team's *plan* for one competency area (SkillTree): the team's intended target stage, priority, status and optional dates/owner. Team planning metadata, never a person's assessment. Firestore-backed: `roadmapItems/{teamId}__{treeId}` (deterministic id — a uniqueness mechanism only, **one plan per team + tree in Feature A**, archived plans included; never parsed and never authorization or ownership proof). Fields: `teamId`, `treeId`, `targetNodeId`, `priority: high/medium/low`, `status: planned/active/completed`, optional `startDate`/`targetDate` (`YYYY-MM-DD`), optional `ownerRef` (a `TeamMembership.memberRef`; opaque planning metadata that grants nothing; a stale, missing or ambiguous ref resolves to "unavailable"), `completedAt` (iff `completed`; completion is manual), paired `archivedAt`/`archivedBy` (archive is separate from `status`; restore returns the same plan with its status), `createdAt`/`createdBy`/`updatedAt`/`updatedBy` (internal audit uids, never returned). **Derived on read and never persisted**: current stage (from `skillProgress`), `areaName`, `targetLabel`, `tracking`, `targetReached` (informative only; never changes status), `overdue`, owner display name, `canEdit`. A plan survives when the team stops tracking the area (shown as untracked; target locked until tracking restarts). No delete path exists. Server-only via the Firebase Admin SDK; `firestore.rules` denies client-SDK access; no new index. Not encrypted (structured, non-sensitive, no free text). | No (`ownerRef` is opaque; audit uids are internal) | No | No |
-| TeamSystem | Implemented in feature code (Firestore-backed `teamSystems`, `docs/features/team-system-overview/SPEC.md`; account-erasure coverage registered as A-13 (ANONYMIZE `createdBy`, `updatedBy`, `assessedBy`) and A-14 (DETACH `knowledgeMemberRefs`), per `docs/features/account-erasure/SPEC.md`) | A team-owned software system with qualitative team assessments (availability, maintainability, security), knowledge associations to current team memberships (by opaque `memberRef`), and an optional https Backstage link. Server-only access; client Firestore access denied. | Indirectly (audit uids `createdBy`/`updatedBy`/`assessedBy`; `memberRef` associations) | Free text may be sensitive operational information (name, description, assessment notes, Backstage URL) | No (not application-encrypted; access control is server-side) |
-| TeamProject | Implemented in feature code (Firestore-backed `teamProjects/{projectId}`, `docs/features/team-experience-redesign/SPEC.md`, TASK-003) | A team-scoped delivery project with a required title, `startDate`/`endDate` (`YYYY-MM-DD`, end not before start), a stored lifecycle `lifecycleStatus: planned/completed`, `priority: high/medium/low`, and archive state (`archived`, `archivedAt`). `Pågår` (active) is derived on read from the start date and never stored; a completed project stays completed; a target date alone does not complete a project. Separate from competence-stage `RoadmapItem` records (AD-1). No product link yet: no product entity exists, so a same-team product reference is not accepted. No actor uid is stored (the erasure inventory does not cover this collection yet; TASK-012). Writes are lead-only on an active team; reads are for any non-denied team role. Server-only via the Firebase Admin SDK; `firestore.rules` denies client-SDK access. Not encrypted (structured, non-sensitive, no free text). | No | No | No |
-| TeamProjectParticipation | Implemented in feature code (Firestore-backed `teamProjectParticipations/{participationId}`, `docs/features/team-experience-redesign/SPEC.md`, TASK-004) | A planned interval in which one same-team member works on one same-team project: `teamId`, `projectId`, `memberRef` (opaque, team-scoped), `startDate`/`endDate` (inclusive, end not before start), optional `note` (max 500 characters), `archived`. Removal is a soft archive. Overlap with another interval of the same member is an informational flag only; no utilization, capacity or performance value exists. Participation is planning data and does not feed skill, coverage or performance outputs. No uid is stored. Writes are lead-only on an active team, and the member and project must both belong to the team; the project must not be archived. Erasure: A-15 (DELETE memberRef). Server-only via the Admin SDK; `firestore.rules` denies client access. Not encrypted (non-sensitive structured planning data; the note is free text and must not contain evaluative content by design). | Yes (A-15) | No | No |
-| TeamManualAssessment | Implemented (Firestore-backed `teamManualAssessments/{teamId}__{skillId}`, `docs/features/team-owned-skills/SPEC.md` §12) | One team's agreed level 1–4 for one active `teamSkills` area, with an optional note (≤300), `criteriaVersion` at entry, `updatedAt` and `updatedBy` (administrator, audit only, never returned). Team-level value only: no member is attributed and no k-threshold applies. Written by a team administrator; read by genuine members. Server-only; `firestore.rules` denies client access. A-19 (ANONYMIZE `updatedBy`). | No | No | No |
-| TeamCompetenceArea | RETIRED 2026-11-11: no code or rule references `teamCompetenceAreas` any more; the collection is cleared by the test-data reset. Previously Firestore-backed `teamCompetenceAreas/{teamId}__{treeId}`, `docs/features/team-experience-redesign/SPEC.md`, TASK-007) | One team's assignment of an admin-owned catalog area from `skillTrees`: `teamId`, `treeId`, `status` (`active`, `inactive`, `archived`), `sortOrder` (0–99), `createdAt`, `updatedAt`. Archive is terminal and never deletes the document. Team-level state only: no uid, no actor, no rating, level or member count. Catalog names are read from `skillTrees` and never copied. Writes are lead-only on an active team; reads are for any non-denied team role (as for team projects). Implemented in `src/features/team-competence-catalog/`, not in the C2 `team-skills` module. Server-only via the Admin SDK; `firestore.rules` denies client access. Not encrypted (non-sensitive structured configuration). Allow-listed as non-person-owned in `inventory-allow-list.ts` (no uid, actor or memberRef field). | No | No | No |
-| TeamCompetencePlan | Implemented in feature code (Firestore-backed `teamCompetencePlans/{planId}`, random UUID, independent of any competence area; `docs/features/team-experience-redesign/SPEC.md`, TASK-006, OD-3/OD-4/OD-6) | One team's development plan, independent of any competence area: `teamId`, `title` (1–120 characters), optional `treeId` catalog label (`null` for new plans, kept for migrated plans only), `targetStage` (one of the four existing self-assessment levels, a goal and never an observed level), `priority` (`high`/`medium`/`low`), `archived`, embedded `milestones` (max 20: `id`, `title`, optional `targetDate`, `status` `planned`/`in_progress`/`completed`), `createdAt`, `updatedAt`. Progress is derived from completed milestones only. Team-level planning state: no uid, actor, memberRef or member assessment. Written only by a lead of an active team; read by any non-denied team role. Server-only via the Admin SDK; `firestore.rules` denies client access. Not encrypted (non-sensitive planning data). Allow-listed as non-person-owned in `inventory-allow-list.ts` (OD-5). | No | No | No |
-| UserProfile | Implemented (Firestore-backed, `docs/features/member-identity-and-team-roles/SPEC.md`, F0) | One user's self-set, presentation-only display name: `userProfiles/{uid}` (`displayName`, `createdAt`, `updatedAt`). The document id **is** the Firebase `uid`; the `uid`, e-mail and every other field are deliberately not stored. A profile may be absent (every existing user) — that means "no name set", never an error, and no migration is needed. `displayName` is NFC-normalised, trimmed, whitespace-collapsed and 2–50 Unicode code points with at least one letter/number and no control/format/private-use/line-separator characters; it is not unique and is never an identifier, key or authorization input. Written/read/deleted only by the owner through `GET`/`PUT`/`DELETE /api/me/profile` (the uid comes solely from the verified token); other same-team members see it only via the roster (name only), app admins via the admin member list. No list/search/by-uid read exists. Hard-deleted by the owner; no account-deletion flow exists yet, so a profile can outlive a deleted Firebase account (see `docs/features/member-identity-and-team-roles/SPEC.md` — Known limitations). Server-only via the Firebase Admin SDK; `firestore.rules` denies client-SDK access; no index. Not encrypted (short, self-chosen label, same posture as `teams.name`). | Yes | No | No |
-| SkillProfile | Implemented (Firestore-backed, `docs/features/individual-skill-self-assessment/SPEC.md`, Feature C1) | One person's own, current, self-reported skill levels: `skillProfiles/{uid}` (`levels`, `createdAt`, `updatedAt`). The document id **is** the Firebase `uid`; the persisted shape is exactly those three fields — no uid/e-mail/display name/team id field, no per-skill timestamps, no history, no sharing/consent flag, no schema version, no derived or aggregate value. `levels` is a map keyed by SkillTree `treeId` whose values are the ordinal integers 1–4 (1 limited/early familiarity; 2 can work with support or guidance; 3 works independently in ordinary situations; 4 deep/advanced proficiency — mentoring is only an example); **absence of a key means unassessed** (there is no level 0 or 5, and no mean, sum or overall score is ever computed). It is a *person's* level, independent of SkillTree stages and of team maturity (`skillProgress`). **Ownership:** person-owned and **owner-only in C1** — written/read/erased only by the owner through `GET /api/me/skills`, `PUT`/`DELETE /api/me/skills/[treeId]` and `DELETE /api/me/skills` (uid solely from the verified token; no uid parameter; role, team lead status and app-admin status grant nothing). Skill-area identity and display name come from the global SkillTree catalog (`treeId`, `name`); there is no separate personal catalog. **Readability:** a missing document or missing `levels` is a readable empty profile; a plain-object `levels` is readable (invalid or unlisted entries are ignored, never repaired by a read); a present but non-object `levels` (`null`, array, primitive) makes the profile *unreadable*; timestamps never decide readability; `GET` never writes. **Writes** are per-key transactional merges: a successful per-skill write sets/removes only the requested `levels` key, preserves other keys and unknown top-level fields, sets `updatedAt`, preserves a valid `createdAt` and repairs a missing/invalid one. Clearing one skill that is already absent (key or document) is an idempotent no-write. Reset-all **physically deletes** the document (including any unknown fields or a malformed `levels`) with no timestamp repair; a later write recreates it with a fresh `createdAt`. Concurrent writes to different skills are protected by the per-key transaction; concurrent writes to the same skill are last-write-wins. Account deletion does not exist, so a profile can outlive a deleted Firebase account. Server-only via the Firebase Admin SDK; `firestore.rules` has an explicit deny-only block; no index; not encrypted (structured self-assessment, no free text). C1 persists nothing for Demo Team. *C2 amendment (2026-10-10):* the document shape and owner-only APIs are unchanged; C2 reads it server-side, read-only, through one batch module and only for a member with an effective per-team participation, and exposes only thresholded categorical team coverage (never the levels). | Yes (a person's self-assessment, owner-only access; read-only thresholded C2 use) | No (not wellbeing data, but private to the owner) | No |
-| TeamSkill | Implemented (Firestore-backed, `docs/features/team-owned-skills/SPEC.md`) | A team-owned skill definition: `teamSkills/{skillId}` (`skillId` is a Firestore auto-id, `[A-Za-z0-9]{1,64}`; `teamId`, `name`, `description`, optional `category`, `guidance` per level 1–4, `criteriaVersion` (bumped only when `guidance` changes), `active`, `sortOrder`, `createdAt`/`createdBy`/`updatedAt`/`updatedBy`). Identity is the `skillId`, scoped to one team; names are never identifiers, and two teams may define the same name. The `createdBy`/`updatedBy` audit uids are internal (A-17) and never returned. Server-only; `firestore.rules` denies client access. | Indirectly (audit uids only) | Short admin-authored text, not encrypted | No |
-| TeamSkillAssessment | Implemented (Firestore-backed, `docs/features/team-owned-skills/SPEC.md`) | One person's private rating of one team skill: `teamSkillAssessments/{uid}__{skillId}` with `uid`, `teamId`, `skillId`, `level` (1–4), `criteriaVersion`, `createdAt`, `updatedAt`. One document per rating (no map keyed by skill id). Owner-only: the person writes and reads their own rating; team administrators have no read path to it. Aggregates use only opted-in contributors at the current criteria version, at threshold 3 (owner decision 2026-11-11; I-19 erasure). Server-only; no client access. | Yes (owner-only self-assessment) | No (structured self-assessment, no free text) | No |
-| TeamSkillNeed | Implemented (Firestore-backed, `docs/features/team-skill-needs-and-matrix/SPEC.md`, Feature C2) | One team's stated skill need per competency area: `teamSkillNeeds/{teamId}__{treeId}` (`requiredLevel` 2–4, `requiredCoverage` 1–20, timestamps). Lead-managed team planning data; derived categorical coverage is never stored. See the notes below. | No | No | No |
-| PersonalGoal | Implemented (Firestore-backed, `docs/features/personal-development-goals/SPEC.md`, Feature D1) | One person's own development goal: `userDevelopment/{uid}/goals/{goalId}` — a **subcollection** (the repository's first); `{uid}` is the owner's Firebase uid as a path segment only and no `userDevelopment/{uid}` parent document is required or written. Persisted keys exactly `title`, `status` (`active`/`completed`), `createdAt`, `updatedAt`, optional `treeId` (a SkillTree id; name resolved at read), optional `targetDate` (`YYYY-MM-DD`, past dates allowed), and `completedAt` only while completed. No uid, e-mail, team, owner name, score, percentage, progress history or sharing field. Server-only (Admin SDK) with an explicit deny-only rules block; no index. | Yes (owner-attributed by design) | Yes — `title` is free text the owner may make sensitive; stored **unencrypted** (accepted, `docs/SECURITY.md` invariant 48) | No |
-| DevelopmentConversation | Implemented (Firestore-backed, `docs/features/development-conversations/SPEC.md`, Feature D2, 2026-10-21) | One development conversation: `userDevelopment/{ownerUid}/conversations/{conversationId}`, an owner-subtree document and the only authority for content and participant state. Plain keys are exactly `teamId`, `participantUid`, `participantMemberRef`, `participantState`, `participantInvitedAt`, `participantAcceptedAt`, `plannedFor`, `status`, `completedAt`, `createdAt`, `updatedAt`, `ciphertext`, `iv`, `authTag`, `keyVersion`, `keyCheck`. Free text (`title`, `ownerNotes`, `nextSteps`, `participantNotes`, goal snapshots) lives only inside the encrypted payload. No goal id is stored. | Yes (owner-attributed; the participant binding is stored as a reference, never as free text) | Yes — application-layer AES-256-GCM on the server, not end-to-end (`docs/SECURITY.md` invariants 55–72) | No |
-| ConversationParticipation | Implemented (participant locator, `docs/features/development-conversations/SPEC.md`, Feature D2, 2026-10-21) | Participant-side index: `userDevelopment/{participantUid}/conversationParticipations/{conversationId}` with exactly `{ ownerUid, invitedAt }`. It holds no content and grants nothing alone; access requires the owner document's binding and the access check (`docs/SECURITY.md` invariants 55–72). | Yes (locator) | No | No |
+Notation: `{x}__{y}` is a deterministic composite document ID. "auto" means a Firestore auto-generated ID or a server-issued
+UUID.
 
-| SuperadminRecord | Implemented (Firestore-backed, `docs/features/superadmin-registry/VERIFICATION.md`, `docs/features/superadmin-registry/BOOTSTRAP.md`) | Authoritative global-admin registry: `superadmins/{uid}` (`uid`, `active`, `grantedAt`, `grantedByUid`, `revokedAt`, `revokedByUid`, `updatedAt`). Admin SDK only; client access denied (`firestore.rules`). No e-mail address stored. `superadminRegistry/control.activeCount` is the serialization point for the last-superadmin rule. |
-## Notes
+## 1. Identity, teams and membership
 
-- `SurveyResponse` and `SurveyParticipation` are intentionally separate
-  concepts so that "who participated" cannot be directly joined to "what
-  they said" (invariant 7 in `docs/SECURITY.md`). For `authenticated`
-  surveys, `SurveyParticipation` exists but shares no identifier, foreign
-  key, or content field with the `SurveyResponse` document it accompanies;
-  `public` surveys have no participation tracking at all, identical in
-  spirit to Phase 1's fully anonymous, dedup-free model.
-- `SurveyAggregate` is only computed and exposed when the underlying
-  response count meets the configured minimum threshold (invariant 11/12).
-  As of `docs/features/managed-surveys/SPEC.md` → "Per-survey result
-  threshold," that threshold (`minimumResponses`) is configured per survey
-  instance, not a single global value.
-- `ForumThread`/`ForumReply` are this codebase's first collections where
-  persisted, member-visible attribution (`authorUid`, displayed as
-  `authorTag`) is the deliberate point, rather than a near-miss to avoid —
-  every other collection above is identity-free by design. `authorUid`
-  itself still never reaches any client; `authorTag` is a one-way,
-  per-team pseudonym, not a real name or contact-reachable value (see
-  `docs/features/team-forum/SPEC.md` → "Identity/attribution model").
-- For every concept above marked "Implemented," the relevant
-  `docs/features/<feature-id>/SPEC.md` is authoritative for exact field
-  names, state transitions, and indexes.
-- `SkillTree`/`SkillProgress` are org-wide/team-scoped reference data, not
-  personal or sensitive data — unlike `SurveyResponse`/`AnonymousChallenge`/
-  `ForumThread`/`ForumReply`, neither is encrypted, matching this
-  codebase's existing posture for similarly-trusted short text such as
-  `teams.name` or `surveys.title`. **Accepted residual risk**: a
-  `SkillTree`'s `name`/node `label`s are short (3-100 character),
-  admin-authored free text; nothing architecturally prevents an admin from
-  typing something identifying or sensitive into one (e.g. naming a
-  specific person in a label). This cannot be prevented by validation
-  alone and is not scanned for — see `docs/features/team-skill-tree/
-  SPEC.md` → "Accepted residual risks" for the full acceptance.
-- The Cross-Team Skill Progress Overview (`docs/features/
-  org-skill-progress-overview/SPEC.md`, Phase 9) introduces **no new
-  collection and no new persisted concept**. Its `getOrgSkillProgressOverview`
-  operation is a computed, on-demand join across the existing `SkillTree`,
-  `SkillProgress`, and `Team` rows above — the same "computed value only,
-  no persisted document" pattern `SurveyAggregate` already establishes —
-  never a fourth collection. Its response DTO is a strict subset of fields
-  already covered by the `SkillTree`/`SkillProgress`/`Team` rows above (plus
-  `Team.name`/`Team.status`), so the "Personal data?"/"Sensitive data?"/
-  "Encryption likely?" answers on those existing rows already apply; Phase 9
-  changes none of them.
-- `UserProfile` (F0) is the first collection holding a person's chosen display name and is deliberately separate from `TeamMembership`: a name is per person, not per team. It is the only thing a teammate may learn about another member's identity from the member-facing roster — never the `uid`, e-mail, membership document id or audit fields — because a Forum `authorTag` is `SHA-256(teamId:authorUid)` (see `docs/SECURITY.md`, invariants 19–22). F0 adds no other collection and no index.
-- Sources of truth stay separate:
-  - **PERSON:** `skillProfiles/{uid}` (C1) — a person's own current self-assessed level.
-  - **TEAM:** the team's **current** stage is `skillProgress`; team **planning** is
-    `roadmapItems`; team **desired skill coverage** is `teamSkillNeeds` (C2).
-  - **PERSON (goals):** `userDevelopment/{uid}/goals/{goalId}` (D1) — a person's own
-    development goals; independent of `skillProfiles` and of every team source below.
-  - **PARTICIPATION:** `teamMemberships/{uid}__{teamId}.skillContribution` (C2) — the
-    member's per-team opt-in; it is not stored in `skillProfiles`.
-  - **ORG:** `skillTrees` — the global catalog of skill-area identity and name.
-  - **DERIVED (never stored):** C2 coverage state per need.
+| Collection / path | Document ID | Owner feature | Key fields | Notes |
+| --- | --- | --- | --- | --- |
+| `userProfiles` | `{uid}` | profiles | `displayName` is sealed (`content`, see section 11). `createdAt`, `updatedAt` plaintext | Presentation only; no e-mail. Erased with the account |
+| `teams` | `{teamId}` | teams | `name` is sealed (`content`, see section 11). `status` (`active` / disabled), `visibility` (`private` / `public`), `createdBy` plaintext (listing, authorization) | Team metadata. Visibility defaults to `private` |
+| `teamMemberships` | `{uid}__{teamId}` | teams | `uid`, `teamId`, `createdAt`, `createdVia` (`invitation` / `access_request` / `admin_direct`), `grantedBy`, `memberRef`, `role` (`teamadmin`; absent = member), `roleUpdatedAt`, `roleUpdatedBy`, `skillContribution` (optional consent object) | A membership is the only team authorization evidence. `role` is written only by a superadmin |
+| `teamInvitations` | `{teamId}__{emailIndex}` (HMAC blind index of the normalized e-mail) | teams | `teamId`, `emailIndex`, `invitedBy`, `resolvedUid`, `status`, timestamps plaintext; the e-mail is sealed (`content`) | Resolved server-side into a membership. No plaintext e-mail is stored |
+| `teamAccessRequests` | `{uid}__{teamId}` | teams | `uid`, `teamId`, `resolvedBy` | Non-member request to join. Approve creates a membership; reject creates none |
+| `superadmins` | `{uid}` | superadmins | `uid`, `active`, `grantedByUid`, `revokedByUid` | Authority for global administration. Revoked records are kept with `active: false` |
+| `superadminRegistry` | `control` (fixed) | superadmins | `activeCount` | Serialization point for grant and revoke |
+| `accountErasures` | `{uid}` | account-erasure | status, step, timestamps | Erasure fence. No personal content |
 
-  Individual levels are never team maturity and are never copied into team
-  documents. Coverage is derived on every request and never persisted; there is no
-  employee-by-skill matrix. `roleDefinitions` exists since the role-profiles feature was built (2026-10-28; formerly the separate, unscheduled role-expectations feature, labelled D1/D2): see "Role profiles" below. Personal goals (`userDevelopment/{uid}/goals`, D1) are a separate PERSON-owned source of truth, see below.
-- **TeamSkillNeed (C2, implemented):** `teamSkillNeeds/{teamId}__{treeId}` (deterministic id,
-  a uniqueness device only). Fields exactly `teamId`, `treeId`, `requiredLevel` (integer 2–4,
-  a C1 personal level; level 1 is rejected), `requiredCoverage` (integer 1–20), `createdAt`,
-  `updatedAt`. Meaning: "at least `requiredCoverage` eligible contributors have a valid level
-  `>= requiredLevel`" — not a stage, average, target for a person, or role expectation. No
-  actor identity, priority, owner, status, archive marker, history or derived value; delete is a
-  hard delete without tombstone. Created, replaced (last write wins) and deleted only by a
-  genuine lead of an `active` team; readable by genuine members and app admins; documents
-  whose stored ids do not match the document id, or with invalid values, are skipped on read.
-  Server-only via the Firebase Admin SDK with an explicit deny-only rules block; no index; not
-  encrypted (team planning data, no free text, no personal data). Not personal data; the need
-  never reads or writes `skillProgress` or `roadmapItems`. Demo Team persists none.
-- **Derived coverage (C2):** per need, one of `covered`, `gap`, `insufficient_data`, or
-  `area_unavailable` (the tree is missing or invalid; no personal data involved). Eligible
-  contributors are counted **per skill** among members of an active team who have an effective
-  participation and a valid level for exactly that `treeId`; fewer than 5 ⇒ `insufficient_data`.
-  Output carries no count, percentage, distribution, level, identity or timestamp, and is
-  recomputed per request (nothing cached or stored). It is a privacy-thresholded team
-  coverage, not anonymous data in a formal sense (`docs/SECURITY.md`, invariants 32–36).
-- **SkillTree reuse and migration consideration (C1, extended by C2):** `skillProfiles.levels`
-  is keyed by the SkillTree `treeId`, so the global catalog doubles as the personal skill-area
-  catalog, and `teamSkillNeeds` is keyed by it too. If the catalog model is replaced or
-  materially changed, both `skillProfiles` and `teamSkillNeeds` must be considered
-  together. No migration is defined or needed now.
-- **SkillTree naming guidance (admins):** a tree `name` is shown both as a team
-  *Kompetanseområde* and as a personal *Ferdighet*, to every signed-in user, with no
-  per-tree hide or archive. Prefer a short noun phrase naming a skill or capability
-  area that makes sense for a person to self-assess ("Testautomatisering"), not a
-  description of a team's adoption state or a person.
-- **PersonalGoal (D1, implemented):** `userDevelopment/{uid}/goals/{goalId}`. Meaning: a
-  person's own development intention, with a simple `active`/`completed` status and an optional
-  SkillTree link used only as a topic name — never a proficiency level, expectation or progress
-  source. Goals are deleted by the owner as hard deletes (no tombstone, no history, no TTL). A
-  cap of 100 goals per person is enforced by count-then-create and can be slightly overshot
-  under concurrent creates; malformed stored documents count toward the cap and are shown to
-  the owner only as delete-only recovery items (no stored content returned); reads use a
-  bounded window (`docs/features/personal-development-goals/SPEC.md`, BR-30…BR-35, BR-56…BR-63).
-  Personal goals feed **no** team data: not `roadmapItems`, `skillProgress`, `teamSkillNeeds`,
-  the C2 coverage or any maturity view, and D1 never reads `skillProfiles`. The earlier
-  conceptual `developmentGoals → progressEntries` model was **not** implemented by D1 (there is
-  no progress-entry collection); `checkIns` likewise does not exist; `roleDefinitions` exists since 2026-10-28 (see "Role profiles" below).
-  *Dated pointer (2026-10-21):* the sentence above is the historical D1-era statement and is not rewritten. D2 was
-  implemented afterwards and does not introduce `checkIns`; development conversations are stored at
-  `userDevelopment/{ownerUid}/conversations/{conversationId}` (`DevelopmentConversation`), with participant locators at
-  `userDevelopment/{participantUid}/conversationParticipations/{conversationId}` (`ConversationParticipation`), as the
-  D2 rows above describe.
+## 2. Team competence
 
-## Role profiles (organizational roles and formal assignment, simplified 2026-11-11)
+| Collection / path | Document ID | Owner feature | Key fields | Notes |
+| --- | --- | --- | --- | --- |
+| `teamSkills` | auto-generated on create (`doc().id`), then fixed | team-owned-skills | name, criteria (four levels), `active`, `createdBy`, `updatedBy` | Canonical team competence catalog. Admin-managed |
+| `teamSkillAssessments` | `{uid}__{skillId}` | team-owned-skills | `uid`, `skillId`, four-level rating, criteria version, timestamps | **Private** self-assessment. Never readable by team admins |
+| `teamManualAssessments` | `{teamId}__{skillId}` | team-owned-skills | team-level agreed level, `updatedBy` | Collaborative level. Team-level value only |
+| `teamSkillNeeds` | `{teamId}__{treeId}` | team-skills | `requiredLevel`, `requiredCoverage` are sealed (`content`). `teamId`, `treeId`, timestamps plaintext | Team requirement per skill-tree. No actor data |
+| `teamCompetencePlans` | auto UUID | team-competence-plan | `teamId`, `title`, `treeId` (optional label, `null` on creation), `targetStage`, `priority`, `archived`, `milestones[]`, timestamps | Independent of any competence area. No uid, no rating. Writes by superadmin or `teamadmin` |
 
-Feature spec: `docs/features/role-profiles/SPEC.md` (current contract). Two collections, both written only by the Admin SDK on
-the server. Client Firestore access to both is denied by explicit deny-only rules.
+Consent is not a separate collection. It is the `skillContribution` field on `teamMemberships/{uid}__{teamId}`
+(`SKILL_CONTRIBUTION_FIELD`). `version` must equal `SKILL_CONTRIBUTION_NOTICE_VERSION` (2) to be effective.
 
-| Collection | Owner | Fields | Notes |
-|---|---|---|---|
-| `roleDefinitions/{roleId}` | role-profiles (admin-maintained, org-wide organizational roles) | `name` (the title, 1–80, required), `description` (1–500, required), `createdAt`, `createdBy`, `updatedAt`, `updatedBy`, `archivedAt`, `archivedBy`. | Document ID is the identity; no `roleId` field. `createdBy`, `updatedBy` and `archivedBy` are internal and never returned. Any unknown field (including the obsolete `expectations`) makes the document malformed, and malformed documents are skipped on read. |
-| `roleAssignments/{uid}` | role-profiles (formal organizational role assignment, one per person) | `roleId` (stable reference to a `roleDefinitions` document id), `createdAt`, `createdBy`, optional `updatedAt`, `updatedBy` | Document ID is the assignee's uid. Written only by an app administrator through the Admin SDK, fenced on the assignee's erasure record. Read by the assignee only through the verified-uid route `GET /api/me/role-assignment`. An assignment grants no application permission and is not read by any authorization path. Erasure deletes it (I-4); `createdBy` and `updatedBy` of other people's assignments are anonymized (A-18). |
+## 3. Skill trees, progress and roadmap
 
-The obsolete `userDevelopment/{uid}/roleTarget/current` document is no longer part of the model. The one document that existed was
-deleted from the test project by `scripts/cleanup-role-expectations.mjs` on 2026-11-11 (dry run, backup, write, verification).
-Account erasure no longer has a `roleTarget` subtree row.
+| Collection / path | Document ID | Owner feature | Key fields | Notes |
+| --- | --- | --- | --- | --- |
+| `skillTrees` | `{treeId}` | skill-trees | `name` and node `label`s are sealed (`content`). Node `nodeId` and `order`, `createdBy`, `updatedBy` plaintext | Org-wide capability progressions. Used by personal skills, `/admin/skills` and roadmap references |
+| `skillProgress` | `{teamId}__{treeId}` | skill-trees | `currentNodeId` is sealed (`content`). `teamId`, `treeId`, `updatedAt`, `updatedBy` plaintext | One team's progress on one tree |
+| `roadmapItems` | `{teamId}__{treeId}` | roadmap | `targetNodeId`, `priority`, `status`, dates, `completedAt` and `ownerRef` are sealed (`content`). `ownerRefIndex` (keyed index), `teamId`, `treeId`, audit and archive fields plaintext | One plan per team and competency area. The ID is a uniqueness key, not authorization |
+| `teamProjects` | auto | team-projects | project name, lifecycle (`planned` / `completed`), archive fields | Team delivery projects |
+| `teamProjectParticipations` | auto | team-projects | `teamId`, `projectId`, `memberRef`, planned interval | Planned member-to-project intervals. Referenced by `memberRef`, not uid |
+| `teamSystems` | `{systemId}` | team-systems | `teamId`, `name`, `description`, `backstageUrl`, seven attributes (`availability`, `deployability`, `maintainability`, `observability`, `reliability`, `security`, `testability`), each `{value, note, assessedAt, assessedBy}`, `knowledgeMemberRefs[]` | Attributes default to `ikke_vurdert`. `assessedBy` is stored for audit and never returned to clients |
 
-Derived, never stored: the list of active roles. No composite index (`firestore.indexes.json` unchanged).
+## 4. Surveys and anonymous feedback
 
-## Account erasure shapes (account-erasure, 2026-11-02)
+| Collection / path | Document ID | Owner feature | Key fields | Notes |
+| --- | --- | --- | --- | --- |
+| `surveys` | auto or `{surveyId}` | surveys | `title`, `description`, `questions` are sealed (`content`). `teamId`, `accessMode`, `minimumResponses` (mandatory), lifecycle timestamps, `createdBy` plaintext | Per-survey result threshold |
+| `teamSurveyState` | `{teamId}` | surveys | open-survey marker | Enforces at most one genuinely open survey per team. Written only in transactions |
+| `surveyResponses` | auto | surveys | `surveyId`, `teamId`, `ciphertext`, `iv`, `authTag`, `keyVersion`, `keyId`, `submittedAt` | **No identity field in either access mode.** Encrypted answers |
+| `surveyParticipations` | `{uid}__{surveyId}` | surveys | `uid`, `surveyId` | Only for `authenticated` mode. Minimal by design: no timestamp, not joined to a response |
+| `challenges` | auto | challenges | `teamId`, `ciphertext`, `iv`, `authTag`, `keyVersion`, `keyId`, `submittedAt`, admin-only `resolvedAt`/`resolvedBy`/`archivedAt`/`archivedBy` | Anonymous, encrypted free text. No submitter identity |
+| `forumThreads` | auto | forum | `teamId`, `authorUid`, `ciphertext`, `iv`, `authTag`, `keyVersion`, `keyId`, `createdAt` | Attributed, encrypted. Deleted as a real document |
+| `forumReplies` | auto | forum | `teamId`, `threadId`, `authorUid`, encrypted body, `createdAt`; tombstone `deletedAt`, `deletedBy` | A single deleted reply leaves a content-free tombstone to keep its position |
 
-Source of truth: `docs/features/account-erasure/SPEC.md`. These are conceptual shapes, not the schema.
+## 5. Personal development (owner-only)
 
-- **AccountErasure** (`accountErasures/{uid}`, server-only, Implemented). The document id is the uid, the only record that may
-  carry it while the erasure runs (AE-SI-5). Fields: `status` (`in_progress` | `auth_deleted` | `completed`), `step`,
-  `startedAt`, `updatedAt`, optional `completedAt` and `expireAt` (set on completion; the TTL policy is configured by the operator,
-  an operator action under the TASK-045 gate), and an optional `errorCode` from a fixed enum. It holds no e-mail, team, memberRef,
-  content or free text.
-- **Erased-thread placeholder** (`forumThreads/{threadId}` when other people replied, Implemented). Shape
-  `{ teamId, createdAt, erasedAt, status: "erased" }`. No title, body, author or `authorTag`.
-- **Erased-actor marker** (Implemented). The constant `"erased"`, written as `deletedBy` on other people's reply tombstones. It is
-  not a uid. The DTO never exposes it as an identity.
-- **Neutral participant block** (conversation DTO, Implemented). After the erased person's participation is removed, the participant
-  block is `{ state: "none" }` with the existing no-participant copy. It carries no uid, memberRef, notes or invitation timestamps,
-  and no historical marker is persisted (amended 2026-10-29).
+All personal records live under `userDevelopment/{uid}/...`. No parent document is needed. Only the owner's
+server-side operations write them. Client access is denied for all paths.
 
-## Teamadmin and team visibility (2026-11-06)
+| Path | Owner feature | Notes |
+| --- | --- | --- |
+| `skillProfiles/{uid}` | skill-profiles | Personal skill self-assessment (levels per skill). Not encrypted |
+| `userDevelopment/{uid}/goals/{goalId}` | personal-goals | Lifecycle plaintext (`status`, `createdAt`, `updatedAt`, `completedAt`). Business content (title, `treeId`, `targetDate`) is inside the v2 `content` envelope, bound to `goal:<uid>:<goalId>` |
+| `userDevelopment/{uid}/responsibilities/{id}` | personal-role-workspace | `title`, `description`, `outcome` encrypted |
+| `userDevelopment/{uid}/achievements/{id}` | personal-role-workspace | Same encryption model as responsibilities |
+| `userDevelopment/{uid}/conversations/{conversationId}` | development-conversations | Owner conversation (ID generated by the store); named free text encrypted |
+| `userDevelopment/{uid}/conversationParticipations/{conversationId}` | development-conversations | Participant-side index of conversations the person participates in (`PARTICIPATION_INDEX_SUBCOLLECTION`) |
 
-Source: `docs/features/teamadmin-and-team-visibility/SPEC.md`; security rules in `docs/SECURITY.md` (TA-SI-1…8).
+Other personal collections:
 
-- `teams/{teamId}.visibility` — `"private" | "public"`. Absent or malformed means `private`. Written only by
-  `setTeamVisibility`; new teams are created `private`. `visibilityUpdatedAt` records the last change. No actor uid is stored.
-- `teamMemberships/{uid}__{teamId}.role` — now `"teamadmin"` (only value written) or absent (member). Legacy `"lead"`
-  documents are read as member and are not migrated. Written only by a superadmin through `setTeamMemberRole`.
-- Public projection (not stored): `{teamId, name}` for an active, public team only.
+| Collection / path | Document ID | Owner feature | Notes |
+| --- | --- | --- | --- |
+| `roleDefinitions` | auto | role-profiles | `name` and `description` are sealed (`content`). Archive and audit fields plaintext | Organizational roles. No skill data; grants no application permission |
+| `roleAssignments` | `{uid}` | role-profiles | One formal role per person. Grants no application permission |
 
-## Superadmin registry (superadmin-registry, 2026-11-06)
+Development conversations are keyed by the owner. Participation is an index under the participant and is never a team
+collection. The conversation-level eligibility check uses `teamMemberships`.
 
-Source: `docs/SECURITY.md` (SR-SI-1…11); `docs/features/superadmin-registry/BOOTSTRAP.md`. Supersedes the former
-`APP_ADMIN_EMAILS` environment allow-list, which no code path reads any longer.
+## 6. Relationships
 
-- `superadmins/{uid}` — one record per Firebase Auth UID. `active` is the authority; a revoked record is kept (`active: false`) so
-  the revocation stays auditable and the id stays stable. Written only by the Admin SDK (grant, revoke, erasure cleanup, bootstrap).
-- `superadminRegistry/control` — `activeCount` (number of `active: true` records) and `updatedAt`. Every grant and revoke reads
-  and writes it in the same transaction, so concurrent revocations conflict on this document. A missing document means zero.
-- No e-mail address is stored in either document. Targets are resolved through Firebase Auth at grant time only.
-- Erasure: the start revokes an active superadmin in the same transaction as the erasure fence; the erasure step deletes the
-  record and keeps `activeCount` exact (`docs/features/account-erasure/SPEC.md`).
+- Membership links an account to a team. Every team read or write joins through `teamMemberships/{uid}__{teamId}`.
+- A `memberRef` is a team-scoped, opaque handle to a membership. Roadmap owners, project participations, system knowledge
+  references and conversation participant views refer to people through `memberRef`. A `memberRef` never authorizes access.
+- `teamSkillAssessments` (private) feed the consent-gated aggregate in `team-owned-skills`. Only the aggregate and the
+  collaborative level leave the server.
+- `skillTrees` are referenced by `skillProgress`, `roadmapItems`, `teamSkillNeeds` and personal skills.
+- Anonymous collections (`surveyResponses`, `challenges`) have no relation to any person. `surveyParticipations` holds
+  identity only for duplicate prevention.
 
-## Personal role workspace (personal-role-workspace, first increment, 2026-11-10)
+## 7. Validation
 
-Source: `docs/features/personal-role-workspace/SPEC.md`; `docs/SECURITY.md` (PR-SI-1…7, Amendments A–D, C2). Only the first increment
-is described here. Formal role assignments are a separate feature (see "Role profiles" above); this increment does not read them.
+- Every stored document is re-validated when read (`parseStored…`, `isValid…For`). A malformed document is treated as absent
+  or refused, never repaired or echoed. Examples: `teamMemberships` must match its own uid and team
+  (`isValidMembershipFor`), a competence plan id must be a UUID (`isWellFormedPlanId`).
+- Document IDs are checked against their own content. A mismatched `teamId` or `uid` makes a document ignored.
 
-- `userDevelopment/{uid}/responsibilities/{id}` — one person's responsibility. Persisted keys exactly: `ciphertext`, `iv`,
-  `authTag`, `keyVersion` (`v1`), `keyCheck` (base64 HMAC over the source-record context, plain), `status` (`active` / `completed`),
-  `relationToRole` (`within` / `beyond` / `unspecified`), optional `startDate` and `endDate` (`YYYY-MM-DD`, `endDate` not before
-  `startDate`), `goalIds` (≤ 5 unique ids of the owner's own goals), `createdAt`, `updatedAt`. The encrypted payload holds `title`
-  and `description` (optional). Owner-only, server-only (Admin SDK). No uid, team, e-mail or actor field.
-- `userDevelopment/{uid}/achievements/{id}` — one person's achievement. Persisted keys exactly: the envelope keys above, plus
-  `relationToRole`, optional `periodStart` and `periodEnd`, `goalIds` (≤ 5), `responsibilityIds` (≤ 5 ids of the owner's own
-  responsibilities), `createdAt`, `updatedAt`. The encrypted payload holds `title`, `description` and optional `outcome`.
-- Encrypted payload and key policy: the AES-256-GCM helper in `src/lib/encryption` with `ENCRYPTION_KEY`. Failure classes and the
-  check order are in SECURITY-REVIEW §11.1. Free text is never stored in plain fields and never logged.
-- Limits: 100 responsibilities and 200 achievements per person; request body ≤ 16 KiB; encrypted envelope ≤ 32 KiB.
-- Evidence (`DevelopmentConversation`, see above): `sharedEvidence` is an encrypted array inside the `content` payload, payload v2.
-  It is absent or `[]` for conversations created before the evidence feature. Snapshot shapes are in the feature SPEC.
-  The owner's evidence write is checked against the document's plain `updatedAt` (sent by the client as `expectedUpdatedAt`,
-  E-1). No new stored field is added for it; any owner or participant write advances `updatedAt`.
-- Client Firestore access is denied by the existing `userDevelopment` deny-only rule. Account erasure: inventory rows I-17
-  (responsibilities) and I-18 (achievements), step `personal_data`, see `docs/features/account-erasure/SPEC.md` (dated amendment).
+## 8. Indexes
+
+`firestore.indexes.json` defines the composite indexes the queries require. Review it with any query change. It has no
+client-facing role.
+
+## 9. Retention and deletion
+
+- No automatic retention job exists in the repository. Data stays until deleted by a user, an admin action or an erasure.
+- **Account erasure** (`src/features/account-erasure/server/inventory.ts`): each uid-bearing row is DELETE, ANONYMIZE,
+  DETACH, PRESERVE (anonymous or other-person content), TRANSIENT (`accountErasures`) or DISCOVERY (for example
+  `conversations` collection-group discovery). The inventory guard test rejects unlisted paths.
+- Operational erasure is held (see [`KNOWN-LIMITATIONS.md`](KNOWN-LIMITATIONS.md)).
+
+## 10. Scripts that write data
+
+- `scripts/seed-demoteam-conversations.ts`: synthetic owner conversations for the `demo-team` team. Hardcoded to the
+  legacy project id and requires it explicitly; it is not a general-purpose seeder. Writes only with `--write` and `--confirm`.
+- `scripts/bootstrap-superadmin.ts`: one-time owner bootstrap (see `docs/operations/superadmin-bootstrap.md`).
+- Retired (removed from the repository): the legacy demo seed `seed-demoteam.mjs` (superseded by `pnpm seed:demo-team`),
+  the one-off migration `migrate-competence-plans-independent.mjs`, the one-off cleanup `cleanup-role-expectations.mjs`,
+  and `reset-disposable-app-data.mjs` (destructive; it targeted the retired project only). Their history stays in git.
+
+## 11. Encryption coverage matrix (current implementation)
+
+This matrix lists every active collection that stores company business content, what is encrypted in it, what stays
+plaintext and why, the envelope version and the AAD context, and the tests that cover the persisted shape. It replaces the
+earlier partial matrix. It is **not** a claim of universal encryption: section 11.2 lists every remaining plaintext exception
+and gap.
+
+**Envelope legend:**
+- `v2 content` = one envelope in the document field `content`, holding the sealed business fields as JSON. Implemented in
+  `src/lib/encryption/record-envelope.ts` with an HKDF-derived AES-256-GCM subkey and the context as additional authenticated
+  data (AAD).
+- `v2 top-level` = the envelope fields (`ciphertext`, `iv`, `authTag`, `keyVersion`, `keyId`) stored directly on the document,
+  one envelope per sealed value.
+- Blind indexes use `src/lib/encryption/blind-index.ts` (HKDF-derived HMAC-SHA-256, one key per purpose).
+
+### 11.1 Converted collections
+
+| Collection / path | Encrypted fields | Plaintext metadata (reason) | Envelope | AAD context | Storage-boundary and binding tests |
+| --- | --- | --- | --- | --- | --- |
+| `teams/{teamId}` | `name` | `status`, `visibility`, `createdBy`, `createdAt`, `visibilityUpdatedAt` (authorization, listing, lifecycle) | v2 `content` | `team:<teamId>` | `teams/domain/team-content-codec.test.ts`, `teams/server/get-public-team.test.ts`, `get-teams-overview.test.ts`, `create-team.test.ts` |
+| `teamInvitations/{teamId}__{emailIndex}` | `email` (normalized, in `content`) | `teamId` (scope), `emailIndex` (keyed blind index, the only searchable value), `status`, `invitedBy`, `resolvedUid`, timestamps | v2 `content` | `team-invitation:<teamId>:<emailIndex>` | `teams/domain/team-invitation-content-codec.test.ts` (no plaintext email, index, tamper, substitution, missing key, malformed index); `create-invitation.test.ts`, `cancel-invitation.test.ts`, `resolve-invitations.test.ts`, `list-team-invitations.test.ts`; erasure: `invitations-erasure.test.ts`, `invitation-match.test.ts`, `erasure-adapters-team.test.ts` |
+| `skillTrees/{treeId}` | `name`, node `label`s (in `content`) | node `nodeId` and `order` (hierarchy, referenced by progress, roadmap and needs), `createdBy`, `updatedBy`, timestamps | v2 `content` | `skill-tree:<treeId>` | `skill-trees/domain/skill-tree-content-codec.test.ts`; `update-skill-tree.test.ts`, `create-skill-tree.test.ts`, `list-skill-trees.test.ts` |
+| `skillProgress/{teamId}__{treeId}` | `currentNodeId` (in `content`, nullable) | `teamId`, `treeId` (team listing and document identity), `updatedAt`, `updatedBy` (accountability; nulled by account erasure A-6) | v2 `content` | `skill-progress:<teamId>:<treeId>` | `skill-trees/server/skill-progress-content-codec.test.ts`; `report-team-skill-progress.test.ts`, `update-team-skill-progress.test.ts`, `start-team-skill-tracking.test.ts`, `team-skill-tracking-lifecycle.test.ts`, `progress-writer-fence.test.ts`, `team-skill-progress-br35-regression.test.ts` |
+| `roadmapItems/{teamId}__{treeId}` | `targetNodeId`, `priority`, `status`, `startDate`, `targetDate`, `completedAt`, `ownerRef` (in `content`) | `teamId`, `treeId`; `createdAt`, `updatedAt`, `archivedAt` (timestamps); `createdBy`, `updatedBy`, `archivedBy` (accountability and the erasure sweeps that match these uids); `ownerRefIndex` (keyed index of the owner handle, see 11.2) | v2 `content` | `roadmap-item:<teamId>:<treeId>`; owner index purpose `roadmap-owner-ref` | `roadmap/domain/roadmap-item-content-codec.test.ts` (no plaintext target, priority, status, dates or owner; owner index; detach re-seals; tamper, substitution, missing key); roadmap server suites; erasure: `erasure-adapters-team.test.ts`, `erasure-adapters-sweep.test.ts`, `erasure-end-to-end.test.ts` |
+| `teamSkillNeeds/{teamId}__{treeId}` | `requiredLevel`, `requiredCoverage` (in `content`) | `teamId`, `treeId` (team listing and identity), `createdAt`, `updatedAt` | v2 `content` | `team-skill-need:<teamId>:<treeId>` | `team-skills/server/skill-need-content-codec.test.ts`; `skill-needs-write-store.test.ts` (no plaintext values in the persisted payload), `skill-needs-store.test.ts`, `list-skill-needs.test.ts` |
+| `surveys/{surveyId}` | `title`, `description`, `questions` (in `content`) | `teamId`, `accessMode`, `minimumResponses` (threshold), `questionSetVersion`, lifecycle timestamps (`openedAt`, `closedAt`, `archivedAt`), `createdAt`, `createdBy` | v2 `content` | `survey:<teamId>:<surveyId>` | `surveys/server/survey-content-codec.test.ts` (no plaintext, tamper, substitution, missing key, plaintext refusal); `create-survey.test.ts`, `update-survey-draft` via `survey-builder.test.ts`, `open-survey.test.ts`, `close-survey.test.ts`, `list-team-surveys.test.ts`, `get-current-team-survey.test.ts`, `admin-stamp-fence.test.ts`, demo `preflight.test.ts` |
+| `surveyResponses/{id}` | answers (one `v2 top-level` envelope) | `surveyId`, `teamId`, `submittedAt`; no identity field in either access mode | v2 top-level | `survey-response:<teamId>:<surveyId>:<id>` (see `surveys/domain/response-context.ts`) | `forum/domain/forum-content-storage.test.ts` (survey response binding: moved-response and tamper refusal, missing key); `submit-survey-response.test.ts`, `get-team-survey-results.test.ts`, `aggregation.test.ts` |
+| `challenges/{id}` | free text (one `v2 top-level` envelope) | `teamId`, timestamps, admin-only `resolvedAt`/`resolvedBy`/`archivedAt`/`archivedBy` (no submitter identity) | v2 top-level | `challenge:<teamId>:<id>` | `submit-challenge.test.ts`, `list-team-challenges.test.ts` (AAD substitution), `challenge.test.ts` |
+| `forumThreads/{id}` | `title`, `body` (one `v2 top-level` envelope) | `teamId`, `authorUid`, timestamps | v2 top-level | `forum-thread:<teamId>:<id>` | `forum/domain/forum-content-storage.test.ts` (no plaintext, moved-thread and tamper refusal, missing key); `create-thread.test.ts`, `get-thread-with-replies.test.ts`, `list-team-threads.test.ts` |
+| `forumReplies/{id}` | reply body (one `v2 top-level` envelope) | `teamId`, `threadId`, `authorUid`, `createdAt`; tombstone `deletedAt`, `deletedBy` | v2 top-level | `forum-reply:<teamId>:<threadId>:<id>` | `forum/domain/forum-content-storage.test.ts` (moved-reply refusal); `create-reply.test.ts`, `delete-reply.test.ts` |
+| `roleDefinitions/{id}` | `name`, `description` (in `content`) | `createdAt`, `createdBy`, `updatedAt`, `updatedBy`, `archivedAt`, `archivedBy` (lifecycle and accountability; a formal role grants no permission) | v2 `content` | `role:<roleId>` | `role-profiles/domain/role-content-codec.test.ts`; `role-profiles/server/role-store.storage.test.ts` (transactional read-modify-reseal, lifecycle-only change leaves the content untouched, refusal when the content cannot be opened, substitution, missing key) |
+| `userProfiles/{uid}` | `displayName` (in `content`) | `createdAt`, `updatedAt` | v2 `content` | `user-profile:<uid>` | `profiles/domain/user-profile-content-codec.test.ts`; `profiles/server/get-display-names.test.ts`, `teams/server/list-team-roster.test.ts` |
+| `teamSkillAssessments/{uid}__{skillId}` | `level` | `uid`, `teamId`, `skillId`, `criteriaVersion`, timestamps | v2 `content`-style envelope per value | `team-skill-assessment:<uid>:<teamId>:<skillId>` | `team-owned-skills/server/assessment-level-codec.test.ts`, `team-skill-store.storage.test.ts` |
+| `teamManualAssessments/{teamId}__{skillId}` | `level`, `note` (separate envelopes) | `teamId`, `skillId`, `criteriaVersion`, `updatedAt`, `updatedBy` | v2 | `team-manual-assessment:{level,note}:<teamId>:<skillId>` | `manual-assessment-codec.test.ts`, `team-skill-store.storage.test.ts` |
+| `teamSkills/{skillId}` | `content` (name, description, category, guidance) | `teamId`, `criteriaVersion`, `active`, `sortOrder`, timestamps, actor ids | v2 `content` | `team-skill:<teamId>:<skillId>` | `team-skill-store.storage.test.ts` |
+| `teamCompetencePlans/{planId}` | `content` (title, milestones) | `teamId`, `treeId` (organisational label), `targetStage`, `priority`, `archived`, timestamps | v2 `content` | `competence-plan:<teamId>:<planId>` | `competence-plan-codec.test.ts` |
+| `teamProjects/{projectId}` | `title` (in `content`) | `teamId`, dates, lifecycle, priority, archive fields | v2 `content` | `team-project:<teamId>:<projectId>` | `team-project-codec.test.ts` |
+| `teamProjectParticipations/{id}` | `note` | `teamId`, `projectId`, `memberRef`, dates, `archived` | v2 | `team-project-participation:<teamId>:<id>` | `team-project-codec.test.ts` |
+| `teamSystems/{systemId}` | `content` (name, description); each attribute `note` | `teamId`, attribute `value`, `assessedAt`, `assessedBy` (never returned), `backstageUrl`, `knowledgeMemberRefs` | v2 | `team-system:<teamId>:<systemId>`; `team-system-note:<teamId>:<systemId>:<attribute>` | `team-system-codec.test.ts` |
+| `skillProfiles/{uid}` | each `levels.<treeId>` | tree-id map keys, `createdAt`, `updatedAt` | v2 | `skill-profile:<uid>:<treeId>` | `skill-level-codec.test.ts`, `collection-independence.test.ts`, `skill-profile-batch-read.test.ts` |
+| `userDevelopment/{uid}/goals/{goalId}` | `content` (title, treeId, targetDate) | lifecycle (`status`, timestamps) | v2 `content` | `goal:<uid>:<goalId>` | `goal-store.test.ts`, personal-goals suites |
+| `userDevelopment/{uid}/responsibilities`, `achievements` | title, description, outcome | ids, timestamps | v2 `content` + `keyCheck` | `personal-record:<ownerUid>:<collection>:<id>` | `source-record-codec.test.ts`, `record-operations.test.ts`, `owned-evidence-source.test.ts` |
+| `userDevelopment/{uid}/conversations/*` | named free text | owner, participation, timestamps | v2 `content` + `keyCheck` | `dev-conversation:<ownerUid>:<id>` | `content-codec.test.ts`, `stored-owner-conversation.test.ts`, `conversation-store*.test.ts` |
+
+### 11.2 Remaining plaintext and gaps
+
+Each entry is a deliberate plaintext field, or a known gap. Nothing here is unreviewed.
+
+**Plaintext exceptions (required metadata):**
+
+- Identifiers and document keys (`teamId`, `treeId`, `surveyId`, `uid`, `memberRef`, `treeId` in competence plans). They are the query keys of the listings and the identity the document ids are built from. They are opaque handles, not content.
+- Authorization metadata: `teamMemberships` (`uid`, `teamId`, `role`, `createdVia`, `grantedBy`, the `skillContribution` consent object), `superadmins`, `accountErasures`, `teams.status` and `teams.visibility`. Access decisions read them, so they cannot be sealed without changing authorization.
+- Accountability and erasure metadata: `createdBy`, `updatedBy`, `archivedBy`, `resolvedBy`, `invitedBy`, `resolvedUid`. The erasure sweeps match these uids; the content they describe is sealed where it is business content.
+- Lifecycle and audit timestamps throughout.
+- Threshold and access mode of a survey (`minimumResponses`, `accessMode`): enforced on every read before aggregation, and never derived from content.
+- Lookup indexes, which are keyed blind indexes and not plaintext: `teamInvitations.emailIndex` (purpose `team-invitation-email`) and `roadmapItems.ownerRefIndex` (purpose `roadmap-owner-ref`, scoped to the team). They make lookup possible without storing the address or the owner handle.
+- `surveyParticipations/{uid}__{surveyId}` (identity for duplicate prevention in authenticated mode, minimal by design) and `surveyResponses` without identity fields (answers are sealed).
+- `roleAssignments/{uid}`: one formal role reference per person. It grants no application permission. Business content of the role itself is sealed in `roleDefinitions`.
+
+**Known gaps (not yet satisfied):**
+
+- Invitation expiration is not implemented in the codebase, so there is no expiration behaviour to test. See `KNOWN-LIMITATIONS.md`.
+- The erasure sweeps and the account-erasure inventory still name the sweep keys `roadmapItems|perMembership|ownerRef` and `teamInvitations|docIdEndsWith|normalizedEmail`. These are sweep identifiers; the stored values they match are the keyed indexes described above.
+- The roadmap owner detach (A-5) and the membership erasure write a full re-sealed plan. A plan whose content cannot be opened makes the erasure step fail closed rather than skipping it.
+- Browser verification of the product flows is not covered by these tests (see `TESTING.md`).

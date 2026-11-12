@@ -1,6 +1,6 @@
 /**
  * The canonical, persisted `skillProgress/{teamId}__{treeId}` document
- * shape (docs/features/team-skill-tree/SPEC.md — "Data model"). Exactly one
+ * shape (docs/archive/features/team-skill-tree/SPEC.md — "Data model"). Exactly one
  * team's tracking record against exactly one SkillTree — never a person's;
  * this feature has no individual-level data anywhere (SPEC — "Purpose").
  *
@@ -27,7 +27,7 @@ export interface SkillProgressRecord {
 
 /**
  * Builds the deterministic `skillProgress` document id for one (teamId,
- * treeId) pair (docs/features/team-skill-tree/SPEC.md — "Data model":
+ * treeId) pair (docs/archive/features/team-skill-tree/SPEC.md — "Data model":
  * "deterministic composite key, mirrors `teamMemberships/{uid}__{teamId}`
  * and `teamSurveyState/{teamId}`"). Used only as a uniqueness/lookup key
  * when reading, writing, or deleting a specific team's progress against a

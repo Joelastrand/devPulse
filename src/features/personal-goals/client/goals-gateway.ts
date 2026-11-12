@@ -2,7 +2,7 @@ import { GOAL_DTO_KEYS, GOAL_LIST_RESPONSE_KEYS, GOAL_RECOVERY_DTO_KEYS } from "
 import { isGoalStatus, type GoalDto, type GoalListResponse, type GoalStatus } from "../domain/goal";
 
 /**
- * Browser gateway for the signed-in user's own goals (docs/features/personal-development-goals/SPEC.md —
+ * Browser gateway for the signed-in user's own goals (docs/archive/features/personal-development-goals/SPEC.md —
  * BR-22, BR-23, BR-25, BR-53): thin `fetch` wrappers around `GET`/`POST /api/me/goals` and
  * `PATCH`/`DELETE /api/me/goals/[goalId]`. The subject is only the token's own
  * identity; no uid, e-mail or team is ever sent. Browser code never touches Firestore. The parser is

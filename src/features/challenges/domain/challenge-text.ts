@@ -1,5 +1,5 @@
 /**
- * Bounds for a challenge's free-text body (docs/features/
+ * Bounds for a challenge's free-text body (docs/archive/features/
  * anonymous-challenges/SPEC.md — BR-3): non-empty after trimming, and
  * between these two lengths (inclusive), measured on the trimmed text.
  */
@@ -12,7 +12,7 @@ export type ValidateChallengeTextResult =
 
 /**
  * Validates and normalizes a raw, untrusted challenge submission body
- * (docs/features/anonymous-challenges/SPEC.md — BR-3). This is the single
+ * (docs/archive/features/anonymous-challenges/SPEC.md — BR-3). This is the single
  * canonical trim path for challenge text — callers must use the returned
  * `text`, not re-trim the original input themselves, so later persistence/
  * encryption code never reimplements this rule.

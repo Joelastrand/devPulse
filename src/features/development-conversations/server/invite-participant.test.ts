@@ -7,9 +7,11 @@ import { createFakeTeamEligibilityReader, type FakeTeamEligibilityState } from "
 import { inviteParticipant, type InviteParticipantDeps } from "./invite-participant";
 import type { ParticipantRefReader } from "./member-ref-binding";
 import { NOW, OTHER_OWNER_UID, OWNER_UID, TEAM_ID, seedOwnerConversation } from "./owner-read-test-support";
+import { conversationContext } from "../domain/stored-owner-conversation";
 
 // Synthetic fixtures only (invariant 15). Every ref satisfies the TASK-002 grammar.
 const CONVERSATION_ID = "conv-1";
+const CTX = conversationContext(OWNER_UID, CONVERSATION_ID);
 const LATER = new Date(NOW.getTime() + 60_000);
 const OWNER_REF = "0123456789abcdefghjkmnpqrs";
 const CANDIDATE_UID = "candidate-2";
@@ -332,7 +334,7 @@ describe("inviteParticipant: conversation state and owner namespace", () => {
       participantNotes: "",
       sharedGoals: [],
       sharedEvidence: [],
-    });
+    }, CTX);
     if (!bad.ok) throw new Error("fixture key unavailable");
     const raw = await rawOwner(store);
     store.seedRawOwner(OWNER_UID, CONVERSATION_ID, { ...raw, ...bad.content });

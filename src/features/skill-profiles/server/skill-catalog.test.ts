@@ -1,3 +1,5 @@
+import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../../skill-trees/domain/skill-tree-test-fixtures";
+stubSkillTreeEncryptionKey();
 import { describe, expect, it, vi } from "vitest";
 import { listSkillTrees, type RawSkillTreeDoc } from "../../skill-trees/server/list-skill-trees";
 import { readSkillCatalog, SKILL_CATALOG_WINDOW, type RawCatalogDoc, type SkillCatalogReader } from "./skill-catalog";
@@ -34,7 +36,7 @@ function doc(
   const id = overrides.id ?? `t${String(index).padStart(4, "0")}`;
   return {
     id,
-    data: treeData(new Date(BASE + index * 1000), overrides.name ?? `Skill ${id}`, overrides.data),
+    data: sealedSkillTreeFixture(id, treeData(new Date(BASE + index * 1000), overrides.name ?? `Skill ${id}`, overrides.data)),
   };
 }
 
@@ -156,7 +158,7 @@ describe("readSkillCatalog — raw window (BR-11)", () => {
     const docs: RawCatalogDoc[] = range(501).map((i) => {
       const id = `id-${String(i).padStart(4, "0")}`;
       // The last id (501st raw) has the alphabetically-first name.
-      return { id, data: treeData(same, i === 500 ? "Aaa" : `Name ${i}`) };
+      return { id, data: sealedSkillTreeFixture(id, treeData(same, i === 500 ? "Aaa" : `Name ${i}`)) as Record<string, unknown> };
     });
     const { reader } = fakeReader(docs);
 
@@ -195,7 +197,7 @@ describe("(k) duplicated-reader parity with listSkillTrees", () => {
     {
       label: "valid, Timestamp-like updatedAt with updatedBy",
       id: "valid-updated",
-      data: treeData(when, "C", { updatedAt: timestampLike(when), updatedBy: "admin" }),
+      data: sealedSkillTreeFixture("valid-updated", treeData(when, "C", { updatedAt: timestampLike(when), updatedBy: "admin" })),
     },
     { label: "missing createdAt", id: "no-created", data: treeData(undefined, "D") },
     { label: "null createdAt", id: "null-created", data: treeData(null, "D2") },
@@ -205,12 +207,12 @@ describe("(k) duplicated-reader parity with listSkillTrees", () => {
     {
       label: "updatedAt without updatedBy",
       id: "half-updated",
-      data: treeData(when, "H", { updatedAt: timestampLike(when) }),
+      data: sealedSkillTreeFixture("half-updated", treeData(when, "H", { updatedAt: timestampLike(when) })),
     },
     {
       label: "invalid updatedAt",
       id: "bad-updated",
-      data: treeData(when, "I", { updatedAt: "x", updatedBy: "admin" }),
+      data: sealedSkillTreeFixture("bad-updated", treeData(when, "I", { updatedAt: "x", updatedBy: "admin" })),
     },
     { label: "too few nodes", id: "few-nodes", data: treeData(when, "J", { nodes: [] }) },
     { label: "blank name", id: "blank-name", data: treeData(when, "  ") },

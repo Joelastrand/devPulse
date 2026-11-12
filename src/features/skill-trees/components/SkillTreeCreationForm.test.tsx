@@ -142,7 +142,7 @@ describe("SkillTreeCreationForm", () => {
     resolveCreate({ ok: true, treeId: "tree-1" });
   });
 
-  it("wires aria-invalid/aria-describedby on the name/stage fields to the validation alert (docs/features/ui-refresh/SPEC.md — BR-9)", async () => {
+  it("wires aria-invalid/aria-describedby on the name/stage fields to the validation alert (docs/archive/features/ui-refresh/SPEC.md — BR-9)", async () => {
     const user = userEvent.setup();
     render(<SkillTreeCreationForm token="token" onCreated={vi.fn()} onCancel={vi.fn()} />);
 
@@ -160,7 +160,7 @@ describe("SkillTreeCreationForm", () => {
     expect(stageField.getAttribute("aria-describedby")).toBe(alert.id);
   });
 
-  it("calls onCancel without submitting when the cancel button is clicked (docs/features/ui-refresh/SPEC.md — BR-14)", async () => {
+  it("calls onCancel without submitting when the cancel button is clicked (docs/archive/features/ui-refresh/SPEC.md — BR-14)", async () => {
     const user = userEvent.setup();
     const onCancel = vi.fn();
 

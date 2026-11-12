@@ -125,7 +125,8 @@ function validThread(): Data {
     ciphertext: "not-used",
     iv: "not-used",
     authTag: "not-used",
-    keyVersion: "v1",
+    keyVersion: "v2",
+    keyId: "k1",
     createdAt: new Date("2026-08-15T00:00:00Z"),
   };
 }

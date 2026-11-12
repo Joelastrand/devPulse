@@ -1,6 +1,9 @@
+import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../../skill-trees/domain/skill-tree-test-fixtures";
+stubSkillTreeEncryptionKey();
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { clearOwnSkillLevel } from "./clear-own-skill-level";
 import { deleteOwnSkillProfile } from "./delete-own-skill-profile";
+import { sealSkillLevel } from "./skill-level-codec";
 import { setOwnSkillLevel } from "./set-own-skill-level";
 
 /**
@@ -17,6 +20,7 @@ const access = vi.hoisted(() => {
     reads: [] as string[],
     writes: [] as string[],
     touched: [] as string[],
+    setPayloads: [] as Array<{ key: string; data: unknown }>,
   };
   const doc = (collection: string, id: string) => ({ collection, id, key: `${collection}/${id}` });
   const db = {
@@ -38,8 +42,9 @@ const access = vi.hoisted(() => {
           const data = state.docs.get(ref.key);
           return { exists: data !== undefined, data: () => data };
         },
-        set(ref: { collection: string; key: string }) {
+        set(ref: { collection: string; key: string }, data: unknown) {
           state.writes.push(ref.collection);
+          state.setPayloads.push({ key: ref.key, data });
         },
         update(ref: { collection: string; key: string }) {
           state.writes.push(ref.collection);
@@ -84,8 +89,8 @@ function expectNoUnrelatedAccess() {
 describe("skill-profile mutations are independent of team/product collections (BR-23/BR-24)", () => {
   beforeEach(() => {
     access.state.docs = new Map<string, Record<string, unknown>>([
-      ["skillTrees/ts", validTree],
-      ["skillProfiles/user-1", { levels: { go: 2 } }],
+      ["skillTrees/ts", sealedSkillTreeFixture("ts", validTree) as Record<string, unknown>],
+      ["skillProfiles/user-1", { levels: { go: sealSkillLevel("user-1", "go", 2) } }],
       ["skillProgress/user-1", { sentinel: true }],
       ["roadmapItems/item-1", { sentinel: true }],
       ["teamMemberships/user-1", { sentinel: true }],
@@ -101,6 +106,11 @@ describe("skill-profile mutations are independent of team/product collections (B
     expect(result).toEqual({ ok: true, level: 3 });
     expect([...new Set(access.state.reads)].sort()).toEqual(["accountErasures", "skillProfiles", "skillTrees"]);
     expect(access.state.writes).toEqual(["skillProfiles"]);
+    // Storage boundary: the persisted write carries a v2 envelope for the level, never the raw number.
+    expect(access.state.setPayloads).toHaveLength(1);
+    const payload = access.state.setPayloads[0].data as { levels: Record<string, unknown> };
+    expect(payload.levels.ts).toMatchObject({ keyVersion: "v2", keyId: "k1" });
+    expect(JSON.stringify(payload)).not.toMatch(/"level":3|"ts":3/);
     expectNoUnrelatedAccess();
   });
 
@@ -140,12 +150,14 @@ describe("skill-profile mutations are independent of team/product collections (B
 
     it("DELETE-one with an erasure record refuses as erasure_in_progress and leaves the level in place", async () => {
       access.state.docs.set("accountErasures/user-1", { status: "in_progress" });
+      // Sealed envelopes carry a fresh IV, so the level is compared against the document as it was before the call.
+      const before = access.state.docs.get("skillProfiles/user-1");
 
       const result = await clearOwnSkillLevel("t", "go", { verifyToken });
 
       expect(result).toEqual({ ok: false, error: "erasure_in_progress" });
       expect(access.state.writes).toEqual([]);
-      expect(access.state.docs.get("skillProfiles/user-1")).toEqual({ levels: { go: 2 } });
+      expect(access.state.docs.get("skillProfiles/user-1")).toEqual(before);
     });
 
     it.each([

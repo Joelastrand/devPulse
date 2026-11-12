@@ -41,7 +41,7 @@ const SIGN_IN_PANEL = {
 /**
  * The `continue` value is untrusted, raw query input — it is forwarded to
  * `SignInForm` unvalidated, and only ever turned into an actual redirect
- * target by `resolveSignInDestination` (docs/features/managed-surveys/
+ * target by `resolveSignInDestination` (docs/archive/features/managed-surveys/
  * SPEC.md — BR-40), never used directly by this page.
  */
 export default async function SignInPage({ searchParams }: SignInPageProps) {

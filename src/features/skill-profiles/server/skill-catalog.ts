@@ -1,3 +1,4 @@
+import { openSkillTreeDocument } from "../../skill-trees/domain/skill-tree-content-codec";
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { isValidSkillTree } from "../../skill-trees/domain/skill-tree";
@@ -39,7 +40,8 @@ export function getDefaultSkillCatalogReader(): SkillCatalogReader {
  * Deliberately duplicated from `listSkillTrees` (which stays untouched); a
  * parity test keeps the two interpretations identical.
  */
-export function toCandidateSkillTree(data: unknown): unknown {
+export function toCandidateSkillTree(treeId: string, raw: unknown): unknown {
+  const data = openSkillTreeDocument(treeId, raw);
   if (typeof data !== "object" || data === null) return undefined;
   const record = data as Record<string, unknown>;
   return {
@@ -74,7 +76,7 @@ export async function readSkillCatalog(reader: SkillCatalogReader): Promise<Skil
   const raw = await reader.listOrderedByCreatedAt(SKILL_CATALOG_WINDOW + 1);
   const skills: SkillCatalog["skills"] = [];
   for (const { id, data } of raw.slice(0, SKILL_CATALOG_WINDOW)) {
-    const candidate = toCandidateSkillTree(data);
+    const candidate = toCandidateSkillTree(id, data);
     if (isValidSkillTree(candidate)) skills.push({ treeId: id, name: candidate.name });
   }
   return { skills: sortSkillRows(skills), truncated: raw.length > SKILL_CATALOG_WINDOW };

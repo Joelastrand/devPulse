@@ -5,7 +5,7 @@ import { authRefusalStatus, isAuthRefusal } from "../../../../../src/features/au
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
- * Team skill needs read (docs/features/team-skill-needs-and-matrix/SPEC.md — BR-4).
+ * Team skill needs read (docs/archive/features/team-skill-needs-and-matrix/SPEC.md — BR-4).
  * Thin delegate to `listSkillNeeds`; `teamId` comes from the URL path only and
  * all authorization decisions live in the delegated operation. Read-only: no
  * other method is exported.

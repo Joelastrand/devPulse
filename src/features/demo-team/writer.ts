@@ -1,7 +1,7 @@
 import { assertAllowedEntry, assertManifestValid, type ManifestEntry, type PlannedOperation } from "./plan";
 
 /**
- * Guarded single-batch writer (docs/features/demo-team/SPEC.md — "Atomicity",
+ * Guarded single-batch writer (docs/archive/features/demo-team/SPEC.md — "Atomicity",
  * "Explicit Forum exclusion", "Cleanup policy"). It only talks to an injected
  * batch seam; the real Admin SDK adapter is wired later. The seam has no
  * removal and no query method, so neither can be expressed through this module.

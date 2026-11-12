@@ -55,11 +55,10 @@ const OPERATION_IMPORTERS = new Set([
 
 /**
  * File-exact exceptions for scripts (SECURITY-REVIEW §11.4). Each entry lists the only local import prefixes the file may use.
- * `seed-demoteam.mjs` has no local import, so its allow-list is empty.
+ * Scripts not listed here may not import feature code at all.
  */
 const SCRIPT_LOCAL_IMPORT_EXCEPTIONS = new Map<string, readonly string[]>([
   ["scripts/seed-demoteam-conversations.ts", ["src/features/development-conversations/"]],
-  ["scripts/seed-demoteam.mjs", []],
 ]);
 
 const ALLOWED_PATH_ALIASES = ["@/*"];
@@ -151,12 +150,15 @@ function pathStringViolations(file: SourceFile): string[] {
 
 /** Script exceptions: a listed script may import only its listed local prefixes. */
 function scriptExceptionViolations(file: SourceFile): string[] {
-  const allowed = SCRIPT_LOCAL_IMPORT_EXCEPTIONS.get(file.path);
-  if (!allowed) return [];
+  if (!file.path.startsWith("scripts/")) return [];
+  // Fail closed: a script that is not listed may import no local feature code.
+  const allowed = SCRIPT_LOCAL_IMPORT_EXCEPTIONS.get(file.path) ?? [];
   const violations: string[] = [];
   for (const specifier of literalSpecifiers(file.text)) {
     if (!isLocalSpecifier(specifier)) continue;
     const target = resolveLocal(file.path, specifier);
+    // A script may import a sibling script (e.g. its own test file); only feature code is restricted.
+    if (target.startsWith("scripts/")) continue;
     if (!allowed.some((prefix) => target.startsWith(prefix))) violations.push(`exception-import:${specifier}`);
   }
   return violations;
@@ -226,7 +228,7 @@ describe("personal record repository guard (PR-SI-2, static regression check, no
     expect(pathStringViolations(fixture("scripts/x.mjs", `doc("${"role" + "Assignments"}/u1")`))).toContain("personal-path-string");
     expect(pathStringViolations(fixture("src/x.ts", `const p = "${"achieve" + "ments"}";`))).toEqual([]);
     expect(
-      scriptExceptionViolations(fixture("scripts/seed-demoteam.mjs", 'import { x } from "../src/features/personal-role-workspace/server/x.ts";')),
+      scriptExceptionViolations(fixture("scripts/unlisted-script.mjs", 'import { x } from "../src/features/personal-role-workspace/server/x.ts";')),
     ).not.toEqual([]);
     expect(
       scriptExceptionViolations(

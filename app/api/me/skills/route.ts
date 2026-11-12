@@ -6,7 +6,7 @@ import { authRefusalStatus, isAuthRefusal } from "../../../../src/features/auth/
 const BEARER_PATTERN = /^Bearer (.+)$/;
 
 /**
- * Own skill self-assessment read (docs/features/individual-skill-self-assessment/
+ * Own skill self-assessment read (docs/archive/features/individual-skill-self-assessment/
  * SPEC.md — BR-8). Thin: no uid in path, query or body; the subject is always
  * the verified token's own identity. `GET` and `DELETE` (erase-all) only.
  */

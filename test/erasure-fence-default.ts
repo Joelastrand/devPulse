@@ -1,4 +1,13 @@
+import { randomBytes } from "node:crypto";
 import { vi } from "vitest";
+
+/**
+ * Synthetic test-only master key for application-layer encryption. It is generated per run, never stored, and only set
+ * when the environment has no key. Tests that need a missing or invalid key stub `ENCRYPTION_KEY` explicitly.
+ */
+if (!process.env.ENCRYPTION_KEY) {
+  process.env.ENCRYPTION_KEY = randomBytes(32).toString("base64");
+}
 
 /**
  * Test default for the erasure fence (TASK-009). Production reads `accountErasures/{uid}` from Firestore

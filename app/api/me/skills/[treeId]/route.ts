@@ -7,7 +7,7 @@ const BEARER_PATTERN = /^Bearer (.+)$/;
 type RouteContext = { params: Promise<{ treeId: string }> };
 
 /**
- * Own single-skill self-assessment writes (docs/features/individual-skill-self-
+ * Own single-skill self-assessment writes (docs/archive/features/individual-skill-self-
  * assessment/SPEC.md — BR-12, BR-13). Thin: the only subject is the verified
  * token; `treeId` from the path is the only resource identifier. `PUT` and
  * `DELETE` only.

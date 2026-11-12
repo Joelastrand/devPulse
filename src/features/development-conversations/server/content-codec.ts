@@ -1,30 +1,32 @@
 import "server-only";
-import { createHmac, timingSafeEqual } from "node:crypto";
 import {
-  decryptToBytes,
-  EncryptedPayloadAuthenticationError,
-  encrypt,
-  readEncryptionKeyBytes,
-  type EncryptedPayload,
-} from "../../../lib/encryption/encryption";
+  checkRecordKeyCheck,
+  decryptRecord,
+  encryptRecord,
+  RecordEnvelopeError,
+  recordKeyCheck,
+  type RecordEnvelope,
+} from "../../../lib/encryption/record-envelope";
 import { parseConversationContent, type ConversationContent } from "../domain/content-payload";
 import { serializeSharedEvidenceSnapshot } from "../domain/shared-evidence-snapshot";
 import {
-  KEY_CHECK_BYTES,
-  KEY_CHECK_CONTEXT,
+  STORED_KEY_ID,
   STORED_KEY_VERSION,
   type DecryptOutcome,
   type StoredEnvelope,
 } from "../domain/stored-owner-conversation";
 
 /**
- * The single D2 seam over the existing AES-256-GCM helper (SPEC BR-51, BR-53, CL-27, AD-5). Every D2 encrypt and
- * decrypt goes through this module. It reads `ENCRYPTION_KEY` only through the helper's key accessor, so there is one
- * source of truth for key parsing. Failures are typed and content-free: no key, keyCheck, ciphertext, IV or helper
- * message ever appears in a result or a thrown error.
+ * The single D2 seam over the record envelope v2 (`src/lib/encryption/record-envelope.ts`). Every D2 encrypt and decrypt
+ * goes through this module. Each record is sealed with AAD `dev-conversation:<ownerUid>:<conversationId>`, which the caller
+ * passes in, so a ciphertext cannot be moved to another owner's or another conversation's document.
+ *
+ * The stored `keyCheck` is kept next to the envelope so a wrong key is reported as `key_mismatch` before any decryption. A
+ * wrong key and a tampered value are different failures and must stay different (SPEC BR-51, BR-53, CL-27). Failures are
+ * typed and content-free: no key, keyCheck, ciphertext, IV or helper message ever appears in a result or a thrown error.
  */
 
-/** The stored envelope: `{ ciphertext, iv, authTag, keyVersion, keyCheck }` (CL-27). */
+/** The stored envelope: `{ ciphertext, iv, authTag, keyVersion, keyId, keyCheck }`. */
 export type EncryptedContent = StoredEnvelope;
 
 /**
@@ -33,7 +35,7 @@ export type EncryptedContent = StoredEnvelope;
  */
 export type KeyFailure = "key_unavailable" | "key_mismatch";
 
-/** Decode failures. Only `payload_unauthenticated` may become `authentication_failed` for the TASK-002 classifier. */
+/** Decode failures. Only `payload_unauthenticated` may become `authentication_failed` for the classifier. */
 export type ContentCodecFailure = KeyFailure | "payload_unauthenticated" | "malformed_payload";
 
 export type ProbeKeyResult = { ok: true } | { ok: false; error: "key_unavailable" };
@@ -54,50 +56,13 @@ export class ContentKeyError extends Error {
   }
 }
 
-/** Fixed, non-secret input for the BR-53 probe. Its output is discarded. */
+/** Fixed, non-secret input and context for the BR-53 probe. Its output is discarded. */
 const PROBE_PLAINTEXT = "devpulse.d2.key-probe";
-
-/** Strict UTF-8: malformed bytes throw instead of becoming U+FFFD. A BOM is kept, so JSON.parse rejects it. */
-const STRICT_UTF8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
-
-/**
- * CL-27 / BR-51: HMAC-SHA-256 keyed with the validated 32-byte `ENCRYPTION_KEY` over the UTF-8 bytes of
- * `KEY_CHECK_CONTEXT`. The derivation is deterministic and domain-separated by the context.
- */
-export function deriveKeyCheckBytes(keyBytes: Buffer): Buffer {
-  return createHmac("sha256", keyBytes).update(KEY_CHECK_CONTEXT, "utf8").digest();
-}
-
-/**
- * The expected keyCheck for the configured key, or `null` when the key cannot be read or derived. The accessor is the
- * only call in the try block, so the classification is by location, not by inspecting the error message.
- */
-function deriveExpectedKeyCheck(): Buffer | null {
-  let expected: Buffer;
-  try {
-    expected = deriveKeyCheckBytes(readEncryptionKeyBytes());
-  } catch {
-    return null;
-  }
-  return expected.length === KEY_CHECK_BYTES ? expected : null;
-}
-
-/** BR-53 probe: confirms the key is readable and derivable, then makes one helper encryption and discards it. */
-export function probeKey(): ProbeKeyResult {
-  if (deriveExpectedKeyCheck() === null) {
-    return { ok: false, error: "key_unavailable" };
-  }
-  try {
-    encrypt(PROBE_PLAINTEXT);
-    return { ok: true };
-  } catch {
-    return { ok: false, error: "key_unavailable" };
-  }
-}
+const PROBE_CONTEXT = "devpulse.d2.key-probe";
 
 /**
  * The plaintext JSON object, with a fixed key order and the exact D2 content fields. `capturedAt` is written as a
- * canonical ISO string, the form TASK-002's payload parser reads back.
+ * canonical ISO string, the form the payload parser reads back.
  */
 function serializeContent(content: ConversationContent): unknown {
   return {
@@ -112,32 +77,36 @@ function serializeContent(content: ConversationContent): unknown {
       status: goal.status,
       capturedAt: goal.capturedAt.toISOString(),
     })),
-    // Amendment C2: every successful write serializes payload v2, so `sharedEvidence` is present, possibly empty.
+    // Every successful write serializes payload v2, so `sharedEvidence` is present, possibly empty.
     sharedEvidence: content.sharedEvidence.map(serializeSharedEvidenceSnapshot),
   };
 }
 
-/**
- * Encrypts validated content. The keyCheck is derived from the helper key accessor. The helper's `encrypt` reads the
- * same variable through the same parser, so the AES key and the keyCheck key come from one source.
- */
-export function encodeContent(content: ConversationContent): EncodeContentResult {
-  const expectedKeyCheck = deriveExpectedKeyCheck();
-  if (expectedKeyCheck === null) {
-    return { ok: false, error: "key_unavailable" };
-  }
-
-  const plaintext = JSON.stringify(serializeContent(content));
-  let encrypted: EncryptedPayload;
+/** BR-53 probe: confirms the key is readable and usable, then makes one envelope and discards it. */
+export function probeKey(): ProbeKeyResult {
   try {
-    encrypted = encrypt(plaintext);
+    recordKeyCheck();
+    encryptRecord(PROBE_PLAINTEXT, PROBE_CONTEXT);
+    return { ok: true };
   } catch {
     return { ok: false, error: "key_unavailable" };
   }
-  if (encrypted.keyVersion !== STORED_KEY_VERSION) {
-    throw new Error("Encryption helper key version does not match the D2 stored key version.");
-  }
+}
 
+/**
+ * Encrypts validated content for the record identified by `context` (`conversationContext(ownerUid, conversationId)`).
+ * The keyCheck is derived from the same configured key as the record subkey, so the stored check and the ciphertext
+ * always agree.
+ */
+export function encodeContent(content: ConversationContent, context: string): EncodeContentResult {
+  let keyCheck: string;
+  let encrypted: RecordEnvelope;
+  try {
+    keyCheck = recordKeyCheck();
+    encrypted = encryptRecord(JSON.stringify(serializeContent(content)), context);
+  } catch {
+    return { ok: false, error: "key_unavailable" };
+  }
   return {
     ok: true,
     content: {
@@ -145,7 +114,8 @@ export function encodeContent(content: ConversationContent): EncodeContentResult
       iv: encrypted.iv,
       authTag: encrypted.authTag,
       keyVersion: STORED_KEY_VERSION,
-      keyCheck: expectedKeyCheck.toString("base64"),
+      keyId: STORED_KEY_ID,
+      keyCheck,
     },
   };
 }
@@ -153,42 +123,38 @@ export function encodeContent(content: ConversationContent): EncodeContentResult
 type OpenResult = { ok: true; json: unknown } | { ok: false; error: ContentCodecFailure };
 
 /**
- * Steps 1 to 6 of the locked decode order, with no payload validation: key bytes, keyCheck, authenticated decrypt,
- * strict UTF-8, JSON parse. The envelope has already passed TASK-002's structural checks.
+ * Steps of the decode order, with no payload validation: key, keyCheck, authenticated decryption, JSON. The envelope has
+ * already passed the structural checks in `stored-owner-conversation.ts`.
  */
-function openEnvelope(envelope: StoredEnvelope): OpenResult {
-  const expectedKeyCheck = deriveExpectedKeyCheck();
-  if (expectedKeyCheck === null) {
-    return { ok: false, error: "key_unavailable" };
-  }
-
-  // Length is checked first. `timingSafeEqual` throws on unequal lengths, and a length mismatch is key_mismatch.
-  const storedKeyCheck = Buffer.from(envelope.keyCheck, "base64");
-  if (storedKeyCheck.length !== expectedKeyCheck.length || !timingSafeEqual(storedKeyCheck, expectedKeyCheck)) {
-    return { ok: false, error: "key_mismatch" };
-  }
-
-  let plaintext: Buffer;
-  try {
-    plaintext = decryptToBytes({
-      ciphertext: envelope.ciphertext,
-      iv: envelope.iv,
-      authTag: envelope.authTag,
-      keyVersion: envelope.keyVersion,
-    });
-  } catch (error) {
-    if (error instanceof EncryptedPayloadAuthenticationError) {
-      return { ok: false, error: "payload_unauthenticated" };
-    }
-    // Any other throw is an unexpected runtime failure. It is neither a payload failure nor a recovery item.
-    throw new Error("Unexpected content decryption failure.");
-  }
+function openEnvelope(envelope: StoredEnvelope, context: string): OpenResult {
+  // The keyCheck is compared before any decryption. A mismatch means the record belongs to a different key, not that it
+  // was tampered with, so it is never reported as an authentication failure.
+  const keyStatus = checkRecordKeyCheck(envelope.keyCheck);
+  if (keyStatus === "key_unavailable") return { ok: false, error: "key_unavailable" };
+  if (keyStatus === "key_mismatch") return { ok: false, error: "key_mismatch" };
+  if (keyStatus === "malformed") return { ok: false, error: "malformed_payload" };
 
   let text: string;
   try {
-    text = STRICT_UTF8.decode(plaintext);
-  } catch {
-    return { ok: false, error: "malformed_payload" };
+    text = decryptRecord(
+      { ciphertext: envelope.ciphertext, iv: envelope.iv, authTag: envelope.authTag, keyVersion: "v2", keyId: "k1" },
+      context,
+    );
+  } catch (error) {
+    if (!(error instanceof RecordEnvelopeError)) {
+      // Any other throw is an unexpected runtime failure. It is neither a payload failure nor a recovery item.
+      throw new Error("Unexpected content decryption failure.");
+    }
+    switch (error.code) {
+      case "authentication_failed":
+        return { ok: false, error: "payload_unauthenticated" };
+      case "key_unavailable":
+        return { ok: false, error: "key_unavailable" };
+      case "unknown_key_id":
+        return { ok: false, error: "key_mismatch" };
+      case "malformed":
+        return { ok: false, error: "malformed_payload" };
+    }
   }
 
   try {
@@ -199,10 +165,10 @@ function openEnvelope(envelope: StoredEnvelope): OpenResult {
 }
 
 /**
- * Decrypts and validates one stored envelope with the TASK-002 payload parser. Every failure is typed and content-free.
+ * Decrypts and validates one stored envelope with the payload parser. Every failure is typed and content-free.
  */
-export function decodeContent(envelope: StoredEnvelope): DecodeContentResult {
-  const opened = openEnvelope(envelope);
+export function decodeContent(envelope: StoredEnvelope, context: string): DecodeContentResult {
+  const opened = openEnvelope(envelope, context);
   if (!opened.ok) {
     return opened;
   }
@@ -216,10 +182,10 @@ export function decodeContent(envelope: StoredEnvelope): DecodeContentResult {
 /**
  * The decrypt seam for `classifyStoredConversation`. A key failure throws `ContentKeyError`, so the classifier never
  * sees it. Only `payload_unauthenticated` returns `authentication_failed`. A malformed plaintext returns a `null`
- * payload, which the TASK-002 parser rejects as malformed. It is never reported as an authentication failure.
+ * payload, which the payload parser rejects as malformed. It is never reported as an authentication failure.
  */
-export function decryptForClassification(envelope: StoredEnvelope): DecryptOutcome {
-  const opened = openEnvelope(envelope);
+export function decryptForClassification(envelope: StoredEnvelope, context: string): DecryptOutcome {
+  const opened = openEnvelope(envelope, context);
   if (opened.ok) {
     return { status: "decrypted", payload: opened.json };
   }

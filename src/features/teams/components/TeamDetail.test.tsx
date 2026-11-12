@@ -29,7 +29,7 @@ const fetchRoadmapItemsMock = vi.fn().mockResolvedValue({
 /**
  * Records every time `TrendChart`'s module is actually loaded, without
  * changing its real behavior (`importOriginal()` passthrough) — most tests
- * exercise the real, unmocked `TrendChart` (docs/features/
+ * exercise the real, unmocked `TrendChart` (docs/archive/features/
  * performance-phase-a/SPEC.md — TASK-003: "at least one validation path
  * exercises the real production integration"). Module resolution is cached
  * by the JS engine after the first successful `import()` for the lifetime of

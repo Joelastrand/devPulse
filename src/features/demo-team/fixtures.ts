@@ -7,7 +7,7 @@ import type { Team } from "../teams/domain/team";
 
 /**
  * Pure, I/O-free logical fixtures for the Demo Team dataset
- * (docs/features/demo-team/SPEC.md — "Demo dataset"). Everything here is
+ * (docs/archive/features/demo-team/SPEC.md — "Demo dataset"). Everything here is
  * synthetic and fictional. Sensitive payloads (survey answers, challenge
  * text) exist only as in-memory plaintext *logical* values; nothing in this
  * module encrypts or persists them — `plan.ts` encrypts them through an

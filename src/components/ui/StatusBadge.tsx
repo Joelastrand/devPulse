@@ -4,7 +4,7 @@ import { Icon } from "./Icon";
 import { cx } from "./class-names";
 
 /**
- * Status presentation (docs/features/product-experience/SPEC.md — Status
+ * Status presentation (docs/archive/features/product-experience/SPEC.md — Status
  * representation). Every status is an icon, a text label and a tone. The icon
  * is decorative because the text carries the meaning, so the status is never
  * conveyed by colour alone. The caller decides the tone from its existing

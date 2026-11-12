@@ -634,7 +634,7 @@ describe("fetchTeamSkills", () => {
     }
   });
 
-  it("fails closed to read_failed when canReportProgress is missing from an otherwise well-formed response (docs/features/skill-progress-self-report/SPEC.md — 'Permission-UI correction')", async () => {
+  it("fails closed to read_failed when canReportProgress is missing from an otherwise well-formed response (docs/archive/features/skill-progress-self-report/SPEC.md — 'Permission-UI correction')", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () => jsonResponse(200, { status: "ok", skills: [] })) as typeof fetch;
 

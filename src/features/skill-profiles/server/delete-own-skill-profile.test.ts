@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../../skill-trees/domain/skill-tree-test-fixtures";
+stubSkillTreeEncryptionKey();
 import { deleteOwnSkillProfile, type DeleteOwnSkillProfileDeps } from "./delete-own-skill-profile";
 import { createFakeSkillProfileStore } from "./fake-skill-profile-store";
 import { getOwnSkills } from "./get-own-skills";
@@ -116,7 +118,7 @@ describe("deleteOwnSkillProfile", () => {
   });
 
   it("lets a following GET see an ok empty profile and a following PUT recreate with a fresh createdAt", async () => {
-    const tree = {
+    const tree = sealedSkillTreeFixture("ts", {
       name: "TypeScript",
       nodes: [
         { nodeId: "node-0", label: "A", order: 0 },
@@ -124,7 +126,7 @@ describe("deleteOwnSkillProfile", () => {
       ],
       createdAt: EARLIER,
       createdBy: "admin-uid",
-    };
+    }) as Record<string, unknown>;
     const s = setup({ "user-1": { levels: null, createdAt: EARLIER } }, { ts: tree });
     const catalogReader = { listOrderedByCreatedAt: vi.fn().mockResolvedValue([{ id: "ts", data: tree }]) };
     const unreadable = await getOwnSkills("t", { ...s.deps(), catalogReader });

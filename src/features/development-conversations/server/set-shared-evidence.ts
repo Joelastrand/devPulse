@@ -8,6 +8,7 @@ import type { ConversationStore } from "./conversation-store-types";
 import { classifyOwnerDocument } from "./owner-read";
 import type { UpdateOwnerSectionsCodec } from "./update-owner-sections";
 import { readOwnedEvidenceSnapshots, type OwnedEvidenceReader } from "./owned-evidence-seam";
+import { conversationContext } from "../domain/stored-owner-conversation";
 
 /**
  * Owner evidence-selection write (SPEC BR-40 to BR-45, BR-48, BR-50; SECURITY-REVIEW §11.2, W-21, N-E6 to N-E8; TASK-007).
@@ -94,7 +95,7 @@ export async function setSharedEvidence(
       const raw = await tx.getOwner(ownerUid, conversationId);
       if (raw === undefined) return NOT_FOUND;
 
-      const classification = classifyOwnerDocument(raw, deps.codec);
+      const classification = classifyOwnerDocument(raw, deps.codec, { ownerUid, conversationId });
       if (classification.kind !== "valid") return NOT_FOUND;
       const record = classification.record;
 
@@ -113,7 +114,7 @@ export async function setSharedEvidence(
         participantNotes: record.content.participantNotes,
         sharedGoals: record.content.sharedGoals,
         sharedEvidence: snapshots,
-      });
+      }, conversationContext(ownerUid, conversationId));
       if (!encoded.ok) return FAILED;
 
       tx.updateOwner(ownerUid, conversationId, { updatedAt: new Date(now.getTime()), ...encoded.content });

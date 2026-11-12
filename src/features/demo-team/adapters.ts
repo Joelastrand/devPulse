@@ -4,7 +4,7 @@ import type { DemoPresenterLookup, DemoReader, DemoReadResult } from "./prefligh
 import type { DemoWriteBatch } from "./writer";
 
 /**
- * Thin Firebase Admin adapters for the demo-team seed (docs/features/
+ * Thin Firebase Admin adapters for the demo-team seed (docs/archive/features/
  * demo-team/SPEC.md — "Target-project safety model", BR-2, BR-5, BR-29,
  * BR-30). They only translate to the seams the preflight and the guarded
  * writer already define: a `get(path)`-only reader, a boolean presenter lookup

@@ -12,9 +12,11 @@ import type { SharedGoalSnapshot } from "../domain/shared-goal-snapshot";
 import { acceptInvitation, leaveParticipation } from "./respond-to-participation";
 import { writeParticipantNotes } from "./write-participant-notes";
 import type { StoredEnvelope } from "../domain/stored-owner-conversation";
+import { conversationContext } from "../domain/stored-owner-conversation";
 
 // Synthetic fixtures only (invariant 15). No real person, team or wellbeing data.
 const CONVERSATION_ID = "conv-1";
+const CTX = conversationContext(OWNER_UID, CONVERSATION_ID);
 const LATER = new Date(NOW.getTime() + 60_000);
 const PARTICIPANT_NOTE = "Synthetic participant note";
 const OWNER_NOTE = "Synthetic owner note";
@@ -82,16 +84,16 @@ function contentOf(codec: FakeContentCodec, raw: RawConversationData) {
     iv: raw.iv,
     authTag: raw.authTag,
     keyVersion: raw.keyVersion,
-    keyCheck: raw.keyCheck,
+    keyId: "k1", keyCheck: raw.keyCheck,
   } as StoredEnvelope;
-  const decoded = codec.decodeContent(envelope);
+  const decoded = codec.decodeContent(envelope, CTX);
   if (!decoded.ok) throw new Error("fixture content unreadable");
   return decoded.content;
 }
 
 /** The envelope fields, which completion must never rewrite. */
 function envelopeOf(raw: RawConversationData) {
-  return { ciphertext: raw.ciphertext, iv: raw.iv, authTag: raw.authTag, keyVersion: raw.keyVersion, keyCheck: raw.keyCheck };
+  return { ciphertext: raw.ciphertext, iv: raw.iv, authTag: raw.authTag, keyVersion: raw.keyVersion, keyId: "k1", keyCheck: raw.keyCheck };
 }
 
 /** A store whose transactions run `work` through `decorate`, so one write inside the completion can be made to fail. */

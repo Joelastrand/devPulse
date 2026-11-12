@@ -2,7 +2,7 @@ import { useId, type ReactNode } from "react";
 import { cx } from "./class-names";
 
 /**
- * Chart container contract (docs/features/product-experience/SPEC.md — Chart
+ * Chart container contract (docs/archive/features/product-experience/SPEC.md — Chart
  * and analytics presentation). The frame only lays out what the caller passes.
  * It never receives or computes a value the server withheld, so it takes no
  * data props. Every chart is shown with a table alternative. When the data is

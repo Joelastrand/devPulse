@@ -1,3 +1,4 @@
+import { openSkillTreeDocument } from "../domain/skill-tree-content-codec";
 import "server-only";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
@@ -8,7 +9,7 @@ import { type AuthRefusal } from "../../auth/server/auth-refusal";
 const SKILL_TREES_COLLECTION = "skillTrees";
 
 /**
- * The server-enforced bound on `listSkillTrees` (docs/features/
+ * The server-enforced bound on `listSkillTrees` (docs/archive/features/
  * team-skill-tree/SPEC.md — "Firestore query/index requirements", BR-6). If
  * more than this many `skillTrees` documents exist, this operation returns
  * exactly the oldest-created ones and silently omits the rest — never
@@ -24,7 +25,7 @@ export interface SkillNodeView {
   order: number;
 }
 
-/** The client-facing shape of one listed SkillTree (docs/features/team-skill-tree/SPEC.md — "API/DTO contracts"). */
+/** The client-facing shape of one listed SkillTree (docs/archive/features/team-skill-tree/SPEC.md — "API/DTO contracts"). */
 export interface SkillTreeView {
   treeId: string;
   name: string;
@@ -61,7 +62,8 @@ function getDefaultSkillTreesReader(): SkillTreesReader {
 }
 
 /** Maps raw Firestore document data (Timestamp fields included) into the candidate shape `isValidSkillTree` expects. */
-function toCandidateSkillTree(data: unknown): unknown {
+function toCandidateSkillTree(treeId: string, raw: unknown): unknown {
+  const data = openSkillTreeDocument(treeId, raw);
   if (typeof data !== "object" || data === null) {
     return undefined;
   }
@@ -109,7 +111,7 @@ export interface ListSkillTreesDeps {
 
 /**
  * Lists the SkillTree catalog, bounded to the `LIST_SKILL_TREES_LIMIT`
- * oldest-created (docs/features/team-skill-tree/SPEC.md — BR-6). Only an
+ * oldest-created (docs/archive/features/team-skill-tree/SPEC.md — BR-6). Only an
  * app admin may call this successfully — no member-facing tree catalog
  * exists in v1.
  *
@@ -145,7 +147,7 @@ export async function listSkillTrees(
 
   const trees: SkillTreeView[] = [];
   for (const { id, data } of rawDocs) {
-    const candidate = toCandidateSkillTree(data);
+    const candidate = toCandidateSkillTree(id, data);
     if (isValidSkillTree(candidate)) {
       trees.push(toSkillTreeView(id, candidate));
     }

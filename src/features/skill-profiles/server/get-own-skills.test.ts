@@ -1,3 +1,5 @@
+import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../../skill-trees/domain/skill-tree-test-fixtures";
+stubSkillTreeEncryptionKey();
 import { describe, expect, it, vi } from "vitest";
 import { getOwnSkills, type GetOwnSkillsDeps } from "./get-own-skills";
 import type { RawCatalogDoc, SkillCatalogReader } from "./skill-catalog";
@@ -21,7 +23,7 @@ const when = new Date("2026-01-01T00:00:00Z");
 function tree(id: string, name: string): RawCatalogDoc {
   return {
     id,
-    data: {
+    data: sealedSkillTreeFixture(id, {
       name,
       nodes: [
         { nodeId: "node-0", label: "Stage A", order: 0 },
@@ -29,7 +31,7 @@ function tree(id: string, name: string): RawCatalogDoc {
       ],
       createdAt: when,
       createdBy: "admin-uid",
-    },
+    }) as Record<string, unknown>,
   };
 }
 

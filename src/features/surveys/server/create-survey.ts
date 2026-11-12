@@ -12,10 +12,11 @@ import { CONFIGURABLE_QUESTION_SET_VERSION, type SurveyAccessMode } from "../dom
 import type { SurveyQuestion } from "../domain/question-definitions";
 import { type AuthRefusal } from "../../auth/server/auth-refusal";
 import { writeRefusalFor, runFencedTransaction } from "../../auth/server/erasure-write-fence";
+import { toPersistedSurvey } from "./survey-content-codec";
 const SURVEYS_COLLECTION = "surveys";
 const TEAMS_COLLECTION = "teams";
 
-/** The persisted shape of one `surveys` document (docs/features/managed-surveys/SPEC.md — "Data model"). */
+/** The persisted shape of one `surveys` document (docs/archive/features/managed-surveys/SPEC.md — "Data model"). */
 export interface SurveyRecord {
   teamId: string;
   title?: string;
@@ -47,7 +48,7 @@ function getDefaultSurveysCollection(actorUid: string): SurveysCollection {
       const db = getFirestoreDb();
       const ref = db.collection(SURVEYS_COLLECTION).doc();
       await runFencedTransaction(db, actorUid, async (tx) => {
-        tx.create(ref, record);
+        tx.create(ref, toPersistedSurvey(ref.id, { ...record }));
       });
       return { id: ref.id };
     },
@@ -102,7 +103,7 @@ export interface CreateSurveyDeps {
 }
 
 /**
- * Creates a new `scheduled` survey for `teamId` (docs/features/
+ * Creates a new `scheduled` survey for `teamId` (docs/archive/features/
  * managed-surveys/SPEC.md — BR-1 through BR-4). Only an app admin may call
  * this successfully (BR-2), reusing `requireAppAdmin` unchanged — never a
  * re-implemented admin check. `teamId` is always the caller's own trusted
@@ -114,13 +115,13 @@ export interface CreateSurveyDeps {
  * `active`; a `disabled` or nonexistent/malformed-status team rejects
  * creation (BR-41's creation clause) — mirrors the existing "no new grants
  * into a disabled team" posture for invitations/access requests
- * (docs/features/team-management/SPEC.md).
+ * (docs/archive/features/team-management/SPEC.md).
  *
  * `minimumResponses` is required by `validateCreateSurveyInput` (TASK-001)
  * and persisted exactly as validated — this operation never assumes
  * `DEFAULT_MINIMUM_RESPONSES` for a missing/invalid value, and there is no
  * later operation anywhere in this feature that can change it once
- * created (docs/features/managed-surveys/SPEC.md — "Per-survey result
+ * created (docs/archive/features/managed-surveys/SPEC.md — "Per-survey result
  * threshold": deliberately immutable).
  *
  * The persisted document carries no `openedAt`/`closedAt`/`archivedAt`

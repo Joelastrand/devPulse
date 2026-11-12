@@ -38,7 +38,7 @@ export interface SetTeamStatusDeps {
 
 /**
  * Disables or re-enables a team. Only an app admin may call this
- * successfully (docs/features/team-management/SPEC.md — BR-2). Never
+ * successfully (docs/archive/features/team-management/SPEC.md — BR-2). Never
  * deletes or modifies any survey response data (BR-4) — this operation
  * touches only the `teams` document's `status` field.
  */

@@ -69,8 +69,10 @@ describe("Team Roadmap scope guard (TASK-012)", () => {
     }
     expect(written.size).toBeGreaterThan(0);
     for (const key of written) expect(PERSISTED.has(key), `update writes non-persisted field "${key}"`).toBe(true);
-    // The generic `fields[field]` remove loop is the only dynamic write; it only receives `patch.remove`.
-    expect(update).toMatch(/for \(const field of patch\.remove\) fields\[field\] = FieldValue\.delete\(\)/);
+    // The store writes the whole sealed plan from the record read in the same transaction (no partial sealed update).
+    const store = read("src/features/roadmap/server/update-roadmap-item.ts");
+    expect(store).toMatch(/tx\.set\(db\.collection\(ROADMAP_COLLECTION\)\.doc\(docId\), toPersistedRoadmapItem\(\{ \.\.\.record \}\)\)/);
+    expect(store).not.toMatch(/FieldValue\.delete\(\)/);
   });
 
   it("only writes to the roadmapItems collection from the roadmap server modules", () => {
@@ -110,7 +112,7 @@ describe("Team Roadmap scope guard (TASK-012)", () => {
           collectionGroup: "teamInvitations",
           queryScope: "COLLECTION",
           fields: [
-            { fieldPath: "email", order: "ASCENDING" },
+            { fieldPath: "emailIndex", order: "ASCENDING" },
             { fieldPath: "status", order: "ASCENDING" },
           ],
         },
