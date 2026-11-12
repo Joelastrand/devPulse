@@ -33,6 +33,7 @@ describe("production erasure readiness gate (TASK-013, TASK-038)", () => {
         auth_time: Math.floor(Date.now() / 1000) - 10,
       }),
       readFence: async () => ({ kind: "none" as const }),
+      loadAccount: async (uid: string) => ({ uid, email: EMAIL, emailVerified: true, disabled: false }),
     });
 
     const response = await startErasureResponse("Bearer t", { confirmation: "someone-else@example.com" }, deps);

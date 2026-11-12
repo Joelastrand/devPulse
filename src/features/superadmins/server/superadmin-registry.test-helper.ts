@@ -119,12 +119,12 @@ export interface TestUser {
 }
 
 export const USERS: Record<string, TestUser> = {
-  admin: { uid: "admin-uid", email: "admin@example.test" },
-  second: { uid: "second-uid", email: "second@example.test" },
-  third: { uid: "third-uid", email: "third@example.test" },
-  dev: { uid: "dev-uid", email: "dev@example.test" },
-  unverified: { uid: "unverified-uid", email: "unverified@example.test", emailVerified: false },
-  disabled: { uid: "disabled-uid", email: "disabled@example.test", disabled: true },
+  admin: { uid: "admin-uid", email: "admin@nve.no" },
+  second: { uid: "second-uid", email: "second@nve.no" },
+  third: { uid: "third-uid", email: "third@nve.no" },
+  dev: { uid: "dev-uid", email: "dev@nve.no" },
+  unverified: { uid: "unverified-uid", email: "unverified@nve.no", emailVerified: false },
+  disabled: { uid: "disabled-uid", email: "disabled@nve.no", disabled: true },
 };
 
 /** Tokens are the synthetic UID itself in these tests; the verifier maps them to a decoded token. */
@@ -141,6 +141,11 @@ export function depsFor(registry: ReturnType<typeof createFakeRegistry>, extra: 
   return {
     verifyToken,
     readFence: noFence,
+    loadAccount: async (uid) => {
+      const user = Object.values(USERS).find((candidate) => candidate.uid === uid);
+      if (!user) throw Object.assign(new Error("not found"), { code: "auth/user-not-found" });
+      return { uid, email: user.email, emailVerified: user.emailVerified !== false, disabled: user.disabled === true };
+    },
     store: registry.store,
     isSuperadmin: (uid) => readSuperadminActive(uid, registry.store),
     lookupAuthUserByEmail: async (email) => {

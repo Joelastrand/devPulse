@@ -2,6 +2,8 @@ import "server-only";
 import { type ErasureResumeCapability, isErasureResumeCapability } from "./erasure-resume-capability";
 import type { DecodedIdToken } from "firebase-admin/auth";
 import { getAdminAuth } from "../../../lib/firebase/admin";
+import { readSuperadminActive } from "../../superadmins/server/superadmin-policy";
+import { decideAccess, type AccountFacts } from "./access-policy";
 import {
   readErasureFenceFromFirestore,
   type ErasureFenceState,
@@ -42,6 +44,15 @@ export interface VerifyIdTokenDeps {
    * opaque capability minted by `erasure-resume-capability.ts`, not a boolean, and only the start/resume operation may obtain one.
    */
   allowDuringErasure?: ErasureResumeCapability;
+  /** Reads the live Auth account (current e-mail, verification, disabled flag). Production: Admin SDK `getUser`. */
+  loadAccount?: (uid: string) => Promise<LiveAccount>;
+  /** Superadmin lookup for the access policy. Production: the Firestore registry, read on every call. */
+  isSuperadmin?: (uid: string) => Promise<boolean>;
+}
+
+/** The live Firebase Auth record the access policy reads. */
+export interface LiveAccount extends AccountFacts {
+  readonly disabled: boolean;
 }
 
 /**
@@ -52,6 +63,22 @@ export interface VerifyIdTokenDeps {
  */
 function defaultVerifyToken(token: string): Promise<DecodedIdToken> {
   return getAdminAuth().verifyIdToken(token, true);
+}
+
+/** Reads the live account record. A missing record is a rejection; other failures propagate and fail closed. */
+async function defaultLoadAccount(uid: string): Promise<LiveAccount> {
+  const user = await getAdminAuth().getUser(uid);
+  return {
+    uid: user.uid,
+    email: user.email ?? "",
+    emailVerified: user.emailVerified === true,
+    disabled: user.disabled === true,
+  };
+}
+
+function isUserNotFound(error: unknown): boolean {
+  const code: unknown = typeof error === "object" && error !== null ? (error as { code?: unknown }).code : undefined;
+  return typeof code === "string" && code.replace(/^(auth|app)\//, "") === "user-not-found";
 }
 
 /**
@@ -115,16 +142,42 @@ export async function verifyIdToken(
   if (fence.kind === "terminal") {
     return { ok: false, error: "invalid_token" };
   }
-  if (fence.kind === "in_progress" && !isErasureResumeCapability(deps.allowDuringErasure)) {
+  const resumingErasure = isErasureResumeCapability(deps.allowDuringErasure);
+  if (fence.kind === "in_progress" && !resumingErasure) {
     return { ok: false, error: "erasure_in_progress" };
+  }
+
+  // Live account: current e-mail, verification and disabled flag are read on every request, not taken from the token.
+  let account: LiveAccount;
+  try {
+    account = await (deps.loadAccount ?? defaultLoadAccount)(decoded.uid);
+  } catch (error) {
+    return { ok: false, error: isUserNotFound(error) ? "invalid_token" : "auth_unavailable" };
+  }
+  if (account.disabled) {
+    return { ok: false, error: "invalid_token" };
+  }
+
+  // NVE access policy (docs/SECURITY.md). The erasure-resume capability skips only the domain step, so a person who cannot
+  // otherwise use DevPulse can still start or resume their own account erasure. Verification and disabled checks still apply.
+  if (!resumingErasure) {
+    let decision: Awaited<ReturnType<typeof decideAccess>>;
+    try {
+      decision = await decideAccess(account, deps.isSuperadmin ?? readSuperadminActive);
+    } catch {
+      return { ok: false, error: "auth_unavailable" };
+    }
+    if (!decision.allowed) {
+      return { ok: false, error: "invalid_token" };
+    }
   }
 
   return {
     ok: true,
     identity: {
       uid: decoded.uid,
-      email: decoded.email,
-      emailVerified: decoded.email_verified === true,
+      email: account.email,
+      emailVerified: account.emailVerified,
       ...(typeof decoded.auth_time === "number" ? { verifiedAuthTime: decoded.auth_time } : {}),
     },
   };

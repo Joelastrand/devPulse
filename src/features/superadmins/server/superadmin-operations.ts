@@ -36,6 +36,7 @@ export type SuperadminOperationError =
 export interface SuperadminOperationDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
   readFence?: VerifyIdTokenDeps["readFence"];
+  loadAccount?: VerifyIdTokenDeps["loadAccount"];
   /** Injected superadmin check for the caller. Defaults to the registry read through the default store. */
   isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
   store?: SuperadminStore;
@@ -108,7 +109,7 @@ export async function grantSuperadmin(
   targetEmailInput: unknown,
   deps: SuperadminOperationDeps = {},
 ): Promise<GrantSuperadminResult> {
-  const admin = await requireAppAdmin(idToken, { verifyToken: deps.verifyToken, readFence: deps.readFence, isSuperadmin: deps.isSuperadmin });
+  const admin = await requireAppAdmin(idToken, { verifyToken: deps.verifyToken, readFence: deps.readFence, isSuperadmin: deps.isSuperadmin, loadAccount: deps.loadAccount });
   if (!admin.ok) return { ok: false, error: admin.error };
 
   const email = parseTargetEmail(targetEmailInput);
@@ -169,7 +170,7 @@ export async function revokeSuperadmin(
   targetUidInput: unknown,
   deps: SuperadminOperationDeps = {},
 ): Promise<RevokeSuperadminResult> {
-  const admin = await requireAppAdmin(idToken, { verifyToken: deps.verifyToken, readFence: deps.readFence, isSuperadmin: deps.isSuperadmin });
+  const admin = await requireAppAdmin(idToken, { verifyToken: deps.verifyToken, readFence: deps.readFence, isSuperadmin: deps.isSuperadmin, loadAccount: deps.loadAccount });
   if (!admin.ok) return { ok: false, error: admin.error };
   if (!isSafeId(targetUidInput)) return { ok: false, error: "invalid_input" };
 
@@ -204,7 +205,7 @@ export async function revokeSuperadmin(
 
 /** Lists active superadmins for a superadmin. Returns UIDs and grant times only; no contact data is stored or returned. */
 export async function listSuperadmins(idToken: string, deps: SuperadminOperationDeps = {}): Promise<ListSuperadminsResult> {
-  const admin = await requireAppAdmin(idToken, { verifyToken: deps.verifyToken, readFence: deps.readFence, isSuperadmin: deps.isSuperadmin });
+  const admin = await requireAppAdmin(idToken, { verifyToken: deps.verifyToken, readFence: deps.readFence, isSuperadmin: deps.isSuperadmin, loadAccount: deps.loadAccount });
   if (!admin.ok) return { ok: false, error: admin.error };
 
   try {

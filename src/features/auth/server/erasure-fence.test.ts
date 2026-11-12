@@ -11,6 +11,7 @@ vi.mock("../../../lib/firebase/admin", () => ({
     verifyIdToken: async () => {
       throw new Error("not used");
     },
+    getUser: async (uid: string) => ({ uid, email: "dev@nve.no", emailVerified: true, disabled: false }),
   }),
   getFirestoreDb: () => ({
     collection: (name: string) => ({
@@ -36,7 +37,7 @@ afterEach(() => {
 });
 
 const verifyAs = (uid: string) =>
-  vi.fn().mockResolvedValue({ uid, email: "dev@example.com", email_verified: true });
+  vi.fn().mockResolvedValue({ uid, email: "dev@nve.no", email_verified: true });
 
 describe("interpretErasureRecord", () => {
   it("maps in_progress to in_progress and the two terminal statuses to terminal", () => {
@@ -73,7 +74,7 @@ describe("verifyIdToken on the production fence path (no injected reader)", () =
     const result = await verifyIdToken("token", { verifyToken: verifyAs("uid-a") });
     expect(result).toEqual({
       ok: true,
-      identity: { uid: "uid-a", email: "dev@example.com", emailVerified: true },
+      identity: { uid: "uid-a", email: "dev@nve.no", emailVerified: true },
     });
   });
 

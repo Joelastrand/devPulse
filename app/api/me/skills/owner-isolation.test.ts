@@ -24,9 +24,9 @@ const h = vi.hoisted(() => ({
 }));
 
 const TOKENS: Record<string, Record<string, unknown>> = {
-  "token-user": { uid: "user-1", email: "user@example.com", email_verified: true },
-  "token-lead": { uid: "lead-1", email: "lead@example.com", email_verified: true, teamRole: "lead" },
-  "token-admin": { uid: "admin-1", email: "admin@example.com", email_verified: false, admin: true },
+  "token-user": { uid: "user-1", email: "user@nve.no", email_verified: true },
+  "token-lead": { uid: "lead-1", email: "lead@nve.no", email_verified: true, teamRole: "lead" },
+  "token-admin": { uid: "admin-1", email: "admin@nve.no", email_verified: true, admin: true },
 };
 
 vi.mock("../../../../src/lib/firebase/admin", () => ({
@@ -35,6 +35,11 @@ vi.mock("../../../../src/lib/firebase/admin", () => ({
       const claims = TOKENS[token];
       if (!claims) throw new Error("invalid token");
       return claims;
+    },
+    getUser: async (uid: string) => {
+      const claims = Object.values(TOKENS).find((c) => c.uid === uid);
+      if (!claims) throw Object.assign(new Error("not found"), { code: "auth/user-not-found" });
+      return { uid, email: claims.email, emailVerified: claims.email_verified === true, disabled: false };
     },
   }),
   getFirestoreDb: () => {

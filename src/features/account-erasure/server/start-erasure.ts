@@ -71,6 +71,7 @@ export interface StartErasureDeps {
   };
   readonly verifyToken?: VerifyIdTokenDeps["verifyToken"];
   readonly readFence?: VerifyIdTokenDeps["readFence"];
+  readonly loadAccount?: VerifyIdTokenDeps["loadAccount"];
   /**
    * Owner decision (Option A): the start creates the fence and revokes this uid's superadmin privilege in ONE transaction,
    * and refuses the last active superadmin. Defaults to the production Firestore transaction; tests inject the fake store.
@@ -108,6 +109,7 @@ export async function startOrResumeErasure(
   const verified = await verifyIdToken(idToken, {
     verifyToken: deps.verifyToken,
     readFence: deps.readFence,
+    loadAccount: deps.loadAccount,
     allowDuringErasure: issueErasureResumeCapability(),
   });
   if (!verified.ok) return { ok: false, error: authRefusalFor(verified) };

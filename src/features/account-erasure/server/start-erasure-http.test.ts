@@ -20,6 +20,7 @@ const UID = "uid-a";
 function deps(overrides: Partial<StartErasureDeps> & { port: FakeErasureStore }): StartErasureDeps {
   return {
     handlers: {},
+    loadAccount: async (uid: string) => ({ uid, email: EMAIL, emailVerified: true, disabled: false }),
     startPort: overrides.port,
     clockMs: () => 0,
     now: () => new Date(NOW_SECONDS * 1000),

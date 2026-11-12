@@ -22,6 +22,7 @@ export interface ProductionStartErasureOverrides {
   readonly port?: StartErasureDeps["port"];
   readonly verifyToken?: VerifyIdTokenDeps["verifyToken"];
   readonly readFence?: VerifyIdTokenDeps["readFence"];
+  readonly loadAccount?: VerifyIdTokenDeps["loadAccount"];
 }
 
 /**
@@ -44,6 +45,7 @@ export function getProductionStartErasureDeps(overrides: ProductionStartErasureO
     ready: PRODUCTION_HANDLERS_READY,
     verifyToken: overrides.verifyToken,
     readFence: overrides.readFence,
+    loadAccount: overrides.loadAccount,
   };
 }
 

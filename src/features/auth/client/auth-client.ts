@@ -1,11 +1,13 @@
 import {
   createUserWithEmailAndPassword,
   onIdTokenChanged,
+  reload,
   sendEmailVerification,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
 } from "firebase/auth";
 import { getFirebaseAuth } from "../../../lib/firebase/client";
+import { isNveEmail } from "../domain/nve-email";
 
 /**
  * The write seam this feature depends on, satisfied in production by the
@@ -16,6 +18,8 @@ export interface AuthGateway {
   createUser(email: string, password: string): Promise<void>;
   sendEmailVerification(): Promise<void>;
   signIn(email: string, password: string): Promise<void>;
+  /** Reloads the signed-in account from Firebase and reports its current verification flag. False when signed out. */
+  reloadEmailVerified(): Promise<boolean>;
   signOut(): Promise<void>;
   subscribeToIdToken(callback: (token: string | null) => void): () => void;
 }
@@ -34,6 +38,13 @@ function getDefaultGateway(): AuthGateway {
     },
     async signIn(email, password) {
       await signInWithEmailAndPassword(auth, email, password);
+    },
+    async reloadEmailVerified() {
+      const user = auth.currentUser;
+      if (!user) return false;
+      // `reload` refreshes the cached flag after the person clicks the link in another tab.
+      await reload(user);
+      return user.emailVerified;
     },
     async signOut() {
       await firebaseSignOut(auth);
@@ -55,18 +66,26 @@ function getDefaultGateway(): AuthGateway {
   };
 }
 
-export type SignUpResult = { ok: true } | { ok: false; error: "sign_up_failed" };
+/**
+ * `not_nve_email` is a client-side pre-check only: it stops an ordinary registration before any account exists. The server
+ * enforces the same policy on every protected request, so this check is never the control on its own.
+ */
+export type SignUpResult = { ok: true } | { ok: false; error: "not_nve_email" | "sign_up_failed" };
 
 export interface AuthActionDeps {
   gateway?: AuthGateway;
 }
 
-/** Creates an account and triggers Firebase's standard verification email. */
+/** Creates an account for an NVE address and triggers Firebase's standard verification email. */
 export async function signUp(
   email: string,
   password: string,
   deps: AuthActionDeps = {},
 ): Promise<SignUpResult> {
+  if (!isNveEmail(email)) {
+    return { ok: false, error: "not_nve_email" };
+  }
+
   const gateway = deps.gateway ?? getDefaultGateway();
 
   try {
@@ -80,12 +99,12 @@ export async function signUp(
 
 export type SignInResult =
   | { ok: true }
-  | { ok: false; error: "invalid_credentials" };
+  | { ok: false; error: "invalid_credentials" }
+  | { ok: false; error: "email_not_verified" };
 
 /**
- * Signs in an existing account. Does not require a verified email — email
- * verification only gates team resolution (`src/features/teams/`), not
- * sign-in itself.
+ * Signs in an existing account. An unverified account stays signed in, so the verification screen can resend the link
+ * and offer a clean login after verification. Protected requests are refused on the server until the address is verified.
  */
 export async function signIn(
   email: string,
@@ -96,9 +115,35 @@ export async function signIn(
 
   try {
     await gateway.signIn(email, password);
-    return { ok: true };
   } catch {
     return { ok: false, error: "invalid_credentials" };
+  }
+
+  try {
+    if (!(await gateway.reloadEmailVerified())) {
+      return { ok: false, error: "email_not_verified" };
+    }
+    return { ok: true };
+  } catch {
+    // The credentials were accepted but the verification state could not be read. Fail closed: treat as unverified.
+    return { ok: false, error: "email_not_verified" };
+  }
+}
+
+export type ResendVerificationResult = { ok: true } | { ok: false; error: "resend_failed" };
+
+/**
+ * Sends the verification link again to the currently signed-in account. Only the signed-in person can trigger it, and the
+ * reply never says whether any other address exists. Abuse is limited by the client cooldown and by Firebase's own limits.
+ */
+export async function resendVerificationEmail(deps: AuthActionDeps = {}): Promise<ResendVerificationResult> {
+  const gateway = deps.gateway ?? getDefaultGateway();
+
+  try {
+    await gateway.sendEmailVerification();
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "resend_failed" };
   }
 }
 

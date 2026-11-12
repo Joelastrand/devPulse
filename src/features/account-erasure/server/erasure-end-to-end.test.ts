@@ -80,7 +80,10 @@ function deps(options: { authResult?: "deleted" | "unavailable" } = {}) {
     if (options.authResult === "unavailable") throw Object.assign(new Error("transient"), { code: "app/network" });
     return undefined;
   });
-  holder.auth = { deleteUser };
+  holder.auth = {
+    deleteUser,
+    getUser: async (uid: string) => ({ uid, email: EMAIL, emailVerified: true, disabled: false }),
+  };
   return { ...base, ready: true, now: () => NOW, nowSeconds: () => NOW_SECONDS };
 }
 
@@ -201,6 +204,7 @@ describe("production erasure chain, end to end", () => {
     const blankEmail = {
       ...deps(),
       verifyToken: vi.fn().mockResolvedValue({ uid: UID, email: "   ", email_verified: true, auth_time: NOW_SECONDS - 60 }),
+      loadAccount: async (uid: string) => ({ uid, email: "   ", emailVerified: true, disabled: false }),
     };
 
     const result = await startOrResumeErasure("token", { confirmation: "   " }, blankEmail);

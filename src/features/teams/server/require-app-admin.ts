@@ -11,6 +11,7 @@ export interface RequireAppAdminDeps {
   verifyToken?: VerifyIdTokenDeps["verifyToken"];
   readFence?: VerifyIdTokenDeps["readFence"];
   isSuperadmin?: IsAppAdminDeps["isSuperadmin"];
+  loadAccount?: VerifyIdTokenDeps["loadAccount"];
 }
 
 /**
@@ -23,6 +24,7 @@ export async function requireAppAdmin(idToken: string, deps: RequireAppAdminDeps
   const verified = await verifyIdToken(idToken, {
     verifyToken: deps.verifyToken,
     readFence: deps.readFence,
+    loadAccount: deps.loadAccount,
   });
   if (!verified.ok) {
     return { ok: false, error: authRefusalFor(verified) };

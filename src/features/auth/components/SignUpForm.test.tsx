@@ -5,6 +5,8 @@ import userEvent from "@testing-library/user-event";
 
 const signUpMock = vi.fn();
 
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }));
+
 vi.mock("../client/auth-client", () => ({
   signUp: signUpMock,
 }));
@@ -41,8 +43,9 @@ describe("SignUpForm", () => {
     await user.type(screen.getByLabelText("Passord"), "correct horse battery");
     await user.click(screen.getByRole("button", { name: /opprett konto/i }));
 
-    const status = await screen.findByRole("status");
-    expect(status.textContent).toMatch(/bekreftelseslenke/i);
+    expect(await screen.findByRole("heading", { name: "Sjekk e-posten din" })).toBeTruthy();
+    expect(screen.getAllByText(/bekreftelseslenke/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Logg inn" })).toBeTruthy();
   });
 
   it("shows a Norwegian error message when sign-up fails", async () => {
@@ -99,7 +102,7 @@ describe("SignUpForm", () => {
     expect(pendingButton.getAttribute("aria-busy")).toBe("true");
 
     resolveSignUp({ ok: true });
-    await screen.findByRole("status");
+    await screen.findByRole("heading", { name: "Sjekk e-posten din" });
   });
 
   it("contains no leftover English copy", () => {

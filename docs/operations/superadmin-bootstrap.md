@@ -1,11 +1,15 @@
 # Superadmin registry — owner bootstrap and production cutover
 
-Status: **prepared, not executed.** Nothing in this document has been run against any Firebase project. The bootstrap script
-has been checked by unit tests and by reading the code. It has not been run against an emulator or a real project, and the
-CLI's refusal paths have not been exercised end to end.
+Status: **executed once against `devpulse-nve` (2026-11-12), with owner approval.**
 
-This document is for the owner's review. It is the only place the exact bootstrap command and its expected output are
-recorded. Do not run any step here without an explicit owner approval for that environment.
+- Dry run: `DRY RUN: would grant superadmin to uid koEwzQcj5Uc0hnjTgZBLithgkYB3.` (exit 0), before any write.
+- Apply (approved command below): `GRANTED: superadmin granted to uid koEwzQcj5Uc0hnjTgZBLithgkYB3.` (exit 0).
+- Verified afterwards, read-only: exactly one active record in `superadmins`, `superadminRegistry/control.activeCount` is `1`,
+  and the app's `readSuperadminActive` returns `true` for that UID.
+- Only these two paths were written: `superadmins/koEwzQcj5Uc0hnjTgZBLithgkYB3` and `superadminRegistry/control`.
+
+No other environment has been bootstrapped. The old project `devpulse-ac26e` must not be touched. Any other environment needs
+its own owner approval for each step. Do not run any step here without an explicit owner approval for that environment.
 
 ## Why a bootstrap is needed
 
@@ -93,9 +97,8 @@ Rollback: there is no automatic rollback. To remove a mistaken first superadmin,
 `/admin/superadmins`. If no superadmin remains, the registry must be repaired by an authorized operator in the Firebase console,
 with the count kept exact. This is a last resort and should be reviewed by the owner first.
 
-## Not done in this change
+## Not done
 
-- The script has not been executed, and no shared or production Firebase project has been written.
-- The bootstrap CLI has not been run against the emulator or any project. The registry rules and transactions were verified
-  on the local emulator (see VERIFICATION.md), but not the CLI wiring.
-- `APP_ADMIN_EMAILS` has not been removed from any `.env` file or deployment.
+- The bootstrap has been run only against `devpulse-nve` (see the status above). No other project has been written.
+- `APP_ADMIN_EMAILS` has not been removed from any `.env` file or deployment. It is not read by any code.
+- Firestore rules and the code were not redeployed for this bootstrap. Deployment is a separate approved step.

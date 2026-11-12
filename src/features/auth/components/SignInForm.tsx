@@ -9,8 +9,9 @@ import { TextField } from "../../../components/ui/TextField";
 import { signIn } from "../client/auth-client";
 import { resolveSignInDestination } from "../domain/continuation";
 import { authCopy } from "../copy";
+import { VerificationPending } from "./VerificationPending";
 
-type Status = "idle" | "submitting" | "success" | "error";
+type Status = "idle" | "submitting" | "success" | "error" | "unverified";
 
 const ERROR_ALERT_ID = "sign-in-error";
 
@@ -37,13 +38,18 @@ export function SignInForm({ continuation }: SignInFormProps) {
 
     const result = await signIn(email, password);
     if (!result.ok) {
-      setStatus("error");
+      // An unverified account is not a wrong password: explain the next step instead of a generic error.
+      setStatus(result.error === "email_not_verified" ? "unverified" : "error");
       return;
     }
     // D-1: navigate automatically. The success alert below is only a fallback
     // while navigation is in progress; its link targets the same destination.
     setStatus("success");
     router.replace(resolveSignInDestination(continuation).path);
+  }
+
+  if (status === "unverified") {
+    return <VerificationPending variant="unverified" />;
   }
 
   if (status === "success") {

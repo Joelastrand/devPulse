@@ -25,9 +25,9 @@ import { getDefaultSkillNeedsStore, type SkillNeedsReader } from "./skill-needs-
 
 // Any real Firestore/Auth use fails the test.
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => {
-    throw new Error("unexpected Firebase Auth use");
-  },
+  getAdminAuth: () => ({
+    getUser: async (uid: string) => ({ uid, email: "dev@nve.no", emailVerified: true, disabled: false }),
+  }),
   getFirestoreDb: () => {
     throw new Error("unexpected Firestore use");
   },

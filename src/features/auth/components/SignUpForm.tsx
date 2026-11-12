@@ -4,8 +4,9 @@ import { useState, type FormEvent } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
 import { TextField } from "../../../components/ui/TextField";
-import { signUp } from "../client/auth-client";
+import { signUp, type SignUpResult } from "../client/auth-client";
 import { authCopy } from "../copy";
+import { VerificationPending } from "./VerificationPending";
 
 type Status = "idle" | "submitting" | "success" | "error";
 
@@ -15,6 +16,7 @@ export function SignUpForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<Status>("idle");
+  const [failure, setFailure] = useState<Extract<SignUpResult, { ok: false }>["error"]>("sign_up_failed");
   const hasError = status === "error";
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -22,15 +24,16 @@ export function SignUpForm() {
     setStatus("submitting");
 
     const result = await signUp(email, password);
-    setStatus(result.ok ? "success" : "error");
+    if (result.ok) {
+      setStatus("success");
+      return;
+    }
+    setFailure(result.error);
+    setStatus("error");
   }
 
   if (status === "success") {
-    return (
-      <Alert variant="success" className="mt-6">
-        {authCopy.signUp.success}
-      </Alert>
-    );
+    return <VerificationPending variant="created" />;
   }
 
   return (
@@ -65,7 +68,7 @@ export function SignUpForm() {
 
       {hasError && (
         <Alert variant="error" id={ERROR_ALERT_ID} className="text-sm">
-          {authCopy.signUp.error}
+          {failure === "not_nve_email" ? authCopy.signUp.notNveDomain : authCopy.signUp.error}
         </Alert>
       )}
     </form>

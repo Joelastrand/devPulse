@@ -2,8 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import { issueErasureResumeCapability, type ErasureResumeCapability } from "./erasure-resume-capability";
 import { verifyIdToken } from "./verify-identity";
 
+vi.mock("../../../lib/firebase/admin", () => ({
+  getAdminAuth: () => ({ verifyIdToken: vi.fn(), getUser: async (uid: string) => ({ uid, email: "dev@nve.no", emailVerified: true, disabled: false }) }),
+}));
+
 // The fence reader is injected in every case here, which overrides the setup default (no record) per test.
-const decoded = { uid: "uid-a", email: "dev@example.com", email_verified: true };
+const decoded = { uid: "uid-a", email: "dev@nve.no", email_verified: true };
 const noRecord = async () => ({ kind: "none" as const });
 
 describe("verifyIdToken fence branches (injected reader)", () => {
@@ -37,7 +41,7 @@ describe("verifyIdToken fence branches (injected reader)", () => {
     const result = await verifyIdToken("token", { verifyToken: vi.fn().mockResolvedValue(decoded), readFence: noRecord });
     expect(result).toEqual({
       ok: true,
-      identity: { uid: "uid-a", email: "dev@example.com", emailVerified: true },
+      identity: { uid: "uid-a", email: "dev@nve.no", emailVerified: true },
     });
   });
 
@@ -56,7 +60,7 @@ describe("verifyIdToken fence branches (injected reader)", () => {
     });
     expect(await verifyIdToken("token", { verifyToken, readFence: inProgress, allowDuringErasure: issueErasureResumeCapability() })).toEqual({
       ok: true,
-      identity: { uid: "uid-a", email: "dev@example.com", emailVerified: true },
+      identity: { uid: "uid-a", email: "dev@nve.no", emailVerified: true },
     });
   });
 

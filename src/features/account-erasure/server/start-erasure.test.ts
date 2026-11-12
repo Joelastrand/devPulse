@@ -16,6 +16,11 @@ const UID = "uid-a";
 const noRecordFence = async () => ({ kind: "none" as const });
 const inProgressFence = async () => ({ kind: "in_progress" as const });
 
+/** The live Auth account the erasure tests run against: verified unless a test asks otherwise. */
+function liveAccountFor(emailVerified = true) {
+  return async (uid: string) => ({ uid, email: EMAIL, emailVerified, disabled: false });
+}
+
 function tokenFor(authTime: number | undefined, uid = UID, email = EMAIL, emailVerified = true) {
   return vi.fn().mockResolvedValue({
     uid,
@@ -43,6 +48,7 @@ function recordingHandlers(calls: ErasureStep[], overrides: Partial<Record<Erasu
 function depsWith(overrides: Partial<StartErasureDeps> & { port: FakeErasureStore }): StartErasureDeps {
   return {
     handlers: {},
+    loadAccount: liveAccountFor(),
     clockMs: () => 0,
     now: () => new Date(NOW_SECONDS * 1000),
     nowSeconds: () => NOW_SECONDS,
@@ -80,6 +86,7 @@ describe("startOrResumeErasure (TASK-013 operation)", () => {
       port: store,
       handlers: recordingHandlers(calls),
       verifyToken: tokenFor(FRESH_AUTH, UID, EMAIL, false),
+      loadAccount: liveAccountFor(false),
       readFence: noRecordFence,
     });
 
@@ -99,6 +106,7 @@ describe("startOrResumeErasure (TASK-013 operation)", () => {
       port: store,
       handlers: recordingHandlers(calls),
       verifyToken: tokenFor(STALE_AUTH, UID, EMAIL, false),
+      loadAccount: liveAccountFor(false),
       readFence: inProgressFence,
     });
 

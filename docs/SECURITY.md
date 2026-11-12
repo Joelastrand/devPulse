@@ -15,8 +15,25 @@ Verification scope: each control below was checked against the code, rules and t
   `src/features/auth/server/verify-identity.ts` with `checkRevoked: true`, so a revoked session is refused.
 - Verification fails closed: a missing or invalid token is `invalid_token` (401). An unreachable Auth or erasure-fence read
   is `auth_unavailable` (503). Neither is ever treated as a valid identity.
-- The identity used for authorization is the verified token's `uid` and `email_verified`. Client-supplied uids, emails and
-  role flags are never trusted.
+- The identity used for authorization is the verified token's `uid`. The e-mail and its verification flag come from the **live
+  Firebase Auth account**, read with the Admin SDK on every protected request (`loadAccount` in `verify-identity.ts`), not from
+  the token, which can be up to an hour old. Client-supplied uids, emails and role flags are never trusted.
+- **NVE access policy** (`src/features/auth/server/access-policy.ts`, `src/features/auth/domain/nve-email.ts`). A protected
+  request is admitted only when all of these hold:
+  1. the account is not disabled (`checkRevoked` and the live `disabled` flag);
+  2. the e-mail is verified;
+  3. either the address is exactly `@nve.no` (normalized, exact domain; no substring or suffix match), or the UID is an active
+     record in the superadmin registry (`superadmins/{uid}`).
+  The registry is read only when the domain check fails. The superadmin exemption is decided by the registry UID, never by
+  the address. A policy denial returns `invalid_token` (401); a registry or Auth read failure fails closed as
+  `auth_unavailable` (503).
+- **Erasure exception:** the erasure-resume capability (`allowDuringErasure`) skips only the domain step, so a person who
+  cannot otherwise use DevPulse can still start or resume their own account erasure. Verification and disabled checks still apply.
+- **Sign-up** refuses a non-`@nve.no` address before any account is created (`signUp` in `auth-client.ts`). This is a client-side
+  pre-check only; the server policy above is the control. Firebase Auth blocking functions would be the server-side
+  pre-creation hook, and they are not used because they need Cloud Functions.
+- **Unverified sign-in** keeps the person signed in and shows the verification screen (resend, and a login action that signs out
+  first). Server requests stay refused until the address is verified.
 
 ## 2. Authorization model
 
