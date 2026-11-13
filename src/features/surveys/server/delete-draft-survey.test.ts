@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type { DeleteOrArchiveSurveyDocSnapshot, SurveyDocStore } from "./delete-or-archive-survey";
 import { deleteDraftSurvey, type DeleteDraftSurveyDeps } from "./delete-draft-survey";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 const ADMIN_UID = "admin-1";
 const MEMBER_UID = "member-1";
@@ -12,11 +13,11 @@ const OTHER_TEAM_ID = "team-99";
 const SURVEY_ID = "survey-1";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 
-const ADMIN_IDENTITY: VerifiedIdentity = { uid: ADMIN_UID, email: "admin@example.com", emailVerified: true };
-const MEMBER_IDENTITY: VerifiedIdentity = { uid: MEMBER_UID, email: "member@example.com", emailVerified: true };
+const ADMIN_IDENTITY: VerifiedIdentity = { uid: ADMIN_UID, email: "admin@nve.no", emailVerified: true };
+const MEMBER_IDENTITY: VerifiedIdentity = { uid: MEMBER_UID, email: "member@nve.no", emailVerified: true };
 
 function verifyAs(identity: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({ uid: identity.uid, email: identity.email, email_verified: identity.emailVerified });
+  return verifierFor({ uid: identity.uid, email: identity.email, emailVerified: identity.emailVerified });
 }
 
 function draftData(overrides: Record<string, unknown> = {}): Record<string, unknown> {

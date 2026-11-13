@@ -18,21 +18,20 @@ const CONFIGURED =
 
 const db = vi.hoisted(() => ({ current: undefined as Firestore | undefined }));
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
   getFirestoreDb: () => {
     if (db.current === undefined) throw new Error("emulator database not initialised");
     return db.current;
   },
-  getAdminAuth: () => {
-    throw new Error("auth is not used by the emulator suite");
-  },
+  getAdminAuth: () => testAdminAuth,
 }));
 
 const { grantSuperadmin, revokeSuperadmin, listSuperadmins } = await import("./superadmin-operations");
 const { getDefaultErasureStartPort, startErasureAtomically } = await import("../../../features/account-erasure/server/erasure-start-atomic");
 const { verifyToken, USERS } = await import("./superadmin-registry.test-helper");
 
-const ERASURE_UIDS = ["erasing-uid", "fenced-uid"];
+const ERASURE_UIDS = ["erasing-uid", "fenced-uid", "admin-uid", "second-uid"];
 const noFence = async () => ({ kind: "none" as const });
 
 async function resetRegistry(store: Firestore) {

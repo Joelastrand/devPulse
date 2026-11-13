@@ -8,6 +8,7 @@ import { startTeamSkillTracking } from "./start-team-skill-tracking";
 import { updateTeamSkillProgress } from "./update-team-skill-progress";
 import { updateSkillTree } from "./update-skill-tree";
 import { getTeamSkillProgress } from "./get-team-skill-progress";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 /**
  * A shared, in-memory Firestore-like store for `skillTrees`/`skillProgress`
@@ -40,7 +41,7 @@ function inMemoryCollection(kind: "tree" | "progress") {
   };
 }
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const ADMIN_UID = "admin-1";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const MEMBER_UID = "member-1";
@@ -52,15 +53,11 @@ function adminIdentity(): VerifiedIdentity {
 }
 
 function memberIdentity(): VerifiedIdentity {
-  return { uid: MEMBER_UID, email: "dev@example.com", emailVerified: true };
+  return { uid: MEMBER_UID, email: "dev@nve.no", emailVerified: true };
 }
 
 function verifyTokenReturning(identity: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({
-    uid: identity.uid,
-    email: identity.email,
-    email_verified: identity.emailVerified,
-  });
+  return verifierFor({ uid: identity.uid, email: identity.email, emailVerified: identity.emailVerified });
 }
 
 function fakeAuthCollection(): AuthorizeTeamAccessCollection {

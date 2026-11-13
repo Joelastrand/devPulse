@@ -5,6 +5,7 @@ import { clearOwnSkillLevel } from "./clear-own-skill-level";
 import { deleteOwnSkillProfile } from "./delete-own-skill-profile";
 import { sealSkillLevel } from "./skill-level-codec";
 import { setOwnSkillLevel } from "./set-own-skill-level";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 /**
  * BR-23/BR-24 forward independence: the real default store runs against a
@@ -59,15 +60,14 @@ const access = vi.hoisted(() => {
   return { state, db };
 });
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => {
-    throw new Error("unexpected Firebase Auth use");
-  },
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => access.db,
 }));
 
 const UNRELATED = ["skillProgress", "roadmapItems", "teamMemberships"] as const;
-const verifyToken = vi.fn().mockResolvedValue({ uid: "user-1", email: "user-1@example.com", email_verified: true });
+const verifyToken = verifierFor({ uid: "user-1", email: "user-1@nve.no", emailVerified: true });
 const validTree = {
   name: "TypeScript",
   nodes: [

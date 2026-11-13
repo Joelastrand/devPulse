@@ -21,6 +21,14 @@ DevPulse is an internal application for developer/team wellbeing and delivery he
 - Do not invent unresolved product, security, or architecture decisions. Stop and report them rather than guessing.
 - Do not deploy or modify production/cloud infrastructure without an explicit request.
 
+## NVE-only access (standing rule)
+
+- DevPulse is for NVE only. The one organization is `nve` (`organizations/nve`, descriptive; it authorizes nothing).
+- Ordinary access requires a verified e-mail at exactly `@nve.no`. An active superadmin, identified by the registry UID, may use any address.
+  Never decide superadmin status from an e-mail address.
+- Verification and the disabled flag are checked on every protected request from the live Firebase Auth account, not from the token.
+- The account-erasure path may waive only the domain step, so a person can still erase their own account. See `docs/SECURITY.md`.
+
 ## Instruction ownership
 
 ```text

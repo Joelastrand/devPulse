@@ -1,13 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createRoadmapItem } from "./create-roadmap-item";
 import { updateRoadmapItem } from "./update-roadmap-item";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 // TASK-032: the roadmap lead writes read the writer's erasure fence first, in the same transaction, and write nothing when
 // the fence refuses. Structural test over a recording Admin Firestore double (not Firestore's conflict behaviour, which is
 // the D-EMU gate). Fixtures are synthetic; the uid is a fictional lead.
 
 const holder = vi.hoisted(() => ({ db: undefined as unknown }));
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => holder.db,
 }));
 vi.mock("server-only", () => ({}));
@@ -48,7 +51,7 @@ holder.db = {
   },
 };
 
-const verifyToken = vi.fn().mockResolvedValue({ uid: LEAD_UID, email: "lead@example.com", email_verified: true });
+const verifyToken = verifierFor({ uid: LEAD_UID, email: "lead@nve.no", emailVerified: true });
 
 beforeEach(() => {
   docs.clear();

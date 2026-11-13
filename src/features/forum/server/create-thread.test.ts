@@ -13,25 +13,22 @@ import type {
 } from "./create-thread";
 import { createThread } from "./create-thread";
 import type { ForumThreadRecord } from "../domain/forum-thread";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 const TEAM_ID = "team-42";
 const OTHER_TEAM_ID = "team-99";
 const MEMBER_UID = "member-1";
-const APP_ADMIN_EMAIL = "admin@example.com";
+const APP_ADMIN_EMAIL = "admin@nve.no";
 const NOW = new Date("2026-09-01T00:00:00Z");
 const VALID_TITLE = "How do we own on-call rotations?";
 const VALID_BODY = "We keep dropping pages overnight and nobody owns the rotation.";
 
 function identity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
-  return { uid: MEMBER_UID, email: "dev@example.com", emailVerified: true, ...overrides };
+  return { uid: MEMBER_UID, email: "dev@nve.no", emailVerified: true, ...overrides };
 }
 
 function verifyTokenReturning(verified: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({
-    uid: verified.uid,
-    email: verified.email,
-    email_verified: verified.emailVerified,
-  });
+  return verifierFor({ uid: verified.uid, email: verified.email, emailVerified: verified.emailVerified });
 }
 
 function fakeForumThreadsCollection(): ForumThreadsCollection & { writes: ForumThreadRecord[]; ids: string[] } {
@@ -388,7 +385,7 @@ describe("createThread", () => {
       expect(stored).not.toHaveProperty(forbiddenField);
     }
     const serialized = JSON.stringify(stored);
-    expect(serialized).not.toContain("dev@example.com");
+    expect(serialized).not.toContain("dev@nve.no");
   });
 
   it("never persists a mutable status, deletedAt, or deletedBy field", async () => {
@@ -552,7 +549,7 @@ describe("createThread", () => {
       for (const forbiddenKey of ["email", "displayName", "authorTag"]) {
         expect(stored).not.toHaveProperty(forbiddenKey);
       }
-      expect(JSON.stringify(stored)).not.toContain("dev@example.com");
+      expect(JSON.stringify(stored)).not.toContain("dev@nve.no");
     });
 
     it("the full serialized success/failure result never contains an identity canary", async () => {
@@ -560,7 +557,7 @@ describe("createThread", () => {
       const serialized = JSON.stringify(result);
 
       expect(serialized).not.toContain(MEMBER_UID);
-      expect(serialized).not.toContain("dev@example.com");
+      expect(serialized).not.toContain("dev@nve.no");
     });
   });
 });

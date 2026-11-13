@@ -20,10 +20,11 @@ import type {
   SkillTreeReader as GetSkillTreeReader,
 } from "./get-team-skill-progress";
 import type { AuthorizeTeamAccessCollection } from "../../teams/server/authorize-team-access";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 const MEMBER_UID = "member-1";
-const MEMBER_EMAIL = "dev@example.com";
-const ADMIN_EMAIL = "admin@example.com";
+const MEMBER_EMAIL = "dev@nve.no";
+const ADMIN_EMAIL = "admin@nve.no";
 const TEAM_ID = "team-1";
 const OTHER_TEAM_ID = "team-2";
 const TREE_ID = "tree-1";
@@ -34,11 +35,7 @@ function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedId
 }
 
 function verifyTokenReturning(identity: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({
-    uid: identity.uid,
-    email: identity.email,
-    email_verified: identity.emailVerified,
-  });
+  return verifierFor({ uid: identity.uid, email: identity.email, emailVerified: identity.emailVerified });
 }
 
 function validMembershipData(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -524,7 +521,7 @@ describe("reportTeamSkillProgress", () => {
 
     it("always sets updatedBy to the verified caller's uid, ignoring any request-shaped override", async () => {
       const progress = fakeProgressStore(validProgressData());
-      const identity = verifiedIdentity({ uid: "member-2", email: "second-member@example.com" });
+      const identity = verifiedIdentity({ uid: "member-2", email: "second-member@nve.no" });
 
       await reportTeamSkillProgress(
         "token",

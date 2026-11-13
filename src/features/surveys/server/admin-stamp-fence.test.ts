@@ -5,20 +5,23 @@ import { closeSurvey } from "./close-survey";
 import { createSurvey } from "./create-survey";
 import { deleteOrArchiveSurvey } from "./delete-or-archive-survey";
 import { openSurvey } from "./open-survey";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 // TASK-034: admin writes that stamp the admin's uid on survey documents (create) and admin lifecycle writes that share the
 // same erasure guard (open, close) read the admin's erasure fence first, in the same transaction, and write nothing when it
 // refuses. Structural test over recording doubles. Fixtures are synthetic; the admin uid is fictional.
 
 const holder = vi.hoisted(() => ({ db: undefined as unknown }));
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => holder.db,
 }));
 vi.mock("server-only", () => ({}));
 
 const ADMIN_UID = "admin-34";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
-const ADMIN_EMAIL = "admin34@example.com";
+const ADMIN_EMAIL = "admin34@nve.no";
 const TEAM_ID = "team-34";
 const ADMIN_FENCE = `accountErasures/${ADMIN_UID}`;
 
@@ -65,7 +68,7 @@ holder.db = {
   },
 };
 
-const verifyToken = vi.fn().mockResolvedValue({ uid: ADMIN_UID, email: ADMIN_EMAIL, email_verified: true });
+const verifyToken = verifierFor({ uid: ADMIN_UID, email: ADMIN_EMAIL, emailVerified: true });
 const isSuperadmin = isAdminUid;
 const teamStatusReader = { getTeamStatus: async () => "active" };
 

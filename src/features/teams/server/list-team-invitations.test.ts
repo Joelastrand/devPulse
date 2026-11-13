@@ -2,8 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type { TeamInvitationsCollection } from "./list-team-invitations";
 import { listTeamInvitations } from "./list-team-invitations";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const ADMIN_UID = "admin-1";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const CREATED_AT = new Date("2026-09-01T00:00:00Z");
@@ -13,11 +14,7 @@ function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedId
 }
 
 function verifyTokenReturning(identity: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({
-    uid: identity.uid,
-    email: identity.email,
-    email_verified: identity.emailVerified,
-  });
+  return verifierFor({ uid: identity.uid, email: identity.email, emailVerified: identity.emailVerified });
 }
 
 function fakeCollection(rawDocs: unknown[]): TeamInvitationsCollection {
@@ -34,14 +31,14 @@ describe("listTeamInvitations", () => {
     const collection = fakeCollection([
       {
         teamId: "team-1",
-        email: "dev1@example.com",
+        email: "dev1@nve.no",
         status: "pending",
         invitedBy: "admin-1",
         createdAt: CREATED_AT,
       },
       {
         teamId: "team-1",
-        email: "dev2@example.com",
+        email: "dev2@nve.no",
         status: "pending",
         invitedBy: "admin-1",
         createdAt: CREATED_AT,
@@ -53,8 +50,8 @@ describe("listTeamInvitations", () => {
     expect(result).toEqual({
       ok: true,
       invitations: [
-        { email: "dev1@example.com", invitedBy: "admin-1", createdAt: CREATED_AT },
-        { email: "dev2@example.com", invitedBy: "admin-1", createdAt: CREATED_AT },
+        { email: "dev1@nve.no", invitedBy: "admin-1", createdAt: CREATED_AT },
+        { email: "dev2@nve.no", invitedBy: "admin-1", createdAt: CREATED_AT },
       ],
     });
   });
@@ -63,21 +60,21 @@ describe("listTeamInvitations", () => {
     const collection = fakeCollection([
       {
         teamId: "team-1",
-        email: "pending@example.com",
+        email: "pending@nve.no",
         status: "pending",
         invitedBy: "admin-1",
         createdAt: CREATED_AT,
       },
       {
         teamId: "team-1",
-        email: "accepted@example.com",
+        email: "accepted@nve.no",
         status: "accepted",
         invitedBy: "admin-1",
         createdAt: CREATED_AT,
       },
       {
         teamId: "team-1",
-        email: "canceled@example.com",
+        email: "canceled@nve.no",
         status: "canceled",
         invitedBy: "admin-1",
         createdAt: CREATED_AT,
@@ -88,7 +85,7 @@ describe("listTeamInvitations", () => {
 
     expect(result).toEqual({
       ok: true,
-      invitations: [{ email: "pending@example.com", invitedBy: "admin-1", createdAt: CREATED_AT }],
+      invitations: [{ email: "pending@nve.no", invitedBy: "admin-1", createdAt: CREATED_AT }],
     });
   });
 
@@ -96,7 +93,7 @@ describe("listTeamInvitations", () => {
     const collection = fakeCollection([
       {
         teamId: "team-1",
-        email: "valid@example.com",
+        email: "valid@nve.no",
         status: "pending",
         invitedBy: "admin-1",
         createdAt: CREATED_AT,
@@ -109,7 +106,7 @@ describe("listTeamInvitations", () => {
 
     expect(result).toEqual({
       ok: true,
-      invitations: [{ email: "valid@example.com", invitedBy: "admin-1", createdAt: CREATED_AT }],
+      invitations: [{ email: "valid@nve.no", invitedBy: "admin-1", createdAt: CREATED_AT }],
     });
   });
 
@@ -130,7 +127,7 @@ describe("listTeamInvitations", () => {
     const collection = fakeCollection([]);
 
     const result = await listTeamInvitations("token", "team-1", {
-      verifyToken: verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" })),
+      verifyToken: verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@nve.no" })),
       isSuperadmin: isAdminUid,
       collection,
     });
@@ -159,6 +156,6 @@ describe("listTeamInvitations", () => {
       collection,
     });
 
-    expect(JSON.stringify(result)).not.toContain("other-admin@example.com");
+    expect(JSON.stringify(result)).not.toContain("other-admin@nve.no");
   });
 });

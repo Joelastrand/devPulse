@@ -8,6 +8,7 @@ import type { ErasedForumThreadRecord } from "../domain/forum-erased-thread";
 import { createReply, type CreateReplyDeps, type ForumRepliesCollection, type MembershipReader, type TeamStatusReader } from "./create-reply";
 import { getThreadWithReplies, type ForumRepliesReader, type ForumThreadReader, type GetThreadWithRepliesDeps, type RawReplyDoc } from "./get-thread-with-replies";
 import type { AuthorizeTeamAccessCollection } from "../../teams/server/authorize-team-access";
+import { registerClaims } from "../../../../test/auth-fixtures";
 
 // TASK-015: the erased-thread placeholder read path and its reply refusal. Fixtures are synthetic.
 
@@ -26,7 +27,7 @@ function placeholder(overrides: Record<string, unknown> = {}): ErasedForumThread
 }
 
 function verifyAs(uid: string) {
-  return vi.fn().mockResolvedValue({ uid, email: `${uid}@example.com`, email_verified: true });
+  return vi.fn().mockImplementation(async () => registerClaims({ uid, email: `${uid}@nve.no`, email_verified: true }));
 }
 
 function threadReader(data: unknown): ForumThreadReader {

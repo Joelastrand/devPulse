@@ -1,3 +1,4 @@
+import { registerClaims } from "../../../../test/auth-fixtures";
 import { type ReadErasureFence } from "../../auth/server/erasure-fence";
 import { readSuperadminActive } from "./superadmin-policy";
 import type { SuperadminOperationDeps } from "./superadmin-operations";
@@ -131,7 +132,10 @@ export const USERS: Record<string, TestUser> = {
 export const verifyToken = (token: string) => {
   const user = Object.values(USERS).find((candidate) => candidate.uid === token);
   if (!user) return Promise.reject(new Error("invalid token"));
-  return Promise.resolve({ uid: user.uid, email: user.email, email_verified: user.emailVerified !== false } as never);
+  // Registers the live Auth account the token asserts, so the production live-account read resolves to the same facts.
+  return Promise.resolve(
+    registerClaims({ uid: user.uid, email: user.email, email_verified: user.emailVerified !== false }) as never,
+  );
 };
 
 export const noFence: ReadErasureFence = async () => ({ kind: "none" });

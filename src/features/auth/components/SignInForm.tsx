@@ -49,7 +49,7 @@ export function SignInForm({ continuation }: SignInFormProps) {
   }
 
   if (status === "unverified") {
-    return <VerificationPending variant="unverified" />;
+    return <VerificationPending variant="unverified" onReturnToSignIn={() => setStatus("idle")} />;
   }
 
   if (status === "success") {

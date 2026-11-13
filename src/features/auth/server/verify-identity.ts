@@ -160,6 +160,10 @@ export async function verifyIdToken(
 
   // NVE access policy (docs/SECURITY.md). The erasure-resume capability skips only the domain step, so a person who cannot
   // otherwise use DevPulse can still start or resume their own account erasure. Verification and disabled checks still apply.
+  // Verification always applies, including on the erasure path: the capability waives the domain step only.
+  if (!account.emailVerified) {
+    return { ok: false, error: "invalid_token" };
+  }
   if (!resumingErasure) {
     let decision: Awaited<ReturnType<typeof decideAccess>>;
     try {

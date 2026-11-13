@@ -2,6 +2,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SKILL_CONTRIBUTION_FIELD } from "../domain/skill-contribution";
 import { SKILL_CONTRIBUTION_NOTICE_VERSION } from "../domain/skill-coverage-policy";
+import { registerClaims } from "../../../../test/auth-fixtures";
 
 type Doc = Record<string, unknown>;
 
@@ -83,9 +84,10 @@ const fakeDb = {
   },
 };
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
   getFirestoreDb: () => fakeDb,
-  getAdminAuth: () => ({}),
+  getAdminAuth: () => testAdminAuth,
 }));
 
 const { getOwnSkillContribution } = await import("./get-own-skill-contribution");
@@ -97,15 +99,15 @@ const { removeTeamMember } = await import("../../teams/server/remove-team-member
 const { setTeamMemberRole } = await import("../../teams/server/set-team-member-role");
 const { materializeMemberRefs } = await import("../../teams/server/materialize-member-refs");
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const NOW = new Date("2026-10-01T00:00:00Z");
 const CONSENT_TIME = new Date("2026-10-05T12:00:00Z");
 const TEAM = "team-1";
 const VERSION = SKILL_CONTRIBUTION_NOTICE_VERSION;
 const PATH = (uid: string, teamId = TEAM) => `teamMemberships/${uid}__${teamId}`;
 
-const verifyAs = (uid: string, email = `${uid}@example.com`) =>
-  vi.fn().mockResolvedValue({ uid, email, email_verified: true });
+const verifyAs = (uid: string, email = `${uid}@nve.no`) =>
+  vi.fn().mockImplementation(async () => registerClaims({ uid, email, email_verified: true }));
 const adminOps = {
   verifyToken: verifyAs("admin-1", ADMIN_EMAIL),
   isSuperadmin: async (uid: string) => uid === "admin-1",

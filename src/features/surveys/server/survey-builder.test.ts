@@ -10,6 +10,7 @@ import { duplicateSurvey, type DuplicateSurveyDeps } from "./duplicate-survey";
 import { getSurveyQuestionResults, type GetSurveyQuestionResultsDeps } from "./get-survey-question-results";
 import { updateSurveyDraft, type SurveyDraftStore, type UpdateSurveyDraftDeps } from "./update-survey-draft";
 import type { CreateSurveyDeps, SurveysCollection, SurveyRecord, TeamStatusReader } from "./create-survey";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 const ADMIN_UID = "admin-1";
 const MEMBER_UID = "member-1";
@@ -19,11 +20,11 @@ const SURVEY_ID = "survey-1";
 const NOW = new Date("2026-09-01T00:00:00Z");
 const TEAM_PULSE = getBuiltInTemplate("team-pulse").questions;
 
-const ADMIN_TOKEN_IDENTITY: VerifiedIdentity = { uid: ADMIN_UID, email: "admin@example.com", emailVerified: true };
-const MEMBER_IDENTITY: VerifiedIdentity = { uid: MEMBER_UID, email: "member@example.com", emailVerified: true };
+const ADMIN_TOKEN_IDENTITY: VerifiedIdentity = { uid: ADMIN_UID, email: "admin@nve.no", emailVerified: true };
+const MEMBER_IDENTITY: VerifiedIdentity = { uid: MEMBER_UID, email: "member@nve.no", emailVerified: true };
 
 function verifyAs(identity: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({ uid: identity.uid, email: identity.email, email_verified: identity.emailVerified });
+  return verifierFor({ uid: identity.uid, email: identity.email, emailVerified: identity.emailVerified });
 }
 
 const isAdmin = async (uid: string) => uid === ADMIN_UID;
@@ -366,7 +367,7 @@ describe("getSurveyQuestionResults", () => {
       TEAM_ID,
       SURVEY_ID,
       resultsDeps([], CLOSED_CONFIGURED_SURVEY, {
-        verifyToken: verifyAs({ uid: "outsider", email: "x@example.com", emailVerified: true }),
+        verifyToken: verifyAs({ uid: "outsider", email: "x@nve.no", emailVerified: true }),
       }),
     );
 

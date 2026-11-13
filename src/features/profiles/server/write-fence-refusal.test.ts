@@ -9,8 +9,9 @@ import { ErasureWriteRefused } from "../../auth/server/erasure-write-fence";
 import { deleteOwnProfile } from "./delete-own-profile";
 import { setOwnProfile } from "./set-own-profile";
 import type { UserProfileStore } from "./user-profile-store";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
-const verifyToken = vi.fn().mockResolvedValue({ uid: "user-1", email: "synthetic@example.com", email_verified: true });
+const verifyToken = verifierFor({ uid: "user-1", email: "synthetic@nve.no", emailVerified: true });
 
 function refusingStore(): UserProfileStore {
   return {

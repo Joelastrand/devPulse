@@ -9,6 +9,7 @@ import { updateTeamSkillProgress } from "./update-team-skill-progress";
 import { stopTeamSkillTracking } from "./stop-team-skill-tracking";
 import { updateSkillTree } from "./update-skill-tree";
 import { openSkillTreeDocument } from "../domain/skill-tree-content-codec";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 /**
  * A shared, in-memory Firestore-like store for exactly the two collections
@@ -41,7 +42,7 @@ function inMemoryCollection(kind: "tree" | "progress") {
   };
 }
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const ADMIN_UID = "admin-1";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const TEAM_ID = "team-1";
@@ -52,11 +53,7 @@ function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedId
 }
 
 function verifyTokenReturning(identity: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({
-    uid: identity.uid,
-    email: identity.email,
-    email_verified: identity.emailVerified,
-  });
+  return verifierFor({ uid: identity.uid, email: identity.email, emailVerified: identity.emailVerified });
 }
 
 describe("team skill tracking lifecycle", () => {

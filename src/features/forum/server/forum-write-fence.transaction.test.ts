@@ -4,13 +4,16 @@ import { membershipDocId } from "../../teams/domain/team-membership";
 import { createThread } from "./create-thread";
 import { deleteReply } from "./delete-reply";
 import { deleteThread } from "./delete-thread";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 // TASK-029: production forum write transactions over a recording Admin Firestore double. These are structural tests: the erasure
 // fence is read first, inside the same transaction as the write; a refusal writes nothing; a retried attempt commits its writes
 // only once. They do not model Firestore's conflict behaviour (that is the manual D-EMU gate). Fixtures are synthetic.
 
 const holder = vi.hoisted(() => ({ db: undefined as unknown }));
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => holder.db,
 }));
 vi.mock("server-only", () => ({}));
@@ -172,7 +175,7 @@ function replyDoc(overrides: Data = {}): Data {
 }
 
 function verifyActor() {
-  return vi.fn().mockResolvedValue({ uid: ACTOR, email: "admin@example.com", email_verified: true });
+  return verifierFor({ uid: ACTOR, email: "admin@nve.no", emailVerified: true });
 }
 
 /** Admin allow-list for the actor, so the actor may delete any thread or reply in the tests. */

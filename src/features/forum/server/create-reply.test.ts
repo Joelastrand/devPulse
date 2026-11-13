@@ -17,25 +17,22 @@ import type {
   ThreadReader,
 } from "./create-reply";
 import { createReply } from "./create-reply";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 const TEAM_ID = "team-42";
 const OTHER_TEAM_ID = "team-99";
 const THREAD_ID = "thread-1";
 const MEMBER_UID = "member-1";
-const APP_ADMIN_EMAIL = "admin@example.com";
+const APP_ADMIN_EMAIL = "admin@nve.no";
 const NOW = new Date("2026-09-01T00:00:00Z");
 const VALID_BODY = "Has anyone actually fixed this in prod, or are we still just restarting the pods?";
 
 function identity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
-  return { uid: MEMBER_UID, email: "dev@example.com", emailVerified: true, ...overrides };
+  return { uid: MEMBER_UID, email: "dev@nve.no", emailVerified: true, ...overrides };
 }
 
 function verifyTokenReturning(verified: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({
-    uid: verified.uid,
-    email: verified.email,
-    email_verified: verified.emailVerified,
-  });
+  return verifierFor({ uid: verified.uid, email: verified.email, emailVerified: verified.emailVerified });
 }
 
 function fakeForumRepliesCollection(): ForumRepliesCollection & { writes: ActiveForumReply[]; ids: string[] } {
@@ -530,7 +527,7 @@ describe("createReply", () => {
     for (const forbiddenField of ["email", "displayName", "name", "authorTag", "createdBy", "userId"]) {
       expect(stored).not.toHaveProperty(forbiddenField);
     }
-    expect(JSON.stringify(stored)).not.toContain("dev@example.com");
+    expect(JSON.stringify(stored)).not.toContain("dev@nve.no");
   });
 
   it("persists encrypted ciphertext, never the raw plaintext body", async () => {
@@ -684,7 +681,7 @@ describe("createReply", () => {
       for (const forbiddenKey of ["email", "displayName", "authorTag"]) {
         expect(stored).not.toHaveProperty(forbiddenKey);
       }
-      expect(JSON.stringify(stored)).not.toContain("dev@example.com");
+      expect(JSON.stringify(stored)).not.toContain("dev@nve.no");
     });
 
     it("the full serialized success/failure result never contains an identity canary", async () => {
@@ -692,7 +689,7 @@ describe("createReply", () => {
       const serialized = JSON.stringify(result);
 
       expect(serialized).not.toContain(MEMBER_UID);
-      expect(serialized).not.toContain("dev@example.com");
+      expect(serialized).not.toContain("dev@nve.no");
     });
   });
 });

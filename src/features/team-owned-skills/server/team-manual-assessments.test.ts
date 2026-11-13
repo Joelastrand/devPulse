@@ -6,11 +6,11 @@ import {
   listTeamManualAssessments,
   setTeamManualAssessment,
 } from "./manage-team-manual-assessments";
+import { registerClaims } from "../../../../test/auth-fixtures";
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => {
-    throw new Error("unexpected Firebase Auth use");
-  },
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => {
     throw new Error("unexpected Firestore use");
   },
@@ -39,7 +39,7 @@ function setup(extra: Partial<FakeTeamSkillState> = {}) {
   };
   const fake = createFakeTeamSkillStore(state);
   const deps: TeamSkillDeps = {
-    verifyToken: vi.fn().mockImplementation(async (token: string) => ({ uid: token, email: `${token}@example.test`, email_verified: true })),
+    verifyToken: vi.fn().mockImplementation(async (token: string) => registerClaims({ uid: token, email: `${token}@nve.no`, email_verified: true })),
     isSuperadmin: vi.fn(async () => false),
     store: fake.store,
     now: () => NOW,

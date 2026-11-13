@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { membershipDocId } from "../../teams/domain/team-membership";
 import { createReply } from "./create-reply";
 import { ErasureWriteRefused } from "../../auth/server/erasure-write-fence";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 // TASK-029: the production create-reply transaction. These are structural tests over a recording Admin Firestore double. They
 // prove the erasure fence read is the first operation in the SAME transaction as the reply create, that no plain read is
@@ -10,7 +11,9 @@ import { ErasureWriteRefused } from "../../auth/server/erasure-write-fence";
 // is the manual D-EMU gate. Fixtures are synthetic.
 
 const holder = vi.hoisted(() => ({ db: undefined as unknown }));
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => holder.db,
 }));
 vi.mock("server-only", () => ({}));
@@ -141,7 +144,7 @@ function baseDocs(overrides: Record<string, Data | string> = {}): Record<string,
 }
 
 function verifyToken() {
-  return vi.fn().mockResolvedValue({ uid: UID, email: "dev@example.com", email_verified: true });
+  return verifierFor({ uid: UID, email: "dev@nve.no", emailVerified: true });
 }
 
 describe("create-reply production transaction (TASK-029)", () => {

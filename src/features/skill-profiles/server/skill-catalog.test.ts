@@ -3,11 +3,11 @@ stubSkillTreeEncryptionKey();
 import { describe, expect, it, vi } from "vitest";
 import { listSkillTrees, type RawSkillTreeDoc } from "../../skill-trees/server/list-skill-trees";
 import { readSkillCatalog, SKILL_CATALOG_WINDOW, type RawCatalogDoc, type SkillCatalogReader } from "./skill-catalog";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => {
-    throw new Error("unexpected Firebase Auth use");
-  },
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => {
     throw new Error("unexpected Firestore use");
   },
@@ -224,7 +224,7 @@ describe("(k) duplicated-reader parity with listSkillTrees", () => {
     const docs = fixtures.map(({ id, data }) => ({ id, data }));
     const c1 = await readSkillCatalog(fakeReader(docs).reader);
     const admin = await listSkillTrees("token", {
-      verifyToken: vi.fn().mockResolvedValue({ uid: "a", email: "admin@example.com", email_verified: true }),
+      verifyToken: verifierFor({ uid: "a", email: "admin@nve.no", emailVerified: true }),
       isSuperadmin: async (uid: string) => uid === "a",
       reader: { listOrderedByCreatedAt: async (limit) => docs.slice(0, limit) as RawSkillTreeDoc[] },
     });

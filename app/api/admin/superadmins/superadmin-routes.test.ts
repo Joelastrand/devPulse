@@ -3,6 +3,7 @@ import { createFakeRegistry, USERS, verifyToken } from "../../../../src/features
 
 const holder = vi.hoisted(() => ({ registry: undefined as undefined | { store: unknown } }));
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../../src/features/superadmins/server/superadmin-store", () => ({
   getDefaultSuperadminStore: () => holder.registry?.store,
 }));
@@ -10,6 +11,7 @@ vi.mock("../../../../src/features/superadmins/server/superadmin-store", () => ({
 vi.mock("../../../../src/lib/firebase/admin", () => ({
   // Only the Firebase boundary is faked: token verification and Auth lookup by e-mail. Everything else runs for real.
   getAdminAuth: () => ({
+    getUser: testAdminAuth.getUser,
     verifyIdToken: (token: string) => verifyToken(token),
     getUserByEmail: async (email: string) => {
       const user = Object.values(USERS).find((candidate) => candidate.email === email);
@@ -133,7 +135,7 @@ describe("POST /api/admin/superadmins (grant)", () => {
   it("does not create an Auth user: an unknown e-mail is 404 and nothing is granted", async () => {
     const registry = seedRegistry({ "admin-uid": { active: true } });
 
-    const response = await POST(grantRequest({ email: "nobody@example.test" }));
+    const response = await POST(grantRequest({ email: "nobody@nve.no" }));
 
     expect(response.status).toBe(404);
     expect(registry.stats.writes).toBe(0);

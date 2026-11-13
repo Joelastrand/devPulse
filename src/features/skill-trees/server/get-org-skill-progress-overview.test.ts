@@ -15,14 +15,15 @@ import {
   LIST_ORG_SKILL_PROGRESS_LIMIT,
   getOrgSkillProgressOverview,
 } from "./get-org-skill-progress-overview";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const ADMIN_UID = "admin-1";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const MEMBER_UID = "member-1";
 
 function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
-  return { uid: MEMBER_UID, email: "dev@example.com", emailVerified: true, ...overrides };
+  return { uid: MEMBER_UID, email: "dev@nve.no", emailVerified: true, ...overrides };
 }
 
 function adminIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
@@ -30,11 +31,7 @@ function adminIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdent
 }
 
 function verifyTokenReturning(identity: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({
-    uid: identity.uid,
-    email: identity.email,
-    email_verified: identity.emailVerified,
-  });
+  return verifierFor({ uid: identity.uid, email: identity.email, emailVerified: identity.emailVerified });
 }
 
 function treeDoc(id: string, createdAt: Date, overrides: Record<string, unknown> = {}): RawSkillTreeDoc {

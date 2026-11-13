@@ -93,3 +93,23 @@ Run the checks that match the change, then inspect the diff.
 - Any code change: `pnpm typecheck` and the focused tests for the feature.
 - Security-sensitive change: also the guard tests named in `TESTING.md` §4.
 - UI change: `pnpm lint`, and `pnpm verify:browser` when the change affects a page the specs cover.
+
+## Browser checks on the emulators (email verification)
+
+`browser/email-verification.spec.ts` runs against the local Firebase Auth emulator, never a real project. Start a dev server
+with emulator-only environment (values are illustrative; do not put live credentials in the command):
+
+```text
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=demo-devpulse-verify FIREBASE_PROJECT_ID=demo-devpulse-verify \
+NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_URL=http://127.0.0.1:9099 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 \
+FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_PRIVATE_KEY= FIREBASE_CLIENT_EMAIL= \
+NEXT_PUBLIC_FIREBASE_API_KEY=demo-api-key NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=localhost NEXT_PUBLIC_FIREBASE_APP_ID=demo-app \
+ENCRYPTION_KEY=<random 32-byte base64> pnpm exec next dev -p 3101
+pnpm exec playwright test -c browser/email-verification.config.ts
+```
+
+- Empty `FIREBASE_PRIVATE_KEY` and `FIREBASE_CLIENT_EMAIL` keep the Admin SDK off the live credentials. The emulator host
+  variables make it use the emulators, and `assertAdminEmulatorSafe` refuses anything that is not local with a `demo-` project.
+- Next refuses a second `next dev` in the same directory while one holds `.next/dev/lock`. Stop the other server first. Do not
+  stop a server you did not start without asking.
+- `browser/playwright.config.ts` (the owner-account harness) signs in to the configured project. Do not point it at a live project.

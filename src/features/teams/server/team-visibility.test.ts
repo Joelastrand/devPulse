@@ -6,25 +6,25 @@ import {
   type VisibilityDecision,
   type VisibilityReads,
 } from "./team-visibility";
+import { registerClaims } from "../../../../test/auth-fixtures";
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => {
-    throw new Error("unexpected Firebase Auth use");
-  },
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => {
     throw new Error("unexpected Firestore use");
   },
 }));
 
 const TEAM = "team-1";
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const NOW = new Date("2026-11-01T00:00:00Z");
 
 const teamDoc = (overrides: Record<string, unknown> = {}) => ({ name: "Team Alfa", status: "active", visibility: "private", ...overrides });
 const membershipDoc = (uid: string, role?: string) => ({ uid, teamId: TEAM, createdVia: "invitation", ...(role ? { role } : {}) });
 
-function tokenFor(uid: string, email = `${uid}@example.com`) {
-  return vi.fn().mockResolvedValue({ uid, email, email_verified: true });
+function tokenFor(uid: string, email = `${uid}@nve.no`) {
+  return vi.fn().mockImplementation(async () => registerClaims({ uid, email, email_verified: true }));
 }
 
 /** Applies one decision against a fixed snapshot and records the single write it would make. */

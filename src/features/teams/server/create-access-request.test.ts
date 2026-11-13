@@ -7,20 +7,17 @@ import type {
   CreateOrResetOutcome,
 } from "./create-access-request";
 import { createAccessRequest } from "./create-access-request";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const NOW = new Date("2026-09-01T00:00:00Z");
 
 function identity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
-  return { uid: "user-1", email: "dev@example.com", emailVerified: true, ...overrides };
+  return { uid: "user-1", email: "dev@nve.no", emailVerified: true, ...overrides };
 }
 
 function verifyTokenReturning(user: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({
-    uid: user.uid,
-    email: user.email,
-    email_verified: user.emailVerified,
-  });
+  return verifierFor({ uid: user.uid, email: user.email, emailVerified: user.emailVerified });
 }
 
 function fakeAuthCollection(state: {
@@ -286,7 +283,7 @@ describe("createAccessRequest", () => {
     expect(teams.getStatus).not.toHaveBeenCalled();
   });
 
-  it("rejects an unverified caller and creates nothing", async () => {
+  it("refuses an unverified caller at the identity layer and creates nothing", async () => {
     const authCollection = fakeAuthCollection({ teamStatus: { "team-1": "active" } });
     const requests = fakeRequests();
 
@@ -297,7 +294,7 @@ describe("createAccessRequest", () => {
       collection: requests,
     });
 
-    expect(result).toEqual({ ok: false, error: "unverified" });
+    expect(result).toEqual({ ok: false, error: "unauthenticated" });
     expect(requests.calls).toBe(0);
   });
 

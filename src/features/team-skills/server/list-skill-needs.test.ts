@@ -5,29 +5,29 @@ import { skillNeedDocId, type SkillNeedRecord } from "../domain/skill-need";
 import { listSkillNeeds, type ListSkillNeedsDeps } from "./list-skill-needs";
 import type { SkillNeedCatalogReader } from "./skill-need-catalog";
 import { getDefaultSkillNeedsStore, type SkillNeedsReader } from "./skill-needs-store";
+import { registerClaims } from "../../../../test/auth-fixtures";
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => {
-    throw new Error("unexpected Firebase Auth use");
-  },
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => {
     throw new Error("unexpected Firestore use");
   },
 }));
 
 const TEAM = "team-1";
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const WHEN = new Date("2026-02-01T00:00:00Z");
 
 type Caller = "member" | "lead" | "memberAdmin" | "leadAdmin" | "nonMemberAdmin" | "unrelated";
 
 const CALLERS: Record<Caller, { uid: string; email: string; membership?: Record<string, unknown> }> = {
-  member: { uid: "u-member", email: "member@example.com", membership: { role: "member" } },
-  lead: { uid: "u-lead", email: "lead@example.com", membership: { role: "teamadmin" } },
+  member: { uid: "u-member", email: "member@nve.no", membership: { role: "member" } },
+  lead: { uid: "u-lead", email: "lead@nve.no", membership: { role: "teamadmin" } },
   memberAdmin: { uid: "u-madmin", email: ADMIN_EMAIL, membership: {} },
   leadAdmin: { uid: "u-ladmin", email: ADMIN_EMAIL, membership: { role: "teamadmin" } },
   nonMemberAdmin: { uid: "u-nadmin", email: ADMIN_EMAIL },
-  unrelated: { uid: "u-other", email: "other@example.com" },
+  unrelated: { uid: "u-other", email: "other@nve.no" },
 };
 
 function validTree(name: string) {
@@ -101,7 +101,7 @@ function setup(s: Setup) {
   const deps: ListSkillNeedsDeps = {
     verifyToken: vi.fn(async () => {
       if (!caller) throw new Error("bad token");
-      return { uid: caller.uid, email: caller.email, email_verified: true } as never;
+      return registerClaims({ uid: caller.uid, email: caller.email, email_verified: true }) as never;
     }),
     isSuperadmin: async (uid: string) => ["u-madmin", "u-ladmin", "u-nadmin"].includes(uid),
     collection: accessReads,
@@ -146,7 +146,7 @@ describe("need read authorization", () => {
         return "active";
       },
       async getMembership() {
-        return { uid: "someone-else", teamId: TEAM, role: "teamadmin", memberRef: "m-1", email: "other@example.com" };
+        return { uid: "someone-else", teamId: TEAM, role: "teamadmin", memberRef: "m-1", email: "other@nve.no" };
       },
     };
     const result = await listSkillNeeds("token", TEAM, { ...deps, collection: forged, reads: forged });
@@ -279,7 +279,7 @@ describe("need listing", () => {
     );
     expect(Object.keys(result.catalog[0]).sort()).toEqual(["name", "treeId"]);
     const json = JSON.stringify(result);
-    for (const forbidden of ["u-lead", "lead@example.com", "memberRef", "createdAt", "createdBy", "covered", "contributor"]) {
+    for (const forbidden of ["u-lead", "lead@nve.no", "memberRef", "createdAt", "createdBy", "covered", "contributor"]) {
       expect(json).not.toContain(forbidden);
     }
   });

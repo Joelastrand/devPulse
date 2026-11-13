@@ -8,23 +8,23 @@ import {
   type ListTeamRosterDeps,
   type TeamRosterStore,
 } from "./list-team-roster";
+import { registerClaims } from "../../../../test/auth-fixtures";
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => {
-    throw new Error("unexpected Firebase Auth use — the roster must never look up Auth users");
-  },
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => {
     throw new Error("unexpected Firestore use");
   },
 }));
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === "admin-1";
 const T0 = new Date("2026-01-01T00:00:00Z");
 const day = (n: number) => new Date(T0.getTime() + n * 86_400_000);
 
-function tokenFor(uid: string, email = `${uid}@example.com`) {
-  return vi.fn().mockResolvedValue({ uid, email, email_verified: true });
+function tokenFor(uid: string, email = `${uid}@nve.no`) {
+  return vi.fn().mockImplementation(async () => registerClaims({ uid, email, email_verified: true }));
 }
 
 function member(uid: string, createdAt: Date, extra: Record<string, unknown> = {}) {
@@ -252,7 +252,7 @@ describe("listTeamRoster — entries", () => {
   it("never falls back to e-mail, uid or an Auth lookup for a nameless member", async () => {
     const { deps } = build(teamWorld());
 
-    const result = await listTeamRoster("token", "team-1", { ...deps, verifyToken: tokenFor("user-3", "bo.lind@example.com") });
+    const result = await listTeamRoster("token", "team-1", { ...deps, verifyToken: tokenFor("user-3", "bo.lind@nve.no") });
 
     const text = JSON.stringify(result);
     expect(text).not.toContain("bo.lind");
@@ -262,7 +262,7 @@ describe("listTeamRoster — entries", () => {
   it("treats a corrupt profile as nameless without failing or leaking its other fields", async () => {
     const world = teamWorld();
     world.profiles = {
-      "user-1": { displayName: "Anna Berg", createdAt: T0, updatedAt: T0, email: "anna@example.com", note: "secret note" },
+      "user-1": { displayName: "Anna Berg", createdAt: T0, updatedAt: T0, email: "anna@nve.no", note: "secret note" },
       "user-2": { displayName: 7, createdAt: T0, updatedAt: T0 },
       "user-3": "garbage",
     };
@@ -272,7 +272,7 @@ describe("listTeamRoster — entries", () => {
 
     expect(result.ok && result.members.map((entry) => entry.displayName)).toEqual([null, "Anna Berg", null]);
     const text = JSON.stringify(result);
-    expect(text).not.toContain("anna@example.com");
+    expect(text).not.toContain("anna@nve.no");
     expect(text).not.toContain("secret note");
   });
 
@@ -490,8 +490,8 @@ describe("listTeamRoster — privacy contract (member-visible response)", () => 
     "user-3",
     "admin-secret",
     "invitation",
-    "user-1@example.com",
-    "user-2@example.com",
+    "user-1@nve.no",
+    "user-2@nve.no",
     "user-1__team-1",
     "user-2__team-1",
     "roleUpdatedBy",
@@ -559,14 +559,14 @@ describe("listTeamRoster — privacy contract (member-visible response)", () => 
     const world = teamWorld();
     world.memberships = {
       ...world.memberships,
-      "user-3__team-1": member("user-3", day(3), { email: "leak@example.com", displayName: "From Membership", secretNote: "x" }),
+      "user-3__team-1": member("user-3", day(3), { email: "leak@nve.no", displayName: "From Membership", secretNote: "x" }),
     };
     const { deps } = build(world);
 
     const result = await listTeamRoster("token", "team-1", deps);
 
     const serialised = JSON.stringify(result);
-    expect(serialised).not.toContain("leak@example.com");
+    expect(serialised).not.toContain("leak@nve.no");
     expect(serialised).not.toContain("From Membership");
     expect(serialised).not.toContain("secretNote");
   });

@@ -8,13 +8,13 @@ import { readTeamSkillRatingsBatch } from "./read-team-skill-ratings-batch";
 import { teamSkillAssessmentDocId } from "../domain/team-skill-assessment";
 import type { TeamSkillLevel } from "../domain/team-skill";
 import { sealAssessmentLevel } from "./assessment-level-codec";
+import { registerClaims } from "../../../../test/auth-fixtures";
 
 vi.stubEnv("ENCRYPTION_KEY", randomBytes(32).toString("base64"));
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => {
-    throw new Error("unexpected Firebase Auth use");
-  },
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => {
     throw new Error("unexpected Firestore use");
   },
@@ -90,7 +90,7 @@ function setup(scenario: Scenario = {}) {
   for (const [uid, skillId, doc] of scenario.assessments ?? []) rawAssessments.set(teamSkillAssessmentDocId(uid, skillId), doc);
 
   const deps: GetTeamOwnedSkillAggregateDeps = {
-    verifyToken: vi.fn().mockImplementation(async (token: string) => ({ uid: token, email: `${token}@example.test`, email_verified: true })),
+    verifyToken: vi.fn().mockImplementation(async (token: string) => registerClaims({ uid: token, email: `${token}@nve.no`, email_verified: true })),
     skillStore: fake.store,
     contributionStore: {
       listMembershipsForCoverage: vi.fn(async (_teamId: string, limit: number) => (scenario.scan ?? []).slice(0, limit)),

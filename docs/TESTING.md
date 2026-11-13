@@ -78,6 +78,36 @@ below-threshold, and plaintext-persistence prevention.
 - Worker count is capped at 50% of cores to keep jsdom tests stable.
 - Tests use synthetic, obviously fictional fixtures. Real employee or wellbeing data is never used (`.claude/rules/tests.md`).
 
+### Focused authorization and emulator checks
+
+- `src/features/auth/server/access-boundaries.test.ts`: the erasure exception (domain step only; verification and disabled
+  checks still apply) and the Gmail superadmin exemption by UID.
+- `src/features/superadmins/server/user-management.test.ts`: listing, search, detail, disable and re-enable, with refusals for
+  non-superadmins, unverified and non-NVE callers, self-disable, active superadmins and unknown uids.
+- `src/features/organization/server/initialize-organization.test.ts`: idempotent creation, conflict and race handling.
+- `browser/email-verification.spec.ts`: the verification flow on the Auth emulator. It needs a dev server started with
+  emulator-only environment (`DEVELOPMENT.md`, "Browser checks on the emulators"). Run it with
+  `pnpm exec playwright test -c browser/email-verification.config.ts`.
+
+### Authentication fixtures (NVE access policy)
+
+Every protected request reads the live Firebase Auth account (`loadAccount` in `verify-identity.ts`) and applies the NVE access
+policy. Feature tests therefore need an explicit account for every identity they use. The shared pieces are:
+
+- `test/auth-fixtures.ts`: an explicit, in-memory account registry. `registerTestAccount` adds an account; `verifierFor(identity)`
+  returns a token verifier that registers its identity each time it verifies a token; `registerClaims(claims)` does the same for
+  an inline claim object; `resetTestAccounts()` clears the registry.
+- `test/admin-auth-default.ts` (setup file): points the app's Admin Auth seam (`getAdminAuth`) at `testAdminAuth`. That fake
+  answers `getUser` and `getUserByEmail` only for registered accounts. An unregistered uid is `auth/user-not-found`, so the
+  production code refuses it. Nothing is granted by default, and the access policy still runs on every verified identity.
+- A test file that mocks `src/lib/firebase/admin` itself must keep the Auth member on the fixture, for example
+  `getAdminAuth: () => testAdminAuth`, loaded through `vi.hoisted`. Its Firestore guard may keep throwing.
+
+Test identities: use `@nve.no` addresses for authorized callers. Keep a non-NVE address only in a test whose purpose is the
+refusal (`@gmail.com` or a look-alike such as `@nve.no.attacker.com`). A superadmin exemption needs an explicit registry
+fixture; do not use an email-based exception. Tests that check an unverified caller expect `unauthenticated` from the identity
+layer, before any role or ownership check runs.
+
 ## 3. What is covered
 
 Evidence is the test file names and their `describe` blocks. Coverage percentages were not measured.

@@ -41,6 +41,10 @@ export const ALLOWED_MEMBER_ACCESS_NAMES: Readonly<Record<string, string>> = {};
 
 /** Collection names that are not person-owned and need no registry row (none at TASK-006). */
 export const ALLOWED_UNREGISTERED_COLLECTIONS: Readonly<Record<string, string>> = {
+  organizations:
+    "The single NVE organization record (organizations/nve, src/features/organization/domain/organization.ts): id, name, " +
+    "emailDomain and two timestamps. No uid, actor or e-mail field, so there is no person-linked data to erase. Do not add a " +
+    "person field without a registry row.",
   superadminRegistry:
     "Superadmin registry control document (superadmin-registry.ts): one activeCount and a timestamp. No uid, actor or memberRef field, so there is no person-linked data to erase. Do not add an actor field without a registry row.",
   teamProjects:

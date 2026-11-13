@@ -2,8 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type { ApproveAccessRequestCollection, ApproveOneOutcome } from "./approve-access-request";
 import { approveAccessRequest } from "./approve-access-request";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const ADMIN_UID = "admin-1";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const NOW = new Date("2026-09-01T00:00:00Z");
@@ -13,11 +14,7 @@ function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedId
 }
 
 function verifyTokenReturning(identity: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({
-    uid: identity.uid,
-    email: identity.email,
-    email_verified: identity.emailVerified,
-  });
+  return verifierFor({ uid: identity.uid, email: identity.email, emailVerified: identity.emailVerified });
 }
 
 interface RawRequest {
@@ -206,7 +203,7 @@ describe("approveAccessRequest", () => {
     });
 
     const result = await approveAccessRequest("token", "user-1", "team-1", {
-      verifyToken: verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" })),
+      verifyToken: verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@nve.no" })),
       isSuperadmin: isAdminUid,
       collection,
     });
@@ -272,7 +269,7 @@ describe("approveAccessRequest", () => {
       now: NOW,
     });
 
-    expect(JSON.stringify(result)).not.toContain("other-admin@example.com");
+    expect(JSON.stringify(result)).not.toContain("other-admin@nve.no");
   });
 
   it("never logs the token, identity, or admin allow-list for success or failure", async () => {

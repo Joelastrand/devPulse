@@ -2,8 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type { CancelInvitationCollection } from "./cancel-invitation";
 import { cancelInvitation } from "./cancel-invitation";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const ADMIN_UID = "admin-1";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const NOW = new Date("2026-09-01T00:00:00Z");
@@ -13,11 +14,7 @@ function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedId
 }
 
 function verifyTokenReturning(identity: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({
-    uid: identity.uid,
-    email: identity.email,
-    email_verified: identity.emailVerified,
-  });
+  return verifierFor({ uid: identity.uid, email: identity.email, emailVerified: identity.emailVerified });
 }
 
 function fakeCollection(
@@ -41,55 +38,55 @@ const baseDeps = {
 describe("cancelInvitation", () => {
   it("cancels a pending invitation", async () => {
     const collection = fakeCollection({
-      "team-1__dev@example.com": {
+      "team-1__dev@nve.no": {
         teamId: "team-1",
-        email: "dev@example.com",
+        email: "dev@nve.no",
         status: "pending",
         invitedBy: "admin-1",
       },
     });
 
-    const result = await cancelInvitation("token", "team-1", "dev@example.com", {
+    const result = await cancelInvitation("token", "team-1", "dev@nve.no", {
       ...baseDeps,
       collection,
       now: NOW,
     });
 
     expect(result).toEqual({ ok: true });
-    expect(collection.canceled).toEqual([{ teamId: "team-1", email: "dev@example.com" }]);
+    expect(collection.canceled).toEqual([{ teamId: "team-1", email: "dev@nve.no" }]);
   });
 
   it("normalizes case/whitespace before looking up the invitation", async () => {
     const collection = fakeCollection({
-      "team-1__dev@example.com": {
+      "team-1__dev@nve.no": {
         teamId: "team-1",
-        email: "dev@example.com",
+        email: "dev@nve.no",
         status: "pending",
         invitedBy: "admin-1",
       },
     });
 
-    const result = await cancelInvitation("token", "team-1", "  Dev@Example.COM ", {
+    const result = await cancelInvitation("token", "team-1", "  Dev@NVE.no ", {
       ...baseDeps,
       collection,
       now: NOW,
     });
 
     expect(result).toEqual({ ok: true });
-    expect(collection.canceled).toEqual([{ teamId: "team-1", email: "dev@example.com" }]);
+    expect(collection.canceled).toEqual([{ teamId: "team-1", email: "dev@nve.no" }]);
   });
 
   it("prevents a canceled invitation from being resolvable — a later create-invitation call must find no pending record", async () => {
     const collection = fakeCollection({
-      "team-1__dev@example.com": {
+      "team-1__dev@nve.no": {
         teamId: "team-1",
-        email: "dev@example.com",
+        email: "dev@nve.no",
         status: "pending",
         invitedBy: "admin-1",
       },
     });
 
-    await cancelInvitation("token", "team-1", "dev@example.com", {
+    await cancelInvitation("token", "team-1", "dev@nve.no", {
       ...baseDeps,
       collection,
       now: NOW,
@@ -101,7 +98,7 @@ describe("cancelInvitation", () => {
   it("is a no-op success for a nonexistent invitation", async () => {
     const collection = fakeCollection();
 
-    const result = await cancelInvitation("token", "team-1", "dev@example.com", {
+    const result = await cancelInvitation("token", "team-1", "dev@nve.no", {
       ...baseDeps,
       collection,
     });
@@ -112,15 +109,15 @@ describe("cancelInvitation", () => {
 
   it("is a no-op success for an already-canceled or already-accepted invitation", async () => {
     const collection = fakeCollection({
-      "team-1__dev@example.com": {
+      "team-1__dev@nve.no": {
         teamId: "team-1",
-        email: "dev@example.com",
+        email: "dev@nve.no",
         status: "accepted",
         invitedBy: "admin-1",
       },
     });
 
-    const result = await cancelInvitation("token", "team-1", "dev@example.com", {
+    const result = await cancelInvitation("token", "team-1", "dev@nve.no", {
       ...baseDeps,
       collection,
     });
@@ -132,7 +129,7 @@ describe("cancelInvitation", () => {
   it("rejects an unauthenticated caller and reads nothing", async () => {
     const collection = fakeCollection();
 
-    const result = await cancelInvitation("bad-token", "team-1", "dev@example.com", {
+    const result = await cancelInvitation("bad-token", "team-1", "dev@nve.no", {
       verifyToken: vi.fn().mockRejectedValue(new Error("bad token")),
       isSuperadmin: isAdminUid,
       collection,
@@ -145,8 +142,8 @@ describe("cancelInvitation", () => {
   it("rejects a non-admin caller and reads nothing", async () => {
     const collection = fakeCollection();
 
-    const result = await cancelInvitation("token", "team-1", "dev@example.com", {
-      verifyToken: verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" })),
+    const result = await cancelInvitation("token", "team-1", "dev@nve.no", {
+      verifyToken: verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@nve.no" })),
       isSuperadmin: isAdminUid,
       collection,
     });
@@ -174,7 +171,7 @@ describe("cancelInvitation", () => {
       markCanceled: vi.fn(),
     };
 
-    const result = await cancelInvitation("token", "team-1", "dev@example.com", {
+    const result = await cancelInvitation("token", "team-1", "dev@nve.no", {
       ...baseDeps,
       collection,
     });
@@ -186,14 +183,14 @@ describe("cancelInvitation", () => {
     const collection: CancelInvitationCollection = {
       get: vi.fn().mockResolvedValue({
         teamId: "team-1",
-        email: "dev@example.com",
+        email: "dev@nve.no",
         status: "pending",
         invitedBy: "admin-1",
       }),
       markCanceled: vi.fn().mockRejectedValue(new Error("simulated firestore outage")),
     };
 
-    const result = await cancelInvitation("token", "team-1", "dev@example.com", {
+    const result = await cancelInvitation("token", "team-1", "dev@nve.no", {
       ...baseDeps,
       collection,
     });
@@ -209,7 +206,7 @@ describe("cancelInvitation", () => {
       markCanceled: vi.fn(),
     };
 
-    const result = await cancelInvitation("token", "team-1", "dev@example.com", {
+    const result = await cancelInvitation("token", "team-1", "dev@nve.no", {
       ...baseDeps,
       collection,
     });
@@ -223,7 +220,7 @@ describe("cancelInvitation", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    await cancelInvitation("token", "team-1", "dev@example.com", {
+    await cancelInvitation("token", "team-1", "dev@nve.no", {
       ...baseDeps,
       collection: fakeCollection(),
       now: NOW,
@@ -233,7 +230,7 @@ describe("cancelInvitation", () => {
       get: vi.fn().mockRejectedValue(new Error("simulated firestore outage")),
       markCanceled: vi.fn(),
     };
-    await cancelInvitation("token", "team-1", "dev@example.com", {
+    await cancelInvitation("token", "team-1", "dev@nve.no", {
       ...baseDeps,
       collection: failingCollection,
     });

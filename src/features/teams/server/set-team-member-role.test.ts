@@ -1,23 +1,24 @@
 import { describe, expect, it, vi } from "vitest";
 import { REMOVE_FIELD, setTeamMemberRole, type SetTeamMemberRoleCollection } from "./set-team-member-role";
+import { verifierFor } from "../../../../test/auth-fixtures";
+import { registerClaims } from "../../../../test/auth-fixtures";
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => {
-    throw new Error("unexpected Firebase Auth use");
-  },
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => {
     throw new Error("unexpected Firestore use");
   },
 }));
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const ADMIN_UID = "admin-1";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const NOW = new Date("2026-10-01T00:00:00Z");
 const EARLIER = new Date("2026-01-01T00:00:00Z");
 
 function verifyTokenFor(email: string, uid = "admin-1") {
-  return vi.fn().mockResolvedValue({ uid, email, email_verified: true });
+  return vi.fn().mockImplementation(async () => registerClaims({ uid, email, email_verified: true }));
 }
 
 const asAdmin = { verifyToken: verifyTokenFor(ADMIN_EMAIL), isSuperadmin: isAdminUid, now: NOW };
@@ -300,7 +301,7 @@ describe("setTeamMemberRole — authorization and input", () => {
     const collection = { run: vi.fn() };
 
     const result = await setTeamMemberRole("token", "team-1", "user-1", "teamadmin", {
-      verifyToken: verifyTokenFor("dev@example.com", "dev-1"),
+      verifyToken: verifyTokenFor("dev@nve.no", "dev-1"),
       isSuperadmin: isAdminUid,
       collection,
     });
@@ -309,16 +310,17 @@ describe("setTeamMemberRole — authorization and input", () => {
     expect(collection.run).not.toHaveBeenCalled();
   });
 
-  it("rejects an allow-listed but unverified-email caller as forbidden", async () => {
+  it("refuses an unverified-email caller at the identity layer (unauthenticated), even when the registry says superadmin", async () => {
     const collection = { run: vi.fn() };
 
     const result = await setTeamMemberRole("token", "team-1", "user-1", "teamadmin", {
-      verifyToken: vi.fn().mockResolvedValue({ uid: "admin-1", email: ADMIN_EMAIL, email_verified: false }),
+      verifyToken: verifierFor({ uid: "admin-1", email: ADMIN_EMAIL, emailVerified: false }),
       isSuperadmin: isAdminUid,
       collection,
     });
 
-    expect(result).toEqual({ ok: false, error: "forbidden" });
+    // The access policy (docs/SECURITY.md) refuses an unverified e-mail before the role check runs.
+    expect(result).toEqual({ ok: false, error: "unauthenticated" });
     expect(collection.run).not.toHaveBeenCalled();
   });
 
@@ -339,7 +341,7 @@ describe("setTeamMemberRole — authorization and input", () => {
     const collection = { run: vi.fn() };
 
     const result = await setTeamMemberRole("token", "team-1", "user-1", "garbage", {
-      verifyToken: verifyTokenFor("dev@example.com", "dev-1"),
+      verifyToken: verifyTokenFor("dev@nve.no", "dev-1"),
       isSuperadmin: isAdminUid,
       collection,
     });

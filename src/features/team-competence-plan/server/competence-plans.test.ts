@@ -7,11 +7,11 @@ import {
   type CompetencePlanWriteTx,
 } from "./competence-plans";
 import type { CompetencePlan } from "../domain/competence-plan";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => {
-    throw new Error("unexpected Firebase Auth use");
-  },
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => {
     throw new Error("unexpected Firestore use");
   },
@@ -79,7 +79,7 @@ function build(world: World = {}) {
     verifyToken:
       world.verifies === false
         ? vi.fn().mockRejectedValue(new Error("bad token"))
-        : vi.fn().mockResolvedValue({ uid: world.callerUid ?? "uid-lead", email: "x@example.test", email_verified: true }),
+        : verifierFor({ uid: world.callerUid ?? "uid-lead", email: "x@nve.no", emailVerified: true }),
     isSuperadmin: async () => false,
     roleDeps: {
       isSuperadmin: async () => false,

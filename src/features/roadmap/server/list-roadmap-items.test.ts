@@ -8,17 +8,17 @@ import {
   type RawDoc,
   type RoadmapReadStore,
 } from "./list-roadmap-items";
+import { registerClaims } from "../../../../test/auth-fixtures";
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => {
-    throw new Error("unexpected Firebase Auth use");
-  },
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => {
     throw new Error("unexpected Firestore use");
   },
 }));
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === "admin-1";
 const NOW = new Date("2026-06-15T10:00:00Z"); // 2026-06-15 in Oslo
 const T0 = new Date("2026-01-01T00:00:00Z");
@@ -120,7 +120,7 @@ function build(world: World, callerUid = "user-1") {
   const deps: ListRoadmapItemsDeps = {
     verifyToken: vi
       .fn()
-      .mockResolvedValue({ uid: callerUid, email: callerUid === "admin-1" ? ADMIN_EMAIL : `${callerUid}@example.com`, email_verified: true }),
+      .mockImplementation(async () => registerClaims({ uid: callerUid, email: callerUid === "admin-1" ? ADMIN_EMAIL : `${callerUid}@nve.no`, email_verified: true })),
     isSuperadmin: isAdminUid,
     collection,
     store,
@@ -439,7 +439,7 @@ describe("listRoadmapItems — owner resolution", () => {
     const r = await items(withOwner(REF(2), { profiles: {} }));
     expect(r.items[0].owner).toMatchObject({ state: "current", displayName: null });
     expect(JSON.stringify(r)).not.toContain("user-2");
-    expect(JSON.stringify(r)).not.toContain("@example.com");
+    expect(JSON.stringify(r)).not.toContain("@nve.no");
   });
 
   it("gives duplicate-name owners the same ordinal as the selector", async () => {
@@ -552,7 +552,7 @@ describe("listRoadmapItems — response shape and read-only behaviour", () => {
       "displayName", "isSelf", "memberRef", "ordinal", "state",
     ]);
     const text = JSON.stringify(r);
-    for (const secret of ["creator-secret", "updater-secret", "admin-secret", "user-2", "@example.com", "authorTag", "team-1__"]) {
+    for (const secret of ["creator-secret", "updater-secret", "admin-secret", "user-2", "@nve.no", "authorTag", "team-1__"]) {
       expect(text).not.toContain(secret);
     }
   });

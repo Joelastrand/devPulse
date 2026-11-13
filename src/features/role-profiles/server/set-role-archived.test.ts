@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 import { setRoleArchived, type SetRoleArchivedDeps } from "./set-role-archived";
 import { createFakeRoleStore } from "./fake-role-store";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 const ADMIN_UID = "admin-1";
 const T0 = new Date("2026-06-01T00:00:00.000Z");
@@ -9,7 +10,7 @@ const T1 = new Date("2026-10-01T10:00:00.000Z");
 
 function deps(overrides: Partial<SetRoleArchivedDeps> = {}): SetRoleArchivedDeps {
   return {
-    verifyToken: vi.fn().mockResolvedValue({ uid: ADMIN_UID, email: "admin@example.com", email_verified: true }),
+    verifyToken: verifierFor({ uid: ADMIN_UID, email: "admin@nve.no", emailVerified: true }),
     isSuperadmin: async (uid: string) => uid === ADMIN_UID,
     readFence: async () => ({ kind: "none" }),
     store: createFakeRoleStore(),
@@ -82,7 +83,7 @@ describe("setRoleArchived", () => {
     const roleId = await store.create({ name: "Utvikler", description: "Bygger tjenester", createdAt: T0, createdBy: ADMIN_UID });
     const spy = vi.spyOn(store, "update");
 
-    const result = await setRoleArchived("token", roleId, true, deps({ store, verifyToken: vi.fn().mockResolvedValue({ uid: "member-1", email: "m@example.com", email_verified: true }) }));
+    const result = await setRoleArchived("token", roleId, true, deps({ store, verifyToken: verifierFor({ uid: "member-1", email: "m@nve.no", emailVerified: true }) }));
 
     expect(result).toEqual({ ok: false, error: "forbidden" });
     expect(spy).not.toHaveBeenCalled();

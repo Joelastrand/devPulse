@@ -2,12 +2,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 import { createRole, type CreateRoleDeps } from "./create-role";
 import { createFakeRoleStore } from "./fake-role-store";
+import { registerClaims } from "../../../../test/auth-fixtures";
 
 const ADMIN_UID = "admin-1";
 const NOW = new Date("2026-10-01T10:00:00Z");
 
 function verifyAs(uid: string) {
-  return vi.fn().mockResolvedValue({ uid, email: "admin@example.com", email_verified: true });
+  return vi.fn().mockImplementation(async () => registerClaims({ uid, email: "admin@nve.no", email_verified: true }));
 }
 
 function deps(overrides: Partial<CreateRoleDeps> = {}): CreateRoleDeps {

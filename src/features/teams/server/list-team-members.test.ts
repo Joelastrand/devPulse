@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type { TeamMembersCollection } from "./list-team-members";
 import { listTeamMembers } from "./list-team-members";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 // Display names are covered by get-display-names.test.ts; here the batched
 // read is an injected seam so these listing tests never reach Firestore.
@@ -10,7 +11,7 @@ vi.mock("../../profiles/server/get-display-names", () => ({
   getDisplayNames: getDisplayNamesMock,
 }));
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const ADMIN_UID = "admin-1";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 
@@ -19,11 +20,7 @@ function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedId
 }
 
 function verifyTokenReturning(identity: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({
-    uid: identity.uid,
-    email: identity.email,
-    email_verified: identity.emailVerified,
-  });
+  return verifierFor({ uid: identity.uid, email: identity.email, emailVerified: identity.emailVerified });
 }
 
 function fakeCollection(rawDocs: unknown[]): TeamMembersCollection {
@@ -64,7 +61,7 @@ describe("listTeamMembers", () => {
       { uid: "user-1", teamId: "team-1" },
       { uid: "user-2", teamId: "team-1" },
     ]);
-    const getUser = fakeGetUser({ "user-1": "one@example.com", "user-2": "two@example.com" });
+    const getUser = fakeGetUser({ "user-1": "one@nve.no", "user-2": "two@nve.no" });
 
     const result = await listTeamMembers("token", "team-1", {
       verifyToken,
@@ -76,8 +73,8 @@ describe("listTeamMembers", () => {
     expect(result).toEqual({
       ok: true,
       members: [
-        { uid: "user-1", email: "one@example.com", displayName: null, role: "member", hasMemberRef: false },
-        { uid: "user-2", email: "two@example.com", displayName: null, role: "member", hasMemberRef: false },
+        { uid: "user-1", email: "one@nve.no", displayName: null, role: "member", hasMemberRef: false },
+        { uid: "user-2", email: "two@nve.no", displayName: null, role: "member", hasMemberRef: false },
       ],
     });
   });
@@ -89,7 +86,7 @@ describe("listTeamMembers", () => {
       { teamId: "team-1" }, // missing uid
       { uid: 12345, teamId: "team-1" }, // non-string uid
     ]);
-    const getUser = fakeGetUser({ "user-1": "one@example.com" });
+    const getUser = fakeGetUser({ "user-1": "one@nve.no" });
 
     const result = await listTeamMembers("token", "team-1", {
       verifyToken,
@@ -100,7 +97,7 @@ describe("listTeamMembers", () => {
 
     expect(result).toEqual({
       ok: true,
-      members: [{ uid: "user-1", email: "one@example.com", displayName: null, role: "member", hasMemberRef: false }],
+      members: [{ uid: "user-1", email: "one@nve.no", displayName: null, role: "member", hasMemberRef: false }],
     });
   });
 
@@ -110,7 +107,7 @@ describe("listTeamMembers", () => {
       { uid: "user-1", teamId: "team-1" },
       { uid: "deleted-user", teamId: "team-1" },
     ]);
-    const getUser = fakeGetUser({ "user-1": "one@example.com" });
+    const getUser = fakeGetUser({ "user-1": "one@nve.no" });
 
     const result = await listTeamMembers("token", "team-1", {
       verifyToken,
@@ -121,7 +118,7 @@ describe("listTeamMembers", () => {
 
     expect(result).toEqual({
       ok: true,
-      members: [{ uid: "user-1", email: "one@example.com", displayName: null, role: "member", hasMemberRef: false }],
+      members: [{ uid: "user-1", email: "one@nve.no", displayName: null, role: "member", hasMemberRef: false }],
     });
   });
 
@@ -141,7 +138,7 @@ describe("listTeamMembers", () => {
 
   it("rejects a non-admin caller and attempts no read", async () => {
     const verifyToken = verifyTokenReturning(
-      verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" }),
+      verifiedIdentity({ uid: "non-admin-1", email: "dev@nve.no" }),
     );
     const collection = fakeCollection([]);
 
@@ -180,7 +177,7 @@ describe("listTeamMembers", () => {
       collection,
     });
 
-    expect(JSON.stringify(result)).not.toContain("other-admin@example.com");
+    expect(JSON.stringify(result)).not.toContain("other-admin@nve.no");
   });
 
   it("resolves with zero identity lookups when the team has no members", async () => {
@@ -230,18 +227,18 @@ describe("listTeamMembers", () => {
     expect(invoked).toEqual(["user-a", "user-b", "user-c"]);
 
     // Resolve deliberately out of input order.
-    deferred["user-c"]({ email: "c@example.com" });
-    deferred["user-a"]({ email: "a@example.com" });
-    deferred["user-b"]({ email: "b@example.com" });
+    deferred["user-c"]({ email: "c@nve.no" });
+    deferred["user-a"]({ email: "a@nve.no" });
+    deferred["user-b"]({ email: "b@nve.no" });
 
     const result = await resultPromise;
 
     expect(result).toEqual({
       ok: true,
       members: [
-        { uid: "user-a", email: "a@example.com", displayName: null, role: "member", hasMemberRef: false },
-        { uid: "user-b", email: "b@example.com", displayName: null, role: "member", hasMemberRef: false },
-        { uid: "user-c", email: "c@example.com", displayName: null, role: "member", hasMemberRef: false },
+        { uid: "user-a", email: "a@nve.no", displayName: null, role: "member", hasMemberRef: false },
+        { uid: "user-b", email: "b@nve.no", displayName: null, role: "member", hasMemberRef: false },
+        { uid: "user-c", email: "c@nve.no", displayName: null, role: "member", hasMemberRef: false },
       ],
     });
   });
@@ -252,7 +249,7 @@ describe("listTeamMembers", () => {
       { uid: "user-b", teamId: "team-1" },
       { uid: "user-c", teamId: "team-1" },
     ]);
-    const getUser = fakeGetUser({ "user-a": "a@example.com", "user-c": "c@example.com" });
+    const getUser = fakeGetUser({ "user-a": "a@nve.no", "user-c": "c@nve.no" });
 
     const result = await listTeamMembers("token", "team-1", {
       verifyToken: verifyTokenReturning(verifiedIdentity()),
@@ -264,15 +261,15 @@ describe("listTeamMembers", () => {
     expect(result).toEqual({
       ok: true,
       members: [
-        { uid: "user-a", email: "a@example.com", displayName: null, role: "member", hasMemberRef: false },
-        { uid: "user-c", email: "c@example.com", displayName: null, role: "member", hasMemberRef: false },
+        { uid: "user-a", email: "a@nve.no", displayName: null, role: "member", hasMemberRef: false },
+        { uid: "user-c", email: "c@nve.no", displayName: null, role: "member", hasMemberRef: false },
       ],
     });
   });
 });
 
 describe("listTeamMembers — display name and stored role (additive admin fields)", () => {
-  const deps = (collection: TeamMembersCollection, getUser = fakeGetUser({ "user-1": "one@example.com", "user-2": "two@example.com", "user-3": "three@example.com" })) => ({
+  const deps = (collection: TeamMembersCollection, getUser = fakeGetUser({ "user-1": "one@nve.no", "user-2": "two@nve.no", "user-3": "three@nve.no" })) => ({
     verifyToken: verifyTokenReturning(verifiedIdentity()),
     isSuperadmin: isAdminUid,
     collection,
@@ -291,8 +288,8 @@ describe("listTeamMembers — display name and stored role (additive admin field
     expect(result).toEqual({
       ok: true,
       members: [
-        { uid: "user-1", email: "one@example.com", displayName: "Anna Berg", role: "member", hasMemberRef: false },
-        { uid: "user-2", email: "two@example.com", displayName: null, role: "member", hasMemberRef: false },
+        { uid: "user-1", email: "one@nve.no", displayName: "Anna Berg", role: "member", hasMemberRef: false },
+        { uid: "user-2", email: "two@nve.no", displayName: null, role: "member", hasMemberRef: false },
       ],
     });
   });
@@ -315,7 +312,7 @@ describe("listTeamMembers — display name and stored role (additive admin field
 
     expect(result).toEqual({
       ok: true,
-      members: [{ uid: "user-1", email: "one@example.com", displayName: null, role: "member", hasMemberRef: false }],
+      members: [{ uid: "user-1", email: "one@nve.no", displayName: null, role: "member", hasMemberRef: false }],
     });
   });
 
@@ -352,7 +349,7 @@ describe("listTeamMembers — display name and stored role (additive admin field
 
     expect(result.ok && result.members[0]).toEqual({
       uid: "user-1",
-      email: "one@example.com",
+      email: "one@nve.no",
       displayName: null,
       role: "teamadmin",
       hasMemberRef: false,
@@ -370,7 +367,7 @@ describe("listTeamMembers — display name and stored role (additive admin field
 
   it("does not read profiles for a non-admin caller", async () => {
     const result = await listTeamMembers("token", "team-1", {
-      verifyToken: verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" })),
+      verifyToken: verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@nve.no" })),
       isSuperadmin: isAdminUid,
       collection: fakeCollection([{ uid: "user-1", teamId: "team-1" }]),
     });
@@ -386,7 +383,7 @@ describe("listTeamMembers — hasMemberRef readiness signal (team-skill-planning
     verifyToken: verifyTokenReturning(verifiedIdentity()),
     isSuperadmin: isAdminUid,
     collection,
-    getUser: fakeGetUser({ "user-1": "one@example.com" }),
+    getUser: fakeGetUser({ "user-1": "one@nve.no" }),
   });
 
   it.each([

@@ -1,23 +1,21 @@
 import { describe, expect, it, vi } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import { getOwnAdminStatus } from "./get-own-admin-status";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
-const verifyIdTokenSpy = vi.fn().mockResolvedValue({
-  uid: "user-1",
-  email: "admin@example.com",
-  email_verified: true,
-});
+const verifyIdTokenSpy = verifierFor({ uid: "user-1", email: "admin@nve.no", emailVerified: true });
 const getFirestoreDbMock = vi.fn();
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => ({ verifyIdToken: verifyIdTokenSpy }),
+  getAdminAuth: () => ({ ...testAdminAuth, verifyIdToken: verifyIdTokenSpy }),
   // Deferred (not a direct reference) so the factory object literal doesn't
   // read `getFirestoreDbMock`'s binding before its own `const` initializes
   // — `vi.mock` factories run before the rest of this file's top-level code.
   getFirestoreDb: (...args: unknown[]) => getFirestoreDbMock(...args),
 }));
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const superadmin = async (uid: string) => uid === "user-1";
 
 function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
@@ -25,11 +23,7 @@ function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedId
 }
 
 function verifyTokenReturning(identity: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({
-    uid: identity.uid,
-    email: identity.email,
-    email_verified: identity.emailVerified,
-  });
+  return verifierFor({ uid: identity.uid, email: identity.email, emailVerified: identity.emailVerified });
 }
 
 describe("getOwnAdminStatus", () => {
@@ -44,20 +38,20 @@ describe("getOwnAdminStatus", () => {
 
   it("returns isAdmin: false for a verified, non-allow-listed caller", async () => {
     const result = await getOwnAdminStatus("token", {
-      verifyToken: verifyTokenReturning(verifiedIdentity({ uid: "dev-1", email: "dev@example.com" })),
+      verifyToken: verifyTokenReturning(verifiedIdentity({ uid: "dev-1", email: "dev@nve.no" })),
       isSuperadmin: superadmin,
     });
 
     expect(result).toEqual({ ok: true, isAdmin: false });
   });
 
-  it("returns isAdmin: false (never an auth error) for an allow-listed but unverified-email caller", async () => {
+  it("refuses an allow-listed but unverified-email caller at the identity layer", async () => {
     const result = await getOwnAdminStatus("token", {
       verifyToken: verifyTokenReturning(verifiedIdentity({ emailVerified: false })),
       isSuperadmin: superadmin,
     });
 
-    expect(result).toEqual({ ok: true, isAdmin: false });
+    expect(result).toEqual({ ok: false, error: "unauthenticated" });
   });
 
   it("rejects an unauthenticated/invalid-token caller with a generic error, never a boolean", async () => {
@@ -91,8 +85,8 @@ describe("getOwnAdminStatus", () => {
       isSuperadmin,
     });
 
-    expect(JSON.stringify(okResult)).not.toContain("other-admin@example.com");
-    expect(JSON.stringify(failResult)).not.toContain("other-admin@example.com");
+    expect(JSON.stringify(okResult)).not.toContain("other-admin@nve.no");
+    expect(JSON.stringify(failResult)).not.toContain("other-admin@nve.no");
   });
 
   it("performs no Firestore read", async () => {

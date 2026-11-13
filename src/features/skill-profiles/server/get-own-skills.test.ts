@@ -4,18 +4,18 @@ import { describe, expect, it, vi } from "vitest";
 import { getOwnSkills, type GetOwnSkillsDeps } from "./get-own-skills";
 import type { RawCatalogDoc, SkillCatalogReader } from "./skill-catalog";
 import type { SkillProfileStore } from "./skill-profile-store";
+import { registerClaims } from "../../../../test/auth-fixtures";
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => {
-    throw new Error("unexpected Firebase Auth use");
-  },
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => {
     throw new Error("unexpected Firestore use");
   },
 }));
 
 function verifyTokenFor(uid: string, extra: Record<string, unknown> = {}) {
-  return vi.fn().mockResolvedValue({ uid, email: `${uid}@example.com`, email_verified: true, ...extra });
+  return vi.fn().mockImplementation(async () => registerClaims({ uid, email: `${uid}@nve.no`, email_verified: true, ...extra }));
 }
 
 const when = new Date("2026-01-01T00:00:00Z");
@@ -92,7 +92,7 @@ describe("getOwnSkills", () => {
     expect(s.read).toHaveBeenCalledWith("user-2");
   });
 
-  it("does not require emailVerified", async () => {
+  it("refuses an unverified-email caller at the identity layer", async () => {
     const s = setup({ "user-1": { levels: { ts: 2 } } }, TREES);
 
     const result = await getOwnSkills("token", {
@@ -100,7 +100,7 @@ describe("getOwnSkills", () => {
       verifyToken: verifyTokenFor("user-1", { email_verified: false }),
     });
 
-    expect(result.ok).toBe(true);
+    expect(result).toEqual({ ok: false, error: "unauthenticated" });
   });
 
   it("gives every identity (admin/lead-like included) only their own levels", async () => {

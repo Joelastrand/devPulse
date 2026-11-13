@@ -2,11 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import { clearOwnSkillLevel, type ClearOwnSkillLevelDeps } from "./clear-own-skill-level";
 import { createFakeSkillProfileStore } from "./fake-skill-profile-store";
 import type { SkillProfileStore } from "./skill-profile-store";
+import { registerClaims } from "../../../../test/auth-fixtures";
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => {
-    throw new Error("unexpected Firebase Auth use");
-  },
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => {
     throw new Error("unexpected Firestore use");
   },
@@ -18,7 +18,7 @@ const EARLIER = new Date("2026-01-01T00:00:00Z");
 function setup(profiles: Record<string, Record<string, unknown>> = {}) {
   const fake = createFakeSkillProfileStore(profiles);
   const deps = (uid = "user-1", extra: Record<string, unknown> = {}): ClearOwnSkillLevelDeps => ({
-    verifyToken: vi.fn().mockResolvedValue({ uid, email: `${uid}@example.com`, email_verified: true, ...extra }),
+    verifyToken: vi.fn().mockImplementation(async () => registerClaims({ uid, email: `${uid}@nve.no`, email_verified: true, ...extra })),
     store: fake.store,
     now: () => NOW,
   });
@@ -120,12 +120,12 @@ describe("clearOwnSkillLevel", () => {
     },
   );
 
-  it("touches only the verified uid's document with emailVerified false", async () => {
+  it("refuses an unverified-email caller and clears nothing", async () => {
     const s = setup({ "user-1": { levels: { ts: 2 } }, "user-2": { levels: { ts: 3 } } });
     const result = await clearOwnSkillLevel("t", "ts", s.deps("user-2", { email_verified: false }));
-    expect(result.ok).toBe(true);
-    expect(s.writes.map((w) => w.uid)).toEqual(["user-2"]);
-    expect(s.docs.get("user-1")).toEqual({ levels: { ts: 2 } });
+    expect(result).toEqual({ ok: false, error: "unauthenticated" });
+    expect(s.writes).toEqual([]);
+    expect(s.docs.get("user-2")).toEqual({ levels: { ts: 3 } });
   });
 
   it("maps a store failure to persistence_failed without leaking the message", async () => {

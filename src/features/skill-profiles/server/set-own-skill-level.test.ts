@@ -2,11 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import { createFakeSkillProfileStore } from "./fake-skill-profile-store";
 import { setOwnSkillLevel, type SetOwnSkillLevelDeps } from "./set-own-skill-level";
 import type { SkillProfileStore } from "./skill-profile-store";
+import { registerClaims } from "../../../../test/auth-fixtures";
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => {
-    throw new Error("unexpected Firebase Auth use");
-  },
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => {
     throw new Error("unexpected Firestore use");
   },
@@ -30,7 +30,7 @@ function validTree(name = "TypeScript") {
 function setup(profiles: Record<string, Record<string, unknown>> = {}, trees: Record<string, unknown> = { ts: validTree() }) {
   const fake = createFakeSkillProfileStore(profiles, trees);
   const deps = (uid = "user-1", extra: Record<string, unknown> = {}): SetOwnSkillLevelDeps => ({
-    verifyToken: vi.fn().mockResolvedValue({ uid, email: `${uid}@example.com`, email_verified: true, ...extra }),
+    verifyToken: vi.fn().mockImplementation(async () => registerClaims({ uid, email: `${uid}@nve.no`, email_verified: true, ...extra })),
     store: fake.store,
     now: () => NOW,
   });
@@ -56,11 +56,11 @@ describe("setOwnSkillLevel", () => {
     expect(s.docs.get("user-1")).toEqual({ levels: { ts: level }, createdAt: NOW, updatedAt: NOW });
   });
 
-  it("writes only to the verified uid's document, even for admin/lead-like or unverified-email identities", async () => {
+  it("refuses an unverified-email caller and writes nothing, even to another person's document", async () => {
     const s = setup({ "user-2": { levels: { ts: 4 } } });
     const result = await setOwnSkillLevel("t", "ts", { level: 1 }, s.deps("user-1", { email_verified: false }));
-    expect(result.ok).toBe(true);
-    expect(s.writes.map((w) => w.uid)).toEqual(["user-1"]);
+    expect(result).toEqual({ ok: false, error: "unauthenticated" });
+    expect(s.writes).toEqual([]);
     expect(s.docs.get("user-2")).toEqual({ levels: { ts: 4 } });
   });
 

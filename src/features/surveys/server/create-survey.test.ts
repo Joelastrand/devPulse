@@ -8,10 +8,11 @@ import type {
 } from "./create-survey";
 import { createSurvey } from "./create-survey";
 import { getBuiltInTemplate } from "../domain/templates";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 const TEAM_PULSE_QUESTIONS = getBuiltInTemplate("team-pulse").questions;
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const ADMIN_UID = "admin-1";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const TEAM_ID = "team-42";
@@ -22,11 +23,7 @@ function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedId
 }
 
 function verifyTokenReturning(identity: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({
-    uid: identity.uid,
-    email: identity.email,
-    email_verified: identity.emailVerified,
-  });
+  return verifierFor({ uid: identity.uid, email: identity.email, emailVerified: identity.emailVerified });
 }
 
 function fakeSurveysCollection(): SurveysCollection & { writes: SurveyRecord[] } {
@@ -231,7 +228,7 @@ describe("createSurvey", () => {
 
   it("rejects a non-admin caller and attempts no write", async () => {
     const collection = fakeSurveysCollection();
-    const verifyToken = verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" }));
+    const verifyToken = verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@nve.no" }));
 
     const result = await createSurvey(
       "token",

@@ -6,8 +6,9 @@ import type {
   LegacyTeamSeedRecord,
 } from "./seed-legacy-teams";
 import { isAlreadyExistsError, seedLegacyTeams } from "./seed-legacy-teams";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const ADMIN_UID = "admin-1";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const LEGACY_IDS = LEGACY_TEAM_SEEDS.map((seed) => seed.teamId);
@@ -17,11 +18,7 @@ function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedId
 }
 
 function verifyTokenReturning(identity: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({
-    uid: identity.uid,
-    email: identity.email,
-    email_verified: identity.emailVerified,
-  });
+  return verifierFor({ uid: identity.uid, email: identity.email, emailVerified: identity.emailVerified });
 }
 
 /**
@@ -281,7 +278,7 @@ describe("seedLegacyTeams", () => {
   it("rejects a non-admin caller and attempts no write", async () => {
     const collection = fakeCollection();
     const verifyToken = verifyTokenReturning(
-      verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" }),
+      verifiedIdentity({ uid: "non-admin-1", email: "dev@nve.no" }),
     );
 
     const result = await seedLegacyTeams("token", {
@@ -304,14 +301,14 @@ describe("seedLegacyTeams", () => {
     });
     const forbiddenResult = await seedLegacyTeams("token", {
       verifyToken: verifyTokenReturning(
-        verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" }),
+        verifiedIdentity({ uid: "non-admin-1", email: "dev@nve.no" }),
       ),
       isSuperadmin,
       collection: fakeCollection(),
     });
 
-    expect(JSON.stringify(okResult)).not.toContain("other-admin@example.com");
-    expect(JSON.stringify(forbiddenResult)).not.toContain("other-admin@example.com");
+    expect(JSON.stringify(okResult)).not.toContain("other-admin@nve.no");
+    expect(JSON.stringify(forbiddenResult)).not.toContain("other-admin@nve.no");
   });
 
   it("never logs the token, identity, or errors for success or failure", async () => {

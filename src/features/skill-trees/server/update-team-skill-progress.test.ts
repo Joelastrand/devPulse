@@ -10,8 +10,9 @@ import type {
   UpdateTeamSkillProgressDocSnapshot,
 } from "./update-team-skill-progress";
 import { updateTeamSkillProgress } from "./update-team-skill-progress";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const ADMIN_UID = "admin-1";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const TEAM_ID = "team-1";
@@ -23,11 +24,7 @@ function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedId
 }
 
 function verifyTokenReturning(identity: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({
-    uid: identity.uid,
-    email: identity.email,
-    email_verified: identity.emailVerified,
-  });
+  return verifierFor({ uid: identity.uid, email: identity.email, emailVerified: identity.emailVerified });
 }
 
 function validProgressData(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -130,7 +127,7 @@ describe("updateTeamSkillProgress", () => {
 
   it("rejects a non-admin caller and attempts no write", async () => {
     const progress = fakeProgressStore(validProgressData());
-    const verifyToken = verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" }));
+    const verifyToken = verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@nve.no" }));
 
     const result = await updateTeamSkillProgress(
       "token",
@@ -248,7 +245,7 @@ describe("updateTeamSkillProgress", () => {
 
   it("ignores a request-shaped teamId/treeId/updatedBy override since the function signature has no body parameter for them", async () => {
     const progress = fakeProgressStore(validProgressData());
-    const identity = verifiedIdentity({ uid: "admin-2", email: "second-admin@example.com" });
+    const identity = verifiedIdentity({ uid: "admin-2", email: "second-admin@nve.no" });
 
     await updateTeamSkillProgress(
       "token",

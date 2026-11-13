@@ -5,17 +5,20 @@ import { updateSkillTree } from "./update-skill-tree";
 // write. Refusal writes nothing. Structural test over a recording Admin Firestore double; fixtures are synthetic.
 
 const holder = vi.hoisted(() => ({ db: undefined as unknown }));
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => holder.db,
 }));
 vi.mock("server-only", () => ({}));
 
 const ADMIN_UID = "admin-35b";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
-const ADMIN_EMAIL = "admin35b@example.com";
+const ADMIN_EMAIL = "admin35b@nve.no";
 const TREE_ID = "tree-35b";
 import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../domain/skill-tree-test-fixtures";
 import { openSkillTreeDocument } from "../domain/skill-tree-content-codec";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 stubSkillTreeEncryptionKey();
 
@@ -51,7 +54,7 @@ holder.db = {
   },
 };
 
-const verifyToken = vi.fn().mockResolvedValue({ uid: ADMIN_UID, email: ADMIN_EMAIL, email_verified: true });
+const verifyToken = verifierFor({ uid: ADMIN_UID, email: ADMIN_EMAIL, emailVerified: true });
 const isSuperadmin = isAdminUid;
 
 function seedTree(): void {

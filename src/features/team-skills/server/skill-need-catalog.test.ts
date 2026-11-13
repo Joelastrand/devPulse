@@ -9,11 +9,11 @@ import {
   type RawTreeDoc,
   type SkillNeedCatalogReader,
 } from "./skill-need-catalog";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => {
-    throw new Error("unexpected Firebase Auth use");
-  },
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => {
     throw new Error("unexpected Firestore use");
   },
@@ -186,7 +186,7 @@ describe("parity with listSkillTrees candidate mapping", () => {
   it("accepts and rejects exactly the same fixture documents", async () => {
     const own = await readSkillNeedCatalog(fakeReader(fixtures).reader);
     const admin = await listSkillTrees("token", {
-      verifyToken: vi.fn().mockResolvedValue({ uid: "a", email: "admin@example.com", email_verified: true }),
+      verifyToken: verifierFor({ uid: "a", email: "admin@nve.no", emailVerified: true }),
       isSuperadmin: async (uid: string) => uid === "a",
       reader: {
         listOrderedByCreatedAt: async (limit) =>

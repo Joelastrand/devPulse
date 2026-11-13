@@ -41,6 +41,19 @@ describe("VerificationPending", () => {
     expect(signOutMock).toHaveBeenCalledTimes(1);
   });
 
+  it("on the sign-in page, signs out and returns to the form in place instead of pushing the same route", async () => {
+    signOutMock.mockResolvedValue({ ok: true });
+    const onReturnToSignIn = vi.fn();
+    const user = userEvent.setup();
+    render(<VerificationPending variant="unverified" onReturnToSignIn={onReturnToSignIn} />);
+
+    await user.click(screen.getByRole("button", { name: "Logg inn" }));
+
+    await waitFor(() => expect(onReturnToSignIn).toHaveBeenCalledTimes(1));
+    expect(signOutMock).toHaveBeenCalledTimes(1);
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
   it("resends the link and then disables resend during the cooldown", async () => {
     resendMock.mockResolvedValue({ ok: true });
     const user = userEvent.setup();

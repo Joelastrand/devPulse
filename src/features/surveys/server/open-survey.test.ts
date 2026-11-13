@@ -3,10 +3,11 @@ import { describe, expect, it, vi } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type { OpenSurveyDb, OpenSurveyDeps, OpenSurveyTransaction } from "./open-survey";
 import { openSurvey } from "./open-survey";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 stubSurveyEncryptionKey();
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const ADMIN_UID = "admin-1";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const TEAM_ID = "team-42";
@@ -17,11 +18,7 @@ function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedId
 }
 
 function verifyTokenReturning(identity: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({
-    uid: identity.uid,
-    email: identity.email,
-    email_verified: identity.emailVerified,
-  });
+  return verifierFor({ uid: identity.uid, email: identity.email, emailVerified: identity.emailVerified });
 }
 
 function surveyDoc(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -413,7 +410,7 @@ describe("openSurvey", () => {
       "teams/team-42": { status: "active" },
     });
     const runTransactionSpy = vi.spyOn(db, "runTransaction");
-    const verifyToken = verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" }));
+    const verifyToken = verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@nve.no" }));
 
     const result = await openSurvey("token", TEAM_ID, "survey-1", baseDeps(db, { verifyToken }));
 

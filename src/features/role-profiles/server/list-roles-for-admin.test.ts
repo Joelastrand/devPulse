@@ -2,13 +2,14 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 import { listRolesForAdmin, type ListRolesForAdminDeps } from "./list-roles-for-admin";
 import { createFakeRoleStore } from "./fake-role-store";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 const ADMIN_UID = "admin-1";
 const T0 = new Date("2026-06-01T00:00:00.000Z");
 
 function deps(overrides: Partial<ListRolesForAdminDeps> = {}): ListRolesForAdminDeps {
   return {
-    verifyToken: vi.fn().mockResolvedValue({ uid: ADMIN_UID, email: "admin@example.com", email_verified: true }),
+    verifyToken: verifierFor({ uid: ADMIN_UID, email: "admin@nve.no", emailVerified: true }),
     isSuperadmin: async (uid: string) => uid === ADMIN_UID,
     readFence: async () => ({ kind: "none" }),
     store: createFakeRoleStore(),
@@ -65,7 +66,7 @@ describe("listRolesForAdmin", () => {
     const result = await listRolesForAdmin(
       "token",
       {},
-      deps({ store, verifyToken: vi.fn().mockResolvedValue({ uid: "member-1", email: "m@example.com", email_verified: true }) }),
+      deps({ store, verifyToken: verifierFor({ uid: "member-1", email: "m@nve.no", emailVerified: true }) }),
     );
 
     expect(result).toEqual({ ok: false, error: "forbidden" });

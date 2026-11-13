@@ -21,10 +21,12 @@ export interface RequireAppAdminDeps {
  * Intentionally narrow: only the admin/non-admin gate. `authorizeTeamAccess` is the separate team-scoped decision.
  */
 export async function requireAppAdmin(idToken: string, deps: RequireAppAdminDeps = {}): Promise<RequireAppAdminResult> {
+  // The same injected superadmin source feeds the identity policy and the admin check, so both see one registry view.
   const verified = await verifyIdToken(idToken, {
     verifyToken: deps.verifyToken,
     readFence: deps.readFence,
     loadAccount: deps.loadAccount,
+    isSuperadmin: deps.isSuperadmin,
   });
   if (!verified.ok) {
     return { ok: false, error: authRefusalFor(verified) };

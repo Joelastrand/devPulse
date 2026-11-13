@@ -5,6 +5,7 @@ import { membershipDocId } from "../../teams/domain/team-membership";
 import { toPersistedTeam } from "../../teams/domain/team-content-codec";
 import { openParticipationDocument, toPersistedParticipation, toPersistedTeamProject } from "./team-project-codec";
 import { writeProjectParticipation } from "./write-project-participation";
+import { registerClaims } from "../../../../test/auth-fixtures";
 
 /**
  * Participation reassignment against the REAL local Firestore Emulator (TASK-005 roadmap editing, BR-8).
@@ -42,14 +43,13 @@ const PROJECT_OTHER = "proj-em-other";
 const db = vi.hoisted(() => ({ current: undefined as Firestore | undefined }));
 
 // Only the database accessor is routed to the emulator; the production write path runs unchanged.
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
   getFirestoreDb: () => {
     if (db.current === undefined) throw new Error("emulator database not initialised");
     return db.current;
   },
-  getAdminAuth: () => {
-    throw new Error("auth is not used by the emulator suite");
-  },
+  getAdminAuth: () => testAdminAuth,
 }));
 
 const ALL_DOCS = {
@@ -148,7 +148,7 @@ async function countTeamParticipations(database: Firestore): Promise<number> {
 /** The write dependencies for one caller: the verified uid and the real transaction store (the production default). */
 function deps(uid: string, newParticipationId = "part-em-never-used") {
   return {
-    verifyToken: vi.fn().mockResolvedValue({ uid, email: `${uid}@example.test`, email_verified: true }),
+    verifyToken: vi.fn().mockImplementation(async () => registerClaims({ uid, email: `${uid}@nve.no`, email_verified: true })),
     isSuperadmin: async () => false,
     newParticipationId: () => newParticipationId,
   };

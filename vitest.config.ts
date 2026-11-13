@@ -4,7 +4,10 @@ import { configDefaults, defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     environment: "node",
-    setupFiles: [fileURLToPath(new URL("./test/erasure-fence-default.ts", import.meta.url))],
+    setupFiles: [
+      fileURLToPath(new URL("./test/erasure-fence-default.ts", import.meta.url)),
+      fileURLToPath(new URL("./test/admin-auth-default.ts", import.meta.url)),
+    ],
     // One jsdom worker per core starves the CPU when anything else runs
     // alongside the suite (another vitest run, tsc, eslint), which pushes
     // jsdom-heavy tests past the default 5s timeout intermittently. Capping at

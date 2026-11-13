@@ -4,8 +4,9 @@ import type { RejectAccessRequestCollection, RejectOneOutcome } from "./reject-a
 import { rejectAccessRequest } from "./reject-access-request";
 import type { ApproveAccessRequestCollection, ApproveOneOutcome } from "./approve-access-request";
 import { approveAccessRequest } from "./approve-access-request";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const ADMIN_UID = "admin-1";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const NOW = new Date("2026-09-01T00:00:00Z");
@@ -15,11 +16,7 @@ function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedId
 }
 
 function verifyTokenReturning(identity: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({
-    uid: identity.uid,
-    email: identity.email,
-    email_verified: identity.emailVerified,
-  });
+  return verifierFor({ uid: identity.uid, email: identity.email, emailVerified: identity.emailVerified });
 }
 
 interface RawRequest {
@@ -117,7 +114,7 @@ describe("rejectAccessRequest", () => {
     });
 
     const result = await rejectAccessRequest("token", "user-1", "team-1", {
-      verifyToken: verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" })),
+      verifyToken: verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@nve.no" })),
       isSuperadmin: isAdminUid,
       collection,
     });

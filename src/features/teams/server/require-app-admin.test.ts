@@ -1,18 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import { requireAppAdmin } from "./require-app-admin";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
-const verifyIdTokenSpy = vi.fn().mockResolvedValue({
-  uid: "admin-1",
-  email: "admin@example.com",
-  email_verified: true,
-});
+const verifyIdTokenSpy = verifierFor({ uid: "admin-1", email: "admin@nve.no", emailVerified: true });
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => ({ verifyIdToken: verifyIdTokenSpy }),
+  getAdminAuth: () => ({ ...testAdminAuth, verifyIdToken: verifyIdTokenSpy }),
 }));
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const superadmin = async (uid: string) => uid === "admin-1";
 
 function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
@@ -20,11 +18,7 @@ function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedId
 }
 
 function verifyTokenReturning(identity: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({
-    uid: identity.uid,
-    email: identity.email,
-    email_verified: identity.emailVerified,
-  });
+  return verifierFor({ uid: identity.uid, email: identity.email, emailVerified: identity.emailVerified });
 }
 
 describe("requireAppAdmin", () => {
@@ -52,7 +46,7 @@ describe("requireAppAdmin", () => {
 
   it("rejects a verified but non-admin caller", async () => {
     const verifyToken = verifyTokenReturning(
-      verifiedIdentity({ uid: "dev-1", email: "dev@example.com" }),
+      verifiedIdentity({ uid: "dev-1", email: "dev@nve.no" }),
     );
 
     const result = await requireAppAdmin("token", {
@@ -73,7 +67,7 @@ describe("requireAppAdmin", () => {
       isSuperadmin: superadmin,
     });
 
-    expect(result).toEqual({ ok: false, error: "forbidden" });
+    expect(result).toEqual({ ok: false, error: "unauthenticated" });
   });
 
   it("checks token revocation by default when no verifyToken override is supplied", async () => {
@@ -93,14 +87,14 @@ describe("requireAppAdmin", () => {
     });
     const forbiddenResult = await requireAppAdmin("token", {
       verifyToken: verifyTokenReturning(
-        verifiedIdentity({ uid: "dev-1", email: "dev@example.com" }),
+        verifiedIdentity({ uid: "dev-1", email: "dev@nve.no" }),
       ),
       isSuperadmin,
     });
 
-    expect(JSON.stringify(okResult)).not.toContain("other-admin@example.com");
+    expect(JSON.stringify(okResult)).not.toContain("other-admin@nve.no");
     expect(JSON.stringify(forbiddenResult)).not.toContain(
-      "other-admin@example.com",
+      "other-admin@nve.no",
     );
   });
 

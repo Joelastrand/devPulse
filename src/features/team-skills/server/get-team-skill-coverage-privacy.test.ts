@@ -15,12 +15,12 @@ import {
 import type { SkillContributionStore } from "./skill-contribution-store";
 import type { SkillNeedCatalogReader } from "./skill-need-catalog";
 import { getDefaultSkillNeedsStore, type SkillNeedsReader } from "./skill-needs-store";
+import { registerClaims } from "../../../../test/auth-fixtures";
 
 // Any real Firestore/Auth use (profile writes, progress or roadmap collections, …) throws and fails the test.
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => {
-    throw new Error("unexpected Firebase Auth use");
-  },
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => {
     throw new Error("unexpected Firestore use");
   },
@@ -34,11 +34,11 @@ vi.mock("../../../lib/firebase/admin", () => ({
 const TEAM = "team-1";
 const WHEN = new Date("2026-02-01T00:00:00Z");
 const CALLERS = {
-  member: { uid: "u-member", email: "member@example.com", role: "member" },
-  lead: { uid: "u-lead", email: "lead@example.com", role: "teamadmin" },
-  memberAdmin: { uid: "u-madmin", email: "admin@example.com", role: "member" },
-  leadAdmin: { uid: "u-ladmin", email: "admin@example.com", role: "teamadmin" },
-  nonMemberAdmin: { uid: "u-nadmin", email: "admin@example.com", role: undefined },
+  member: { uid: "u-member", email: "member@nve.no", role: "member" },
+  lead: { uid: "u-lead", email: "lead@nve.no", role: "teamadmin" },
+  memberAdmin: { uid: "u-madmin", email: "admin@nve.no", role: "member" },
+  leadAdmin: { uid: "u-ladmin", email: "admin@nve.no", role: "teamadmin" },
+  nonMemberAdmin: { uid: "u-nadmin", email: "admin@nve.no", role: undefined },
 } as const;
 type Caller = keyof typeof CALLERS;
 
@@ -102,7 +102,7 @@ function setup(s: Setup) {
   const call = () =>
     createGetTeamSkillCoverage({
       readLevels: readLevelsSpy,
-      verifyToken: vi.fn(async () => ({ uid: caller.uid, email: caller.email, email_verified: true }) as never),
+      verifyToken: vi.fn(async () => (registerClaims({ uid: caller.uid, email: caller.email, email_verified: true })) as never),
       reads: {
         async getTeamStatus() {
           return "teamStatus" in s ? s.teamStatus : "active";

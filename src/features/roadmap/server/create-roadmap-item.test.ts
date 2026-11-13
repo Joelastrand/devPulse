@@ -5,11 +5,11 @@ import {
   type CreateRoadmapStore,
   type CreateRoadmapTx,
 } from "./create-roadmap-item";
+import { registerClaims } from "../../../../test/auth-fixtures";
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => {
-    throw new Error("unexpected Firebase Auth use");
-  },
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => {
     throw new Error("unexpected Firestore use");
   },
@@ -73,7 +73,7 @@ const valid = { treeId: "tree-1", targetNodeId: "node-2" };
 
 type Write = { docId: string; data: Record<string, unknown> };
 
-function build(world: World, uid = "user-1", email = `${uid}@example.com`) {
+function build(world: World, uid = "user-1", email = `${uid}@nve.no`) {
   const writes: Write[] = [];
   const reads: string[] = [];
   let membershipQueries = 0;
@@ -126,7 +126,7 @@ function build(world: World, uid = "user-1", email = `${uid}@example.com`) {
     },
   };
   const deps: CreateRoadmapItemDeps = {
-    verifyToken: vi.fn().mockResolvedValue({ uid, email, email_verified: true }),
+    verifyToken: vi.fn().mockImplementation(async () => registerClaims({ uid, email, email_verified: true })),
     store,
     now: () => NOW,
     profileReader: {
@@ -179,7 +179,7 @@ describe("createRoadmapItem — authorization", () => {
   it("lets an app admin who is also a genuine active member create (via membership)", async () => {
     const world = baseWorld();
     world.memberships["admin-1__team-1"] = member("admin-1", 3);
-    const { result } = await create(world, valid, "admin-1", "admin@example.com");
+    const { result } = await create(world, valid, "admin-1", "admin@nve.no");
     expect(result.ok).toBe(true);
   });
 
@@ -521,7 +521,7 @@ describe("createRoadmapItem — slot and persisted shape", () => {
       createdAt: NOW.toISOString(),
     });
     const json = JSON.stringify(result);
-    for (const leak of ["createdBy", "updatedBy", "user-1", "user-2", "@example.com"]) {
+    for (const leak of ["createdBy", "updatedBy", "user-1", "user-2", "@nve.no"]) {
       expect(json).not.toContain(leak);
     }
   });

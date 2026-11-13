@@ -4,10 +4,11 @@ import type { SkillTreeDocStore, UpdateSkillTreeDeps, UpdateSkillTreeDocSnapshot
 import { updateSkillTree } from "./update-skill-tree";
 import { sealedSkillTreeFixture, stubSkillTreeEncryptionKey } from "../domain/skill-tree-test-fixtures";
 import { openSkillTreeDocument } from "../domain/skill-tree-content-codec";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 stubSkillTreeEncryptionKey();
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const ADMIN_UID = "admin-1";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const TREE_ID = "tree-1";
@@ -19,11 +20,7 @@ function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedId
 }
 
 function verifyTokenReturning(identity: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({
-    uid: identity.uid,
-    email: identity.email,
-    email_verified: identity.emailVerified,
-  });
+  return verifierFor({ uid: identity.uid, email: identity.email, emailVerified: identity.emailVerified });
 }
 
 function existingTreeData(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -165,7 +162,7 @@ describe("updateSkillTree", () => {
 
   it("rejects a non-admin caller and attempts no read or write", async () => {
     const docs = fakeSkillTreeDocStore(existingTreeData());
-    const verifyToken = verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" }));
+    const verifyToken = verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@nve.no" }));
 
     const result = await updateSkillTree("token", TREE_ID, "New name", THREE_LABELS, baseDeps({ docs, verifyToken }));
 
@@ -273,7 +270,7 @@ describe("updateSkillTree", () => {
 
   it("uses the verified acting admin's uid, never a client-supplied updatedBy", async () => {
     const docs = fakeSkillTreeDocStore(existingTreeData());
-    const identity = verifiedIdentity({ uid: "admin-2", email: "second-admin@example.com" });
+    const identity = verifiedIdentity({ uid: "admin-2", email: "second-admin@nve.no" });
 
     await updateSkillTree(
       "token",

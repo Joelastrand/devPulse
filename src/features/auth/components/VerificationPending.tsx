@@ -14,6 +14,11 @@ type ResendState = "idle" | "sending" | "sent" | "failed";
 interface VerificationPendingProps {
   /** `created`: right after sign-up. `unverified`: sign-in found an account whose address is not yet verified. */
   variant: "created" | "unverified";
+  /**
+   * Set when the region is shown on the sign-in page itself. Navigating to the page the visitor is already on does not
+   * remount the form, so the form resets its own state here instead of relying on the route change.
+   */
+  onReturnToSignIn?: () => void;
 }
 
 /**
@@ -21,7 +26,7 @@ interface VerificationPendingProps {
  * The login action signs out first: a signed-in visitor is redirected away from `/sign-in`, so the sign-in page can only
  * be reached cleanly without the pending session. Login then re-checks verification from a fresh session.
  */
-export function VerificationPending({ variant }: VerificationPendingProps) {
+export function VerificationPending({ variant, onReturnToSignIn }: VerificationPendingProps) {
   const router = useRouter();
   const copy = authCopy.verification;
   const [resendState, setResendState] = useState<ResendState>("idle");
@@ -46,6 +51,10 @@ export function VerificationPending({ variant }: VerificationPendingProps) {
 
   async function handleLogin() {
     await signOut();
+    if (onReturnToSignIn) {
+      onReturnToSignIn();
+      return;
+    }
     router.push("/sign-in");
   }
 

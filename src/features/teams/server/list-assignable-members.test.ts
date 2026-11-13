@@ -7,24 +7,24 @@ import {
   type AssignableMembersStore,
   type ListAssignableMembersDeps,
 } from "./list-assignable-members";
+import { registerClaims } from "../../../../test/auth-fixtures";
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => {
-    throw new Error("unexpected Firebase Auth use");
-  },
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => {
     throw new Error("unexpected Firestore use");
   },
 }));
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === "admin-uid";
 const T0 = new Date("2026-01-01T00:00:00Z");
 const day = (n: number) => new Date(T0.getTime() + n * 86_400_000);
 const REF = (n: number) => `${String(n).padStart(2, "0")}bbbbbbbbbbbbbbbbbbbbbbbb`;
 
-function tokenFor(uid: string, email = `${uid}@example.com`) {
-  return vi.fn().mockResolvedValue({ uid, email, email_verified: true });
+function tokenFor(uid: string, email = `${uid}@nve.no`) {
+  return vi.fn().mockImplementation(async () => registerClaims({ uid, email, email_verified: true }));
 }
 
 function member(uid: string, n: number, extra: Record<string, unknown> = {}) {
@@ -342,7 +342,7 @@ describe("listAssignableMembers — names and ordinals", () => {
     expect(result.members.map((m) => m.displayName)).toEqual(["Anna Berg", "Cecilia Dahl", null]);
     const text = JSON.stringify(result);
     expect(text).not.toContain("user-3");
-    expect(text).not.toContain("@example.com");
+    expect(text).not.toContain("@nve.no");
   });
 
   it("gives unique names no ordinal", async () => {
@@ -387,7 +387,7 @@ describe("listAssignableMembers — privacy and read-only", () => {
     }
     const text = JSON.stringify(result);
     for (const forbidden of [
-      "user-1", "user-2", "user-3", "@example.com", "admin-secret", "__team-1",
+      "user-1", "user-2", "user-3", "@nve.no", "admin-secret", "__team-1",
       "createdAt", "createdVia", "grantedBy", "role", "hasMemberRef", "authorTag", "uid", "email",
       "2026-01", String(day(1).getTime()),
     ]) {

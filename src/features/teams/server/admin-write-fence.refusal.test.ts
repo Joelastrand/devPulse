@@ -5,20 +5,23 @@ import { grantTeamMembership } from "./grant-team-membership";
 import { rejectAccessRequest } from "./reject-access-request";
 import { seedLegacyTeams } from "./seed-legacy-teams";
 import { setTeamMemberRole } from "./set-team-member-role";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 // TASK-035: direct refusal coverage for the team-management admin writes that stamp the acting admin's uid. Each protected
 // mutation reads the fence inside its own transaction and writes nothing when the fence refuses. Structural test over a
 // recording Admin Firestore double. Fixtures are synthetic; the admin and target uids are fictional.
 
 const holder = vi.hoisted(() => ({ db: undefined as unknown }));
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => holder.db,
 }));
 vi.mock("server-only", () => ({}));
 
 const ADMIN_UID = "admin-35";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
-const ADMIN_EMAIL = "admin35@example.com";
+const ADMIN_EMAIL = "admin35@nve.no";
 const TARGET_UID = "member-35";
 const TEAM_ID = "team-35";
 const ADMIN_FENCE = `accountErasures/${ADMIN_UID}`;
@@ -68,7 +71,7 @@ holder.db = {
   },
 };
 
-const verifyToken = vi.fn().mockResolvedValue({ uid: ADMIN_UID, email: ADMIN_EMAIL, email_verified: true });
+const verifyToken = verifierFor({ uid: ADMIN_UID, email: ADMIN_EMAIL, emailVerified: true });
 const isSuperadmin = isAdminUid;
 
 function seedAdminFence(): void {
@@ -130,7 +133,7 @@ describe("team admin writes are refused while the acting admin's erasure record 
   it("creating a pending invitation refuses with erasure_in_progress and stores no invitation", async () => {
     seedAdminFence();
 
-    const result = await createInvitation("t", TEAM_ID, "invitee@example.com", {
+    const result = await createInvitation("t", TEAM_ID, "invitee@nve.no", {
       verifyToken,
       isSuperadmin,
       teamsCollection: { getStatus: async () => "active" },

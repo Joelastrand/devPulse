@@ -5,11 +5,11 @@ import { deleteOwnSkillProfile, type DeleteOwnSkillProfileDeps } from "./delete-
 import { createFakeSkillProfileStore } from "./fake-skill-profile-store";
 import { getOwnSkills } from "./get-own-skills";
 import { setOwnSkillLevel } from "./set-own-skill-level";
+import { registerClaims } from "../../../../test/auth-fixtures";
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => {
-    throw new Error("unexpected Firebase Auth use");
-  },
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => {
     throw new Error("unexpected Firestore use");
   },
@@ -21,7 +21,7 @@ const EARLIER = new Date("2026-01-01T00:00:00Z");
 function setup(profiles: Record<string, Record<string, unknown>> = {}, skillTrees: Record<string, unknown> = {}) {
   const fake = createFakeSkillProfileStore(profiles, skillTrees);
   const deps = (uid = "user-1", extra: Record<string, unknown> = {}): DeleteOwnSkillProfileDeps => ({
-    verifyToken: vi.fn().mockResolvedValue({ uid, email: `${uid}@example.com`, email_verified: true, ...extra }),
+    verifyToken: vi.fn().mockImplementation(async () => registerClaims({ uid, email: `${uid}@nve.no`, email_verified: true, ...extra })),
     store: fake.store,
   });
   return { ...fake, deps };
@@ -99,11 +99,11 @@ describe("deleteOwnSkillProfile", () => {
     expect(s.treeReads).toEqual([]);
   });
 
-  it("works with emailVerified:false", async () => {
+  it("refuses an unverified-email caller at the identity layer and deletes nothing", async () => {
     const s = setup({ "user-1": { levels: { ts: 2 } } });
     const result = await deleteOwnSkillProfile("t", s.deps("user-1", { email_verified: false }));
-    expect(result).toEqual({ ok: true });
-    expect(s.docs.has("user-1")).toBe(false);
+    expect(result).toEqual({ ok: false, error: "unauthenticated" });
+    expect(s.docs.has("user-1")).toBe(true);
   });
 
   it("maps a store failure to persistence_failed without leaking the error", async () => {

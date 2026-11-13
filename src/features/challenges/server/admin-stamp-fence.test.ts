@@ -1,20 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { archiveChallenge } from "./archive-challenge";
 import { resolveChallenge } from "./resolve-challenge";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 // TASK-034: the admin stamp writes on challenges (archive, resolve) read the admin's erasure fence first, in the same
 // transaction, and write nothing when it refuses. Structural test over a recording Admin Firestore double. Fixtures are
 // synthetic; the admin uid is fictional.
 
 const holder = vi.hoisted(() => ({ db: undefined as unknown }));
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => holder.db,
 }));
 vi.mock("server-only", () => ({}));
 
 const ADMIN_UID = "admin-34";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
-const ADMIN_EMAIL = "admin34@example.com";
+const ADMIN_EMAIL = "admin34@nve.no";
 const TEAM_ID = "team-34";
 const CHALLENGE_ID = "challenge-34";
 const CHALLENGE_PATH = `challenges/${CHALLENGE_ID}`;
@@ -45,7 +48,7 @@ holder.db = {
   },
 };
 
-const verifyToken = vi.fn().mockResolvedValue({ uid: ADMIN_UID, email: ADMIN_EMAIL, email_verified: true });
+const verifyToken = verifierFor({ uid: ADMIN_UID, email: ADMIN_EMAIL, emailVerified: true });
 const isSuperadmin = isAdminUid;
 
 function seedChallenge(): void {

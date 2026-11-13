@@ -2,6 +2,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SKILL_CONTRIBUTION_FIELD } from "../domain/skill-contribution";
 import { SKILL_CONTRIBUTION_NOTICE_VERSION } from "../domain/skill-coverage-policy";
+import { registerClaims } from "../../../../test/auth-fixtures";
 
 type Doc = Record<string, unknown>;
 
@@ -88,7 +89,7 @@ const fakeDb = {
   },
 };
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === "admin";
 const TEAM = "team-1";
 const NOW = new Date("2026-10-01T00:00:00Z");
@@ -96,11 +97,11 @@ const CONSENT_SENTINEL = new Date("2031-02-03T04:05:06Z");
 const VERSION = SKILL_CONTRIBUTION_NOTICE_VERSION;
 
 const identities: Record<string, { uid: string; email: string; email_verified: boolean }> = {
-  "t-anna": { uid: "anna", email: "anna@example.com", email_verified: true },
-  "t-bo": { uid: "bo", email: "bo@example.com", email_verified: true },
-  "t-lead": { uid: "lead", email: "lead@example.com", email_verified: true },
-  "t-stale": { uid: "stale", email: "stale@example.com", email_verified: true },
-  "t-admin": { uid: "admin", email: ADMIN_EMAIL, email_verified: true },
+  "t-anna": registerClaims({ uid: "anna", email: "anna@nve.no", email_verified: true }),
+  "t-bo": registerClaims({ uid: "bo", email: "bo@nve.no", email_verified: true }),
+  "t-lead": registerClaims({ uid: "lead", email: "lead@nve.no", email_verified: true }),
+  "t-stale": registerClaims({ uid: "stale", email: "stale@nve.no", email_verified: true }),
+  "t-admin": registerClaims({ uid: "admin", email: ADMIN_EMAIL, email_verified: true }),
 };
 
 vi.mock("../../superadmins/server/superadmin-policy", () => ({
@@ -116,7 +117,7 @@ vi.mock("../../../lib/firebase/admin", () => ({
       if (!identity) throw new Error("bad token");
       return identity;
     },
-    getUser: async (uid: string) => ({ email: `${uid}@example.com` }),
+    getUser: async (uid: string) => ({ uid, email: `${uid}@nve.no`, emailVerified: true, disabled: false }),
   }),
 }));
 

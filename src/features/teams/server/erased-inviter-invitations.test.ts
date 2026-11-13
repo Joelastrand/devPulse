@@ -4,12 +4,13 @@ import { fetchTeamInvitations } from "../client/admin-team-detail-gateway";
 import { isValidPendingInvitationFor, isValidPendingInvitationForTeam } from "../domain/team-invitation";
 import type { TeamInvitationsCollection } from "./list-team-invitations";
 import { listTeamInvitations } from "./list-team-invitations";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 // TASK-017 (account-erasure, approved option (a)): a preserved invitation whose inviter was erased has `invitedBy: null`.
 // That state stays valid and visible where it was visible before; any other malformed inviter value is still rejected.
 // Fixtures are synthetic.
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === "admin-1";
 const CREATED_AT = new Date("2026-09-01T00:00:00Z");
 const TEAM = "team-1";
@@ -19,7 +20,7 @@ function verifiedAdmin(): VerifiedIdentity {
 }
 
 function verifyAs(identity: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({ uid: identity.uid, email: identity.email, email_verified: true });
+  return verifierFor({ uid: identity.uid, email: identity.email, emailVerified: true });
 }
 
 function collectionOf(rawDocs: unknown[]): TeamInvitationsCollection {
@@ -28,7 +29,7 @@ function collectionOf(rawDocs: unknown[]): TeamInvitationsCollection {
 
 const pending = (overrides: Record<string, unknown> = {}) => ({
   teamId: TEAM,
-  email: "dev@example.com",
+  email: "dev@nve.no",
   status: "pending",
   invitedBy: "admin-1",
   createdAt: CREATED_AT,
@@ -39,7 +40,7 @@ const pending = (overrides: Record<string, unknown> = {}) => ({
 describe("pending invitation with a normal inviter (unchanged)", () => {
   it("is valid for the team and for its expected email", () => {
     expect(isValidPendingInvitationForTeam(pending(), TEAM)).toBe(true);
-    expect(isValidPendingInvitationFor(pending(), { teamId: TEAM, email: "dev@example.com" })).toBe(true);
+    expect(isValidPendingInvitationFor(pending(), { teamId: TEAM, email: "dev@nve.no" })).toBe(true);
   });
 });
 
@@ -47,19 +48,19 @@ describe("preserved invitation with invitedBy: null (erased inviter)", () => {
   it("is valid for the team and for its expected email, so it stays readable and resolvable", () => {
     const erased = pending({ invitedBy: null });
     expect(isValidPendingInvitationForTeam(erased, TEAM)).toBe(true);
-    expect(isValidPendingInvitationFor(erased, { teamId: TEAM, email: "dev@example.com" })).toBe(true);
+    expect(isValidPendingInvitationFor(erased, { teamId: TEAM, email: "dev@nve.no" })).toBe(true);
   });
 
   it("stays visible in the admin list, with the inviter absent and no identity of any kind", async () => {
     const result = await listTeamInvitations("token", TEAM, {
       verifyToken: verifyAs(verifiedAdmin()),
       isSuperadmin: isAdminUid,
-      collection: collectionOf([pending({ invitedBy: null, email: "kept@example.com" })]),
+      collection: collectionOf([pending({ invitedBy: null, email: "kept@nve.no" })]),
     });
 
     expect(result).toEqual({
       ok: true,
-      invitations: [{ email: "kept@example.com", invitedBy: null, createdAt: CREATED_AT }],
+      invitations: [{ email: "kept@nve.no", invitedBy: null, createdAt: CREATED_AT }],
     });
     if (!result.ok) throw new Error("expected ok result");
     const row: Record<string, unknown> = { ...result.invitations[0] };
@@ -68,7 +69,7 @@ describe("preserved invitation with invitedBy: null (erased inviter)", () => {
   });
 
   it("does not grant visibility to a non-admin: the erased-inviter state changes nothing about authorization", async () => {
-    const member = { uid: "member-1", email: "member@example.com", emailVerified: true };
+    const member = { uid: "member-1", email: "member@nve.no", emailVerified: true };
     const nullInviter = await listTeamInvitations("token", TEAM, {
       verifyToken: verifyAs(member),
       isSuperadmin: isAdminUid,
@@ -96,7 +97,7 @@ describe("malformed inviter values remain rejected (not made acceptable by the n
   ])("rejects %s for both the team list and the resolve/pending predicate", (_label, invitedBy) => {
     const record = pending({ invitedBy });
     expect(isValidPendingInvitationForTeam(record, TEAM)).toBe(false);
-    expect(isValidPendingInvitationFor(record, { teamId: TEAM, email: "dev@example.com" })).toBe(false);
+    expect(isValidPendingInvitationFor(record, { teamId: TEAM, email: "dev@nve.no" })).toBe(false);
   });
 
   it("drops a malformed-inviter row from the admin list while keeping a valid neighbour", async () => {
@@ -104,14 +105,14 @@ describe("malformed inviter values remain rejected (not made acceptable by the n
       verifyToken: verifyAs(verifiedAdmin()),
       isSuperadmin: isAdminUid,
       collection: collectionOf([
-        pending({ email: "bad@example.com", invitedBy: 42 }),
-        pending({ email: "good@example.com", invitedBy: null }),
+        pending({ email: "bad@nve.no", invitedBy: 42 }),
+        pending({ email: "good@nve.no", invitedBy: null }),
       ]),
     });
 
     expect(result).toEqual({
       ok: true,
-      invitations: [{ email: "good@example.com", invitedBy: null, createdAt: CREATED_AT }],
+      invitations: [{ email: "good@nve.no", invitedBy: null, createdAt: CREATED_AT }],
     });
   });
 });
@@ -126,18 +127,18 @@ describe("admin gateway accepts the explicit null and nothing malformed (TASK-01
   }
 
   it("accepts an invitation with invitedBy null", async () => {
-    stubInvitations([{ email: "a@example.com", invitedBy: null, createdAt: "2026-01-01T00:00:00.000Z" }]);
+    stubInvitations([{ email: "a@nve.no", invitedBy: null, createdAt: "2026-01-01T00:00:00.000Z" }]);
 
     expect(await fetchTeamInvitations("t", TEAM)).toEqual({
       status: "ok",
-      invitations: [{ email: "a@example.com", invitedBy: null, createdAt: "2026-01-01T00:00:00.000Z" }],
+      invitations: [{ email: "a@nve.no", invitedBy: null, createdAt: "2026-01-01T00:00:00.000Z" }],
     });
   });
 
   it("rejects the whole list when any row carries a malformed inviter (fail closed)", async () => {
     stubInvitations([
-      { email: "a@example.com", invitedBy: null, createdAt: "2026-01-01T00:00:00.000Z" },
-      { email: "b@example.com", invitedBy: 42, createdAt: "2026-01-01T00:00:00.000Z" },
+      { email: "a@nve.no", invitedBy: null, createdAt: "2026-01-01T00:00:00.000Z" },
+      { email: "b@nve.no", invitedBy: 42, createdAt: "2026-01-01T00:00:00.000Z" },
     ]);
 
     expect(await fetchTeamInvitations("t", TEAM)).toEqual({ status: "read_failed" });

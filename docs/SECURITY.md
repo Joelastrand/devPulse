@@ -236,3 +236,30 @@ final product decision for the current application scope. It is not a fixed defe
 - Criteria-version validation rejects malformed or mismatched ratings. Suspect ratings suppress a skill.
 - Individual self-assessments are readable only by their owner through the server.
 - Encryption, anonymous response shapes and erasure controls as described in §§5–9.
+
+## 10. Superadmin user management and disabled accounts
+
+- **Who.** Every operation in `src/features/superadmins/server/user-management.ts` calls `requireAppAdmin`: a verified,
+  revocation-checked, enabled account, and an active superadmin registry record read on the same request.
+- **List and search.** Paginated, with a page size of 1 to 100 (default 25). A malformed size falls back to the default, never to
+  all users. Search is an exact, normalized e-mail match, because Firebase Auth has no prefix search. The e-mail is shown to the
+  operator and is not stored by the module.
+- **Detail.** Account facts (verification, enabled state, creation and last sign-in) and the team memberships (`uid`, `teamId`,
+  role), read server-side.
+- **Disable.** Requires `confirm: true` in the request body. Refused for the operator's own account, and for any active superadmin
+  (the superadmin record must be revoked first, which keeps the last-superadmin rule in the registry operations). On success the
+  account's refresh tokens are revoked. Existing sessions then fail the revocation check on their next request, and the live
+  `disabled` flag refuses them too.
+- **Re-enable.** Clears the disabled flag. It revokes nothing and needs no confirmation.
+- **Failures.** Any Auth error is reported as `persistence_failed` with no detail. Unknown uids are `user_not_found`.
+- **Admin-initiated deletion is not supported.** The erasure workflow is self-only (AE-SI-1, BR-22): no superadmin, operator or
+  other route may start another person's erasure. No deletion endpoint or UI exists for superadmins, and the static guard
+  `erasure-static-guards.test.ts` enforces that only `POST /api/me/erasure` names the erasure operation. Any future operator-initiated
+  deletion needs a separate, reviewed decision that amends AE-SI-1 and BR-22 first.
+- **Not audited yet.** These operations write no audit record. Adding one is a separate decision.
+
+## 11. NVE access policy and organization (summary)
+
+- Ordinary access: a verified e-mail whose domain is exactly `nve.no`. Superadmin access: an active registry UID, whatever the address.
+  Team access and team-admin rights stay separate (§2). Formal organizational roles grant nothing.
+- The organization record (`organizations/nve`) is descriptive and authorizes nothing. See `DATA-MODEL.md` §12.

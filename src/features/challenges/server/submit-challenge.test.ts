@@ -12,24 +12,21 @@ import type {
   TeamStatusReader,
 } from "./submit-challenge";
 import { submitChallenge } from "./submit-challenge";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 const TEAM_ID = "team-42";
 const OTHER_TEAM_ID = "team-99";
 const MEMBER_UID = "member-1";
-const APP_ADMIN_EMAIL = "admin@example.com";
+const APP_ADMIN_EMAIL = "admin@nve.no";
 const NOW = new Date("2026-09-01T00:00:00Z");
 const VALID_TEXT = "Deploys have no clear owner and this causes delays.";
 
 function identity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
-  return { uid: MEMBER_UID, email: "dev@example.com", emailVerified: true, ...overrides };
+  return { uid: MEMBER_UID, email: "dev@nve.no", emailVerified: true, ...overrides };
 }
 
 function verifyTokenReturning(verified: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({
-    uid: verified.uid,
-    email: verified.email,
-    email_verified: verified.emailVerified,
-  });
+  return verifierFor({ uid: verified.uid, email: verified.email, emailVerified: verified.emailVerified });
 }
 
 const FIXED_CHALLENGE_ID = "generated-challenge-1";
@@ -367,7 +364,7 @@ describe("submitChallenge", () => {
     }
     const serialized = JSON.stringify(stored);
     expect(serialized).not.toContain(MEMBER_UID);
-    expect(serialized).not.toContain("dev@example.com");
+    expect(serialized).not.toContain("dev@nve.no");
   });
 
   it("never persists a mutable status field", async () => {
@@ -549,7 +546,7 @@ describe("submitChallenge", () => {
       await submitChallenge("token", TEAM_ID, VALID_TEXT, baseDeps({ collection }));
 
       const serialized = JSON.stringify(collection.writes[0]);
-      for (const canary of [MEMBER_UID, "dev@example.com", APP_ADMIN_EMAIL, "uid", "email", "displayName"]) {
+      for (const canary of [MEMBER_UID, "dev@nve.no", APP_ADMIN_EMAIL, "uid", "email", "displayName"]) {
         if (canary === "uid" || canary === "email" || canary === "displayName") {
           // These are checked as absent *keys*, not substrings, since
           // "keyVersion"/"teamId" etc. legitimately contain unrelated text.
@@ -565,7 +562,7 @@ describe("submitChallenge", () => {
       const serialized = JSON.stringify(result);
 
       expect(serialized).not.toContain(MEMBER_UID);
-      expect(serialized).not.toContain("dev@example.com");
+      expect(serialized).not.toContain("dev@nve.no");
     });
   });
 });

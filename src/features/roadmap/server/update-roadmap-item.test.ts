@@ -8,11 +8,11 @@ import {
   type UpdateRoadmapStore,
   type UpdateRoadmapTx,
 } from "./update-roadmap-item";
+import { registerClaims } from "../../../../test/auth-fixtures";
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => {
-    throw new Error("unexpected Firebase Auth use");
-  },
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => {
     throw new Error("unexpected Firestore use");
   },
@@ -139,7 +139,7 @@ function build(world: World, uid = "user-1") {
     },
   };
   const deps: UpdateRoadmapItemDeps = {
-    verifyToken: vi.fn().mockResolvedValue({ uid, email: `${uid}@example.com`, email_verified: true }),
+    verifyToken: vi.fn().mockImplementation(async () => registerClaims({ uid, email: `${uid}@nve.no`, email_verified: true })),
     store,
     now: () => NOW,
     profileReader: {

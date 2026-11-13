@@ -3,6 +3,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { randomBytes } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { invitationDocIdForEmail, toPersistedInvitation } from "../domain/team-invitation-content-codec";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 vi.stubEnv("ENCRYPTION_KEY", randomBytes(32).toString("base64"));
 
@@ -117,9 +118,10 @@ const fakeDb = {
   },
 };
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
   getFirestoreDb: () => fakeDb,
-  getAdminAuth: () => ({}),
+  getAdminAuth: () => testAdminAuth,
 }));
 
 const { setTeamMemberRole } = await import("./set-team-member-role");
@@ -131,11 +133,11 @@ const { authorizeTeamAccess } = await import("./authorize-team-access");
 const { resolveTeamRole } = await import("./resolve-team-role");
 const { listTeamRoster } = await import("./list-team-roster");
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === "admin-1";
 const NOW = new Date("2026-10-01T00:00:00Z");
 const adminDeps = {
-  verifyToken: vi.fn().mockResolvedValue({ uid: "admin-1", email: ADMIN_EMAIL, email_verified: true }),
+  verifyToken: verifierFor({ uid: "admin-1", email: ADMIN_EMAIL, emailVerified: true }),
   isSuperadmin: isAdminUid,
   now: NOW,
 };
@@ -219,10 +221,10 @@ describe("existing membership grant paths never write or inherit a role", () => 
   });
 
   it("resolveInvitations creates a plain member", async () => {
-    store.set(invitationDocIdForEmailPath("team-1", "anna@example.com"), sealedInvitation("team-1", "anna@example.com", "admin-1"));
+    store.set(invitationDocIdForEmailPath("team-1", "anna@nve.no"), sealedInvitation("team-1", "anna@nve.no", "admin-1"));
 
     const result = await resolveInvitations(
-      { uid: "user-1", email: "anna@example.com", emailVerified: true },
+      { uid: "user-1", email: "anna@nve.no", emailVerified: true },
       { now: NOW },
     );
 
@@ -263,8 +265,8 @@ describe("memberRef lifecycle (team-skill-planning TASK-001)", () => {
     await grant();
     store.set("teamAccessRequests/user-2__team-1", { uid: "user-2", teamId: "team-1", status: "pending", createdAt: NOW });
     await approveAccessRequest("t", "user-2", "team-1", adminDeps);
-    store.set(invitationDocIdForEmailPath("team-1", "anna@example.com"), sealedInvitation("team-1", "anna@example.com", "admin-1"));
-    await resolveInvitations({ uid: "user-3", email: "anna@example.com", emailVerified: true }, { now: NOW });
+    store.set(invitationDocIdForEmailPath("team-1", "anna@nve.no"), sealedInvitation("team-1", "anna@nve.no", "admin-1"));
+    await resolveInvitations({ uid: "user-3", email: "anna@nve.no", emailVerified: true }, { now: NOW });
 
     const refs = ["user-1", "user-2", "user-3"].map((uid) => store.get(`teamMemberships/${uid}__team-1`)?.memberRef);
     refs.forEach((ref) => expect(ref).toMatch(MEMBER_REF));
@@ -316,7 +318,7 @@ describe("memberRef lifecycle (team-skill-planning TASK-001)", () => {
   });
 
   it("a memberRef grants no access: authorization ignores it entirely", async () => {
-    const stranger = { uid: "user-9", email: "x@example.com", emailVerified: true };
+    const stranger = { uid: "user-9", email: "x@nve.no", emailVerified: true };
     store.set("teamMemberships/user-1__team-1", membership("user-1", { memberRef: "0123456789abcdefghjkmnpqrs" }));
 
     expect(await authorizeTeamAccess(stranger, "team-1", { isSuperadmin: isAdminUid })).toEqual({ ok: true, access: "denied" });
@@ -326,7 +328,7 @@ describe("memberRef lifecycle (team-skill-planning TASK-001)", () => {
     await grant();
     const ref = store.get("teamMemberships/user-1__team-1")?.memberRef as string;
     const result = await listTeamRoster("t", "team-1", {
-      verifyToken: vi.fn().mockResolvedValue({ uid: "user-1", email: "dev@example.com", email_verified: true }),
+      verifyToken: verifierFor({ uid: "user-1", email: "dev@nve.no", emailVerified: true }),
       isSuperadmin: isAdminUid,
     });
 
@@ -337,7 +339,7 @@ describe("memberRef lifecycle (team-skill-planning TASK-001)", () => {
 });
 
 describe("authorizeTeamAccess is unaffected by the role field", () => {
-  const nonAdmin = { uid: "user-1", email: "dev@example.com", emailVerified: true };
+  const nonAdmin = { uid: "user-1", email: "dev@nve.no", emailVerified: true };
   const deps = { isSuperadmin: isAdminUid };
 
   it.each([
@@ -369,7 +371,7 @@ describe("authorizeTeamAccess is unaffected by the role field", () => {
 });
 
 describe("resolveTeamRole against the production Firestore reads", () => {
-  const nonAdmin = { uid: "user-1", email: "dev@example.com", emailVerified: true };
+  const nonAdmin = { uid: "user-1", email: "dev@nve.no", emailVerified: true };
   const deps = { isSuperadmin: isAdminUid };
 
   it("resolves lead, member and denied from real documents, while authorizeTeamAccess keeps reporting the lead as member", async () => {
@@ -403,7 +405,7 @@ describe("resolveTeamRole against the production Firestore reads", () => {
 });
 
 describe("listTeamRoster against the production Firestore reads", () => {
-  const verifyToken = vi.fn().mockResolvedValue({ uid: "user-1", email: "dev@example.com", email_verified: true });
+  const verifyToken = verifierFor({ uid: "user-1", email: "dev@nve.no", emailVerified: true });
   const timestamp = (date: Date) => ({ toDate: () => date });
 
   it("builds the roster from real memberships and profile documents with no Auth lookup and no uid in the output", async () => {

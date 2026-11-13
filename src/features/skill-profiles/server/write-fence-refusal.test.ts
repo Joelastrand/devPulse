@@ -10,11 +10,12 @@ import { clearOwnSkillLevel } from "./clear-own-skill-level";
 import { deleteOwnSkillProfile } from "./delete-own-skill-profile";
 import { setOwnSkillLevel } from "./set-own-skill-level";
 import { createFakeSkillProfileStore } from "./fake-skill-profile-store";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 type SkillProfileStore = ReturnType<typeof createFakeSkillProfileStore>["store"];
 
 const TREE_ID = "tree-1";
-const verifyToken = vi.fn().mockResolvedValue({ uid: "user-1", email: "synthetic@example.com", email_verified: true });
+const verifyToken = verifierFor({ uid: "user-1", email: "synthetic@nve.no", emailVerified: true });
 
 /** The fake store with every write refused by the erasure fence, or failing generically. */
 function writeBlocked(failure: unknown): SkillProfileStore {

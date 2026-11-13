@@ -3,20 +3,20 @@ import { deleteOwnProfile } from "./delete-own-profile";
 import { getOwnProfile } from "./get-own-profile";
 import { setOwnProfile } from "./set-own-profile";
 import type { UserProfileStore } from "./user-profile-store";
+import { registerClaims } from "../../../../test/auth-fixtures";
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => {
-    throw new Error("unexpected Firebase Auth use");
-  },
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => {
     throw new Error("unexpected Firestore use");
   },
 }));
 
-const EMAIL = "anna.berg@example.com";
+const EMAIL = "anna.berg@nve.no";
 
 function verifyTokenFor(uid: string) {
-  return vi.fn().mockResolvedValue({ uid, email: EMAIL, email_verified: true });
+  return vi.fn().mockImplementation(async () => registerClaims({ uid, email: EMAIL, email_verified: true }));
 }
 
 const rejectingVerifyToken = vi.fn().mockRejectedValue(new Error("bad token"));

@@ -3,8 +3,9 @@ import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import * as encryptionModule from "../../../lib/encryption/encryption";
 import type { ChallengeDocStore, ResolveChallengeDeps, ResolveChallengeDocSnapshot } from "./resolve-challenge";
 import { resolveChallenge } from "./resolve-challenge";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const ADMIN_UID = "admin-1";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const TEAM_ID = "team-42";
@@ -16,11 +17,7 @@ function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedId
 }
 
 function verifyTokenReturning(identity: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({
-    uid: identity.uid,
-    email: identity.email,
-    email_verified: identity.emailVerified,
-  });
+  return verifierFor({ uid: identity.uid, email: identity.email, emailVerified: identity.emailVerified });
 }
 
 function challengeData(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -76,7 +73,7 @@ describe("resolveChallenge", () => {
 
   it("never accepts a client-supplied resolvedBy — the acting admin's verified uid is always used", async () => {
     const docs = fakeChallengeDocStore(challengeData());
-    const identity = verifiedIdentity({ uid: "admin-2", email: "second-admin@example.com" });
+    const identity = verifiedIdentity({ uid: "admin-2", email: "second-admin@nve.no" });
 
     const result = await resolveChallenge(
       "token",
@@ -156,7 +153,7 @@ describe("resolveChallenge", () => {
 
   it("rejects a non-admin caller and reads nothing", async () => {
     const docs = fakeChallengeDocStore(challengeData());
-    const verifyToken = verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" }));
+    const verifyToken = verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@nve.no" }));
 
     const result = await resolveChallenge("token", TEAM_ID, CHALLENGE_ID, baseDeps({ docs, verifyToken }));
 

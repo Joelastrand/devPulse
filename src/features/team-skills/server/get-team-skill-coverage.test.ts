@@ -17,28 +17,28 @@ import {
 import type { SkillContributionStore } from "./skill-contribution-store";
 import type { SkillNeedCatalogReader } from "./skill-need-catalog";
 import { getDefaultSkillNeedsStore, type SkillNeedsReader } from "./skill-needs-store";
+import { registerClaims } from "../../../../test/auth-fixtures";
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => {
-    throw new Error("unexpected Firebase Auth use");
-  },
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => {
     throw new Error("unexpected Firestore use");
   },
 }));
 
 const TEAM = "team-1";
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const WHEN = new Date("2026-02-01T00:00:00Z");
 const CONSENT_SENTINEL = new Date("2031-05-05T05:05:05.000Z");
 
 type Caller = "member" | "lead" | "leadAdmin" | "nonMemberAdmin" | "unrelated";
 const CALLERS: Record<Caller, { uid: string; email: string; role?: string }> = {
-  member: { uid: "u-member", email: "member@example.com", role: "member" },
-  lead: { uid: "u-lead", email: "lead@example.com", role: "teamadmin" },
+  member: { uid: "u-member", email: "member@nve.no", role: "member" },
+  lead: { uid: "u-lead", email: "lead@nve.no", role: "teamadmin" },
   leadAdmin: { uid: "u-ladmin", email: ADMIN_EMAIL, role: "teamadmin" },
   nonMemberAdmin: { uid: "u-nadmin", email: ADMIN_EMAIL },
-  unrelated: { uid: "u-other", email: "other@example.com" },
+  unrelated: { uid: "u-other", email: "other@nve.no" },
 };
 
 const validTree = (name: string) => ({
@@ -118,7 +118,7 @@ function setup(s: Setup) {
     readLevels,
     verifyToken: vi.fn(async () => {
       if (!caller) throw new Error("bad token");
-      return { uid: caller.uid, email: caller.email, email_verified: true } as never;
+      return registerClaims({ uid: caller.uid, email: caller.email, email_verified: true }) as never;
     }),
     reads,
     needsStore: getDefaultSkillNeedsStore(reader),

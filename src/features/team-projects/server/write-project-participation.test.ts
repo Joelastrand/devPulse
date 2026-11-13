@@ -5,11 +5,11 @@ import {
   type WriteProjectParticipationDeps,
   type WriteProjectParticipationTx,
 } from "./write-project-participation";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => {
-    throw new Error("unexpected Firebase Auth use");
-  },
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => {
     throw new Error("unexpected Firestore use");
   },
@@ -140,7 +140,7 @@ function build(
   const deps: WriteProjectParticipationDeps = {
     verifyToken: options.verifyFails
       ? vi.fn().mockRejectedValue(new Error("bad token"))
-      : vi.fn().mockResolvedValue({ uid: callerUid, email: `${callerUid}@example.test`, email_verified: true }),
+      : verifierFor({ uid: callerUid, email: `${callerUid}@nve.no`, emailVerified: true }),
     store: {
       async runWriteTransaction(_actor, fn) {
         if (options.fenceRefuses) throw new ErasureWriteRefused();

@@ -8,6 +8,7 @@ import { startTeamSkillTracking } from "./start-team-skill-tracking";
 import { stopTeamSkillTracking } from "./stop-team-skill-tracking";
 import { updateTeamSkillProgress } from "./update-team-skill-progress";
 import { reportTeamSkillProgress } from "./report-team-skill-progress";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 /**
  * Writer-only fence for the team skill-progress writes (TASK-031, W-15). The production default stores run each write in a
@@ -51,17 +52,19 @@ const { db } = vi.hoisted(() => {
   return { db: database };
 });
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => db,
 }));
 
 const ADMIN_UID = "admin-1";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const TEAM = "team-1";
 const TREE = "tree-1";
 const PROGRESS = `skillProgress/${skillProgressDocId(TEAM, TREE)}`;
-const verifyToken = vi.fn().mockResolvedValue({ uid: ADMIN_UID, email: ADMIN_EMAIL, email_verified: true });
+const verifyToken = verifierFor({ uid: ADMIN_UID, email: ADMIN_EMAIL, emailVerified: true });
 const isSuperadmin = isAdminUid;
 const treeReader = { get: async () => ({ exists: true, data: () => sealedSkillTreeFixture(TREE, tree) }) };
 const tree = {

@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
+// The setup file replaces this module for feature tests; this file tests the real implementation.
+vi.unmock("./admin");
 
 const initializeApp = vi.fn<(options: unknown) => { name: string }>(() => ({ name: "[DEFAULT]" }));
 const applicationDefault = vi.fn(() => ({ kind: "adc" }));

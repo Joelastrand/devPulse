@@ -1,12 +1,15 @@
 import { randomBytes } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { submitChallenge } from "./submit-challenge";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 // TASK-033: the default anonymous challenge writer creates its document inside a transaction that reads the submitter's
 // erasure fence first. Structural test over a recording Admin Firestore double; fixtures are synthetic.
 
 const holder = vi.hoisted(() => ({ db: undefined as unknown }));
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => holder.db,
 }));
 vi.mock("server-only", () => ({}));
@@ -40,7 +43,7 @@ holder.db = {
   },
 };
 
-const verifyToken = vi.fn().mockResolvedValue({ uid: MEMBER_UID, email: "member@example.com", email_verified: true });
+const verifyToken = verifierFor({ uid: MEMBER_UID, email: "member@nve.no", emailVerified: true });
 const membershipReader = { getMembership: async () => ({ uid: MEMBER_UID, teamId: TEAM_ID }) };
 const teamStatusReader = { getTeamStatus: async () => "active" };
 

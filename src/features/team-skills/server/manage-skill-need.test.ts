@@ -5,11 +5,11 @@ import { skillNeedDocId, SKILL_NEED_PERSISTED_KEYS } from "../domain/skill-need"
 import { deleteSkillNeed } from "./delete-skill-need";
 import type { SkillNeedWriteStore, SkillNeedWriteTx } from "./skill-needs-store";
 import { upsertSkillNeed } from "./upsert-skill-need";
+import { registerClaims } from "../../../../test/auth-fixtures";
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => {
-    throw new Error("unexpected Firebase Auth use");
-  },
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => {
     throw new Error("unexpected Firestore use");
   },
@@ -20,19 +20,19 @@ const TREE = "tree-1";
 const DOC = skillNeedDocId(TEAM, TREE);
 const T0 = new Date("2026-01-01T00:00:00Z");
 const NOW = new Date("2026-06-15T10:00:00Z");
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 
 type Caller = "registrySuperadmin" | "lead" | "leadAdmin" | "member" | "memberAdmin" | "nonMemberAdmin" | "unrelated" | "otherTeamLead";
 
 const CALLERS: Record<Caller, { uid: string; email: string; membership?: Record<string, unknown>; teamId?: string; superadmin?: boolean }> = {
-  lead: { uid: "u-lead", email: "lead@example.com", membership: { role: "teamadmin" } },
+  lead: { uid: "u-lead", email: "lead@nve.no", membership: { role: "teamadmin" } },
   leadAdmin: { uid: "u-ladmin", email: ADMIN_EMAIL, membership: { role: "teamadmin" } , superadmin: true },
-  member: { uid: "u-member", email: "member@example.com", membership: { role: "member" } },
+  member: { uid: "u-member", email: "member@nve.no", membership: { role: "member" } },
   memberAdmin: { uid: "u-madmin", email: ADMIN_EMAIL, membership: {} },
   nonMemberAdmin: { uid: "u-nadmin", email: ADMIN_EMAIL },
-  unrelated: { uid: "u-other", email: "other@example.com" },
-  registrySuperadmin: { uid: "u-registry", email: "registry@example.com", superadmin: true },
-  otherTeamLead: { uid: "u-olead", email: "olead@example.com", membership: { role: "teamadmin" }, teamId: "team-2" },
+  unrelated: { uid: "u-other", email: "other@nve.no" },
+  registrySuperadmin: { uid: "u-registry", email: "registry@nve.no", superadmin: true },
+  otherTeamLead: { uid: "u-olead", email: "olead@nve.no", membership: { role: "teamadmin" }, teamId: "team-2" },
 };
 
 const tree = (name = "Testing") => ({
@@ -118,7 +118,7 @@ function setup(w: World) {
 
   const verifyToken = vi.fn(async () => {
     if (!caller) throw new Error("bad token");
-    return { uid: caller.uid, email: caller.email, email_verified: true } as never;
+    return registerClaims({ uid: caller.uid, email: caller.email, email_verified: true }) as never;
   });
   return {
     needs,

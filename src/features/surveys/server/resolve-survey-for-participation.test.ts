@@ -9,12 +9,13 @@ import type {
   ResolveSurveyForParticipationDeps,
 } from "./resolve-survey-for-participation";
 import { resolveSurveyForParticipation } from "./resolve-survey-for-participation";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 const TEAM_ID = "team-42";
 const OTHER_TEAM_ID = "team-99";
 const SURVEY_ID = "survey-1";
 const MEMBER_UID = "member-1";
-const APP_ADMIN_EMAIL = "admin@example.com";
+const APP_ADMIN_EMAIL = "admin@nve.no";
 const NOW = new Date("2026-09-01T00:00:00Z");
 
 function surveyDoc(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -37,15 +38,11 @@ function membershipDoc(uid: string, teamId: string): Record<string, unknown> {
 }
 
 function identity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
-  return { uid: MEMBER_UID, email: "dev@example.com", emailVerified: true, ...overrides };
+  return { uid: MEMBER_UID, email: "dev@nve.no", emailVerified: true, ...overrides };
 }
 
 function verifyTokenReturning(verified: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({
-    uid: verified.uid,
-    email: verified.email,
-    email_verified: verified.emailVerified,
-  });
+  return verifierFor({ uid: verified.uid, email: verified.email, emailVerified: verified.emailVerified });
 }
 
 interface FakeState {

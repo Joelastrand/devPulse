@@ -1,16 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SkillNeedsReader } from "./skill-needs-store";
+import { registerClaims } from "../../../../test/auth-fixtures";
 
 // Representative service-level propagation test (TASK-009). The setup file mocks the fence reader for feature tests;
 // this file restores the real production reader so the verifier's real fence path runs under the protected service.
 vi.unmock("../../auth/server/erasure-fence");
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
+
 const state = vi.hoisted(() => ({ records: new Map<string, unknown>(), failRead: false }));
 
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => {
-    throw new Error("unexpected Firebase Auth use");
-  },
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => ({
     collection: (name: string) => ({
       doc: (id: string) => ({
@@ -66,7 +67,7 @@ function run(fence: "none" | "in_progress" | "terminal" | "malformed" | "read_fa
   const spies = dataAccessSpies();
   const reader: SkillNeedsReader = { listByTeam: spies.listByTeam };
   const result = listSkillNeeds("token", TEAM, {
-    verifyToken: async () => ({ uid: UID, email: "member@example.com", email_verified: true }) as never,
+    verifyToken: async () => (registerClaims({ uid: UID, email: "member@nve.no", email_verified: true })) as never,
     isSuperadmin: async () => false,
     collection: { getTeamStatus: spies.getTeamStatus, getMembership: spies.getMembership },
     reads: { getTeamStatus: spies.getTeamStatus, getMembership: spies.getMembership },

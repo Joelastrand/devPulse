@@ -185,3 +185,25 @@ Each entry is a deliberate plaintext field, or a known gap. Nothing here is unre
 - The erasure sweeps and the account-erasure inventory still name the sweep keys `roadmapItems|perMembership|ownerRef` and `teamInvitations|docIdEndsWith|normalizedEmail`. These are sweep identifiers; the stored values they match are the keyed indexes described above.
 - The roadmap owner detach (A-5) and the membership erasure write a full re-sealed plan. A plan whose content cannot be opened makes the erasure step fail closed rather than skipping it.
 - Browser verification of the product flows is not covered by these tests (see `TESTING.md`).
+
+## 12. Organization (`organizations/nve`)
+
+DevPulse serves one organization, NVE. Its record is descriptive configuration:
+
+| Path | Fields | Notes |
+| --- | --- | --- |
+| `organizations/nve` | `id` (`"nve"`), `name` (`"Norges vassdrags- og energidirektorat"`), `emailDomain` (`"nve.no"`), `createdAt`, `updatedAt` | Created once by `initializeOrganization` (`src/features/organization/server/initialize-organization.ts`). No uid, actor or e-mail field. |
+
+- **Encryption.** Stored as plaintext. It holds no personal data and no survey data, so it is outside the encrypted-field policy.
+  This is a classification the owner should confirm before the live write.
+- **Authorization.** Nothing reads this record to decide access. The NVE e-mail policy, the superadmin registry and team
+  membership decide. Organization eligibility is kept separate from team membership.
+- **Erasure.** Listed in the account-erasure inventory as a non-personal collection (`inventory-allow-list.ts`).
+- **Initialization.** Idempotent. A missing record is created; a canonical record is left alone; any other record is reported as a
+  conflict and never overwritten. The live write is not performed yet and needs separate approval.
+
+## 13. Team membership lookup by uid
+
+`teamMemberships` documents carry `uid` and `teamId` fields. The superadmin user-management detail view reads them with
+`where("uid", "==", uid)` (`defaultMembershipReader` in `src/features/superadmins/server/user-management.ts`). This is a read-only
+query; it changes nothing and needs no new index for a single equality filter.

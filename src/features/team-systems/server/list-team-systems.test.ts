@@ -3,11 +3,11 @@ import { describe, expect, it, vi } from "vitest";
 import type { AuthorizeTeamAccessCollection } from "../../teams/server/authorize-team-access";
 import { MEMBER_REF_LOOKUP_CHUNK_SIZE } from "../domain/team-system";
 import { listTeamSystems, type ListTeamSystemsDeps, type RawDoc, type TeamSystemsReadStore } from "./list-team-systems";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => {
-    throw new Error("unexpected Firebase Auth use");
-  },
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => {
     throw new Error("unexpected Firestore use");
   },
@@ -79,7 +79,7 @@ function build(world: World, callerUid = "uid-user-1", options: { verifyFails?: 
   const deps: ListTeamSystemsDeps = {
     verifyToken: options.verifyFails
       ? vi.fn().mockRejectedValue(new Error("bad token"))
-      : vi.fn().mockResolvedValue({ uid: callerUid, email: callerUid === "uid-admin" ? "admin@example.test" : `${callerUid}@example.test`, email_verified: true }),
+      : verifierFor({ uid: callerUid, email: callerUid === "uid-admin" ? "admin@nve.no" : `${callerUid}@nve.no`, emailVerified: true }),
     isSuperadmin: async (uid: string) => uid === "uid-admin",
     collection,
     store,

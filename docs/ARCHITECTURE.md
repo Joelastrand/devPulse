@@ -173,6 +173,22 @@ documents are archived at `docs/archive/design/`; the implementation is the refe
 - Fonts: Geist and Geist Mono, loaded with `next/font/google` in `app/layout.tsx`.
 - No analytics or error-reporting SDK is present (grep for common analytics and error-reporting packages found none).
 
+## 11a. Access policy, organization and user management
+
+- **Access policy.** Every protected request verifies the Firebase ID token with revocation checks, reads the live Auth
+  account (current e-mail, verification flag, disabled flag), and applies `decideAccess` (`src/features/auth/server/access-policy.ts`):
+  verified e-mail, and either the exact `@nve.no` domain or an active superadmin registry UID. The erasure-resume capability waives
+  only the domain step. See `SECURITY.md` §1.
+- **Organization.** One record, `organizations/nve` (`src/features/organization/`). It is descriptive and authorizes nothing.
+- **Superadmin user management.** Server operations in `src/features/superadmins/server/user-management.ts` use the Admin Auth
+  adapter behind a narrow port (`UserAdminPort`). Routes: `app/api/admin/users` (list, one exact e-mail search) and
+  `app/api/admin/users/[uid]` (detail with team memberships; PATCH to disable or re-enable). The screen is `AdminUsers` on
+  `/admin/superadmins`. Disabling requires `confirm: true`, revokes refresh tokens, and is refused for the operator's own account
+  and for an active superadmin.
+- **Verification flow.** Sign-up, and sign-in of an unverified account, both show `VerificationPending`
+  (`src/features/auth/components/VerificationPending.tsx`): instructions, a spam-folder reminder, a login action that signs out
+  first, and a resend action with a 60-second client cooldown.
+
 ## 12. Known architectural debt
 
 See [`KNOWN-LIMITATIONS.md`](KNOWN-LIMITATIONS.md) §4.

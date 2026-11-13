@@ -4,8 +4,9 @@ import { describe, expect, it, vi } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type { ListTeamSurveysDeps, RawSurveyDoc, TeamSurveysCollection } from "./list-team-surveys";
 import { listTeamSurveys } from "./list-team-surveys";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const ADMIN_UID = "admin-1";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const TEAM_ID = "team-42";
@@ -16,11 +17,7 @@ function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedId
 }
 
 function verifyTokenReturning(identity: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({
-    uid: identity.uid,
-    email: identity.email,
-    email_verified: identity.emailVerified,
-  });
+  return verifierFor({ uid: identity.uid, email: identity.email, emailVerified: identity.emailVerified });
 }
 
 function fakeCollection(docs: RawSurveyDoc[]): TeamSurveysCollection & { calls: string[] } {
@@ -195,7 +192,7 @@ describe("listTeamSurveys", () => {
 
   it("rejects a non-admin caller and never queries surveys", async () => {
     const collection = fakeCollection([surveyDoc("survey-1")]);
-    const verifyToken = verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" }));
+    const verifyToken = verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@nve.no" }));
 
     const result = await listTeamSurveys("token", TEAM_ID, baseDeps({ collection, verifyToken }));
 

@@ -2,11 +2,11 @@ import { randomBytes } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { toPersistedTeamProject } from "./team-project-codec";
 import { listTeamProjects, mapTeamProjectDocs, TEAM_PROJECTS_MAX, type ListTeamProjectsDeps } from "./list-team-projects";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => {
-    throw new Error("unexpected Firebase Auth use");
-  },
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => {
     throw new Error("unexpected Firestore use");
   },
@@ -50,7 +50,7 @@ function deps(options: {
   return {
     verifyToken: options.tokenFails
       ? vi.fn().mockRejectedValue(new Error("bad"))
-      : vi.fn().mockResolvedValue({ uid: callerUid, email: "x@example.test", email_verified: true }),
+      : verifierFor({ uid: callerUid, email: "x@nve.no", emailVerified: true }),
     roleDeps: {
       isSuperadmin: async () => false,
       collection: {

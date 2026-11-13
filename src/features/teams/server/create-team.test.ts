@@ -2,8 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type { TeamRecord, TeamsCollection } from "./create-team";
 import { createTeam } from "./create-team";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const ADMIN_UID = "admin-1";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const NOW = new Date("2026-09-01T00:00:00Z");
@@ -13,11 +14,7 @@ function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedId
 }
 
 function verifyTokenReturning(identity: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({
-    uid: identity.uid,
-    email: identity.email,
-    email_verified: identity.emailVerified,
-  });
+  return verifierFor({ uid: identity.uid, email: identity.email, emailVerified: identity.emailVerified });
 }
 
 function fakeCollection(): TeamsCollection & { writes: TeamRecord[] } {
@@ -83,7 +80,7 @@ describe("createTeam", () => {
   it("rejects a non-admin caller and attempts no write", async () => {
     const collection = fakeCollection();
     const verifyToken = verifyTokenReturning(
-      verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" }),
+      verifiedIdentity({ uid: "non-admin-1", email: "dev@nve.no" }),
     );
 
     const result = await createTeam("token", "Platform", {
@@ -96,7 +93,7 @@ describe("createTeam", () => {
     expect(collection.writes).toHaveLength(0);
   });
 
-  it("rejects an allow-listed but unverified caller and attempts no write", async () => {
+  it("refuses an allow-listed but unverified caller at the identity layer and attempts no write", async () => {
     const collection = fakeCollection();
     const verifyToken = verifyTokenReturning(
       verifiedIdentity({ emailVerified: false }),
@@ -108,7 +105,7 @@ describe("createTeam", () => {
       collection,
     });
 
-    expect(result).toEqual({ ok: false, error: "forbidden" });
+    expect(result).toEqual({ ok: false, error: "unauthenticated" });
     expect(collection.writes).toHaveLength(0);
   });
 
@@ -173,15 +170,15 @@ describe("createTeam", () => {
     });
     const forbiddenResult = await createTeam("token", "Platform", {
       verifyToken: verifyTokenReturning(
-        verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" }),
+        verifiedIdentity({ uid: "non-admin-1", email: "dev@nve.no" }),
       ),
       isSuperadmin,
       collection: fakeCollection(),
     });
 
-    expect(JSON.stringify(okResult)).not.toContain("other-admin@example.com");
+    expect(JSON.stringify(okResult)).not.toContain("other-admin@nve.no");
     expect(JSON.stringify(forbiddenResult)).not.toContain(
-      "other-admin@example.com",
+      "other-admin@nve.no",
     );
   });
 

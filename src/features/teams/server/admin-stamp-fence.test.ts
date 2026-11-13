@@ -1,20 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createSkillTree } from "../../skill-trees/server/create-skill-tree";
 import { createTeam } from "./create-team";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 // TASK-035: admin writes that stamp the admin's uid on skill trees and teams read the admin's erasure fence first, in the
 // same transaction, and write nothing when it refuses. Structural test over a recording Admin Firestore double; fixtures are
 // synthetic and the admin uid is fictional.
 
 const holder = vi.hoisted(() => ({ db: undefined as unknown }));
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => holder.db,
 }));
 vi.mock("server-only", () => ({}));
 
 const ADMIN_UID = "admin-35";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
-const ADMIN_EMAIL = "admin35@example.com";
+const ADMIN_EMAIL = "admin35@nve.no";
 const FENCE = `accountErasures/${ADMIN_UID}`;
 
 const docs = new Map<string, Record<string, unknown>>();
@@ -37,7 +40,7 @@ holder.db = {
   },
 };
 
-const verifyToken = vi.fn().mockResolvedValue({ uid: ADMIN_UID, email: ADMIN_EMAIL, email_verified: true });
+const verifyToken = verifierFor({ uid: ADMIN_UID, email: ADMIN_EMAIL, emailVerified: true });
 
 beforeEach(() => {
   docs.clear();

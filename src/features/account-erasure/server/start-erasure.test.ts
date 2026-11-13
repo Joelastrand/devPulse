@@ -92,7 +92,7 @@ describe("startOrResumeErasure (TASK-013 operation)", () => {
 
     const result = await startOrResumeErasure("token", { confirmation: EMAIL }, deps);
 
-    expect(result).toEqual({ ok: false, error: "erasure_unavailable" });
+    expect(result).toEqual({ ok: false, error: "unauthenticated" });
     expect(store.documents.size).toBe(0);
     expect(calls).toEqual([]);
   });
@@ -112,7 +112,7 @@ describe("startOrResumeErasure (TASK-013 operation)", () => {
 
     const result = await startOrResumeErasure("token", { confirmation: undefined }, deps);
 
-    expect(result).toEqual({ ok: false, error: "erasure_unavailable" });
+    expect(result).toEqual({ ok: false, error: "unauthenticated" });
     expect(calls).toEqual([]);
     expect(store.documents.get(UID)).toEqual(before);
   });

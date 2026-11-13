@@ -5,16 +5,17 @@ import type { ActiveTeamsCollection } from "./list-active-teams";
 import type { ResolveInvitationsCollection, ResolveOneOutcome } from "./resolve-invitations";
 import type { TeamsOverviewCollection } from "./get-teams-overview";
 import { getTeamsOverview } from "./get-teams-overview";
+import { registerClaims } from "../../../../test/auth-fixtures";
 
 const TOKEN = "valid-token";
 
 function decoded(overrides: Partial<DecodedIdToken> = {}): DecodedIdToken {
-  return {
+  return registerClaims({
     uid: "user-1",
-    email: "dev@example.com",
+    email: "dev@nve.no",
     email_verified: true,
     ...overrides,
-  } as DecodedIdToken;
+  }) as DecodedIdToken;
 }
 
 function verifyToken(overrides: Partial<DecodedIdToken> = {}) {
@@ -115,7 +116,7 @@ describe("getTeamsOverview", () => {
 
   it("shows 'admin' for every team when the caller is an app admin, regardless of membership", async () => {
     const result = await getTeamsOverview(TOKEN, {
-      verifyToken: verifyToken({ uid: "admin-1", email: "admin@example.com" }),
+      verifyToken: verifyToken({ uid: "admin-1", email: "admin@nve.no" }),
       activeTeamsCollection: fakeActiveTeams([{ teamId: "team-1", name: "Team One" }]),
       resolveInvitationsCollection: noopResolveInvitations(),
       collection: fakeOverviewCollection({}),
@@ -130,7 +131,7 @@ describe("getTeamsOverview", () => {
 
   it("keeps relationship 'admin' for an app admin who is also a member, and flags the genuine membership", async () => {
     const result = await getTeamsOverview(TOKEN, {
-      verifyToken: verifyToken({ uid: "admin-1", email: "admin@example.com" }),
+      verifyToken: verifyToken({ uid: "admin-1", email: "admin@nve.no" }),
       activeTeamsCollection: fakeActiveTeams([
         { teamId: "team-1", name: "Team One" },
         { teamId: "team-2", name: "Team Two" },
@@ -359,8 +360,8 @@ describe("getTeamsOverview", () => {
 
     const resolveInvitationsCollection: ResolveInvitationsCollection = {
       async listRawForEmail(email) {
-        return email === "dev@example.com"
-          ? [{ teamId: "team-1", email: "dev@example.com", status: "pending", invitedBy: "admin-1" }]
+        return email === "dev@nve.no"
+          ? [{ teamId: "team-1", email: "dev@nve.no", status: "pending", invitedBy: "admin-1" }]
           : [];
       },
       async resolveOne({ teamId, uid }) {
@@ -410,7 +411,7 @@ describe("getTeamsOverview", () => {
         expect(Object.keys(entry).sort()).toEqual(["isMember", "name", "relationship", "teamId"]);
       }
       expect(JSON.stringify(result)).not.toContain("user-1");
-      expect(JSON.stringify(result)).not.toContain("dev@example.com");
+      expect(JSON.stringify(result)).not.toContain("dev@nve.no");
     }
   });
 });

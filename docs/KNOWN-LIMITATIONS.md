@@ -162,3 +162,4 @@ the flag. The flag is not a security control.
   `docs/archive/features/`. They are historical evidence, not current requirements.
 - `CLAUDE.md`, `AGENTS.md` and `.claude/skills/` still describe the feature workflow (`docs/features/<id>/SPEC.md` and
   `TASKS.md`). That workflow is unchanged, but no feature currently has a live SPEC or TASKS file.
+- **Admin-initiated account deletion is not supported.** Account erasure is self-only (AE-SI-1, BR-22). No superadmin endpoint or UI deletes another account; this is deferred and needs an explicit decision that amends AE-SI-1 and BR-22 (see `docs/SECURITY.md`, §10). Superadmin user management offers listing, search, details, disable and re-enable only.

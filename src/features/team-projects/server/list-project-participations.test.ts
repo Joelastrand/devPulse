@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { listProjectParticipations, type ListProjectParticipationsDeps } from "./list-project-participations";
+import { registerClaims } from "../../../../test/auth-fixtures";
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => {
-    throw new Error("unexpected Firebase Auth use");
-  },
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => {
     throw new Error("unexpected Firestore use");
   },
@@ -36,7 +36,7 @@ function deps(roleByUid: Record<string, "teamadmin" | "member">, rows: unknown[]
   return {
     verifyToken: vi.fn().mockImplementation(async (token: string) => {
       if (token === "bad") throw new Error("bad token");
-      return { uid: token, email: `${token}@example.test`, email_verified: true };
+      return registerClaims({ uid: token, email: `${token}@nve.no`, email_verified: true });
     }),
     roleDeps: {
       isSuperadmin: async () => false,

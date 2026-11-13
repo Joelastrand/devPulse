@@ -2,8 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import type { VerifiedIdentity } from "../../auth/server/verify-identity";
 import type { TeamAccessRequestsCollection } from "./list-team-access-requests";
 import { listTeamAccessRequests } from "./list-team-access-requests";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const ADMIN_UID = "admin-1";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const CREATED_AT = new Date("2026-09-01T00:00:00Z");
@@ -13,11 +14,7 @@ function verifiedIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedId
 }
 
 function verifyTokenReturning(identity: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({
-    uid: identity.uid,
-    email: identity.email,
-    email_verified: identity.emailVerified,
-  });
+  return verifierFor({ uid: identity.uid, email: identity.email, emailVerified: identity.emailVerified });
 }
 
 function fakeCollection(rawDocs: unknown[]): TeamAccessRequestsCollection {
@@ -57,7 +54,7 @@ describe("listTeamAccessRequests", () => {
       { teamId: "team-1", uid: "user-1", status: "pending", createdAt: CREATED_AT },
       { teamId: "team-1", uid: "user-2", status: "pending", createdAt: CREATED_AT },
     ]);
-    const getUser = fakeGetUser({ "user-1": "one@example.com", "user-2": "two@example.com" });
+    const getUser = fakeGetUser({ "user-1": "one@nve.no", "user-2": "two@nve.no" });
 
     const result = await listTeamAccessRequests("token", "team-1", {
       ...baseDeps,
@@ -68,8 +65,8 @@ describe("listTeamAccessRequests", () => {
     expect(result).toEqual({
       ok: true,
       requests: [
-        { uid: "user-1", email: "one@example.com", createdAt: CREATED_AT },
-        { uid: "user-2", email: "two@example.com", createdAt: CREATED_AT },
+        { uid: "user-1", email: "one@nve.no", createdAt: CREATED_AT },
+        { uid: "user-2", email: "two@nve.no", createdAt: CREATED_AT },
       ],
     });
   });
@@ -80,7 +77,7 @@ describe("listTeamAccessRequests", () => {
       { teamId: "other-team", uid: "user-2", status: "pending", createdAt: CREATED_AT },
       { teamId: "team-1", uid: "user-3", status: "approved", createdAt: CREATED_AT },
     ]);
-    const getUser = fakeGetUser({ "user-1": "one@example.com" });
+    const getUser = fakeGetUser({ "user-1": "one@nve.no" });
 
     const result = await listTeamAccessRequests("token", "team-1", {
       ...baseDeps,
@@ -90,7 +87,7 @@ describe("listTeamAccessRequests", () => {
 
     expect(result).toEqual({
       ok: true,
-      requests: [{ uid: "user-1", email: "one@example.com", createdAt: CREATED_AT }],
+      requests: [{ uid: "user-1", email: "one@nve.no", createdAt: CREATED_AT }],
     });
   });
 
@@ -100,7 +97,7 @@ describe("listTeamAccessRequests", () => {
       { teamId: "team-1", status: "pending" }, // missing uid
       null,
     ]);
-    const getUser = fakeGetUser({ "user-1": "one@example.com" });
+    const getUser = fakeGetUser({ "user-1": "one@nve.no" });
 
     const result = await listTeamAccessRequests("token", "team-1", {
       ...baseDeps,
@@ -110,7 +107,7 @@ describe("listTeamAccessRequests", () => {
 
     expect(result).toEqual({
       ok: true,
-      requests: [{ uid: "user-1", email: "one@example.com", createdAt: CREATED_AT }],
+      requests: [{ uid: "user-1", email: "one@nve.no", createdAt: CREATED_AT }],
     });
   });
 
@@ -119,7 +116,7 @@ describe("listTeamAccessRequests", () => {
       { teamId: "team-1", uid: "user-1", status: "pending", createdAt: CREATED_AT },
       { teamId: "team-1", uid: "deleted-user", status: "pending", createdAt: CREATED_AT },
     ]);
-    const getUser = fakeGetUser({ "user-1": "one@example.com" });
+    const getUser = fakeGetUser({ "user-1": "one@nve.no" });
 
     const result = await listTeamAccessRequests("token", "team-1", {
       ...baseDeps,
@@ -129,7 +126,7 @@ describe("listTeamAccessRequests", () => {
 
     expect(result).toEqual({
       ok: true,
-      requests: [{ uid: "user-1", email: "one@example.com", createdAt: CREATED_AT }],
+      requests: [{ uid: "user-1", email: "one@nve.no", createdAt: CREATED_AT }],
     });
   });
 
@@ -150,7 +147,7 @@ describe("listTeamAccessRequests", () => {
     const collection = fakeCollection([]);
 
     const result = await listTeamAccessRequests("token", "team-1", {
-      verifyToken: verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@example.com" })),
+      verifyToken: verifyTokenReturning(verifiedIdentity({ uid: "non-admin-1", email: "dev@nve.no" })),
       isSuperadmin: isAdminUid,
       collection,
     });
@@ -179,7 +176,7 @@ describe("listTeamAccessRequests", () => {
       collection,
     });
 
-    expect(JSON.stringify(result)).not.toContain("other-admin@example.com");
+    expect(JSON.stringify(result)).not.toContain("other-admin@nve.no");
   });
 
   it("resolves with zero identity lookups when there are no pending requests", async () => {
@@ -227,18 +224,18 @@ describe("listTeamAccessRequests", () => {
     expect(invoked).toEqual(["user-a", "user-b", "user-c"]);
 
     // Resolve deliberately out of input order.
-    deferred["user-c"]({ email: "c@example.com" });
-    deferred["user-a"]({ email: "a@example.com" });
-    deferred["user-b"]({ email: "b@example.com" });
+    deferred["user-c"]({ email: "c@nve.no" });
+    deferred["user-a"]({ email: "a@nve.no" });
+    deferred["user-b"]({ email: "b@nve.no" });
 
     const result = await resultPromise;
 
     expect(result).toEqual({
       ok: true,
       requests: [
-        { uid: "user-a", email: "a@example.com", createdAt: CREATED_AT },
-        { uid: "user-b", email: "b@example.com", createdAt: CREATED_AT },
-        { uid: "user-c", email: "c@example.com", createdAt: CREATED_AT },
+        { uid: "user-a", email: "a@nve.no", createdAt: CREATED_AT },
+        { uid: "user-b", email: "b@nve.no", createdAt: CREATED_AT },
+        { uid: "user-c", email: "c@nve.no", createdAt: CREATED_AT },
       ],
     });
   });
@@ -249,7 +246,7 @@ describe("listTeamAccessRequests", () => {
       { teamId: "team-1", uid: "user-b", status: "pending", createdAt: CREATED_AT },
       { teamId: "team-1", uid: "user-c", status: "pending", createdAt: CREATED_AT },
     ]);
-    const getUser = fakeGetUser({ "user-a": "a@example.com", "user-c": "c@example.com" });
+    const getUser = fakeGetUser({ "user-a": "a@nve.no", "user-c": "c@nve.no" });
 
     const result = await listTeamAccessRequests("token", "team-1", {
       ...baseDeps,
@@ -260,8 +257,8 @@ describe("listTeamAccessRequests", () => {
     expect(result).toEqual({
       ok: true,
       requests: [
-        { uid: "user-a", email: "a@example.com", createdAt: CREATED_AT },
-        { uid: "user-c", email: "c@example.com", createdAt: CREATED_AT },
+        { uid: "user-a", email: "a@nve.no", createdAt: CREATED_AT },
+        { uid: "user-c", email: "c@nve.no", createdAt: CREATED_AT },
       ],
     });
   });

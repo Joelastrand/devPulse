@@ -13,6 +13,7 @@ import { deleteReply } from "./delete-reply";
 import { getThreadWithReplies } from "./get-thread-with-replies";
 import type { ForumRepliesReader, ForumThreadReader, RawReplyDoc } from "./get-thread-with-replies";
 import type { AuthorizeTeamAccessCollection } from "../../teams/server/authorize-team-access";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 const TEAM_ID = "team-42";
 const OTHER_TEAM_ID = "team-99";
@@ -23,11 +24,11 @@ const AUTHOR_UID = "author-1";
 const OTHER_MEMBER_UID = "member-2";
 const ADMIN_UID = "admin-1";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const NOW = new Date("2026-09-01T00:00:00Z");
 
 function memberIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
-  return { uid: AUTHOR_UID, email: "author@example.com", emailVerified: true, ...overrides };
+  return { uid: AUTHOR_UID, email: "author@nve.no", emailVerified: true, ...overrides };
 }
 
 function adminIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
@@ -35,11 +36,7 @@ function adminIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdent
 }
 
 function verifyTokenReturning(identity: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({
-    uid: identity.uid,
-    email: identity.email,
-    email_verified: identity.emailVerified,
-  });
+  return verifierFor({ uid: identity.uid, email: identity.email, emailVerified: identity.emailVerified });
 }
 
 function activeReplyRecord(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -167,7 +164,7 @@ describe("deleteReply", () => {
       THREAD_ID,
       REPLY_ID,
       baseDeps({
-        verifyToken: verifyTokenReturning(memberIdentity({ uid: OTHER_MEMBER_UID, email: "other@example.com" })),
+        verifyToken: verifyTokenReturning(memberIdentity({ uid: OTHER_MEMBER_UID, email: "other@nve.no" })),
         docs,
       }),
     );
@@ -261,7 +258,7 @@ describe("deleteReply", () => {
         TEAM_ID,
         THREAD_ID,
         REPLY_ID,
-        baseDeps({ verifyToken: verifyTokenReturning(memberIdentity({ uid: OTHER_MEMBER_UID, email: "other@example.com" })), docs }),
+        baseDeps({ verifyToken: verifyTokenReturning(memberIdentity({ uid: OTHER_MEMBER_UID, email: "other@nve.no" })), docs }),
       );
 
       expect(result).toEqual({ ok: true });
@@ -303,7 +300,7 @@ describe("deleteReply", () => {
         TEAM_ID,
         THREAD_ID,
         REPLY_ID,
-        baseDeps({ verifyToken: verifyTokenReturning(memberIdentity({ uid: OTHER_MEMBER_UID, email: "other@example.com" })), docs }),
+        baseDeps({ verifyToken: verifyTokenReturning(memberIdentity({ uid: OTHER_MEMBER_UID, email: "other@nve.no" })), docs }),
       );
 
       expect(result).toEqual({ ok: false, error: "not_found" });
@@ -317,7 +314,7 @@ describe("deleteReply", () => {
         TEAM_ID,
         THREAD_ID,
         REPLY_ID,
-        baseDeps({ verifyToken: verifyTokenReturning(memberIdentity({ uid: OTHER_MEMBER_UID, email: "other@example.com" })), docs }),
+        baseDeps({ verifyToken: verifyTokenReturning(memberIdentity({ uid: OTHER_MEMBER_UID, email: "other@nve.no" })), docs }),
       );
 
       expect(result).toEqual({ ok: false, error: "not_found" });
@@ -506,7 +503,7 @@ describe("deleteReply", () => {
       TEAM_ID,
       THREAD_ID,
       REPLY_ID,
-      baseDeps({ verifyToken: verifyTokenReturning(memberIdentity({ uid: OTHER_MEMBER_UID, email: "other@example.com" })), docs }),
+      baseDeps({ verifyToken: verifyTokenReturning(memberIdentity({ uid: OTHER_MEMBER_UID, email: "other@nve.no" })), docs }),
     );
 
     expect(result).toEqual({ ok: true });

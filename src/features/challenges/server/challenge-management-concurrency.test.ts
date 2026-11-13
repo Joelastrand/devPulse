@@ -5,6 +5,7 @@ import type { ChallengeDocStore as ArchiveChallengeDocStore } from "./archive-ch
 import { archiveChallenge } from "./archive-challenge";
 import type { ChallengeDocStore as ResolveChallengeDocStore } from "./resolve-challenge";
 import { resolveChallenge } from "./resolve-challenge";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 /**
  * Models this feature's accepted concurrency posture (docs/archive/features/
@@ -41,7 +42,7 @@ function identity(uid: string, email: string): VerifiedIdentity {
 }
 
 function verifyTokenFor(id: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({ uid: id.uid, email: id.email, email_verified: id.emailVerified });
+  return verifierFor({ uid: id.uid, email: id.email, emailVerified: id.emailVerified });
 }
 
 function challengeData(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -58,8 +59,8 @@ function challengeData(overrides: Record<string, unknown> = {}): Record<string, 
 
 describe("concurrent challenge management", () => {
   it("two concurrent resolveChallenge calls on the same open challenge both succeed and leave it resolved", async () => {
-    const admin1 = identity("admin-1", "admin1@example.com");
-    const admin2 = identity("admin-2", "admin2@example.com");
+    const admin1 = identity("admin-1", "admin1@nve.no");
+    const admin2 = identity("admin-2", "admin2@nve.no");
     const { store, writes } = fakeConcurrentStore(challengeData());
 
     const [result1, result2] = await Promise.all([
@@ -98,8 +99,8 @@ describe("concurrent challenge management", () => {
   });
 
   it("a resolveChallenge and an archiveChallenge racing on the same challenge both commit and resolve to archived", async () => {
-    const admin1 = identity("admin-1", "admin1@example.com");
-    const admin2 = identity("admin-2", "admin2@example.com");
+    const admin1 = identity("admin-1", "admin1@nve.no");
+    const admin2 = identity("admin-2", "admin2@nve.no");
     const initial = challengeData();
     const resolveWrites: { challengeId: string; data: Record<string, unknown> }[] = [];
     const archiveWrites: { challengeId: string; data: Record<string, unknown> }[] = [];

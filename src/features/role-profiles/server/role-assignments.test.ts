@@ -10,6 +10,7 @@ import {
 } from "./role-assignments";
 import { createFakeRoleStore } from "./fake-role-store";
 import type { RoleAssignmentWriteStore, RawAssignmentData } from "./role-assignment-store";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 const ADMIN_UID = "admin-1";
 const MEMBER_UID = "member-1";
@@ -50,7 +51,7 @@ function createFakeAssignmentStore(initial: Record<string, RawAssignmentData> = 
 
 function deps(overrides: Partial<RoleAssignmentDeps> = {}): RoleAssignmentDeps {
   return {
-    verifyToken: vi.fn().mockResolvedValue({ uid: ADMIN_UID, email: "admin@example.com", email_verified: true }),
+    verifyToken: verifierFor({ uid: ADMIN_UID, email: "admin@nve.no", emailVerified: true }),
     isSuperadmin: async (uid: string) => uid === ADMIN_UID,
     readFence: async () => ({ kind: "none" }),
     assignments: createFakeAssignmentStore(),
@@ -115,7 +116,7 @@ describe("assignRoleToUser (admin assign and change)", () => {
     const result = await assignRoleToUser("token", MEMBER_UID, { roleId }, deps({
       roles,
       assignments,
-      verifyToken: vi.fn().mockResolvedValue({ uid: "member-2", email: "m@example.com", email_verified: true }),
+      verifyToken: verifierFor({ uid: "member-2", email: "m@nve.no", emailVerified: true }),
     }));
 
     expect(result).toEqual({ ok: false, error: "forbidden" });
@@ -239,7 +240,7 @@ describe("removeRoleAssignment (admin remove)", () => {
     const result = await removeRoleAssignment("token", MEMBER_UID, deps({
       roles,
       assignments,
-      verifyToken: vi.fn().mockResolvedValue({ uid: "member-2", email: "m@example.com", email_verified: true }),
+      verifyToken: verifierFor({ uid: "member-2", email: "m@nve.no", emailVerified: true }),
     }));
 
     expect(result).toEqual({ ok: false, error: "forbidden" });
@@ -282,7 +283,7 @@ describe("lookupRoleAssignments (admin batch read)", () => {
 
   it("refuses a non-administrator", async () => {
     const result = await lookupRoleAssignments("token", [MEMBER_UID], deps({
-      verifyToken: vi.fn().mockResolvedValue({ uid: "member-2", email: "m@example.com", email_verified: true }),
+      verifyToken: verifierFor({ uid: "member-2", email: "m@nve.no", emailVerified: true }),
     }));
 
     expect(result).toEqual({ ok: false, error: "forbidden" });
@@ -290,7 +291,7 @@ describe("lookupRoleAssignments (admin batch read)", () => {
 });
 
 describe("getOwnRoleAssignment (the signed-in person's own role)", () => {
-  const memberVerify = () => vi.fn().mockResolvedValue({ uid: MEMBER_UID, email: "m@example.com", email_verified: true });
+  const memberVerify = () => verifierFor({ uid: MEMBER_UID, email: "m@nve.no", emailVerified: true });
 
   it("returns the title and description of the assigned active role, and no identifiers", async () => {
     const roles = createFakeRoleStore();

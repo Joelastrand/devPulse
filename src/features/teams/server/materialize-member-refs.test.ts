@@ -7,23 +7,23 @@ import {
   type MaterializeMemberRefsCollection,
   type MaterializeMemberRefsDeps,
 } from "./materialize-member-refs";
+import { registerClaims } from "../../../../test/auth-fixtures";
 
+const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
 vi.mock("../../../lib/firebase/admin", () => ({
-  getAdminAuth: () => {
-    throw new Error("unexpected Firebase Auth use");
-  },
+  getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => {
     throw new Error("unexpected Firestore use");
   },
 }));
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const EARLIER = new Date("2026-01-01T00:00:00Z");
 const VALID_REF = "0123456789abcdefghjkmnpqrs";
 const OTHER_VALID_REF = "zzzzzzzzzzzzzzzzzzzzzzzzzz";
 
 function verifyTokenFor(email: string, uid = "admin-1") {
-  return vi.fn().mockResolvedValue({ uid, email, email_verified: true });
+  return vi.fn().mockImplementation(async () => registerClaims({ uid, email, email_verified: true }));
 }
 
 const asAdmin = { verifyToken: verifyTokenFor(ADMIN_EMAIL), isSuperadmin: async (uid: string) => uid === "admin-1" };
@@ -114,7 +114,7 @@ describe("materializeMemberRefs — authorization", () => {
 
   it("rejects a non-admin caller (even a team lead) with no transaction", async () => {
     const fake = fakeCollection({ memberships: [member("lead-1", { role: "teamadmin" })] });
-    const result = await run(fake, { verifyToken: verifyTokenFor("lead@example.com", "lead-1") });
+    const result = await run(fake, { verifyToken: verifyTokenFor("lead@nve.no", "lead-1") });
     expect(result).toEqual({ ok: false, error: "forbidden" });
     expect(fake.log.runs).toBe(0);
     expect(fake.memberships.get("lead-1__team-1")?.memberRef).toBeUndefined();

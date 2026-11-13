@@ -15,6 +15,7 @@ import { DELETE_THREAD_CASCADE_BATCH_SIZE, deleteThread } from "./delete-thread"
 import { listTeamThreads } from "./list-team-threads";
 import type { ThreadsReader } from "./list-team-threads";
 import type { AuthorizeTeamAccessCollection } from "../../teams/server/authorize-team-access";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
 const TEAM_ID = "team-42";
 const OTHER_TEAM_ID = "team-99";
@@ -23,10 +24,10 @@ const AUTHOR_UID = "author-1";
 const OTHER_MEMBER_UID = "member-2";
 const ADMIN_UID = "admin-1";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 
 function memberIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
-  return { uid: AUTHOR_UID, email: "author@example.com", emailVerified: true, ...overrides };
+  return { uid: AUTHOR_UID, email: "author@nve.no", emailVerified: true, ...overrides };
 }
 
 function adminIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdentity {
@@ -34,11 +35,7 @@ function adminIdentity(overrides: Partial<VerifiedIdentity> = {}): VerifiedIdent
 }
 
 function verifyTokenReturning(identity: VerifiedIdentity) {
-  return vi.fn().mockResolvedValue({
-    uid: identity.uid,
-    email: identity.email,
-    email_verified: identity.emailVerified,
-  });
+  return verifierFor({ uid: identity.uid, email: identity.email, emailVerified: identity.emailVerified });
 }
 
 function threadRecord(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -171,7 +168,7 @@ describe("deleteThread", () => {
       "token",
       TEAM_ID,
       THREAD_ID,
-      baseDeps({ verifyToken: verifyTokenReturning(memberIdentity({ uid: OTHER_MEMBER_UID, email: "other@example.com" })), threadDocs }),
+      baseDeps({ verifyToken: verifyTokenReturning(memberIdentity({ uid: OTHER_MEMBER_UID, email: "other@nve.no" })), threadDocs }),
     );
 
     expect(result).toEqual({ ok: false, error: "forbidden" });

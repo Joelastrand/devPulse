@@ -12,10 +12,11 @@ vi.mock("server-only", () => ({}));
 import { membershipDocId } from "../domain/team-membership";
 import { ErasureWriteRefused } from "../../auth/server/erasure-write-fence";
 import { removeTeamMember } from "./remove-team-member";
+import { verifierFor } from "../../../../test/auth-fixtures";
 
-const ADMIN_EMAIL = "admin@example.com";
+const ADMIN_EMAIL = "admin@nve.no";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === "admin-1";
-const verifyToken = vi.fn().mockResolvedValue({ uid: "admin-1", email: ADMIN_EMAIL, email_verified: true });
+const verifyToken = verifierFor({ uid: "admin-1", email: ADMIN_EMAIL, emailVerified: true });
 
 describe("removeTeamMember: production default", () => {
   it("destroys the membership of (uid, teamId) through the membership-destruction boundary, not a plain delete", async () => {
@@ -33,7 +34,7 @@ describe("removeTeamMember: production default", () => {
     destroy.mockClear();
 
     const result = await removeTeamMember("token", "team-1", "member-1", {
-      verifyToken: vi.fn().mockResolvedValue({ uid: "someone", email: "x@example.com", email_verified: true }),
+      verifyToken: verifierFor({ uid: "someone", email: "x@nve.no", emailVerified: true }),
       isSuperadmin: isAdminUid,
     });
 

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { AuthorizeTeamAccessCollection } from "../../teams/server/authorize-team-access";
 import { getBuiltInTemplate } from "../domain/templates";
 import { listTeamResultsSurveys, type ListTeamResultsSurveysDeps } from "./list-team-results-surveys";
+import { registerClaims } from "../../../../test/auth-fixtures";
 
 const NOW = new Date("2026-09-01T00:00:00Z");
 const TEAM_ID = "team-42";
@@ -12,7 +13,7 @@ const OUTSIDER_UID = "outsider-1";
 const TEAM_PULSE = getBuiltInTemplate("team-pulse").questions;
 
 function verifyAs(uid: string) {
-  return vi.fn().mockResolvedValue({ uid, email: `${uid}@example.com`, email_verified: true });
+  return vi.fn().mockImplementation(async () => registerClaims({ uid, email: `${uid}@nve.no`, email_verified: true }));
 }
 
 const authCollection: AuthorizeTeamAccessCollection = {
