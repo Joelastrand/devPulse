@@ -105,6 +105,9 @@ export function KompetanseprofilRadar({
     );
   }
 
+  // The expected-level series and its legend entry exist only when at least one area has a real expected level.
+  const hasTargets = model.axes.some((axis) => axis.targetLevel !== null);
+
   const message =
     model.status === "too_few_axes"
       ? KOMPETANSEPROFIL_COPY.tooFew
@@ -145,6 +148,7 @@ export function KompetanseprofilRadar({
                   connectNulls={false}
                   isAnimationActive={false}
                 />
+                {hasTargets ? (
                 <Radar
                   name={KOMPETANSEPROFIL_COPY.legendTarget}
                   dataKey="target"
@@ -155,6 +159,7 @@ export function KompetanseprofilRadar({
                   connectNulls={false}
                   isAnimationActive={false}
                 />
+                ) : null}
               </RadarChart>
             </ResponsiveContainer>
           </div>
@@ -166,28 +171,30 @@ export function KompetanseprofilRadar({
 
       {message !== null ? <p className="text-sm text-text-secondary">{message}</p> : null}
 
-      <Legend />
+      {model.status === "ready" ? <Legend showTarget={hasTargets} /> : null}
 
       {showTable && model.axes.length > 0 ? <ProfileTable axes={model.axes} /> : null}
     </section>
   );
 }
 
-function Legend() {
+function Legend({ showTarget }: { readonly showTarget: boolean }) {
   return (
     <ul className="flex flex-wrap gap-4 text-sm text-text-secondary">
       <li className="flex items-center gap-2">
         <span aria-hidden="true" className="inline-block h-3 w-3 rounded-sm" style={{ background: "var(--chart-1)" }} />
         <span>{KOMPETANSEPROFIL_COPY.legendTeam}</span>
       </li>
-      <li className="flex items-center gap-2">
-        <span
-          aria-hidden="true"
-          className="inline-block h-0 w-5 border-t-2 border-dashed"
-          style={{ borderColor: "var(--text-secondary)" }}
-        />
-        <span>{KOMPETANSEPROFIL_COPY.legendTarget}</span>
-      </li>
+      {showTarget ? (
+        <li className="flex items-center gap-2">
+          <span
+            aria-hidden="true"
+            className="inline-block h-0 w-5 border-t-2 border-dashed"
+            style={{ borderColor: "var(--text-secondary)" }}
+          />
+          <span>{KOMPETANSEPROFIL_COPY.legendTarget}</span>
+        </li>
+      ) : null}
     </ul>
   );
 }

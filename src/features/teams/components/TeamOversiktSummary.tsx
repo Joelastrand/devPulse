@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { Card } from "../../../components/ui/Card";
+import { Skeleton } from "../../../components/ui/Skeleton";
 import { fetchCompetencePlans } from "../../team-competence-plan/client/competence-plan-gateway";
 import { fetchTeamProjects } from "../../team-projects/client/team-projects-gateway";
 import { fetchTeamSystems } from "../../team-systems/client/team-systems-gateway";
@@ -262,9 +263,11 @@ function KpiCard({
     value.status === "ok" ? (
       <p className="text-metric font-semibold tabular-nums text-text-primary">{value.value}</p>
     ) : value.status === "loading" ? (
-      <p className="text-sm text-text-secondary" aria-live="polite">
-        {TEAM_OVERSIKT_COPY.loading}
-      </p>
+      // Value-sized placeholder so the card keeps its height. No live region: four cards must not each announce.
+      <>
+        <span className="sr-only">{TEAM_OVERSIKT_COPY.loading}</span>
+        <Skeleton aria-hidden="true" className="h-8 w-12" />
+      </>
     ) : value.status === "forbidden" ? (
       <p className="text-sm text-text-secondary">{TEAM_OVERSIKT_COPY.forbiddenForMembers}</p>
     ) : (

@@ -1,4 +1,4 @@
-import { assertValidPresenterUid } from "./fixtures";
+import { assertValidPresenterUid, DEMO_TEAM_ID } from "./fixtures";
 
 /**
  * Pure CLI-argument and environment validation for the demo-team seed
@@ -24,6 +24,8 @@ export interface DemoSeedConfig {
   /** The proven target project id (equals `--project` and `FIREBASE_PROJECT_ID`). */
   projectId: string;
   presenterUid: string;
+  /** The team the plan writes into. Default `demo-team`; any other value must be an existing team the presenter owns. */
+  teamId: string;
   /** Midnight UTC of the as-of day. */
   asOf: Date;
   /** Capability the runner must honor: `false` means zero network calls and zero reads. */
@@ -45,6 +47,7 @@ export type DemoSeedConfigErrorCategory =
   | "confirm-mismatch"
   | "invalid-project-id"
   | "invalid-presenter-uid"
+  | "invalid-team-id"
   | "invalid-as-of"
   | "env-incomplete"
   | "project-mismatch"
@@ -67,7 +70,9 @@ export interface ResolveDemoSeedConfigInput {
   now: () => Date;
 }
 
-const VALUE_FLAGS = ["--project", "--presenter-uid", "--as-of", "--confirm"] as const;
+const VALUE_FLAGS = ["--project", "--presenter-uid", "--as-of", "--confirm", "--team-id"] as const;
+// Team ids are opaque Firestore segments. No `__` (it is the membership separator), no slash, bounded length.
+const TEAM_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 const BOOLEAN_FLAGS = ["--offline", "--write"] as const;
 
 type ValueFlag = (typeof VALUE_FLAGS)[number];
@@ -188,6 +193,8 @@ export function resolveDemoSeedConfig(input: ResolveDemoSeedConfigInput): DemoSe
 
   if (!PROJECT_ID_PATTERN.test(projectId)) return fail("invalid-project-id", "--project");
   if (!isValidPresenterUid(presenterUid)) return fail("invalid-presenter-uid", "--presenter-uid");
+  const teamId = values["--team-id"] ?? DEMO_TEAM_ID;
+  if (!TEAM_ID_PATTERN.test(teamId) || teamId.includes("__")) return fail("invalid-team-id", "--team-id");
 
   let asOf: Date;
   if (values["--as-of"] === undefined) {
@@ -234,6 +241,7 @@ export function resolveDemoSeedConfig(input: ResolveDemoSeedConfigInput): DemoSe
       mode,
       projectId,
       presenterUid,
+      teamId,
       asOf,
       network: !offline,
       writesAllowed: write,

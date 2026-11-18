@@ -40,7 +40,7 @@ export async function getOwnSkillContribution(
       const membership = await tx.reads.getMembership(identity.uid, teamId);
       return {
         ok: true,
-        contributing: isEffectiveSkillContribution(membership),
+        contributing: isEffectiveSkillContribution(membership, { uid: identity.uid, teamId }),
         canOptIn: genuine.teamStatus === "active",
       };
     });

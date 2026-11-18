@@ -30,11 +30,14 @@ function participationContext(teamId: string, participationId: string): string {
   return `team-project-participation:${teamId}:${participationId}`;
 }
 
-function openJson(envelopeValue: unknown, context: string): Record<string, unknown> | null {
+type OpenRecord = (envelope: RecordEnvelope, context: string) => string;
+type SealRecord = (plaintext: string, context: string) => RecordEnvelope;
+
+function openJson(envelopeValue: unknown, context: string, open: OpenRecord = decryptRecord): Record<string, unknown> | null {
   const envelope = readRecordEnvelope(envelopeValue);
   if (envelope === null) return null;
   try {
-    const parsed: unknown = JSON.parse(decryptRecord(envelope, context));
+    const parsed: unknown = JSON.parse(open(envelope, context));
     return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
   } catch (error) {
     if (error instanceof RecordEnvelopeError && error.code !== "authentication_failed" && error.code !== "malformed") {
@@ -47,18 +50,26 @@ function openJson(envelopeValue: unknown, context: string): Record<string, unkno
 // ---- Team projects ----
 
 /** Seals the project title. The caller passes the full stored document; `title` must be a string. */
-export function toPersistedTeamProject(projectId: string, data: Record<string, unknown>): Record<string, unknown> {
+export function toPersistedTeamProject(
+  projectId: string,
+  data: Record<string, unknown>,
+  seal: SealRecord = encryptRecord,
+): Record<string, unknown> {
   const { title, ...rest } = data;
   if (typeof title !== "string" || typeof rest.teamId !== "string") throw new Error("team project content is incomplete");
-  const sealed: RecordEnvelope = encryptRecord(JSON.stringify({ title }), projectContext(rest.teamId, projectId));
+  const sealed: RecordEnvelope = seal(JSON.stringify({ title }), projectContext(rest.teamId, projectId));
   return { ...rest, [PROJECT_CONTENT_FIELD]: sealed };
 }
 
 /** Opens a stored project. Returns `null` for a document that cannot be opened or still carries a plaintext title. */
-export function openTeamProjectDocument(projectId: string, data: Record<string, unknown>): Record<string, unknown> | null {
+export function openTeamProjectDocument(
+  projectId: string,
+  data: Record<string, unknown>,
+  open: OpenRecord = decryptRecord,
+): Record<string, unknown> | null {
   const { [PROJECT_CONTENT_FIELD]: sealed, ...metadata } = data;
   if (Object.hasOwn(metadata, "title") || typeof metadata.teamId !== "string") return null;
-  const content = openJson(sealed, projectContext(metadata.teamId, projectId));
+  const content = openJson(sealed, projectContext(metadata.teamId, projectId), open);
   return content !== null && typeof content.title === "string" ? { ...metadata, title: content.title } : null;
 }
 

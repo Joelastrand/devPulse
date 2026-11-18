@@ -33,30 +33,43 @@ function planContext(teamId: string, planId: string): string {
   return `competence-plan:${teamId}:${planId}`;
 }
 
-export function toPersistedCompetencePlan(planId: string, plan: CompetencePlan): Record<string, unknown> {
+export function toPersistedCompetencePlan(
+  planId: string,
+  plan: CompetencePlan,
+  seal: (plaintext: string, context: string) => RecordEnvelope = encryptRecord,
+): Record<string, unknown> {
   const { title, milestones, ...metadata } = plan;
   const content: PlanContent = { title, milestones };
-  const sealed: RecordEnvelope = encryptRecord(JSON.stringify(content), planContext(plan.teamId, planId));
+  const sealed: RecordEnvelope = seal(JSON.stringify(content), planContext(plan.teamId, planId));
   return { ...metadata, [PLAN_CONTENT_FIELD]: sealed };
 }
 
 /** Opens a stored plan back into the domain shape. `undefined` when absent; `null` when it cannot be opened. */
-export function openCompetencePlanDocument(planId: string, data: unknown): unknown {
+export function openCompetencePlanDocument(
+  planId: string,
+  data: unknown,
+  open: (envelope: RecordEnvelope, context: string) => string = decryptRecord,
+): unknown {
   if (data === undefined) return undefined;
   if (typeof data !== "object" || data === null || Array.isArray(data)) return null;
   const { [PLAN_CONTENT_FIELD]: sealed, ...metadata } = data as Record<string, unknown>;
   if (SEALED_KEYS.some((key) => Object.hasOwn(metadata, key))) return null;
   if (typeof metadata.teamId !== "string") return null;
-  const content = openContent(metadata.teamId, planId, sealed);
+  const content = openContent(metadata.teamId, planId, sealed, open);
   return content === null ? null : { ...metadata, ...content };
 }
 
-function openContent(teamId: string, planId: string, value: unknown): PlanContent | null {
+function openContent(
+  teamId: string,
+  planId: string,
+  value: unknown,
+  open: (envelope: RecordEnvelope, context: string) => string,
+): PlanContent | null {
   const envelope = readRecordEnvelope(value);
   if (envelope === null) return null;
   let parsed: unknown;
   try {
-    parsed = JSON.parse(decryptRecord(envelope, planContext(teamId, planId)));
+    parsed = JSON.parse(open(envelope, planContext(teamId, planId)));
   } catch (error) {
     if (error instanceof RecordEnvelopeError && error.code !== "authentication_failed" && error.code !== "malformed") {
       throw error;

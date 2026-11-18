@@ -81,6 +81,15 @@ Source of truth: `src/features/team-skills/domain/skill-coverage-policy.ts` and 
   `teamMemberships` document (`SKILL_CONTRIBUTION_FIELD`). A valid object means opt-in. No persisted `false` exists.
   Consent counts only when its version equals `SKILL_CONTRIBUTION_NOTICE_VERSION` = **2**. Version 1 (threshold 5) has
   lapsed, so members must re-consent.
+- **Simulated demo consent (demo data only).** The consent object may carry `simulated: true` (`SIMULATED_CONTRIBUTION_FIELD`)
+  only when the reader is given a trusted context whose `uid` is one of the ten fixed fictional members
+  `demo-member-01`…`10` and whose `teamId` is the designated demo team `8yB2bS8Jav69TCfDETON`
+  (`isSimulatedContributionContext`, `src/features/team-skills/domain/skill-contribution.ts`). Both values are fixed in
+  code. A uid match alone is not enough, a bare field read (no context) rejects the marker, and any other extra key still
+  makes the record unreadable. The marker grants no authentication or authorization: the membership, the team state and
+  the verified identity are checked exactly as for genuine members. Withdrawal and erasure are unchanged. Production writers
+  never set the marker; `simulatedContributionPatch` refuses any context outside the demo scope. The team-owned aggregate
+  reports `includesSimulated: true` when a counted contributor carries it, so the UI labels the result as demo data.
 - **Threshold k = 3.** `SKILL_COVERAGE_MIN_CONTRIBUTORS = 3` is a fixed constant, not configurable. It applies to the
   automatic team-owned aggregate and the categorical coverage view. The historical k = 5 is not current policy.
 - **Automatic aggregate** (`get-team-owned-skill-aggregate.ts`): reads opted-in members, reads each contributor's rating for

@@ -1,3 +1,4 @@
+import { ASSESSMENT_ATTRIBUTES } from "../team-systems/domain/team-system";
 import type { RoadmapItemRecord } from "../roadmap/domain/roadmap-item";
 import type { SkillProgressRecord } from "../skill-trees/domain/skill-progress";
 import type { SkillTreeRecord } from "../skill-trees/domain/skill-tree";
@@ -265,6 +266,47 @@ export const DEMO_SKILL_TREES = [
     name: "Demo – Sikker utvikling",
     labels: ["Sikkerhetsbevissthet", "Skanning av avhengigheter", "Trusselmodellering", "Sikkerhet i byggløypa"],
   },
+  // Personal development catalog (Phase 1). Org-wide skill trees referenced by the presenter's goals and skill levels.
+  {
+    id: "demo-skill-typescript",
+    name: "Demo – TypeScript og React",
+    labels: ["Grunnleggende typer", "Komponentmønstre", "Validering av ytre data", "Testbar frontend-arkitektur"],
+  },
+  {
+    id: "demo-skill-api",
+    name: "Demo – API-design og integrasjon",
+    labels: ["Ressursorientert design", "Versjonering og feilkoder", "Idempotens og kontrakter", "Sikre integrasjonsmønstre"],
+  },
+  {
+    id: "demo-skill-cloud",
+    name: "Demo – Skyarkitektur",
+    labels: ["Isolasjon av tjenester", "Nettverk og tilgangsstyring", "Skalering og kostnad", "Hendelsesdrevne løsninger"],
+  },
+  {
+    id: "demo-skill-accessibility",
+    name: "Demo – Universell utforming",
+    labels: ["Semantisk HTML", "Tastaturnavigasjon", "WCAG 2.2 AA-kontroll", "Test med hjelpemiddelbrukere"],
+  },
+  {
+    id: "demo-skill-architecture",
+    name: "Demo – Arkitekturbeslutninger",
+    labels: ["Dokumenterte beslutninger", "Avveininger og alternativer", "Ansvar for helhetlig løsning"],
+  },
+  {
+    id: "demo-skill-mentoring",
+    name: "Demo – Mentorering og teknisk ledelse",
+    labels: ["Veiledning i kodegjennomgang", "Strukturert opplæring", "Ansvar for teknisk retning"],
+  },
+  {
+    id: "demo-skill-data",
+    name: "Demo – Datamodellering og datakvalitet",
+    labels: ["Grunnleggende modellering", "Valideringsregler", "Målbar datakvalitet", "Forvaltning av datamodeller"],
+  },
+  {
+    id: "demo-skill-incident",
+    name: "Demo – Hendelseshåndtering",
+    labels: ["Varsling og bakvakt", "Triage og kommunikasjon", "Etterarbeid og læring"],
+  },
 ] as const;
 
 /**
@@ -303,16 +345,98 @@ export const DEMO_ROADMAP_PLANS: readonly {
   { treeId: "demo-skill-delivery", targetNodeId: "node-4", status: "completed", priority: "low" },
 ];
 
+/**
+ * Team delivery projects (Phase 1). The model stores a sealed title, plaintext dates, lifecycle, priority and `archived`.
+ * There is no description or owner field in the model, so none is written. A project is effectively `active` when it is
+ * planned and its start date has passed, `planned` before that, and `completed` when its lifecycle is `completed`.
+ */
+export const DEMO_TEAM_PROJECTS: readonly {
+  projectId: string;
+  title: string;
+  startOffsetDays: number;
+  endOffsetDays: number;
+  lifecycleStatus: "planned" | "completed";
+  priority: "high" | "medium" | "low";
+}[] = [
+  { projectId: "demo-project-api", title: "Modernisering av interne API-er", startOffsetDays: -120, endOffsetDays: 60, lifecycleStatus: "planned", priority: "high" },
+  { projectId: "demo-project-devplatform", title: "Forbedret utviklerplattform", startOffsetDays: -40, endOffsetDays: 90, lifecycleStatus: "planned", priority: "high" },
+  { projectId: "demo-project-access", title: "Universell utforming av digitale tjenester", startOffsetDays: -20, endOffsetDays: 45, lifecycleStatus: "planned", priority: "medium" },
+  { projectId: "demo-project-observability", title: "Bedre overvåking og hendelseshåndtering", startOffsetDays: 14, endOffsetDays: 120, lifecycleStatus: "planned", priority: "medium" },
+  { projectId: "demo-project-dataquality", title: "Datakvalitet og automatiserte kontroller", startOffsetDays: -150, endOffsetDays: -20, lifecycleStatus: "completed", priority: "medium" },
+  { projectId: "demo-project-delivery", title: "Sikker og effektiv leveranseprosess", startOffsetDays: -200, endOffsetDays: -45, lifecycleStatus: "completed", priority: "low" },
+];
+
+/**
+ * Team systems (Systemoversikt). Each attribute is an assessment: `{ value, note }`. An attribute not listed is `ikke_vurdert`.
+ * Notes are sealed by the systems codec. Eight systems: three healthy, five needing follow-up (values trenger_oppfolging or kritisk).
+ */
+export const DEMO_TEAM_SYSTEMS: readonly {
+  systemId: string;
+  name: string;
+  description: string;
+  assessments: Partial<Record<"availability" | "deployability" | "maintainability" | "observability" | "reliability" | "security" | "testability", { value: "god" | "trenger_oppfolging" | "kritisk" | "ikke_vurdert"; note: string | null }>>;
+}[] = [
+  { systemId: "demo-system-portal", name: "Selvbetjeningsportalen", description: "Innbyggernes inngang til digitale tjenester.", assessments: { availability: { value: "god", note: null }, deployability: { value: "god", note: null }, maintainability: { value: "god", note: "Tydelig eierskap og oppdatert dokumentasjon." }, observability: { value: "god", note: null }, reliability: { value: "god", note: null }, security: { value: "god", note: null }, testability: { value: "god", note: null } } },
+  { systemId: "demo-system-notify", name: "Varslingstjenesten", description: "Sender e-post og SMS-varsler til brukere av portalen.", assessments: { availability: { value: "god", note: null }, deployability: { value: "god", note: null }, maintainability: { value: "god", note: null }, observability: { value: "god", note: null }, reliability: { value: "god", note: null }, security: { value: "god", note: null }, testability: { value: "god", note: null } } },
+  { systemId: "demo-system-integration", name: "Integrasjonsplattformen", description: "Samler meldingsutvekslingen mellom fagsystemene.", assessments: { reliability: { value: "trenger_oppfolging", note: "Meldingskøene har hatt flere ustabile perioder de siste månedene." }, maintainability: { value: "trenger_oppfolging", note: "Flere integrasjoner bruker ulike mønstre for feilhåndtering." }, availability: { value: "god", note: null }, deployability: { value: "god", note: null }, observability: { value: "god", note: null }, security: { value: "god", note: null } } },
+  { systemId: "demo-system-reporting", name: "Rapporteringstjenesten", description: "Genererer periodiske rapporter til ledelsen.", assessments: { testability: { value: "kritisk", note: "Mange ustabile tester i byggløypa gjør det vanskelig å endre rapportlogikken trygt." }, maintainability: { value: "trenger_oppfolging", note: null }, availability: { value: "god", note: null }, reliability: { value: "god", note: null } } },
+  { systemId: "demo-system-auth", name: "Innlogging og sesjoner", description: "Håndterer innlogging, sesjoner og fornyelse av tilgang.", assessments: { security: { value: "god", note: "Ny sesjonshåndtering har kjørt i produksjon uten kjente hendelser." }, reliability: { value: "god", note: null }, observability: { value: "trenger_oppfolging", note: "Mangler strukturert logging av innloggingsfeil." }, availability: { value: "god", note: null } } },
+  { systemId: "demo-system-datahub", name: "Datakatalogen", description: "Oversikt over datasett, eiere og kvalitetskrav.", assessments: { maintainability: { value: "kritisk", note: "Eldre datamodell uten valideringsregler; krever opprydding før nye datasett kan legges til." }, security: { value: "god", note: null }, availability: { value: "god", note: null } } },
+  { systemId: "demo-system-forms", name: "Skjemamotoren", description: "Felles bibliotek for dynamiske skjemaer i portalen.", assessments: { testability: { value: "trenger_oppfolging", note: "Mangler automatiserte tilgjengelighetstester for skjemaene." }, deployability: { value: "god", note: null }, maintainability: { value: "god", note: null } } },
+  { systemId: "demo-system-archive", name: "Eksportjobb for arkiv", description: "Nattlig eksport av dokumenter til arkivsystemet.", assessments: { deployability: { value: "trenger_oppfolging", note: "Utrulling skjer fortsatt manuelt og krever en koordinert sjekkliste." }, maintainability: { value: "trenger_oppfolging", note: "Skrevet for ett arkivformat; flere formater er planlagt." } } },
+];
+
+/** The persisted fields of one team system (name and description are sealed by the codec). Assessed attributes carry the demo actor. */
+export function teamSystemRecord(s: (typeof DEMO_TEAM_SYSTEMS)[number], teamId: string, asOf: Date): Record<string, unknown> {
+  const attributes = Object.fromEntries(
+    ASSESSMENT_ATTRIBUTES.map((attribute) => {
+      const assessment = s.assessments[attribute];
+      return [
+        attribute,
+        assessment === undefined
+          ? { value: "ikke_vurdert", note: null, assessedAt: null, assessedBy: null }
+          : { value: assessment.value, note: assessment.note, assessedAt: asOf, assessedBy: DEMO_AUDIT_ACTOR },
+      ];
+    }),
+  );
+  return {
+    teamId,
+    name: s.name,
+    description: s.description,
+    backstageUrl: null,
+    knowledgeMemberRefs: [],
+    createdAt: asOf,
+    createdBy: DEMO_AUDIT_ACTOR,
+    updatedAt: asOf,
+    updatedBy: DEMO_AUDIT_ACTOR,
+    ...attributes,
+  };
+}
+
+/**
+ * The persisted-shape fields of one team project (title is sealed by the codec). Dates are `YYYY-MM-DD` relative to `asOf`. */
+export function teamProjectRecord(p: (typeof DEMO_TEAM_PROJECTS)[number], teamId: string, asOf: Date): Record<string, unknown> {
+  return {
+    teamId,
+    title: p.title,
+    startDate: planDate(asOf, p.startOffsetDays),
+    endDate: planDate(asOf, p.endOffsetDays),
+    lifecycleStatus: p.lifecycleStatus,
+    priority: p.priority,
+    archived: false,
+  };
+}
+
 /** `YYYY-MM-DD` of `asOf` shifted by whole days (asOf is midnight UTC). */
 function planDate(asOf: Date, offsetDays: number): string {
   return new Date(asOf.getTime() + offsetDays * DAY_MS).toISOString().slice(0, 10);
 }
 
-function buildRoadmapItems(asOf: Date): RoadmapItemFixture[] {
+function buildRoadmapItems(asOf: Date, teamId: string): RoadmapItemFixture[] {
   return DEMO_ROADMAP_PLANS.map(({ treeId, targetNodeId, status, priority, dates }) => ({
     treeId,
     record: {
-      teamId: DEMO_TEAM_ID,
+      teamId: teamId,
       treeId,
       targetNodeId,
       priority,
@@ -338,7 +462,7 @@ function offsetFromAsOf(asOf: Date, days: number, hours: number): Date {
   return new Date(asOf.getTime() - days * DAY_MS + hours * HOUR_MS);
 }
 
-function buildSurveys(asOf: Date): Pick<DemoLogicalFixtures, "closedSurveys" | "scheduledSurvey"> {
+function buildSurveys(asOf: Date, teamId: string): Pick<DemoLogicalFixtures, "closedSurveys" | "scheduledSurvey"> {
   const closedSurveys = Array.from({ length: CLOSED_PERIOD_COUNT }, (_, i) => {
     const period = i + 1;
     const dates = surveyPeriodDates(asOf, period);
@@ -346,7 +470,7 @@ function buildSurveys(asOf: Date): Pick<DemoLogicalFixtures, "closedSurveys" | "
       id: demoSurveyId(period),
       period,
       record: {
-        teamId: DEMO_TEAM_ID,
+        teamId: teamId,
         title: `Teampuls – sprint ${period}`,
         accessMode: "authenticated",
         minimumResponses: DEMO_MINIMUM_RESPONSES,
@@ -361,7 +485,7 @@ function buildSurveys(asOf: Date): Pick<DemoLogicalFixtures, "closedSurveys" | "
   const scheduledSurvey = {
     id: DEMO_SURVEY_NEXT_ID,
     record: {
-      teamId: DEMO_TEAM_ID,
+      teamId: teamId,
       title: "Teampuls – neste sprint",
       accessMode: "authenticated",
       minimumResponses: DEMO_MINIMUM_RESPONSES,
@@ -429,14 +553,16 @@ function buildSkillTrees(asOf: Date): SkillTreeFixture[] {
  * The presenter uid is used only as the membership `uid`.
  */
 export function buildDemoLogicalFixtures(input: {
+  teamId?: string;
   presenterUid: string;
   asOf: Date;
 }): DemoLogicalFixtures {
   const { presenterUid, asOf } = input;
+  const teamId = input.teamId ?? DEMO_TEAM_ID;
   assertValidAsOf(asOf);
   assertValidPresenterUid(presenterUid);
 
-  const surveys = buildSurveys(asOf);
+  const surveys = buildSurveys(asOf, teamId);
 
   return {
     team: {
@@ -447,7 +573,7 @@ export function buildDemoLogicalFixtures(input: {
     },
     membership: {
       uid: presenterUid,
-      teamId: DEMO_TEAM_ID,
+      teamId: teamId,
       createdAt: asOf,
       createdVia: "admin_direct",
       grantedBy: DEMO_AUDIT_ACTOR,
@@ -459,14 +585,14 @@ export function buildDemoLogicalFixtures(input: {
     skillProgress: DEMO_TRACKED_SKILLS.map(({ treeId, currentNodeId }) => ({
       treeId,
       record: {
-        teamId: DEMO_TEAM_ID,
+        teamId: teamId,
         treeId,
         currentNodeId,
         updatedAt: asOf,
         updatedBy: DEMO_AUDIT_ACTOR,
       },
     })),
-    roadmapItems: buildRoadmapItems(asOf),
+    roadmapItems: buildRoadmapItems(asOf, teamId),
   };
 }
 

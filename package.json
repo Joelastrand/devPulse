@@ -16,6 +16,13 @@
     "test:full": "node scripts/test-tier.mjs full",
     "test:emulator": "node scripts/test-tier.mjs emulator",
     "seed:demo-team": "node --conditions=react-server --import ./src/features/demo-team/register-ts-resolver.mjs --env-file-if-exists=.env.local src/features/demo-team/cli.ts",
+    "seed:demo-teamkompetanse": "node --conditions=react-server --import ./src/features/demo-team/register-ts-resolver.mjs --env-file-if-exists=.env.local src/features/demo-team/teamkompetanse/cli.ts",
+    "seed:demo-team-identities":"node --conditions=react-server --import ./src/features/demo-team/register-ts-resolver.mjs --env-file-if-exists=.env.local src/features/demo-team/identities/cli.ts",
+    "seed:demo-team-forum": "node --conditions=react-server --import ./src/features/demo-team/register-ts-resolver.mjs --env-file-if-exists=.env.local src/features/demo-team/forum/cli.ts",
+    "seed:demo-team-roadmap-owners": "node --conditions=react-server --import ./src/features/demo-team/register-ts-resolver.mjs --env-file-if-exists=.env.local src/features/demo-team/roadmap/owners-cli.ts",
+    "seed:demo-team-roadmap":"node --conditions=react-server --import ./src/features/demo-team/register-ts-resolver.mjs --env-file-if-exists=.env.local src/features/demo-team/roadmap/cli.ts",
+    "seed:demo-team-participations":"node --conditions=react-server --import ./src/features/demo-team/register-ts-resolver.mjs --env-file-if-exists=.env.local src/features/demo-team/participations/cli.ts",
+    "inspect:demo-team-live": "node --conditions=react-server --import ./src/features/demo-team/register-ts-resolver.mjs --env-file-if-exists=.env.local src/features/demo-team/inspect/cli.ts",
     "verify:browser": "playwright test -c browser/playwright.config.ts"
   },
   "dependencies": {

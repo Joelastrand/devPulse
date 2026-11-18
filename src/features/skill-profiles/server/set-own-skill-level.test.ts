@@ -1,14 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
+import { ErasureWriteRefused } from "../../auth/server/erasure-write-fence";
+import { seedSkillLevelsCreateOnly } from "./skill-profile-store";
 import { createFakeSkillProfileStore } from "./fake-skill-profile-store";
 import { setOwnSkillLevel, type SetOwnSkillLevelDeps } from "./set-own-skill-level";
 import type { SkillProfileStore } from "./skill-profile-store";
 import { registerClaims } from "../../../../test/auth-fixtures";
 
 const { testAdminAuth } = await vi.hoisted(async () => await import("../../../../test/auth-fixtures"));
+/** Set only by the trusted-seed fence test below. Unset, any Firestore use still throws (the original guarantee). */
+const dbHolder = vi.hoisted(() => ({ db: undefined as unknown }));
 vi.mock("../../../lib/firebase/admin", () => ({
   getAdminAuth: () => testAdminAuth,
   getFirestoreDb: () => {
-    throw new Error("unexpected Firestore use");
+    if (dbHolder.db === undefined) throw new Error("unexpected Firestore use");
+    return dbHolder.db;
   },
 }));
 
@@ -36,6 +41,39 @@ function setup(profiles: Record<string, Record<string, unknown>> = {}, trees: Re
   });
   return { ...fake, deps };
 }
+
+describe("trusted skill-level seed — erasure fence (create-only, feature-owned)", () => {
+  it.each([
+    ["a valid in-progress record", { status: "in_progress" }],
+    ["a malformed record", "not-a-record"],
+  ])("refuses with %s as ErasureWriteRefused, reads only the fence and creates nothing", async (_label, erasure) => {
+    const reads: string[] = [];
+    const creates: string[] = [];
+    dbHolder.db = {
+      collection: (name: string) => ({ doc: (id: string) => ({ path: `${name}/${id}` }) }),
+      runTransaction: async (work: (tx: unknown) => Promise<unknown>) =>
+        work({
+          get: async (ref: { path: string }) => {
+            reads.push(ref.path);
+            return { exists: ref.path.startsWith("accountErasures/"), data: () => erasure };
+          },
+          create: (ref: { path: string }) => creates.push(ref.path),
+          set: () => undefined,
+          update: () => undefined,
+          delete: () => undefined,
+        }),
+    };
+    try {
+      await expect(seedSkillLevelsCreateOnly("user-1", [{ treeId: "demo-skill-typescript", level: 4 }], { createdAt: NOW, updatedAt: NOW })).rejects.toBeInstanceOf(
+        ErasureWriteRefused,
+      );
+      expect(reads).toEqual(["accountErasures/user-1"]);
+      expect(creates).toEqual([]);
+    } finally {
+      dbHolder.db = undefined;
+    }
+  });
+});
 
 describe("setOwnSkillLevel", () => {
   it("returns unauthenticated for an invalid token and touches nothing", async () => {

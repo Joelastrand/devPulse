@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import { fetchOwnFormalRole, type OwnFormalRole } from "../client/formal-role-gateway";
 import { workspaceCopy } from "../copy";
+import { FormalRoleSkeleton } from "./RoleSkeletons";
 
 type ViewState =
   | { phase: "loading" }
@@ -44,7 +45,7 @@ export function FormalRoleSection() {
 
 function FormalRoleBody({ state }: { state: ViewState }) {
   if (state.phase === "loading") {
-    return <p className="text-sm text-text-secondary">{workspaceCopy.formalRole.loading}</p>;
+    return <FormalRoleSkeleton label={workspaceCopy.formalRole.loading} />;
   }
   if (state.phase === "signed_out") {
     return <p className="text-sm text-text-secondary">{workspaceCopy.formalRole.signedOut}</p>;

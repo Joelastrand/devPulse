@@ -6,7 +6,7 @@ import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
-import { LoadingState } from "../../../components/ui/LoadingState";
+import { AdminTeamDetailSkeleton } from "./TeamAdminSkeletons";
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { ADMIN_SCOPE_EYEBROW } from "../../../components/ui/copy";
 import { TextField } from "../../../components/ui/TextField";
@@ -974,7 +974,7 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
   }
 
   if (state.phase === "loading") {
-    return <LoadingState label={adminCopy.detail.loading} />;
+    return <AdminTeamDetailSkeleton label={adminCopy.detail.loading} />;
   }
 
   if (state.phase === "signed_out") {

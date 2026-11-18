@@ -1,10 +1,9 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { useAnnounceTeamName } from "../../../components/nav/TeamContext";
+import { useAnnounceTeamName, useTeamsOverviewLoader } from "../../../components/nav/TeamContext";
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
-import { fetchTeamsOverview } from "../client/teams-overview-gateway";
 import { teamsCopy } from "../copy";
 import { TeamIdentity } from "./TeamIdentity";
 import { TeamRouteNav } from "./TeamRouteNav";
@@ -28,6 +27,7 @@ export function TeamPageHeader({
   children?: ReactNode;
 }) {
   const [fetchedName, setFetchedName] = useState<string | undefined>(undefined);
+  const loadTeamsOverview = useTeamsOverviewLoader();
 
   useAuthGatedResource(
     (token, generation, isCurrentGeneration) => {
@@ -38,7 +38,7 @@ export function TeamPageHeader({
         setFetchedName(undefined);
         return;
       }
-      fetchTeamsOverview(token).then((overview) => {
+      loadTeamsOverview(token).then((overview) => {
         if (!isCurrentGeneration(generation)) {
           return;
         }

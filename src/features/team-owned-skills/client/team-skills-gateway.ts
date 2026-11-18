@@ -198,7 +198,7 @@ export async function clearOwnTeamSkillRating(token: string, teamId: string, ski
 }
 
 export type TeamOwnedSkillAggregateStatus =
-  | { status: "ok"; availability: "available"; rows: TeamOwnedSkillAggregateRowView[] }
+  | { status: "ok"; availability: "available"; rows: TeamOwnedSkillAggregateRowView[]; includesSimulated: boolean }
   | { status: "incomplete" }
   | { status: "unauthenticated" | "forbidden" | "team_disabled" | "read_failed" };
 
@@ -227,7 +227,9 @@ export async function fetchTeamSkillAggregate(token: string, teamId: string): Pr
   if (response.json.availability === "incomplete") return { status: "incomplete" };
   const rows = response.json.rows.map(toAggregateRow);
   if (rows.some((row) => row === null)) return { status: "read_failed" };
-  return { status: "ok", availability: "available", rows: rows as TeamOwnedSkillAggregateRowView[] };
+  // A missing or non-boolean flag is treated as "may include synthetic data": the label must never under-report.
+  const includesSimulated = response.json.includesSimulated !== false;
+  return { status: "ok", availability: "available", rows: rows as TeamOwnedSkillAggregateRowView[], includesSimulated };
 }
 
 /** One agreed (collaborative) team level of an active team skill. Team-level value only; no actor is ever returned. */

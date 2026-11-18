@@ -105,11 +105,17 @@ describe("axis limits", () => {
     expect(screen.getByRole("table")).toBeTruthy();
   });
 
-  it("shows the table only above eight axes", () => {
-    const { container } = render(<KompetanseprofilRadar axes={axesOf(9)} />);
+  it("draws no chart and no legend above eight axes, so the caller must pass at most eight", () => {
+    const { container } = render(<KompetanseprofilRadar axes={axesOf(9)} showTable={false} />);
     expect(screen.getByText("Profilen vises for opptil åtte områder. Se tabellen for alle områder.")).toBeTruthy();
     expect(within(container).queryByTestId("radar-chart")).toBeNull();
-    expect(screen.getAllByRole("rowheader")).toHaveLength(9);
+    expect(screen.queryByText("Teamets nivå")).toBeNull();
+  });
+
+  it("shows the legend only together with a drawn chart", () => {
+    const { container } = render(<KompetanseprofilRadar axes={[axis(1, 2)]} showTable={false} />);
+    expect(within(container).queryByTestId("radar-chart")).toBeNull();
+    expect(screen.queryByText("Teamets nivå")).toBeNull();
   });
 });
 
@@ -137,5 +143,23 @@ describe("Norwegian labels and forbidden content", () => {
   it("never names anonymity", () => {
     const { container } = render(<KompetanseprofilRadar axes={axesOf(3)} />);
     expect(container.textContent?.toLowerCase()).not.toContain("anonym");
+  });
+});
+
+describe("expected-level legend", () => {
+  function legendText(container: HTMLElement): string {
+    return container.querySelector("ul")?.textContent ?? "";
+  }
+
+  it("omits the 'Forventet nivå' legend entry and series when no area has an expected level", () => {
+    const { container } = render(<KompetanseprofilRadar axes={[axis(1, 2, null), axis(2, 3, null), axis(3, 1, null)]} />);
+    expect(legendText(container)).toContain("Teamets nivå");
+    expect(legendText(container)).not.toContain("Forventet nivå");
+    expect(pointsOf(container).every((point) => point.target === null)).toBe(true);
+  });
+
+  it("shows the 'Forventet nivå' legend entry when at least one area has an expected level", () => {
+    const { container } = render(<KompetanseprofilRadar axes={[axis(1, 2, 3), axis(2, 3, null), axis(3, 1, null)]} />);
+    expect(legendText(container)).toContain("Forventet nivå");
   });
 });

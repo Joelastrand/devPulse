@@ -6,11 +6,11 @@ import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { ConversationsIllustration } from "../../../components/ui/illustrations/illustrations";
-import { LoadingState } from "../../../components/ui/LoadingState";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import { fetchConversationList, type ConversationListResponse } from "../client/conversations-gateway";
 import { conversationsCopy } from "../copy";
 import { CreateConversationForm } from "./CreateConversationForm";
+import { ConversationsListSkeleton } from "./ConversationSkeletons";
 import { OwnedConversationList, ParticipationList } from "./ConversationList";
 
 import { RecoveryRegion } from "./RecoveryRegion";
@@ -56,7 +56,7 @@ export function ConversationsPage() {
   }
 
   if (state.phase === "loading") {
-    return <LoadingState label={conversationsCopy.loading} />;
+    return <ConversationsListSkeleton label={conversationsCopy.loading} />;
   }
 
   if (state.phase === "signed_out") {

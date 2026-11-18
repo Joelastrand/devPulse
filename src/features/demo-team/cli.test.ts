@@ -1,3 +1,4 @@
+import { teamPlanCounts } from "./team-plan-counts";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -118,7 +119,7 @@ describe.skipIf(nodeMajor < 24)("CLI smoke under real Node (offline, fake env)",
     expect(res.status).toBe(0);
     expect(res.stdout).toContain(`Resolved project id: ${PROJECT}`);
     expect(res.stdout).toContain("Mode: offline-dry-run");
-    expect(res.stdout).toContain("Writes planned: 85");
+    expect(res.stdout).toContain(`Writes planned: ${teamPlanCounts().total}`);
     expect(res.stdout).toContain("Local crypto round-trip: ok");
     expect(res.stdout).not.toContain(PRIVATE_KEY_MARKER);
     expect(res.stdout).not.toContain(ENCRYPTION_KEY);
@@ -127,7 +128,7 @@ describe.skipIf(nodeMajor < 24)("CLI smoke under real Node (offline, fake env)",
   it("tolerates the leading `--` that pnpm forwards", () => {
     const res = runCli(["--", ...args], fakeEnv);
     expect(res.status).toBe(0);
-    expect(res.stdout).toContain("Writes planned: 85");
+    expect(res.stdout).toContain(`Writes planned: ${teamPlanCounts().total}`);
   });
 
   it("does not load firebase-admin offline (only the entry's own module graph runs)", () => {

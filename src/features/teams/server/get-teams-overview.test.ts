@@ -91,8 +91,8 @@ describe("getTeamsOverview", () => {
     expect(result).toEqual({
       ok: true,
       teams: [
-        { teamId: "team-1", name: "Team One", relationship: "none", isMember: false },
-        { teamId: "team-2", name: "Team Two", relationship: "none", isMember: false },
+        { teamId: "team-1", name: "Team One", relationship: "none", isMember: false, canOpen: false },
+        { teamId: "team-2", name: "Team Two", relationship: "none", isMember: false, canOpen: false },
       ],
     });
   });
@@ -110,11 +110,69 @@ describe("getTeamsOverview", () => {
 
     expect(result).toEqual({
       ok: true,
-      teams: [{ teamId: "team-1", name: "Team One", relationship: "member", isMember: true }],
+      teams: [{ teamId: "team-1", name: "Team One", relationship: "member", isMember: true, canOpen: true }],
     });
   });
 
-  it("shows 'admin' for every team when the caller is an app admin, regardless of membership", async () => {
+  // Badge regression: the team role comes from the caller's own membership document only. Global superadmin status must
+  // never change the role shown on a team card; it only affects access (canOpen).
+  it("shows 'teamadmin' for an ordinary user whose own membership document carries the teamadmin role", async () => {
+    const result = await getTeamsOverview(TOKEN, {
+      verifyToken: verifyToken({ uid: "user-1", email: "user-1@nve.no" }),
+      activeTeamsCollection: fakeActiveTeams([{ teamId: "team-1", name: "Team One" }]),
+      resolveInvitationsCollection: noopResolveInvitations(),
+      collection: fakeOverviewCollection({ memberships: [{ uid: "user-1", teamId: "team-1", role: "teamadmin" }] }),
+      isSuperadmin: async () => false,
+    });
+    expect(result).toEqual({
+      ok: true,
+      teams: [{ teamId: "team-1", name: "Team One", relationship: "teamadmin", isMember: true, canOpen: true }],
+    });
+  });
+
+  it("shows 'member' for a superadmin whose membership on the team is an ordinary member role (no implicit teamadmin)", async () => {
+    const result = await getTeamsOverview(TOKEN, {
+      verifyToken: verifyToken({ uid: "admin-1", email: "admin@nve.no" }),
+      activeTeamsCollection: fakeActiveTeams([{ teamId: "team-1", name: "Team One" }]),
+      resolveInvitationsCollection: noopResolveInvitations(),
+      collection: fakeOverviewCollection({ memberships: [{ uid: "admin-1", teamId: "team-1" }] }),
+      isSuperadmin: async (uid: string) => uid === "admin-1",
+    });
+    expect(result).toEqual({
+      ok: true,
+      teams: [{ teamId: "team-1", name: "Team One", relationship: "member", isMember: true, canOpen: true }],
+    });
+  });
+
+  it("shows 'teamadmin' for a superadmin whose own membership carries the teamadmin role, and flags the genuine membership", async () => {
+    const result = await getTeamsOverview(TOKEN, {
+      verifyToken: verifyToken({ uid: "admin-1", email: "admin@nve.no" }),
+      activeTeamsCollection: fakeActiveTeams([{ teamId: "team-1", name: "Team One" }]),
+      resolveInvitationsCollection: noopResolveInvitations(),
+      collection: fakeOverviewCollection({ memberships: [{ uid: "admin-1", teamId: "team-1", role: "teamadmin" }] }),
+      isSuperadmin: async (uid: string) => uid === "admin-1",
+    });
+    expect(result).toEqual({
+      ok: true,
+      teams: [{ teamId: "team-1", name: "Team One", relationship: "teamadmin", isMember: true, canOpen: true }],
+    });
+  });
+
+  it("shows 'none' with no access for an ordinary user who has no membership and no admin status", async () => {
+    const result = await getTeamsOverview(TOKEN, {
+      verifyToken: verifyToken({ uid: "user-1", email: "user-1@nve.no" }),
+      activeTeamsCollection: fakeActiveTeams([{ teamId: "team-1", name: "Team One" }]),
+      resolveInvitationsCollection: noopResolveInvitations(),
+      collection: fakeOverviewCollection({}),
+      isSuperadmin: async () => false,
+    });
+    expect(result).toEqual({
+      ok: true,
+      teams: [{ teamId: "team-1", name: "Team One", relationship: "none", isMember: false, canOpen: false }],
+    });
+  });
+
+  it("gives an app admin without membership canOpen on every team, while the team role stays 'none'", async () => {
     const result = await getTeamsOverview(TOKEN, {
       verifyToken: verifyToken({ uid: "admin-1", email: "admin@nve.no" }),
       activeTeamsCollection: fakeActiveTeams([{ teamId: "team-1", name: "Team One" }]),
@@ -125,11 +183,11 @@ describe("getTeamsOverview", () => {
 
     expect(result).toEqual({
       ok: true,
-      teams: [{ teamId: "team-1", name: "Team One", relationship: "admin", isMember: false }],
+      teams: [{ teamId: "team-1", name: "Team One", relationship: "none", isMember: false, canOpen: true }],
     });
   });
 
-  it("keeps relationship 'admin' for an app admin who is also a member, and flags the genuine membership", async () => {
+  it("shows an app admin who is also a member as 'member' (the role comes from membership), and flags the genuine membership", async () => {
     const result = await getTeamsOverview(TOKEN, {
       verifyToken: verifyToken({ uid: "admin-1", email: "admin@nve.no" }),
       activeTeamsCollection: fakeActiveTeams([
@@ -146,8 +204,8 @@ describe("getTeamsOverview", () => {
     expect(result).toEqual({
       ok: true,
       teams: [
-        { teamId: "team-1", name: "Team One", relationship: "admin", isMember: true },
-        { teamId: "team-2", name: "Team Two", relationship: "admin", isMember: false },
+        { teamId: "team-1", name: "Team One", relationship: "member", isMember: true, canOpen: true },
+        { teamId: "team-2", name: "Team Two", relationship: "none", isMember: false, canOpen: true },
       ],
     });
   });
@@ -165,7 +223,7 @@ describe("getTeamsOverview", () => {
 
     expect(result).toEqual({
       ok: true,
-      teams: [{ teamId: "team-1", name: "Team One", relationship: "request_pending", isMember: false }],
+      teams: [{ teamId: "team-1", name: "Team One", relationship: "request_pending", isMember: false, canOpen: false }],
     });
   });
 
@@ -182,7 +240,7 @@ describe("getTeamsOverview", () => {
 
     expect(result).toEqual({
       ok: true,
-      teams: [{ teamId: "team-1", name: "Team One", relationship: "request_rejected", isMember: false }],
+      teams: [{ teamId: "team-1", name: "Team One", relationship: "request_rejected", isMember: false, canOpen: false }],
     });
   });
 
@@ -205,9 +263,9 @@ describe("getTeamsOverview", () => {
     expect(result).toEqual({
       ok: true,
       teams: [
-        { teamId: "team-1", name: "Team One", relationship: "member", isMember: true },
-        { teamId: "team-2", name: "Team Two", relationship: "request_pending", isMember: false },
-        { teamId: "team-3", name: "Team Three", relationship: "none", isMember: false },
+        { teamId: "team-1", name: "Team One", relationship: "member", isMember: true, canOpen: true },
+        { teamId: "team-2", name: "Team Two", relationship: "request_pending", isMember: false, canOpen: false },
+        { teamId: "team-3", name: "Team Three", relationship: "none", isMember: false, canOpen: false },
       ],
     });
   });
@@ -248,8 +306,8 @@ describe("getTeamsOverview", () => {
     expect(result).toEqual({
       ok: true,
       teams: [
-        { teamId: "team-1", name: "Team One", relationship: "none", isMember: false },
-        { teamId: "team-2", name: "Team Two", relationship: "member", isMember: true },
+        { teamId: "team-1", name: "Team One", relationship: "none", isMember: false, canOpen: false },
+        { teamId: "team-2", name: "Team Two", relationship: "member", isMember: true, canOpen: true },
       ],
     });
   });
@@ -267,7 +325,7 @@ describe("getTeamsOverview", () => {
 
     expect(result).toEqual({
       ok: true,
-      teams: [{ teamId: "team-1", name: "Team One", relationship: "none", isMember: false }],
+      teams: [{ teamId: "team-1", name: "Team One", relationship: "none", isMember: false, canOpen: false }],
     });
   });
 
@@ -390,7 +448,7 @@ describe("getTeamsOverview", () => {
 
     expect(result).toEqual({
       ok: true,
-      teams: [{ teamId: "team-1", name: "Team One", relationship: "member", isMember: true }],
+      teams: [{ teamId: "team-1", name: "Team One", relationship: "member", isMember: true, canOpen: true }],
     });
   });
 
@@ -408,7 +466,7 @@ describe("getTeamsOverview", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       for (const entry of result.teams) {
-        expect(Object.keys(entry).sort()).toEqual(["isMember", "name", "relationship", "teamId"]);
+        expect(Object.keys(entry).sort()).toEqual(["canOpen", "isMember", "name", "relationship", "teamId"]);
       }
       expect(JSON.stringify(result)).not.toContain("user-1");
       expect(JSON.stringify(result)).not.toContain("dev@nve.no");

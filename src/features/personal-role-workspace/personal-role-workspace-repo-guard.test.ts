@@ -44,6 +44,8 @@ const STORE_IMPORTERS = new Set([
 
 /** Importers of the operations module: the two route families and the operation tests. */
 const OPERATION_IMPORTERS = new Set([
+  // Trusted demo seed orchestrator (approved exact file): calls only the create-only seed operations.
+  "src/features/demo-team/personal-seed.ts",
   "app/api/me/responsibilities/route.ts",
   "app/api/me/responsibilities/[recordId]/route.ts",
   "app/api/me/achievements/route.ts",

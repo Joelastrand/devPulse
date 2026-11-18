@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
-import { LoadingState } from "../../../components/ui/LoadingState";
 import { Select } from "../../../components/ui/Select";
 import { TextArea } from "../../../components/ui/TextArea";
 import { TextField } from "../../../components/ui/TextField";
@@ -25,6 +24,7 @@ import {
 } from "../client/records-gateway";
 import { RELATION_TO_ROLE_VALUES, type RelationToRole } from "../domain/constants";
 import { LinkPicker } from "./LinkPicker";
+import { RecordListSkeleton } from "./RoleSkeletons";
 
 type Notice = { variant: "success" | "error"; text: string };
 type Editing = { mode: "create" } | { mode: "edit"; record: AchievementDto } | null;
@@ -109,7 +109,26 @@ export function AchievementsSection({ revision = 0 }: { revision?: number } = {}
   const [values, setValues] = useState<FormValues>(valuesFrom(null));
   const [notice, setNotice] = useState<Notice | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  // Messages and open confirmations are dropped on every auth change (including a refresh). The draft is dropped only when
+  // the account changes (a direct switch or sign-out), using the UID-based account epoch; a same-account refresh keeps it.
+  // Both resets run during render, so the previous account's content never paints.
+  const [seenEpoch, setSeenEpoch] = useState(records.authEpoch);
+  if (seenEpoch !== records.authEpoch) {
+    setSeenEpoch(records.authEpoch);
+    setNotice(null);
+    setConfirmId(null);
+  }
+  const [seenAccountEpoch, setSeenAccountEpoch] = useState(records.accountEpoch);
+  if (seenAccountEpoch !== records.accountEpoch) {
+    setSeenAccountEpoch(records.accountEpoch);
+    setEditing(null);
+    setValues(valuesFrom(null));
+  }
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  /** Record ids with a delete in flight. Mirrored in a ref so a repeat click is blocked before the next render. */
+  const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(() => new Set());
+  const busyRef = useRef(new Set<string>());
   const [relationFilter, setRelationFilter] = useState<RelationFilter>("all");
   const [fromFilter, setFromFilter] = useState("");
   const [toFilter, setToFilter] = useState("");
@@ -131,11 +150,26 @@ export function AchievementsSection({ revision = 0 }: { revision?: number } = {}
     setNotice(null);
   };
 
+  /** A superseded outcome (auth state changed mid-write) shows nothing and returns false. */
   const run = async (action: (token: string) => Promise<GatewayResult<unknown>>, success: string): Promise<boolean> => {
-    const result = await records.mutate(action);
-    if (result.ok) setNotice({ variant: "success", text: success });
-    else setNotice(errorNotice(result.error));
-    return result.ok;
+    const outcome = await records.mutate(action);
+    if (outcome.status === "superseded") return false;
+    if (outcome.result.ok) setNotice({ variant: "success", text: success });
+    else setNotice(errorNotice(outcome.result.error));
+    return outcome.result.ok;
+  };
+
+  /** One delete with its own pending state. The ref blocks a repeat click before the next render; other rows stay usable. */
+  const runRow = async (id: string, action: (token: string) => Promise<GatewayResult<unknown>>, success: string): Promise<boolean> => {
+    if (busyRef.current.has(id)) return false;
+    busyRef.current.add(id);
+    setBusyIds(new Set(busyRef.current));
+    try {
+      return await run(action, success);
+    } finally {
+      busyRef.current.delete(id);
+      setBusyIds(new Set(busyRef.current));
+    }
   };
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -145,20 +179,27 @@ export function AchievementsSection({ revision = 0 }: { revision?: number } = {}
       setNotice({ variant: "error", text: workspaceCopy.errors.invalid_input });
       return;
     }
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
-    const input = inputFrom(values);
-    const ok =
-      editing.mode === "create"
-        ? await run((token) => createAchievement(token, input), copy.success.created)
-        : await run((token) => updateAchievement(token, editing.record.id, input), copy.success.updated);
-    setSaving(false);
-    if (ok) closeForm();
+    try {
+      const input = inputFrom(values);
+      const ok =
+        editing.mode === "create"
+          ? await run((token) => createAchievement(token, input), copy.success.created)
+          : await run((token) => updateAchievement(token, editing.record.id, input), copy.success.updated);
+      if (ok) closeForm();
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
   };
 
-  const remove = (id: string) => {
+  /** The confirmation stays open while the delete is pending. It closes either way; an open draft for this record is kept on failure. */
+  const remove = async (id: string) => {
+    const ok = await runRow(id, (token) => deleteAchievement(token, id), copy.success.deleted);
     setConfirmId(null);
-    if (editing?.mode === "edit" && editing.record.id === id) closeForm();
-    void run((token) => deleteAchievement(token, id), copy.success.deleted);
+    if (ok && editing?.mode === "edit" && editing.record.id === id) closeForm();
   };
 
   const goalChoices = isReady(goals.state) ? goals.state.data : [];
@@ -277,7 +318,7 @@ export function AchievementsSection({ revision = 0 }: { revision?: number } = {}
               onChange={(goalIds) => setValues({ ...values, goalIds })}
             />
             <div className="flex flex-wrap gap-2">
-              <Button type="submit" pending={saving}>{workspaceCopy.achievements.save}</Button>
+              <Button type="submit" pending={saving}>{saving ? copy.saving : workspaceCopy.achievements.save}</Button>
               <Button type="button" variant="secondary" onClick={cancelForm}>{copy.cancel}</Button>
             </div>
           </form>
@@ -293,9 +334,10 @@ export function AchievementsSection({ revision = 0 }: { revision?: number } = {}
         responsibilityChoices={responsibilityChoices}
         onRetry={() => void records.reload()}
         onEdit={(record) => openForm({ mode: "edit", record })}
+        busyIds={busyIds}
         confirmId={confirmId}
         onAskDelete={setConfirmId}
-        onDelete={remove}
+        onDelete={(id) => void remove(id)}
       />
     </section>
   );
@@ -310,14 +352,16 @@ interface AchievementListProps {
   responsibilityChoices: readonly LinkChoice[];
   onRetry: () => void;
   onEdit: (record: AchievementDto) => void;
+  /** Ids with a delete in flight. Only those rows are disabled; the list is never replaced. */
+  busyIds: ReadonlySet<string>;
   confirmId: string | null;
   onAskDelete: (id: string | null) => void;
   onDelete: (id: string) => void;
 }
 
 /** Renders the achievement list in every state. Missing links use the BR-22 text and never block the page. */
-function AchievementList({ state, relationFilter, fromFilter, toFilter, goalChoices, responsibilityChoices, onRetry, onEdit, confirmId, onAskDelete, onDelete }: AchievementListProps) {
-  if (state.phase === "loading") return <LoadingState />;
+function AchievementList({ state, relationFilter, fromFilter, toFilter, goalChoices, responsibilityChoices, onRetry, onEdit, busyIds, confirmId, onAskDelete, onDelete }: AchievementListProps) {
+  if (state.phase === "loading") return <RecordListSkeleton label={copy.loading} />;
   if (state.phase === "signed_out") return <EmptyState>{workspaceCopy.signedOut}</EmptyState>;
   if (state.phase === "error") {
     return (
@@ -356,11 +400,11 @@ function AchievementList({ state, relationFilter, fromFilter, toFilter, goalChoi
                 </p>
                 {missing > 0 ? <p className="text-xs text-text-secondary">{workspaceCopy.missingLink}</p> : null}
                 <div className="flex flex-wrap gap-2">
-                  <Button type="button" size="sm" variant="secondary" onClick={() => onEdit(record)}>{copy.edit}</Button>
+                  <Button type="button" size="sm" variant="secondary" disabled={busyIds.has(record.id)} onClick={() => onEdit(record)}>{copy.edit}</Button>
                   {confirmId === record.id ? (
-                    <ConfirmDelete onConfirm={() => onDelete(record.id)} onCancel={() => onAskDelete(null)} />
+                    <ConfirmDelete pending={busyIds.has(record.id)} onConfirm={() => onDelete(record.id)} onCancel={() => onAskDelete(null)} />
                   ) : (
-                    <Button type="button" size="sm" variant="destructive" onClick={() => onAskDelete(record.id)}>{copy.delete}</Button>
+                    <Button type="button" size="sm" variant="destructive" disabled={busyIds.has(record.id)} onClick={() => onAskDelete(record.id)}>{copy.delete}</Button>
                   )}
                 </div>
               </Card>
@@ -377,9 +421,9 @@ function AchievementList({ state, relationFilter, fromFilter, toFilter, goalChoi
             {data.recoveryItems.map((item) => (
               <li key={item.id} className="flex flex-wrap items-center gap-2">
                 {confirmId === item.id ? (
-                  <ConfirmDelete onConfirm={() => onDelete(item.id)} onCancel={() => onAskDelete(null)} />
+                  <ConfirmDelete pending={busyIds.has(item.id)} onConfirm={() => onDelete(item.id)} onCancel={() => onAskDelete(null)} />
                 ) : (
-                  <Button type="button" size="sm" variant="destructive" onClick={() => onAskDelete(item.id)}>{copy.recoveryDelete}</Button>
+                  <Button type="button" size="sm" variant="destructive" disabled={busyIds.has(item.id)} onClick={() => onAskDelete(item.id)}>{copy.recoveryDelete}</Button>
                 )}
               </li>
             ))}
@@ -390,12 +434,14 @@ function AchievementList({ state, relationFilter, fromFilter, toFilter, goalChoi
   );
 }
 
-function ConfirmDelete({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: () => void }) {
+function ConfirmDelete({ pending, onConfirm, onCancel }: { pending: boolean; onConfirm: () => void; onCancel: () => void }) {
   return (
     <div role="group" aria-label={copy.deleteConfirm} className="flex flex-wrap items-center gap-2">
       <span className="text-sm text-text-primary">{copy.deleteConfirm}</span>
-      <Button type="button" size="sm" variant="destructive" onClick={onConfirm}>{copy.confirmDelete}</Button>
-      <Button type="button" size="sm" variant="secondary" onClick={onCancel}>{copy.cancel}</Button>
+      <Button type="button" size="sm" variant="destructive" pending={pending} onClick={onConfirm}>
+        {pending ? copy.deleting : copy.confirmDelete}
+      </Button>
+      <Button type="button" size="sm" variant="secondary" disabled={pending} onClick={onCancel}>{copy.cancel}</Button>
     </div>
   );
 }

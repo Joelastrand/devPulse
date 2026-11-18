@@ -1,5 +1,13 @@
-import type { KnowledgeRiskBand, AssessmentAttribute } from "../domain/team-system";
-import { ASSESSMENT_ATTRIBUTES, isAssessmentValue, isAssessmentAttribute } from "../domain/team-system";
+import type { KnowledgeRiskBand, AssessmentAttribute, SystemClassification } from "../domain/team-system";
+import {
+  ASSESSMENT_ATTRIBUTES,
+  UNASSESSED_CLASSIFICATION,
+  isAssessmentValue,
+  isAssessmentAttribute,
+  isBusinessCriticality,
+  isSystemType,
+  isUserReach,
+} from "../domain/team-system";
 import type { AssessmentView, KnowledgeMemberView, TeamSystemView } from "../server/list-team-systems";
 
 /**
@@ -66,6 +74,18 @@ function parseKnowledge(value: unknown): KnowledgeMemberView | undefined {
 
 const RISK_BANDS: readonly string[] = ["none", "high", "elevated", "lower"];
 
+/** Classification from the server; an absent or unknown value reads as "not assessed" and never drops the system. */
+function parseClassification(value: unknown): SystemClassification {
+  const record = isRecord(value) ? value : {};
+  return {
+    systemType: isSystemType(record.systemType) ? record.systemType : UNASSESSED_CLASSIFICATION.systemType,
+    businessCriticality: isBusinessCriticality(record.businessCriticality)
+      ? record.businessCriticality
+      : UNASSESSED_CLASSIFICATION.businessCriticality,
+    userReach: isUserReach(record.userReach) ? record.userReach : UNASSESSED_CLASSIFICATION.userReach,
+  };
+}
+
 function parseSystem(value: unknown): TeamSystemView | null {
   if (!isRecord(value) || !isRecord(value.assessments)) return null;
   const assessments = {} as Record<AssessmentAttribute, AssessmentView>;
@@ -90,6 +110,7 @@ function parseSystem(value: unknown): TeamSystemView | null {
     name: value.name,
     description: value.description,
     backstageUrl: value.backstageUrl,
+    classification: parseClassification(value.classification),
     assessments,
     knowledge,
     knowledgeRisk: value.knowledgeRisk as KnowledgeRiskBand,

@@ -422,12 +422,18 @@ const PUBLIC_CONVERSATION_ROUTE_LITERAL = new RegExp(
   "g",
 );
 
+/**
+ * Emulator verification test (approved exact file, persistence-identifier checks only): it reads the owner subtrees to verify
+ * key checks, participation indexes and erasure behaviour against the isolated emulator. Test code, not production.
+ */
+const EMULATOR_VERIFICATION_FILE = "src/features/demo-team/personal-seed.emulator.test.ts";
+
 function collectionReferenceViolations(
   files: SourceFile[],
   approved: readonly string[] = APPROVED_COLLECTION_REFERENCES,
 ): string[] {
   return files
-    .filter((f) => isGuarded(f.path) && !approved.includes(f.path))
+    .filter((f) => isGuarded(f.path) && f.path !== EMULATOR_VERIFICATION_FILE && !approved.includes(f.path))
     .filter((f) => {
       const text = f.text.replace(PUBLIC_CONVERSATION_ROUTE_LITERAL, "$1$1");
       return COLLECTION_IDENTIFIER.test(text) || (isD2(f.path) && USER_DEVELOPMENT_PARENT.test(text));
@@ -664,6 +670,14 @@ describe("D2 scope guard — sanity", () => {
 describe("D2 scope guard — persistence identifiers (dimension 1)", () => {
   it("only the approved files reference a D2 storage identifier on the real tree", () => {
     expect(collectionReferenceViolations(realFiles)).toEqual([]);
+  });
+
+  it("negative regression: the emulator verification exception is exact-file; another demo-team test naming the storage identifier is still flagged", () => {
+    const naming = `const c = "conversations";`;
+    expect(collectionReferenceViolations([virtual("src/features/demo-team/personal-seed.emulator.test.ts", naming)])).toEqual([]);
+    expect(collectionReferenceViolations([virtual("src/features/demo-team/personal-seed.test.ts", naming)])).toEqual([
+      "src/features/demo-team/personal-seed.test.ts",
+    ]);
   });
 
   it("the account-erasure exemption is file-exact: sibling erasure files naming the collection are still flagged", () => {

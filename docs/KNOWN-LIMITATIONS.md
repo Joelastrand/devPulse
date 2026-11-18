@@ -140,6 +140,21 @@ the flag. The flag is not a security control.
 
 ## 4. Technical debt
 
+- **Teamkompetanse membership-scan ceiling (code-confirmed, no scaling solution approved).** The team-owned competence
+  aggregate (`src/features/team-owned-skills/server/get-team-owned-skill-aggregate.ts`) reads the team's memberships with a
+  scan limit of `TEAM_SKILL_COHORT_SCAN_MAX = 500` (`src/features/team-skills/domain/skill-coverage-policy.ts`), asking for
+  501 documents to detect overflow. A team with **501 or more memberships** gets `availability: "incomplete"` and no rows,
+  whatever the number of opted-in members. The aggregate is then never shown for that team.
+  - Separately, `TEAM_OWNED_AGGREGATE_MAX_READS = 20000` bounds the per-person rating reads: opted-in members × active skills.
+    When opted-in members × active skills exceeds 20,000, the result is also `incomplete`. With the 100-skill team maximum the budget binds at 200 opted-in
+    members; with 23 skills the membership scan binds first.
+  - The limits are cost bounds, not privacy thresholds. The privacy rules are unchanged: each shown level needs at least
+    `SKILL_COVERAGE_MIN_CONTRIBUTORS = 3` contributors, and a suspect rating suppresses its skill.
+  - The aggregate is read-only and uncached by design. Caching the decrypted, cross-person result would need a privacy
+    review, and any precomputed version must still enforce k ≥ 3 at read time.
+  - No scaling solution has been approved. Options (paging the scan with a documented completeness rule, or a precomputed
+    aggregate) change privacy and consistency behaviour and need a product and security decision first. See
+    `docs/PERFORMANCE-AUDIT.md` §5.2 and P1-5.
 - **Two skill concepts.** Skill trees (`skillTrees`, `skillProgress`, personal skills, roadmap references) and the
   team-owned competence catalog (`teamSkills`) coexist. Routes are named `skills` for the tree endpoints
   (`/api/teams/[teamId]/skills`), which is easy to confuse with the team-owned `team-skills` endpoints. See `ROUTES.md` §3.
@@ -153,6 +168,8 @@ the flag. The flag is not a security control.
   tests read source text rather than behaviour. They detect drift but are not authorization.
 - **Retired one-off scripts.** The competence-plan migration and the role-expectation cleanup were removed from the repository.
   The plaintext-write risk they carried is recorded in `DATA-MODEL.md` §10; their code remains in git history.
+  The 2026-11-16 demo rating-update tool is **not** retired: it is retained as a gated maintenance tool with a digest-confirmed
+  write path and a read-only preflight (`docs/DEMO-DATA-MAINTENANCE.md`). Its approval for any write remains open.
 - **Demo conversation seeder has no CLI equivalent.** `scripts/seed-demoteam-conversations.ts` is still hardcoded to the legacy
   project id. Porting it into `src/features/demo-team` is an open task before it can target `devpulse-nve`.
 
@@ -163,3 +180,9 @@ the flag. The flag is not a security control.
 - `CLAUDE.md`, `AGENTS.md` and `.claude/skills/` still describe the feature workflow (`docs/features/<id>/SPEC.md` and
   `TASKS.md`). That workflow is unchanged, but no feature currently has a live SPEC or TASKS file.
 - **Admin-initiated account deletion is not supported.** Account erasure is self-only (AE-SI-1, BR-22). No superadmin endpoint or UI deletes another account; this is deferred and needs an explicit decision that amends AE-SI-1 and BR-22 (see `docs/SECURITY.md`, §10). Superadmin user management offers listing, search, details, disable and re-enable only.
+
+## Phase 2D.7 open items (2026-11-17)
+
+- **Production UI and API visibility of the demo team is unverified.** The read-only Firestore checks cover the assessment category only. No authorized production browser or API session was used. See `docs/DEMO-DATA-MAINTENANCE.md`, "Phase 2D.7".
+- **Account-switch invalidation is covered at the gateway level.** The early `account_changing` signal is tested in `auth-client.identity.test.ts`. A component-level suite for the full ten-scenario list is not written yet.
+- **Emulator tests for the demo-data update tool were not run in this phase.**

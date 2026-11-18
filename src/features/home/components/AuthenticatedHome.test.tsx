@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, afterEach, describe, expect, it, vi } from "vitest";
 import { expectHeadingStructure } from "../../../components/ui/heading-structure";
 import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -92,7 +92,7 @@ function healthyReads() {
   });
   fetchTeamsOverviewMock.mockResolvedValue({
     status: "ok",
-    teams: [{ teamId: "t1", name: "Demo Team", relationship: "member" }],
+    teams: [{ teamId: "t1", name: "Demo Team", relationship: "member", isMember: true, canOpen: true }],
   });
   fetchTeamResultsMock.mockResolvedValue({ status: "ok", teamId: "t1", results: [] });
 }
@@ -185,6 +185,12 @@ describe("AuthenticatedHome composition", () => {
   });
 });
 
+// The trend chart is code-split: its first load in jsdom (recharts) can take several seconds under parallel test load.
+// Load it once before the timed tests, so the chart's cost is not charged to a single test's 5 s budget.
+beforeAll(async () => {
+  await import("../../results/components/TrendChart");
+}, 60_000);
+
 describe("AuthenticatedHome team development panel", () => {
   it("renders a suppressed survey as the chart, never as a zero value", async () => {
     signedIn();
@@ -194,9 +200,11 @@ describe("AuthenticatedHome team development panel", () => {
       teamId: "t1",
       results: [{ surveyId: "s1", date: "2026-10-01", minimumResponses: 5, status: "insufficient" }],
     });
-    render(<AuthenticatedHome />);
+    const { container } = render(<AuthenticatedHome />);
 
-    expect(await screen.findByRole("heading", { name: "Trendvisualisering" })).toBeTruthy();
+    // The heading is part of the chart placeholder too, so wait for the loaded chart itself, not the heading.
+    await waitFor(() => expect(container.querySelector(".recharts-responsive-container")).not.toBeNull(), { timeout: 3000 });
+    expect(screen.getByRole("heading", { name: "Trendvisualisering" })).toBeTruthy();
     expect(screen.queryByText("0")).toBeNull();
     expect(screen.queryByText(/Det finnes ingen resultater/)).toBeNull();
   });
@@ -320,6 +328,20 @@ describe("AuthenticatedHome composition (reference 03, visual-fidelity TASK-027)
     expect(fetchTeamResultsMock).not.toHaveBeenCalled();
   });
 
+  it("reserves the chart's height and announces loading once while the teams read is pending", async () => {
+    signedIn();
+    healthyReads();
+    fetchTeamsOverviewMock.mockReturnValue(new Promise(() => {}));
+    const { container } = render(<AuthenticatedHome />);
+
+    await screen.findByRole("heading", { name: "Trendvisualisering" });
+    // The chart-shaped placeholder keeps the loaded chart's plot height (h-64), so the card does not jump.
+    expect(container.querySelector(".h-64")).not.toBeNull();
+    expect(screen.queryByText(/Det finnes ingen resultater/)).toBeNull();
+    // Only the teams section is a live status; the other panels are silent placeholders.
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+  });
+
   it("calls each home read once per load", async () => {
     signedIn();
     healthyReads();
@@ -341,11 +363,11 @@ describe("AuthenticatedHome composition (reference 03, visual-fidelity TASK-027)
     fetchTeamsOverviewMock
       .mockResolvedValueOnce({
         status: "ok",
-        teams: [{ teamId: "t9", name: "Other Team", relationship: "none" }],
+        teams: [{ teamId: "t9", name: "Other Team", relationship: "none", isMember: false, canOpen: false }],
       })
       .mockResolvedValueOnce({
         status: "ok",
-        teams: [{ teamId: "t9", name: "Other Team", relationship: "request_pending" }],
+        teams: [{ teamId: "t9", name: "Other Team", relationship: "request_pending", isMember: false, canOpen: false }],
       });
     requestTeamAccessMock.mockResolvedValue({ ok: true, outcome: "created" });
     render(<AuthenticatedHome />);
@@ -382,8 +404,8 @@ describe("AuthenticatedHome composition (reference 03, visual-fidelity TASK-027)
     });
     fetchTeamsOverviewMock.mockImplementation(async (token: string) =>
       token === "token-b"
-        ? { status: "ok", teams: [{ teamId: "t2", name: "Other Team", relationship: "member" }] }
-        : { status: "ok", teams: [{ teamId: "t1", name: "Demo Team", relationship: "member" }] },
+        ? { status: "ok", teams: [{ teamId: "t2", name: "Other Team", relationship: "member", isMember: true, canOpen: true }] }
+        : { status: "ok", teams: [{ teamId: "t1", name: "Demo Team", relationship: "member", isMember: true, canOpen: true }] },
     );
     render(<AuthenticatedHome />);
     await waitFor(() => expect(teamAResolvers.length).toBe(1));

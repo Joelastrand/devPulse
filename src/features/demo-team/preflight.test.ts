@@ -1,3 +1,5 @@
+import { DEMO_COMPETENCE_PLANS, DEMO_TEAM_SKILLS } from "./team-catalog-fixtures";
+import { teamPlanCounts } from "./team-plan-counts";
 import { openRoadmapItemDocument, toPersistedRoadmapItem } from "../roadmap/domain/roadmap-item-content-codec";
 import { openTeamDocument, toPersistedTeam } from "../teams/domain/team-content-codec";
 import { openSkillTreeDocument, toPersistedSkillTree } from "../skill-trees/domain/skill-tree-content-codec";
@@ -26,11 +28,6 @@ const PROJECT = "fake-demo-project";
 const PRIVATE_KEY_SENTINEL = "PRIVATE-KEY-SENTINEL-DO-NOT-PRINT";
 const EMAIL_SENTINEL = "presenter.email@example.invalid";
 
-const ROADMAP_PATHS = [
-  "roadmapItems/demo-team__demo-skill-testing",
-  "roadmapItems/demo-team__demo-skill-observability",
-  "roadmapItems/demo-team__demo-skill-delivery",
-];
 
 const realCrypto: DemoCrypto = {
   sealRecord: (plaintext, context) => encryptRecord(plaintext, context),
@@ -153,7 +150,7 @@ describe("offline preflight (BR-28, BR-29)", () => {
     });
 
     expect(result).toMatchObject({ ok: true, existingStateChecked: false, classifications: [] });
-    expect(result.ok && result.plannedOperations).toHaveLength(85);
+    expect(result.ok && result.plannedOperations).toHaveLength(teamPlanCounts().total);
     expect(r.calls).toEqual([]);
     expect(p.calls).toEqual([]);
   });
@@ -169,7 +166,7 @@ describe("online preflight — presenter and adapters", () => {
   it("checks presenter existence with the uid only, before any read", async () => {
     const { presenterCalls, reads } = await preflightOnline(new Map());
     expect(presenterCalls).toEqual([PRESENTER]);
-    expect(reads).toHaveLength(85);
+    expect(reads).toHaveLength(teamPlanCounts().total);
   });
 
   it("aborts with zero reads when the presenter does not exist", async () => {
@@ -260,12 +257,12 @@ describe("classification — empty, correct and partial targets (BR-23)", () => 
     const { result, reads, operations, manifest } = await preflightOnline(new Map());
 
     expect(result.ok).toBe(true);
-    expect(result.classifications).toHaveLength(85);
+    expect(result.classifications).toHaveLength(teamPlanCounts().total);
     expect(result.classifications.every((c) => c.state === "ABSENT" && c.action === "create")).toBe(true);
-    expect(result.ok && result.plannedOperations).toHaveLength(85);
+    expect(result.ok && result.plannedOperations).toHaveLength(teamPlanCounts().total);
     // Only manifest paths are read, each exactly once (BR-29).
     expect([...reads].sort()).toEqual(manifest.map((m) => m.path).sort());
-    expect(operations).toHaveLength(85);
+    expect(operations).toHaveLength(teamPlanCounts().total);
   });
 
   it("already-correct target: C → skip, U → set (79 planned), no conflict", async () => {
@@ -275,13 +272,13 @@ describe("classification — empty, correct and partial targets (BR-23)", () => 
     expect(result.ok).toBe(true);
     const c = result.classifications;
     expect(c.every((x) => x.state === "COMPATIBLE")).toBe(true);
-    expect(c.filter((x) => x.action === "skip").map((x) => x.writeClass)).toEqual(["C", "C", "C", "C", "C", "C"]);
-    expect(c.filter((x) => x.action === "set")).toHaveLength(79);
+    expect(c.filter((x) => x.action === "skip").map((x) => x.writeClass)).toEqual(Array.from({ length: teamPlanCounts().createOnly }, () => "C"));
+    expect(c.filter((x) => x.action === "set")).toHaveLength(teamPlanCounts().updatable);
     expect(result.ok && result.plannedOperations.every((op) => op.writeClass === "U")).toBe(true);
-    expect(result.ok && result.plannedOperations).toHaveLength(79);
+    expect(result.ok && result.plannedOperations).toHaveLength(teamPlanCounts().updatable);
   });
 
-  it("partially existing target mixes create, set and skip", async () => {
+  it("partially existing target mixes create and skip (identical records are never rewritten)", async () => {
     const { operations } = buildPlan();
     const store = correctStore(operations);
     store.delete("surveys/demo-survey-01");
@@ -298,17 +295,14 @@ describe("classification — empty, correct and partial targets (BR-23)", () => 
       state: "COMPATIBLE",
       action: "skip",
     });
-    expect(classificationOf(result, "surveys/demo-survey-02")).toMatchObject({ state: "COMPATIBLE", action: "set" });
+    expect(classificationOf(result, "surveys/demo-survey-02")).toMatchObject({ state: "COMPATIBLE", action: "skip" });
     // 85 - 1 skipped membership - scheduled survey skip - … only C-compatible are skipped.
     const skipped = result.classifications.filter((c) => c.action === "skip").map((c) => c.path).sort();
-    expect(skipped).toEqual(
-      [
-        `teamMemberships/${PRESENTER}__demo-team`,
-        "surveys/demo-survey-next",
-        ...ROADMAP_PATHS,
-      ].sort(),
-    );
-    expect(result.ok && result.plannedOperations).toHaveLength(80);
+    // Every identical record is skipped; the four deleted documents are the only creates.
+    expect(skipped).toHaveLength(teamPlanCounts().total - 4);
+    expect(skipped).toContain(`teamMemberships/${PRESENTER}__demo-team`);
+    expect(skipped).not.toContain("surveys/demo-survey-01");
+    expect(result.ok && result.plannedOperations).toHaveLength(teamPlanCounts().total - skipped.length);
   });
 
   it("is deterministic: the same inputs classify identically", async () => {
@@ -330,7 +324,7 @@ describe("classification — compatible but edited records (BR-21, BR-23)", () =
     return preflightOnline(store);
   }
 
-  it("progress moved by the presenter (real updatedBy) stays COMPATIBLE and is set back", async () => {
+  it("progress changed by the presenter (currentNodeId) is a conflict and is never overwritten", async () => {
     // A stage edit is a sealed-content edit: the record is re-sealed exactly as a real update writes it.
     const { result } = await withEdit("skillProgress/demo-team__demo-skill-testing", (d) =>
       toPersistedSkillProgress({
@@ -339,34 +333,35 @@ describe("classification — compatible but edited records (BR-21, BR-23)", () =
         updatedBy: "some-real-admin-uid",
       } as { teamId: string; treeId: string; currentNodeId: string | null } & Record<string, unknown>),
     );
-    expect(result.ok).toBe(true);
+    expect(result.ok).toBe(false);
     expect(classificationOf(result, "skillProgress/demo-team__demo-skill-testing")).toMatchObject({
-      state: "COMPATIBLE",
-      action: "set",
+      state: "CONFLICT",
+      action: "blocked",
+      reason: "structure-mismatch",
     });
   });
 
-  it("a resolved demo challenge (real resolvedBy) stays COMPATIBLE", async () => {
+  it("a resolved demo challenge (real resolvedBy) is a conflict and is never overwritten", async () => {
     const { result } = await withEdit("challenges/demo-challenge-01", (d) => ({
       ...d,
       resolvedAt: new Date("2026-03-01T10:00:00.000Z"),
       resolvedBy: "some-real-admin-uid",
     }));
-    expect(result.ok).toBe(true);
-    expect(classificationOf(result, "challenges/demo-challenge-01").state).toBe("COMPATIBLE");
+    expect(result.ok).toBe(false);
+    expect(classificationOf(result, "challenges/demo-challenge-01").state).toBe("CONFLICT");
   });
 
-  it("an opened scheduled survey stays COMPATIBLE and is skipped", async () => {
+  it("an opened scheduled survey is a conflict: the lifecycle change is reported, not overwritten", async () => {
     const { result } = await withEdit("surveys/demo-survey-next", (d) => ({
       ...d,
       openedAt: new Date("2026-03-10T08:00:00.000Z"),
     }));
-    expect(classificationOf(result, "surveys/demo-survey-next")).toMatchObject({ state: "COMPATIBLE", action: "skip" });
+    expect(classificationOf(result, "surveys/demo-survey-next")).toMatchObject({ state: "CONFLICT", action: "blocked", reason: "structure-mismatch" });
   });
 
-  it("an edited team name and an edited tree label with an updatedBy pair stay COMPATIBLE", async () => {
+  it("an edited team name or tree label is a conflict; audit metadata alone is not compared", async () => {
     const team = await withEdit("teams/demo-team", (d) => toPersistedTeam("demo-team", { ...(openTeamDocument("demo-team", d) as Record<string, unknown>), name: "Omdøpt demo" }));
-    expect(team.result.ok).toBe(true);
+    expect(team.result.ok).toBe(false);
 
     // A label edit is a sealed-content edit: the tree is re-sealed exactly as a real update writes it.
     const tree = await withEdit("skillTrees/demo-skill-delivery", (d) => {
@@ -381,7 +376,7 @@ describe("classification — compatible but edited records (BR-21, BR-23)", () =
         updatedBy: "some-real-admin-uid",
       });
     });
-    expect(tree.result.ok).toBe(true);
+    expect(tree.result.ok).toBe(false);
   });
 });
 
@@ -446,7 +441,7 @@ describe("classification — conflicts abort with no planned writes (BR-23, BR-2
     expect(result).not.toHaveProperty("plannedOperations");
     expect(classificationOf(result, path)).toMatchObject({ state: "CONFLICT", action: "blocked", reason });
     // Every other path is still classified, so the report shows the whole picture.
-    expect(result.classifications).toHaveLength(85);
+    expect(result.classifications).toHaveLength(teamPlanCounts().total);
     expect(result.classifications.filter((c) => c.state === "CONFLICT")).toHaveLength(1);
   });
 
@@ -481,7 +476,9 @@ describe("classification — conflicts abort with no planned writes (BR-23, BR-2
     const teamOperations = operations.filter((op) => op.collection === "teams").length;
     const progressOperations = operations.filter((op) => op.collection === "skillProgress").length;
     const roadmapOperations = operations.filter((op) => op.collection === "roadmapItems").length;
-    expect(result.classifications.filter((c) => c.state === "CONFLICT")).toHaveLength(64 + surveyOperations + skillTreeOperations + teamOperations + progressOperations + roadmapOperations);
+    const projectOperations = operations.filter((op) => op.collection === "teamProjects").length;
+    const systemOperations = operations.filter((op) => op.collection === "teamSystems").length;
+    expect(result.classifications.filter((c) => c.state === "CONFLICT")).toHaveLength(64 + surveyOperations + skillTreeOperations + teamOperations + progressOperations + roadmapOperations + projectOperations + systemOperations + DEMO_COMPETENCE_PLANS.length + DEMO_TEAM_SKILLS.length);
   });
 });
 
@@ -541,6 +538,7 @@ describe("dry-run report (BR-4, BR-28, BR-31)", () => {
   const fullConfig: DemoSeedConfig = {
     mode: "online-dry-run",
     projectId: PROJECT,
+    teamId: "demo-team",
     presenterUid: PRESENTER,
     asOf: AS_OF,
     network: true,
@@ -561,7 +559,7 @@ describe("dry-run report (BR-4, BR-28, BR-31)", () => {
     expect(text).toContain("Mode: online-dry-run");
     expect(text).toContain("Presenter uid: presenter-uid-fixture");
     expect(text).toContain("As-of date: 2026-03-16");
-    for (const [collection, n] of Object.entries({ teams: 1, teamMemberships: 1, surveys: 9, surveyResponses: 59, challenges: 5, skillTrees: 4, skillProgress: 3, roadmapItems: 3 })) {
+    for (const [collection, n] of Object.entries(teamPlanCounts().byCollection)) {
       expect(text).toContain(`  ${collection}: ${n}`);
     }
     expect(text).toContain("  create teams/demo-team");
@@ -572,13 +570,14 @@ describe("dry-run report (BR-4, BR-28, BR-31)", () => {
     expect(text).toContain("does not prove the key matches ciphertext already stored");
   });
 
-  it("shows set / skip (exists) / blocked (category) actions", async () => {
+  it("shows skip (exists) / blocked (category) actions; no action is ever an overwrite", async () => {
     const { operations } = buildPlan();
     const store = correctStore(operations);
     const okReport = (await report(store)).lines.join("\n");
     expect(okReport).toContain("  skip (exists) teams/demo-team");
-    expect(okReport).toContain("  set surveys/demo-survey-01");
-    expect(okReport).toContain("Writes planned: 79");
+    expect(okReport).toContain("  skip (exists) surveys/demo-survey-01");
+    expect(okReport).not.toContain("  set ");
+    expect(okReport).toContain(`Writes planned: ${teamPlanCounts().updatable}`);
 
     store.set("teams/demo-team", { ...(store.get("teams/demo-team") as object), status: "disabled" });
     const conflictReport = (await report(store)).lines.join("\n");
@@ -590,7 +589,7 @@ describe("dry-run report (BR-4, BR-28, BR-31)", () => {
     const { operations, manifest } = buildPlan();
     const result = await runDemoPreflight({ config: offlineConfig, operations, manifest, crypto: realCrypto });
     const text = formatDemoDryRunReport({
-      config: { mode: "offline-dry-run", projectId: PROJECT, presenterUid: PRESENTER, asOf: AS_OF },
+      config: { mode: "offline-dry-run", projectId: PROJECT, presenterUid: PRESENTER, asOf: AS_OF, teamId: "demo-team" },
       operations,
       result,
     }).join("\n");
@@ -669,7 +668,7 @@ describe("classification — roadmap plans (team-skill-planning TASK-011)", () =
     expect(result.ok && result.plannedOperations.some((op) => op.collection === "roadmapItems")).toBe(true);
   });
 
-  it("tolerates presenter edits (status, owner reference, updatedBy, archive)", async () => {
+  it("presenter edits to status or archive are conflicts, never overwritten", async () => {
     const { result } = await withRoadmapEdit((d) => ({
       ...d,
       status: "planned",
@@ -679,9 +678,8 @@ describe("classification — roadmap plans (team-skill-planning TASK-011)", () =
       archivedAt: new Date("2026-03-20T00:00:00Z"),
       archivedBy: "someone-else",
     }));
-    expect(result.ok).toBe(true);
-    expect(classificationOf(result, TESTING)).toMatchObject({ state: "COMPATIBLE", action: "skip" });
-    expect(result.ok && result.plannedOperations.map((o) => o.path)).not.toContain(TESTING);
+    expect(result.ok).toBe(false);
+    expect(classificationOf(result, TESTING)).toMatchObject({ state: "CONFLICT", action: "blocked", reason: "structure-mismatch" });
   });
 
   // The read-side legacy tolerance (completed without completedAt) must not leak into preflight.

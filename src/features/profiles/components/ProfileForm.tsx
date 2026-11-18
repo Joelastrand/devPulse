@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
-import { LoadingState } from "../../../components/ui/LoadingState";
+import { LoadingRegion, Skeleton, SkeletonCard } from "../../../components/ui/Skeleton";
 import { TextField } from "../../../components/ui/TextField";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import {
@@ -27,6 +27,22 @@ type ActionState =
   | { status: "pending"; kind: "save" | "remove" }
   | { status: "success"; message: string }
   | { status: "error"; message: string };
+
+/** Placeholder in the loaded card's order: the current-name line, the field, and the action row. No text or name. */
+function ProfileFormSkeleton({ label }: { label: string }) {
+  return (
+    <LoadingRegion label={label}>
+      <SkeletonCard className="flex flex-col gap-4 p-6">
+        <div aria-hidden="true" className="flex flex-col gap-4">
+          <Skeleton className="h-5 w-2/3" />
+          <Skeleton className="h-4 w-1/4" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-9 w-32" />
+        </div>
+      </SkeletonCard>
+    </LoadingRegion>
+  );
+}
 
 function saveErrorMessage(error: Exclude<SaveOwnProfileResult, { ok: true }>["error"]): string {
   if (error === "invalid_input") return profileCopy.invalidName;
@@ -50,6 +66,7 @@ export function ProfileForm() {
   const [state, setState] = useState<ViewState>({ phase: "loading" });
   const [value, setValue] = useState("");
   const [action, setAction] = useState<ActionState>({ status: "idle" });
+  const writeInFlight = useRef(false);
 
   const { isCurrentGeneration } = useAuthGatedResource((token, generation) => {
     setAction({ status: "idle" });
@@ -90,7 +107,8 @@ export function ProfileForm() {
 
   async function handleSave(event: FormEvent<HTMLFormElement>, token: string, generation: number) {
     event.preventDefault();
-    if (action.status === "pending") {
+    // A ref, so a second submit before the next render (Enter key) is blocked. Save and remove share it.
+    if (writeInFlight.current) {
       return;
     }
     if (value.trim() === "") {
@@ -98,48 +116,58 @@ export function ProfileForm() {
       return;
     }
 
+    writeInFlight.current = true;
     setAction({ status: "pending", kind: "save" });
-    const result = await saveOwnProfile(token, value);
-    if (!isCurrentGeneration(generation)) {
-      return;
-    }
+    try {
+      const result = await saveOwnProfile(token, value);
+      if (!isCurrentGeneration(generation)) {
+        return;
+      }
 
-    if (!result.ok) {
-      setAction({ status: "error", message: saveErrorMessage(result.error) });
-      return;
-    }
+      if (!result.ok) {
+        setAction({ status: "error", message: saveErrorMessage(result.error) });
+        return;
+      }
 
-    setValue(result.displayName);
-    setState({ phase: "ready", token, generation, savedName: result.displayName });
-    setAction({ status: "success", message: profileCopy.saved });
+      setValue(result.displayName);
+      setState({ phase: "ready", token, generation, savedName: result.displayName });
+      setAction({ status: "success", message: profileCopy.saved });
+    } finally {
+      writeInFlight.current = false;
+    }
   }
 
   async function handleRemove(token: string, generation: number) {
-    if (action.status === "pending") {
+    if (writeInFlight.current) {
       return;
     }
 
+    writeInFlight.current = true;
     setAction({ status: "pending", kind: "remove" });
-    const result = await removeOwnProfile(token);
-    if (!isCurrentGeneration(generation)) {
-      return;
-    }
+    try {
+      const result = await removeOwnProfile(token);
+      if (!isCurrentGeneration(generation)) {
+        return;
+      }
 
-    if (!result.ok) {
-      setAction({
-        status: "error",
-        message: result.error === "unauthenticated" ? profileCopy.signInAgain : profileCopy.genericError,
-      });
-      return;
-    }
+      if (!result.ok) {
+        setAction({
+          status: "error",
+          message: result.error === "unauthenticated" ? profileCopy.signInAgain : profileCopy.genericError,
+        });
+        return;
+      }
 
-    setValue("");
-    setState({ phase: "ready", token, generation, savedName: null });
-    setAction({ status: "success", message: profileCopy.removed });
+      setValue("");
+      setState({ phase: "ready", token, generation, savedName: null });
+      setAction({ status: "success", message: profileCopy.removed });
+    } finally {
+      writeInFlight.current = false;
+    }
   }
 
   if (state.phase === "loading") {
-    return <LoadingState label={profileCopy.loading} />;
+    return <ProfileFormSkeleton label={profileCopy.loading} />;
   }
 
   if (state.phase === "signed_out") {

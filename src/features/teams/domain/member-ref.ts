@@ -1,5 +1,3 @@
-import { randomBytes } from "node:crypto";
-
 /**
  * Opaque, team-scoped handle of one team membership (docs/archive/features/
  * team-skill-planning/SPEC.md — "Opaque member reference"): 128 bits of
@@ -12,9 +10,12 @@ const ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz";
 const MEMBER_REF_PATTERN = /^[0-9a-hjkmnp-tv-z]{26}$/;
 const BYTES = 16;
 
-/** Generates a fresh member reference. Takes no input on purpose. */
+/**
+ * Generates a fresh member reference. Takes no input on purpose. Uses Web Crypto (a CSPRNG in both Node and the browser)
+ * rather than `node:crypto`, because this module is imported by client components and must bundle for the browser.
+ */
 export function generateMemberRef(): string {
-  const bytes = randomBytes(BYTES);
+  const bytes = globalThis.crypto.getRandomValues(new Uint8Array(BYTES));
   let bits = 0;
   let value = 0;
   let out = "";

@@ -50,6 +50,7 @@ function system(overrides: Partial<TeamSystemView> & { name: string }): TeamSyst
     systemId: `sys-${overrides.name}`,
     description: null,
     backstageUrl: null,
+    classification: { systemType: "internt", businessCriticality: "hoy", userReach: "flere_avdelinger" },
     assessments: {
       availability: assessed,
       reliability: assessed,

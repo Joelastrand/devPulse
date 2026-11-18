@@ -1,6 +1,7 @@
 import { createFirebaseDemoAdapters, loadFirebaseAdminSdk } from "./adapters";
 import { demoCrypto } from "./crypto";
 import { runDemoSeed, stripForwardedSeparator } from "./runner";
+import { loadProductionPersonalWriters } from "./personal-seed";
 
 /**
  * Process boundary for `pnpm seed:demo-team` (see `package.json`). Runs under
@@ -16,6 +17,8 @@ async function main(): Promise<void> {
       crypto: demoCrypto,
       createOnlineAdapters: async ({ projectId, credentials }) =>
         createFirebaseDemoAdapters({ sdk: await loadFirebaseAdminSdk(), projectId, ...credentials }),
+      // `--personal` write mode only: owner-feature create-only operations, loaded after every gate has passed.
+      loadPersonalWriters: loadProductionPersonalWriters,
     });
     for (const line of stdout) console.log(line);
     for (const line of stderr) console.error(line);

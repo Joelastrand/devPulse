@@ -63,7 +63,7 @@ describe("ResultsRedirect", () => {
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
       teams: [
-        { teamId: "team-1", name: "Platform", relationship: "member", isMember: true },
+        { teamId: "team-1", name: "Platform", relationship: "member", isMember: true, canOpen: true },
         { teamId: "team-2", name: "Mobile", relationship: "none" },
       ],
     });
@@ -90,8 +90,8 @@ describe("ResultsRedirect", () => {
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
       teams: [
-        { teamId: "team-1", name: "Platform", relationship: "member", isMember: true },
-        { teamId: "team-2", name: "Mobile", relationship: "member", isMember: true },
+        { teamId: "team-1", name: "Platform", relationship: "member", isMember: true, canOpen: true },
+        { teamId: "team-2", name: "Mobile", relationship: "member", isMember: true, canOpen: true },
       ],
     });
 
@@ -105,8 +105,8 @@ describe("ResultsRedirect", () => {
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
       teams: [
-        { teamId: "team-1", name: "Platform", relationship: "admin", isMember: true },
-        { teamId: "team-2", name: "Mobile", relationship: "admin", isMember: false },
+        { teamId: "team-1", name: "Platform", relationship: "member", isMember: true, canOpen: true },
+        { teamId: "team-2", name: "Mobile", relationship: "none", isMember: false, canOpen: true },
       ],
     });
 
@@ -119,7 +119,7 @@ describe("ResultsRedirect", () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform", relationship: "admin", isMember: false }],
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false, canOpen: true }],
     });
 
     render(<ResultsRedirect />);
@@ -157,7 +157,7 @@ describe("ResultsRedirect", () => {
       )
       .mockResolvedValueOnce({
         status: "ok",
-        teams: [{ teamId: "team-b", name: "Mobile", relationship: "member", isMember: true }],
+        teams: [{ teamId: "team-b", name: "Mobile", relationship: "member", isMember: true, canOpen: true }],
       });
 
     render(<ResultsRedirect />);
@@ -169,7 +169,7 @@ describe("ResultsRedirect", () => {
 
     resolveFirst({
       status: "ok",
-      teams: [{ teamId: "team-a", name: "Platform", relationship: "member", isMember: true }],
+      teams: [{ teamId: "team-a", name: "Platform", relationship: "member", isMember: true, canOpen: true }],
     });
     await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1));
 

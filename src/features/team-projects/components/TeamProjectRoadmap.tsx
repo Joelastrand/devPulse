@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
 import { EmptyState } from "../../../components/ui/EmptyState";
-import { LoadingState } from "../../../components/ui/LoadingState";
+import { TeamRoadmapSkeleton } from "./TeamRoadmapSkeleton";
 import { Section } from "../../../components/ui/Section";
 import { TeamPageHeader } from "../../teams/components/TeamPageHeader";
 import { teamsCopy } from "../../teams/copy";
@@ -57,11 +57,18 @@ export function TeamProjectRoadmap({ teamId }: { teamId: string }) {
   const [participationError, setParticipationError] = useState<string | null>(null);
   // Fixed for the lifetime of this view; the planning calendar date is the anchor for the window and the today marker.
   const [today] = useState(() => planningToday(new Date()));
+  // The team and identity this view shows. A write's result is applied only while its scope is still the current one.
+  const scopeKey = auth.phase === "signed_in" ? `${teamId}\u0000${auth.token}` : null;
+  const scopeRef = useRef(scopeKey);
+  const writeInFlight = useRef(false);
+  useEffect(() => {
+    scopeRef.current = scopeKey;
+  }, [scopeKey]);
   const timelineWindow = buildTimelineWindow(today, months);
   const participations = data.phase === "loaded" ? toParticipationInputs(data.projects, data.participations) : [];
 
   if (auth.phase === "loading") {
-    return <LoadingState label={teamProjectsCopy.loading} />;
+    return <TeamRoadmapSkeleton label={teamProjectsCopy.loading} />;
   }
 
   if (auth.phase === "signed_out") {
@@ -78,22 +85,33 @@ export function TeamProjectRoadmap({ teamId }: { teamId: string }) {
   const token = auth.token;
 
   async function runWrite(action: ProjectWriteAction, projectId: string | null, input: ProjectWriteInput | null) {
+    // A write already in flight blocks another (a ref, so it holds before the next render).
+    if (writeInFlight.current) return;
+    writeInFlight.current = true;
+    const scope = scopeKey;
     setBusyProjectId(projectId ?? "new");
     setFormError(null);
     setActionError(null);
-    const result: ProjectWriteResult = await writeTeamProject(token, teamId, action, projectId, input);
-    setBusyProjectId(null);
+    try {
+      const result: ProjectWriteResult = await writeTeamProject(token, teamId, action, projectId, input);
+      // Busy always clears, so a superseded write cannot leave this view's controls disabled.
+      setBusyProjectId(null);
+      // A result for another team or identity is not shown on the current page.
+      if (scopeRef.current !== scope) return;
 
-    if (result.status === "ok") {
-      setEditing(null);
-      reload();
-      return;
-    }
-    const message = writeErrorMessage(result.status);
-    if (action === "create" || action === "update") {
-      setFormError(message);
-    } else {
-      setActionError(message);
+      if (result.status === "ok") {
+        setEditing(null);
+        reload();
+        return;
+      }
+      const message = writeErrorMessage(result.status);
+      if (action === "create" || action === "update") {
+        setFormError(message);
+      } else {
+        setActionError(message);
+      }
+    } finally {
+      writeInFlight.current = false;
     }
   }
 
@@ -108,19 +126,27 @@ export function TeamProjectRoadmap({ teamId }: { teamId: string }) {
     participationId: string | null,
     input: ParticipationCreateInput | ParticipationUpdateInput | null,
   ) {
+    if (writeInFlight.current) return;
+    writeInFlight.current = true;
+    const scope = scopeKey;
     setParticipationBusy(true);
     setParticipationError(null);
-    const result = await writeProjectParticipation(token, teamId, projectId, action, participationId, input);
-    setParticipationBusy(false);
+    try {
+      const result = await writeProjectParticipation(token, teamId, projectId, action, participationId, input);
+      setParticipationBusy(false);
+      if (scopeRef.current !== scope) return;
 
-    if (result.status === "ok") {
-      setParticipationEdit(null);
-      await refreshParticipations();
-      return;
+      if (result.status === "ok") {
+        setParticipationEdit(null);
+        await refreshParticipations();
+        return;
+      }
+      setParticipationError(
+        result.status === "invalid_input" ? teamProjectsCopy.participationIssues.generic : participationErrorMessage(result.error),
+      );
+    } finally {
+      writeInFlight.current = false;
     }
-    setParticipationError(
-      result.status === "invalid_input" ? teamProjectsCopy.participationIssues.generic : participationErrorMessage(result.error),
-    );
   }
 
   function handleParticipationSubmit(input: ParticipationFormSubmit) {
@@ -143,7 +169,7 @@ export function TeamProjectRoadmap({ teamId }: { teamId: string }) {
   }
 
   function renderBody() {
-    if (data.phase === "loading") return <LoadingState label={teamProjectsCopy.loading} />;
+    if (data.phase === "loading") return <TeamRoadmapSkeleton label={teamProjectsCopy.loading} />;
 
     if (data.phase === "error") {
       return (

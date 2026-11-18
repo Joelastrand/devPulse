@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { RoadmapItemView } from "../server/list-roadmap-items";
+import { teamsCopy } from "../../teams/copy";
 import { queryMutationControls } from "./roadmap-test-helpers";
 
 const observeIdTokenMock = vi.fn();
@@ -144,7 +145,9 @@ const FOCUSABLE = "a[href], button, input, select, textarea, [tabindex]";
 const done = (overrides: Partial<RoadmapItemView> = {}) =>
   plan({ treeId: "tree-3", areaName: "Third", status: "completed", completedAt: "2026-03-01T00:00:00.000Z", ...overrides });
 
-describe("TASK-012 — mid-session permission loss", () => {
+// This block drives a full page render, a save and a refetch. Under standard-tier parallel load it measured up to ~5.5 s
+// (the default budget is 5 s), so the block gets an explicit 15 s budget. The assertions are unchanged.
+describe("TASK-012 — mid-session permission loss", { timeout: 15_000 }, () => {
   it("becomes an ordinary read-only page when the canonical refetch returns canEdit=false (not no-access)", async () => {
     fetchRoadmapItemsMock.mockResolvedValueOnce(roadmapOk([plan(), plan({ treeId: "tree-2", areaName: "Second", archived: true })]));
     const { user } = await renderReady();
@@ -421,8 +424,13 @@ describe("TASK-012 — responsive structure", () => {
     expect(within(facts).getByText(longOwner).className).toMatch(/\bbreak-words\b/);
     expect(screen.getByRole("heading", { level: 3, name: "Fourth" }).className).toMatch(/\bbreak-words\b/);
 
-    const offenders = Array.from(container.querySelectorAll("*")).filter((element) =>
-      /(^|\s)(w-\[\d+px\]|w-\d{2,}|min-w-\[\d+px\]|whitespace-nowrap|overflow-x-(auto|scroll))(\s|$)/.test(element.getAttribute("class") ?? ""),
+    // The shared team tab navigation (`TeamRouteNav`) scrolls horizontally on narrow screens by design, so its own subtree
+    // is exempt. Everything else on the Roadmap page, including the header's other elements, is still checked.
+    const teamNavSelector = `nav[aria-label="${teamsCopy.nav.label}"]`;
+    const offenders = Array.from(container.querySelectorAll("*")).filter(
+      (element) =>
+        !element.closest(teamNavSelector) &&
+        /(^|\s)(w-\[\d+px\]|w-\d{2,}|min-w-\[\d+px\]|whitespace-nowrap|overflow-x-(auto|scroll))(\s|$)/.test(element.getAttribute("class") ?? ""),
     );
     expect(offenders.map((element) => element.outerHTML.slice(0, 80))).toEqual([]);
   });

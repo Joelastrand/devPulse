@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Card } from "../../../components/ui/Card";
-import { LoadingState } from "../../../components/ui/LoadingState";
+import { TeamMetricSkeleton, TeamNextStepsSkeleton } from "./TeamAdminSkeletons";
 import { roadmapCopy } from "../../roadmap/copy";
 import { formatPlanDate } from "../../roadmap/components/RoadmapPlanSummary";
 import type { PlanSummaryState } from "../../roadmap/components/RoadmapPlanning";
@@ -83,7 +83,7 @@ function CountValue({ value, label }: { value: number; label: string }) {
 }
 
 function ActivePlansValue({ plans }: { plans: PlanSummaryState }) {
-  if (plans.phase === "loading") return <LoadingState label={roadmapCopy.loading} />;
+  if (plans.phase === "loading") return <TeamMetricSkeleton />;
   if (plans.phase === "error") {
     return <p className="text-sm text-text-secondary">{TEAM_OVERVIEW_SUMMARY_COPY.plansUnavailable}</p>;
   }
@@ -110,7 +110,7 @@ function NextStepsPanel({ teamId, plans }: { teamId: string; plans: PlanSummaryS
 }
 
 function NextStepsBody({ plans }: { plans: PlanSummaryState }) {
-  if (plans.phase === "loading") return <LoadingState label={roadmapCopy.loading} />;
+  if (plans.phase === "loading") return <TeamNextStepsSkeleton label={roadmapCopy.loading} />;
   if (plans.phase === "error") {
     return <Alert variant="error" className="text-sm">{TEAM_OVERVIEW_SUMMARY_COPY.nextStepsUnavailable}</Alert>;
   }

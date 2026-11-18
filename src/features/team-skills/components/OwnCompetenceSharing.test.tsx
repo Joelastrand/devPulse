@@ -44,9 +44,9 @@ describe("OwnCompetenceSharing on /me/skills (TASK-009, C2 participation composi
     fetchTeamsMock.mockResolvedValue({
       status: "ok",
       teams: [
-        { teamId: "team-a", name: "Team Alfa", relationship: "member", isMember: true },
-        { teamId: "team-b", name: "Team Beta", relationship: "lead", isMember: false },
-        { teamId: "team-c", name: "Team Gamma", relationship: "none", isMember: false },
+        { teamId: "team-a", name: "Team Alfa", relationship: "member", isMember: true, canOpen: true },
+        { teamId: "team-b", name: "Team Beta", relationship: "lead", isMember: false, canOpen: false },
+        { teamId: "team-c", name: "Team Gamma", relationship: "none", isMember: false, canOpen: false },
       ],
     });
     fetchContributionMock.mockImplementation(async (_token: string, teamId: string) => ({
@@ -70,8 +70,8 @@ describe("OwnCompetenceSharing on /me/skills (TASK-009, C2 participation composi
     fetchTeamsMock.mockResolvedValue({
       status: "ok",
       teams: [
-        { teamId: "team-a", name: "Team Alfa", relationship: "member", isMember: true },
-        { teamId: "team-b", name: "Team Beta", relationship: "member", isMember: true },
+        { teamId: "team-a", name: "Team Alfa", relationship: "member", isMember: true, canOpen: true },
+        { teamId: "team-b", name: "Team Beta", relationship: "member", isMember: true, canOpen: true },
       ],
     });
     fetchContributionMock.mockResolvedValue({ status: "ok", contributing: false, canOptIn: true });
@@ -85,7 +85,7 @@ describe("OwnCompetenceSharing on /me/skills (TASK-009, C2 participation composi
   });
 
   it("is OFF by default: a member team with no contribution shows the opt-in control and no withdraw control", async () => {
-    fetchTeamsMock.mockResolvedValue({ status: "ok", teams: [{ teamId: "team-a", name: "Team Alfa", relationship: "member", isMember: true }] });
+    fetchTeamsMock.mockResolvedValue({ status: "ok", teams: [{ teamId: "team-a", name: "Team Alfa", relationship: "member", isMember: true, canOpen: true }] });
     fetchContributionMock.mockResolvedValue({ status: "ok", contributing: false, canOptIn: true });
 
     render(<OwnCompetenceSharing />);
@@ -96,7 +96,7 @@ describe("OwnCompetenceSharing on /me/skills (TASK-009, C2 participation composi
   });
 
   it("explains that nothing is shared when the caller belongs to no team, and calls no participation endpoint", async () => {
-    fetchTeamsMock.mockResolvedValue({ status: "ok", teams: [{ teamId: "team-b", name: "Team Beta", relationship: "lead", isMember: false }] });
+    fetchTeamsMock.mockResolvedValue({ status: "ok", teams: [{ teamId: "team-b", name: "Team Beta", relationship: "lead", isMember: false, canOpen: false }] });
 
     render(<OwnCompetenceSharing />);
 
@@ -120,8 +120,8 @@ describe("OwnCompetenceSharing role distinctions (superadmin is not implicitly a
     fetchTeamsMock.mockResolvedValue({
       status: "ok",
       teams: [
-        { teamId: "team-a", name: "Team Alfa", relationship: "admin", isMember: false },
-        { teamId: "team-b", name: "Team Beta", relationship: "admin", isMember: false },
+        { teamId: "team-a", name: "Team Alfa", relationship: "none", isMember: false, canOpen: true },
+        { teamId: "team-b", name: "Team Beta", relationship: "none", isMember: false, canOpen: true },
       ],
     });
 
@@ -138,8 +138,8 @@ describe("OwnCompetenceSharing role distinctions (superadmin is not implicitly a
     fetchTeamsMock.mockResolvedValue({
       status: "ok",
       teams: [
-        { teamId: "team-a", name: "Team Alfa", relationship: "admin", isMember: true },
-        { teamId: "team-b", name: "Team Beta", relationship: "admin", isMember: false },
+        { teamId: "team-a", name: "Team Alfa", relationship: "member", isMember: true, canOpen: true },
+        { teamId: "team-b", name: "Team Beta", relationship: "none", isMember: false, canOpen: true },
       ],
     });
     fetchContributionMock.mockResolvedValue({ status: "ok", contributing: false, canOptIn: true });
@@ -156,7 +156,7 @@ describe("OwnCompetenceSharing role distinctions (superadmin is not implicitly a
   it("shows the plain no-team message for an ordinary user with no relationships", async () => {
     fetchTeamsMock.mockResolvedValue({
       status: "ok",
-      teams: [{ teamId: "team-a", name: "Team Alfa", relationship: "none", isMember: false }],
+      teams: [{ teamId: "team-a", name: "Team Alfa", relationship: "none", isMember: false, canOpen: false }],
     });
 
     render(<OwnCompetenceSharing />);

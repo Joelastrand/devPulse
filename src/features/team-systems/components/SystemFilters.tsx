@@ -3,8 +3,17 @@ import { cx, FORM_CONTROL_CLASSNAME, FORM_CONTROL_HEIGHT_CLASSNAME } from "../..
 import { FieldLabel } from "../../../components/ui/FieldLabel";
 import { Icon } from "../../../components/ui/Icon";
 import { Select } from "../../../components/ui/Select";
-import { KNOWLEDGE_RISK_LABELS, type KnowledgeRiskBand } from "../domain/team-system";
-import type { AttentionFilter, KnowledgeFilter, SystemFilter } from "../domain/team-system-summary";
+import {
+  BUSINESS_CRITICALITIES,
+  BUSINESS_CRITICALITY_LABELS,
+  KNOWLEDGE_RISK_LABELS,
+  SYSTEM_TYPES,
+  SYSTEM_TYPE_LABELS,
+  type BusinessCriticality,
+  type KnowledgeRiskBand,
+  type SystemType,
+} from "../domain/team-system";
+import type { AttentionFilter, CriticalityFilter, KnowledgeFilter, SystemFilter, SystemTypeFilter } from "../domain/team-system-summary";
 import { KNOWLEDGE_BAND_ORDER } from "../domain/team-system-summary";
 import { systemsCopy } from "../copy";
 
@@ -54,6 +63,32 @@ export function SystemFilters({
         {KNOWLEDGE_BAND_ORDER.map((band: KnowledgeRiskBand) => (
           <option key={band} value={band}>
             {KNOWLEDGE_RISK_LABELS[band]}
+          </option>
+        ))}
+      </Select>
+      <Select
+        id="system-filter-type"
+        label={systemsCopy.filters.systemTypeLabel}
+        value={filter.systemType}
+        onChange={(event) => onChange({ ...filter, systemType: event.target.value as SystemTypeFilter })}
+      >
+        <option value="all">{systemsCopy.filters.systemTypeAll}</option>
+        {SYSTEM_TYPES.map((type: SystemType) => (
+          <option key={type} value={type}>
+            {SYSTEM_TYPE_LABELS[type]}
+          </option>
+        ))}
+      </Select>
+      <Select
+        id="system-filter-criticality"
+        label={systemsCopy.filters.criticalityLabel}
+        value={filter.criticality}
+        onChange={(event) => onChange({ ...filter, criticality: event.target.value as CriticalityFilter })}
+      >
+        <option value="all">{systemsCopy.filters.criticalityAll}</option>
+        {BUSINESS_CRITICALITIES.map((level: BusinessCriticality) => (
+          <option key={level} value={level}>
+            {BUSINESS_CRITICALITY_LABELS[level]}
           </option>
         ))}
       </Select>

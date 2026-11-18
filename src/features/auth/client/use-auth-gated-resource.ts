@@ -6,6 +6,16 @@ import { observeIdToken } from "./auth-client";
 type IsCurrentGeneration = (generation: number) => boolean;
 
 /**
+ * What changed in the authentication state, derived from the Firebase account UID (never from token contents):
+ * - `signed_in`: first sign-in, or sign-in after sign-out.
+ * - `refreshed`: the same account received a new ID token. Drafts and other unsaved state may be kept.
+ * - `switched`: a different account is now signed in, with no sign-out in between. Account-scoped state must be dropped.
+ * - `signed_out`: no account. Account-scoped state must be dropped.
+ * An emission whose UID is unknown is treated as `switched` (fail closed).
+ */
+export type AuthChange = "signed_in" | "refreshed" | "switched" | "signed_out";
+
+/**
  * Shared implementation of the `observeIdToken` + monotonic-generation
  * stale-response guard previously duplicated verbatim across
  * `TeamsOverview`, `TeamDetail`, `AdminTeams`, `AdminTeamDetail`, and
@@ -33,10 +43,13 @@ export function useAuthGatedResource(
     token: string | null,
     generation: number,
     isCurrentGeneration: IsCurrentGeneration,
+    change: AuthChange,
   ) => void,
   resetDeps: readonly unknown[] = [],
 ): { isCurrentGeneration: IsCurrentGeneration } {
   const generationRef = useRef(0);
+  /** UID of the last signed-in account. `undefined` before the first emission; `null` after sign-out. */
+  const lastUidRef = useRef<string | null | undefined>(undefined);
   const onAuthChangeRef = useRef(onAuthChange);
 
   useEffect(() => {
@@ -48,9 +61,22 @@ export function useAuthGatedResource(
   }, []);
 
   useEffect(() => {
-    const unsubscribe = observeIdToken((token) => {
+    const unsubscribe = observeIdToken((token, uid, signal) => {
       generationRef.current += 1;
-      onAuthChangeRef.current(token, generationRef.current, isCurrentGeneration);
+      if (signal === "account_changing") {
+        // Early invalidation: the previous account's state is dropped now. `lastUidRef` keeps the previous UID so the
+        // new account's delivery is still classified as `switched` (drafts cleared), not `signed_in`.
+        onAuthChangeRef.current(null, generationRef.current, isCurrentGeneration, "switched");
+        return;
+      }
+      const previous = lastUidRef.current;
+      let change: AuthChange;
+      if (token === null) change = "signed_out";
+      else if (uid === null) change = "switched";
+      else if (previous === undefined || previous === null) change = "signed_in";
+      else change = previous === uid ? "refreshed" : "switched";
+      lastUidRef.current = token === null ? null : uid;
+      onAuthChangeRef.current(token, generationRef.current, isCurrentGeneration, change);
     });
 
     return () => {

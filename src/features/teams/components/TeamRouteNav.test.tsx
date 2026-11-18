@@ -21,6 +21,8 @@ function renderAt(pathname: string | null, teamId = "team-1") {
     competencePlan: within(nav).getByRole("link", { name: "Kompetanseplan" }),
     competence: within(nav).getByRole("link", { name: "Teamkompetanse" }),
     systems: within(nav).getByRole("link", { name: "Systemoversikt" }),
+    results: within(nav).getByRole("link", { name: "Resultater og trender" }),
+    surveys: within(nav).getByRole("link", { name: "Undersøkelser" }),
     links: within(nav).getAllByRole("link"),
   };
 }
@@ -30,7 +32,7 @@ describe("TeamRouteNav", () => {
     cleanup();
   });
 
-  it("exposes exactly the five team tabs in order — no Forum or other destination", () => {
+  it("exposes exactly the seven team destinations in order", () => {
     const { links } = renderAt("/teams/team-1");
 
     expect(links.map((link) => link.textContent)).toEqual([
@@ -39,25 +41,30 @@ describe("TeamRouteNav", () => {
       "Kompetanseplan",
       "Teamkompetanse",
       "Systemoversikt",
+      "Resultater og trender",
+      "Undersøkelser",
     ]);
   });
 
-  it("links all five tabs to their routes", () => {
-    const { overview, roadmap, competencePlan, competence, systems } = renderAt("/teams/team-1");
-    expect(systems.hasAttribute("aria-current")).toBe(false);
+  it("links all seven tabs to their routes", () => {
+    const { overview, roadmap, competencePlan, competence, systems, results, surveys } = renderAt("/teams/team-1");
 
     expect(overview.getAttribute("href")).toBe("/teams/team-1");
     expect(roadmap.getAttribute("href")).toBe("/teams/team-1/roadmap");
     expect(competencePlan.getAttribute("href")).toBe("/teams/team-1/competence-plan");
     expect(competence.getAttribute("href")).toBe("/teams/team-1/competence");
     expect(systems.getAttribute("href")).toBe("/teams/team-1/systems");
+    expect(results.getAttribute("href")).toBe("/teams/team-1/results");
+    expect(surveys.getAttribute("href")).toBe("/teams/team-1/surveys");
   });
 
-  it("encodes the teamId in both hrefs", () => {
-    const { overview, roadmap } = renderAt("/teams/a%20b", "a b");
+  it("encodes the teamId in every href", () => {
+    const { overview, roadmap, results, surveys } = renderAt("/teams/a%20b", "a b");
 
     expect(overview.getAttribute("href")).toBe("/teams/a%20b");
     expect(roadmap.getAttribute("href")).toBe("/teams/a%20b/roadmap");
+    expect(results.getAttribute("href")).toBe("/teams/a%20b/results");
+    expect(surveys.getAttribute("href")).toBe("/teams/a%20b/surveys");
     expect(overview.getAttribute("aria-current")).toBe("page");
   });
 
@@ -76,6 +83,21 @@ describe("TeamRouteNav", () => {
     expect(overview.hasAttribute("aria-current")).toBe(false);
   });
 
+  it("marks only Resultater og trender current on the results route", () => {
+    const { overview, results, surveys } = renderAt("/teams/team-1/results");
+
+    expect(results.getAttribute("aria-current")).toBe("page");
+    expect(overview.hasAttribute("aria-current")).toBe(false);
+    expect(surveys.hasAttribute("aria-current")).toBe(false);
+  });
+
+  it("marks only Undersøkelser current on the surveys route", () => {
+    const { results, surveys } = renderAt("/teams/team-1/surveys");
+
+    expect(surveys.getAttribute("aria-current")).toBe("page");
+    expect(results.hasAttribute("aria-current")).toBe(false);
+  });
+
   it("ignores a single trailing slash", () => {
     const { overview, roadmap } = renderAt("/teams/team-1/roadmap/");
 
@@ -83,13 +105,15 @@ describe("TeamRouteNav", () => {
     expect(overview.hasAttribute("aria-current")).toBe(false);
   });
 
-  it.each(["/teams/team-1/forum/t1", "/teams/team-1/roadmap/extra", "/teams/other", "/unknown", null])(
+  it.each(["/teams/team-1/forum/t1", "/teams/team-1/roadmap/extra", "/teams/team-1/results/extra", "/teams/other", "/unknown", null])(
     "marks nothing current on %s",
     (pathname) => {
-      const { overview, roadmap } = renderAt(pathname);
+      const { overview, roadmap, results, surveys } = renderAt(pathname);
 
       expect(overview.hasAttribute("aria-current")).toBe(false);
       expect(roadmap.hasAttribute("aria-current")).toBe(false);
+      expect(results.hasAttribute("aria-current")).toBe(false);
+      expect(surveys.hasAttribute("aria-current")).toBe(false);
     },
   );
 });

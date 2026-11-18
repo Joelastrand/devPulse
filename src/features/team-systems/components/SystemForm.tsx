@@ -1,20 +1,31 @@
 "use client";
 
-import { useId, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { TextArea } from "../../../components/ui/TextArea";
+import { Select } from "../../../components/ui/Select";
 import { TextField } from "../../../components/ui/TextField";
 import { cx, FORM_CONTROL_CLASSNAME, FORM_CONTROL_HEIGHT_CLASSNAME } from "../../../components/ui/class-names";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Icon } from "../../../components/ui/Icon";
 import {
+  BUSINESS_CRITICALITIES,
+  BUSINESS_CRITICALITY_LABELS,
+  SYSTEM_TYPES,
+  SYSTEM_TYPE_LABELS,
+  USER_REACHES,
+  USER_REACH_LABELS,
+  type BusinessCriticality,
+  type SystemType,
+  type UserReach,
   ASSESSMENT_ATTRIBUTES,
   ASSESSMENT_ATTRIBUTE_LABELS,
   ASSESSMENT_VALUES,
   ASSESSMENT_VALUE_LABELS,
   TEAM_SYSTEM_LIMITS,
+  UNASSESSED_CLASSIFICATION,
   parseBackstageUrl,
   parseOptionalText,
   parseSystemName,
@@ -32,6 +43,9 @@ interface Draft {
   name: string;
   description: string;
   backstageUrl: string;
+  systemType: SystemType;
+  businessCriticality: BusinessCriticality;
+  userReach: UserReach;
   assessments: Record<AssessmentAttribute, AssessmentDraft>;
   knowledge: string[];
 }
@@ -47,6 +61,10 @@ function draftFrom(system: TeamSystemView | null): Draft {
     name: system?.name ?? "",
     description: system?.description ?? "",
     backstageUrl: system?.backstageUrl ?? "",
+    // A new system starts "not assessed" in every dimension; nothing is inferred for a new or an existing system.
+    systemType: system?.classification.systemType ?? UNASSESSED_CLASSIFICATION.systemType,
+    businessCriticality: system?.classification.businessCriticality ?? UNASSESSED_CLASSIFICATION.businessCriticality,
+    userReach: system?.classification.userReach ?? UNASSESSED_CLASSIFICATION.userReach,
     assessments,
     knowledge: system?.knowledge.map((member) => member.memberRef) ?? [],
   };
@@ -82,7 +100,16 @@ function validate(draft: Draft): { errors: Partial<Record<"name" | "description"
   }
   return {
     errors,
-    body: { name, description, backstageUrl: url.value, assessments, knowledgeMemberRefs: draft.knowledge },
+    body: {
+      name,
+      description,
+      backstageUrl: url.value,
+      systemType: draft.systemType,
+      businessCriticality: draft.businessCriticality,
+      userReach: draft.userReach,
+      assessments,
+      knowledgeMemberRefs: draft.knowledge,
+    },
   };
 }
 
@@ -204,24 +231,34 @@ export function SystemForm({ system, members, membersStatus, onSubmit, onDone, o
   const [errors, setErrors] = useState<ReturnType<typeof validate>["errors"]>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const inFlight = useRef(false);
 
   const title = system === null ? systemsCopy.form.createTitle : systemsCopy.form.editTitle;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    // A ref, so a second submit before the next render (Enter key) cannot send a second write.
+    if (inFlight.current) return;
     const result = validate(draft);
     setErrors(result.errors);
     setServerError(null);
     if (result.body === null) return;
 
+    inFlight.current = true;
     setSaving(true);
-    const outcome = await onSubmit(result.body);
-    setSaving(false);
-    if (outcome.ok) {
-      onDone();
-      return;
+    try {
+      const outcome = await onSubmit(result.body);
+      if (outcome.ok) {
+        // Success is shown only after the server has confirmed the write; the form closes and the list refreshes.
+        onDone();
+        return;
+      }
+      // Field values stay in the draft, so a recoverable failure keeps what the user typed.
+      setServerError(mutationMessage(outcome.error));
+    } finally {
+      inFlight.current = false;
+      setSaving(false);
     }
-    setServerError(mutationMessage(outcome.error));
   }
 
   function toggleKnowledge(memberRef: string, checked: boolean) {
@@ -264,6 +301,49 @@ export function SystemForm({ system, members, membersStatus, onSubmit, onDone, o
             onChange={(event) => setDraft({ ...draft, backstageUrl: event.target.value })}
           />
         </div>
+
+        <fieldset className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <legend className="sr-only">{systemsCopy.classification.groupLabel}</legend>
+          <Select
+            id={`${idBase}-system-type`}
+            label={systemsCopy.classification.systemTypeLabel}
+            description={systemsCopy.classification.systemTypeHelp}
+            value={draft.systemType}
+            onChange={(event) => setDraft({ ...draft, systemType: event.target.value as SystemType })}
+          >
+            {SYSTEM_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {SYSTEM_TYPE_LABELS[type]}
+              </option>
+            ))}
+          </Select>
+          <Select
+            id={`${idBase}-criticality`}
+            label={systemsCopy.classification.criticalityLabel}
+            description={systemsCopy.classification.criticalityHelp}
+            value={draft.businessCriticality}
+            onChange={(event) => setDraft({ ...draft, businessCriticality: event.target.value as BusinessCriticality })}
+          >
+            {BUSINESS_CRITICALITIES.map((level) => (
+              <option key={level} value={level}>
+                {BUSINESS_CRITICALITY_LABELS[level]}
+              </option>
+            ))}
+          </Select>
+          <Select
+            id={`${idBase}-reach`}
+            label={systemsCopy.classification.reachLabel}
+            description={systemsCopy.classification.reachHelp}
+            value={draft.userReach}
+            onChange={(event) => setDraft({ ...draft, userReach: event.target.value as UserReach })}
+          >
+            {USER_REACHES.map((reach) => (
+              <option key={reach} value={reach}>
+                {USER_REACH_LABELS[reach]}
+              </option>
+            ))}
+          </Select>
+        </fieldset>
 
         <TextArea
           id={`${idBase}-description`}

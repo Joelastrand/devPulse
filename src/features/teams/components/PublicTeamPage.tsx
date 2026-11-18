@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Card } from "../../../components/ui/Card";
-import { LoadingState } from "../../../components/ui/LoadingState";
+import { PublicTeamHeadingSkeleton } from "./TeamAdminSkeletons";
 import { fetchPublicTeam, type FetchPublicTeamResult } from "../client/team-visibility-gateway";
 import { visibilityCopy } from "../visibility-copy";
 
@@ -31,7 +31,7 @@ export function PublicTeamPage({ teamId }: { teamId: string }) {
   return (
     <Card as="section" aria-labelledby="public-team-heading" className="flex flex-col gap-3">
       <p className="text-sm text-text-secondary">{visibilityCopy.publicHeading}</p>
-      {state.phase === "loading" && <LoadingState label={visibilityCopy.loading} />}
+      {state.phase === "loading" && <PublicTeamHeadingSkeleton label={visibilityCopy.loading} />}
       {state.phase === "done" && state.result.status === "ok" && (
         <h1 id="public-team-heading" className="text-2xl font-semibold text-text-primary">
           {state.result.team.name}

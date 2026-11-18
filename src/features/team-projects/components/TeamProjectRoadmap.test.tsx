@@ -138,9 +138,12 @@ describe("TeamProjectRoadmap", () => {
 
   it("shows the loading state until the project read completes", () => {
     fetchTeamProjects.mockReturnValue(new Promise(() => undefined));
-    render(<TeamProjectRoadmap teamId="team-1" />);
+    const { container } = render(<TeamProjectRoadmap teamId="team-1" />);
 
     expect(screen.getByText("Laster prosjektplan …")).toBeTruthy();
+    // Structured placeholder: decorative blocks are hidden from assistive technology, the label is the one announcement.
+    expect(container.querySelectorAll('[aria-hidden="true"]').length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("status")).toHaveLength(1);
   });
 
   it("shows the empty state when the team has no active projects", async () => {
@@ -284,6 +287,40 @@ describe("TeamProjectRoadmap", () => {
 
     await waitFor(() => expect(writeTeamProject).toHaveBeenCalledWith("token-1", "team-1", "archive", "p-1", null));
     await waitFor(() => expect(fetchTeamProjects).toHaveBeenCalledTimes(2));
+  });
+
+  it("does not keep the previously loaded plan on screen while the reload after a save is pending", async () => {
+    fetchTeamProjects.mockResolvedValue(okProjects(true));
+    writeTeamProject.mockResolvedValue({ status: "ok", project: { ...ACTIVE_DEMO, archived: true } });
+    await renderRoadmap();
+    // The reload that follows the save never settles here. Previously loaded project data must not stay visible while
+    // access is being re-checked: only the loading placeholder shows.
+    fetchTeamProjects.mockReturnValueOnce(new Promise(() => undefined));
+    fireEvent.click(leadButton("Arkiver: Demo – Leveranse"));
+
+    await waitFor(() => expect(fetchTeamProjects).toHaveBeenCalledTimes(2));
+    expect(screen.getByText("Laster prosjektplan …")).toBeTruthy();
+    expect(screen.queryByText(/Demo/)).toBeNull();
+  });
+
+  it("does not show a late failure from the previous team after the page moves to another team, and frees its controls", async () => {
+    fetchTeamProjects.mockResolvedValue(okProjects(true));
+    let resolveWrite: (value: unknown) => void = () => undefined;
+    writeTeamProject.mockReturnValueOnce(new Promise((resolve) => (resolveWrite = resolve)));
+    const { rerender } = render(<TeamProjectRoadmap teamId="team-1" />);
+    await screen.findByRole("button", { name: "6 måneder" });
+    await waitFor(() => expect(screen.queryByText("Laster prosjektplan …")).toBeNull());
+    fireEvent.click(leadButton("Arkiver: Demo – Leveranse"));
+
+    rerender(<TeamProjectRoadmap teamId="team-2" />);
+    await screen.findByRole("button", { name: "6 måneder" });
+    await waitFor(() => expect(screen.queryByText("Laster prosjektplan …")).toBeNull());
+    resolveWrite({ status: "write_failed" });
+    await waitFor(() => expect(writeTeamProject).toHaveBeenCalledTimes(1));
+
+    // The failure belongs to the previous team: no alert on this page, and the archive control is usable again.
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect((leadButton("Arkiver: Demo – Leveranse") as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("restores an archived project from the archived list", async () => {

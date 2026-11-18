@@ -7,7 +7,7 @@ import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
-import { LoadingState } from "../../../components/ui/LoadingState";
+import { AdminTeamsListSkeleton } from "./TeamAdminSkeletons";
 import { TextField } from "../../../components/ui/TextField";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import { adminCopy } from "../copy";
@@ -190,7 +190,7 @@ export function AdminTeams() {
   }
 
   if (state.phase === "loading") {
-    return <LoadingState label={adminCopy.teams.loading} />;
+    return <AdminTeamsListSkeleton label={adminCopy.teams.loading} />;
   }
 
   if (state.phase === "signed_out") {

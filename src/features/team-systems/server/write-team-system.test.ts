@@ -329,3 +329,68 @@ describe("writeTeamSystem — knowledge refs beyond 501 memberships (no team-wid
     expect(writes.touched.map((t) => t.memberRef).sort()).toEqual([...refs].sort());
   });
 });
+
+describe("writeTeamSystem — system classification (task 4)", () => {
+  const CLASSIFIED = { systemType: "eksternt", businessCriticality: "kritisk", userReach: "virksomhetsomfattende" };
+
+  it("stores the supplied classification on create", async () => {
+    const { deps, writes } = build(activeWorld());
+    const result = await writeTeamSystem("token", "team-1", null, { name: "Portal", ...CLASSIFIED }, deps);
+
+    expect(result.ok).toBe(true);
+    expect(writes.created[0].data).toMatchObject(CLASSIFIED);
+  });
+
+  it("defaults every classification dimension to not assessed on create when absent", async () => {
+    const { deps, writes } = build(activeWorld());
+    await writeTeamSystem("token", "team-1", null, { name: "Portal" }, deps);
+
+    expect(writes.created[0].data).toMatchObject({
+      systemType: "uavklart",
+      businessCriticality: "ikke_vurdert",
+      userReach: "ikke_vurdert",
+    });
+  });
+
+  it("keeps the stored classification on update when the request does not mention it", async () => {
+    const world = activeWorld({
+      systems: { "sys-1": existingSystem("team-1", { systemType: "internt", businessCriticality: "hoy", userReach: "ett_team" }) },
+    });
+    const { deps, writes } = build(world);
+    const result = await writeTeamSystem("token", "team-1", "sys-1", { name: "Nytt navn" }, deps);
+
+    expect(result.ok).toBe(true);
+    expect(writes.set[0].data).toMatchObject({ systemType: "internt", businessCriticality: "hoy", userReach: "ett_team" });
+  });
+
+  it("does not classify a legacy system silently on update", async () => {
+    const { deps, writes } = build(activeWorld({ systems: { "sys-1": existingSystem() } }));
+    await writeTeamSystem("token", "team-1", "sys-1", { name: "Saksportalen 2" }, deps);
+
+    expect(writes.set[0].data).toMatchObject({
+      systemType: "uavklart",
+      businessCriticality: "ikke_vurdert",
+      userReach: "ikke_vurdert",
+    });
+  });
+
+  it("changes only the supplied dimension on update", async () => {
+    const world = activeWorld({
+      systems: { "sys-1": existingSystem("team-1", { systemType: "internt", businessCriticality: "lav", userReach: "faa_brukere" }) },
+    });
+    const { deps, writes } = build(world);
+    await writeTeamSystem("token", "team-1", "sys-1", { businessCriticality: "kritisk" }, deps);
+
+    expect(writes.set[0].data).toMatchObject({ systemType: "internt", businessCriticality: "kritisk", userReach: "faa_brukere" });
+  });
+
+  it.each([
+    { systemType: "ekstern" },
+    { businessCriticality: "høy" },
+    { userReach: "1000 brukere" },
+  ])("rejects an invalid classification value %j with invalid_input and writes nothing", async (body) => {
+    const { deps, writes } = build(activeWorld());
+    expect(await writeTeamSystem("token", "team-1", null, { name: "Portal", ...body }, deps)).toEqual({ ok: false, error: "invalid_input" });
+    expect(writes.created).toHaveLength(0);
+  });
+});

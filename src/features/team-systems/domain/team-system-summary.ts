@@ -3,7 +3,13 @@
  * (docs/archive/features/team-system-overview/SPEC.md — BR-11, BR-12, BR-13). Counts
  * only; nothing is persisted, ranked, or attributed to a named person.
  */
-import { KNOWLEDGE_RISK_LABELS, type KnowledgeRiskBand } from "./team-system";
+import {
+  KNOWLEDGE_RISK_LABELS,
+  type BusinessCriticality,
+  type KnowledgeRiskBand,
+  type SystemClassification,
+  type SystemType,
+} from "./team-system";
 
 /** The subset of a system view these rules read. */
 export interface SystemSummaryInput {
@@ -13,6 +19,7 @@ export interface SystemSummaryInput {
   knowledgeCount: number;
   attention: boolean;
   inGoodStanding: boolean;
+  classification: SystemClassification;
 }
 
 export interface TeamSystemSummary {
@@ -52,17 +59,27 @@ export function summarizeSystems(systems: readonly SystemSummaryInput[]): TeamSy
 
 export type AttentionFilter = "all" | "attention";
 export type KnowledgeFilter = "all" | KnowledgeRiskBand;
+export type SystemTypeFilter = "all" | SystemType;
+export type CriticalityFilter = "all" | BusinessCriticality;
 
 export interface SystemFilter {
   query: string;
   attention: AttentionFilter;
   knowledge: KnowledgeFilter;
+  systemType: SystemTypeFilter;
+  criticality: CriticalityFilter;
 }
 
-export const DEFAULT_SYSTEM_FILTER: SystemFilter = { query: "", attention: "all", knowledge: "all" };
+export const DEFAULT_SYSTEM_FILTER: SystemFilter = {
+  query: "",
+  attention: "all",
+  knowledge: "all",
+  systemType: "all",
+  criticality: "all",
+};
 
 /** The fields filtering reads; a full system view satisfies this structurally. */
-export type SystemFilterFields = Pick<SystemSummaryInput, "name" | "description" | "knowledgeRisk" | "attention">;
+export type SystemFilterFields = Pick<SystemSummaryInput, "name" | "description" | "knowledgeRisk" | "attention" | "classification">;
 
 /** BR-13: case-insensitive substring over name and description; filters are exact. Never widens the input. */
 export function filterSystems<T extends SystemFilterFields>(systems: readonly T[], filter: SystemFilter): T[] {
@@ -74,6 +91,8 @@ export function filterSystems<T extends SystemFilterFields>(systems: readonly T[
     }
     if (filter.attention === "attention" && !system.attention) return false;
     if (filter.knowledge !== "all" && system.knowledgeRisk !== filter.knowledge) return false;
+    if (filter.systemType !== "all" && system.classification.systemType !== filter.systemType) return false;
+    if (filter.criticality !== "all" && system.classification.businessCriticality !== filter.criticality) return false;
     return true;
   });
 }

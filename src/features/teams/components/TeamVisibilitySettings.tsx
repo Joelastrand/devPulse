@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
-import { LoadingState } from "../../../components/ui/LoadingState";
+import { VisibilitySettingsSkeleton } from "./TeamAdminSkeletons";
 import {
   fetchTeamVisibility,
   saveTeamVisibility,
@@ -87,7 +87,7 @@ export function TeamVisibilitySettings({ teamId, token }: { teamId: string; toke
         {visibilityCopy.title}
       </h3>
 
-      {phase.kind === "loading" && <LoadingState label={visibilityCopy.loading} />}
+      {phase.kind === "loading" && <VisibilitySettingsSkeleton label={visibilityCopy.loading} />}
       {phase.kind === "error" && <Alert variant="error">{phase.message}</Alert>}
 
       {phase.kind === "ready" && (

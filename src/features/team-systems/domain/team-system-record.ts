@@ -6,10 +6,15 @@
 import {
   ASSESSMENT_ATTRIBUTES,
   TEAM_SYSTEM_LIMITS,
+  UNASSESSED_CLASSIFICATION,
   isAssessmentValue,
+  isBusinessCriticality,
+  isSystemType,
+  isUserReach,
   parseBackstageUrl,
   type AssessmentAttribute,
   type AssessmentValue,
+  type SystemClassification,
 } from "./team-system";
 
 export interface StoredAssessment {
@@ -29,6 +34,7 @@ export interface TeamSystemRecord {
   name: string;
   description: string | null;
   backstageUrl: string | null;
+  classification: SystemClassification;
   assessments: StoredAssessments;
   knowledgeMemberRefs: string[];
   createdAt: Date;
@@ -54,6 +60,20 @@ function isNonEmptyString(value: unknown): value is string {
 function nullableActor(value: unknown): string | null | undefined {
   if (value === undefined || value === null) return null;
   return isNonEmptyString(value) ? value : undefined;
+}
+
+/**
+ * Stored classification. An absent or unknown value (records written before the fields existed, or a value this version
+ * does not know) reads as "not assessed". It is never guessed from another dimension, and it never drops the system.
+ */
+function parseClassification(data: Record<string, unknown>): SystemClassification {
+  return {
+    systemType: isSystemType(data.systemType) ? data.systemType : UNASSESSED_CLASSIFICATION.systemType,
+    businessCriticality: isBusinessCriticality(data.businessCriticality)
+      ? data.businessCriticality
+      : UNASSESSED_CLASSIFICATION.businessCriticality,
+    userReach: isUserReach(data.userReach) ? data.userReach : UNASSESSED_CLASSIFICATION.userReach,
+  };
 }
 
 function parseAssessment(raw: unknown): StoredAssessment | null {
@@ -114,6 +134,7 @@ export function parseTeamSystemRecord(data: unknown, systemId: string, teamId: s
     name: r.name,
     description: description as string | null,
     backstageUrl: backstageUrl as string | null,
+    classification: parseClassification(r),
     assessments,
     knowledgeMemberRefs: [...refs],
     createdAt: r.createdAt,

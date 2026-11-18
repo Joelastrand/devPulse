@@ -111,6 +111,8 @@ const APPROVED_WHEN_PRESENT_COLLECTION_REFERENCES = [
 
 /** Dimension 2: files outside the feature that may import `personal-goals/server/**` (routes, their tests, page). */
 const APPROVED_SERVER_IMPORTERS = [
+  // Trusted demo seed orchestrator (approved exact file, seed decision 2026-11): calls only the create-only seed operation.
+  "src/features/demo-team/personal-seed.ts",
   "app/api/me/goals/route.ts",
   "app/api/me/goals/route.test.ts",
   "app/api/me/goals/[goalId]/route.ts",
@@ -124,6 +126,8 @@ const APPROVED_SERVER_IMPORTERS = [
 const STORE_MODULE = "src/features/personal-goals/server/goal-store";
 /** Dimension 2, store: the only files that may import the store module (operations, the fake, their tests). */
 const APPROVED_STORE_IMPORTERS = [
+  // Trusted demo seed orchestrator (approved exact file): calls only the create-only goal seed.
+  "src/features/demo-team/personal-seed.ts",
   "src/features/personal-goals/server/get-personal-goals.ts",
   "src/features/personal-goals/server/create-personal-goal.ts",
   "src/features/personal-goals/server/update-personal-goal.ts",
@@ -272,7 +276,13 @@ const D1_MARKERS = ["personal-goals", "userDevelopment", "app/api/me/goals", "ap
 const isTest = (path: string) => /\.test\.tsx?$/.test(path);
 const isD1Feature = (path: string) => path.startsWith(D1_DIR);
 const isD1 = (path: string) => isD1Feature(path) || D1_ROUTE_DIRS.some((dir) => path.startsWith(dir));
-const isGuarded = (path: string) => path !== GUARD_FILE;
+/**
+ * Guard-definition test files are not source files under inspection: they hold the guard's own negative fixtures (the
+ * forbidden identifiers written as test strings). They are excluded structurally, here, and never by a per-check allowlist.
+ * Production sources and the virtual negative fixtures of every check are still scanned.
+ */
+const GUARD_DEFINITION_FILES: readonly string[] = [GUARD_FILE, "src/features/personal-goals/personal-goals-cross-cutting.test.ts"];
+const isGuarded = (path: string) => !GUARD_DEFINITION_FILES.includes(path);
 const isD1Production = (path: string) => isGuarded(path) && isD1(path) && !isTest(path);
 
 const SPECIFIER =
@@ -315,9 +325,18 @@ function reExportTargets(file: SourceFile): string[] {
 const COLLECTION_TOKEN = /\buserDevelopment\b/;
 
 /** Dimension 1. Raw text (comments included, conservatively). */
+/**
+ * Emulator verification test (approved exact file, collection-name checks only): an isolated-emulator end-to-end test that reads
+ * the owner collections to verify encryption, paths and the erasure fence. It is test code, not production. No other file gets
+ * this exception.
+ */
+const EMULATOR_VERIFICATION_FILE = "src/features/demo-team/personal-seed.emulator.test.ts";
+
 function collectionReferenceViolations(files: SourceFile[]): string[] {
   const allowed = new Set([...APPROVED_COLLECTION_REFERENCES, ...APPROVED_WHEN_PRESENT_COLLECTION_REFERENCES]);
-  return files.filter((f) => isGuarded(f.path) && COLLECTION_TOKEN.test(f.text) && !allowed.has(f.path)).map((f) => f.path);
+  return files
+    .filter((f) => isGuarded(f.path) && f.path !== EMULATOR_VERIFICATION_FILE && COLLECTION_TOKEN.test(f.text) && !allowed.has(f.path))
+    .map((f) => f.path);
 }
 
 /** Dimension 2: outside the feature, only the approved route/page files may import `personal-goals/server/**`. */
@@ -613,6 +632,15 @@ describe("D1 scope guard — collection identifier (dimension 1)", () => {
     expect(collectionReferenceViolations(realFiles)).toEqual([]);
   });
 
+  it("negative regression: the emulator verification exception is exact-file; other tests and production files naming the collection are still flagged", () => {
+    const naming = `db.doc("userDevelopment/u1")`;
+    expect(collectionReferenceViolations([virtual("src/features/demo-team/personal-seed.emulator.test.ts", naming)])).toEqual([]);
+    expect(collectionReferenceViolations([virtual("src/features/demo-team/personal-seed.test.ts", naming)])).toEqual([
+      "src/features/demo-team/personal-seed.test.ts",
+    ]);
+    expect(collectionReferenceViolations([virtual("src/features/demo-team/plan.ts", naming)])).toEqual(["src/features/demo-team/plan.ts"]);
+  });
+
   it("fails for an unapproved file or a sibling of the store, and allows the store and the rules pin", () => {
     expect(
       collectionReferenceViolations([
@@ -651,6 +679,15 @@ describe("D1 scope guard — collection identifier (dimension 1)", () => {
 });
 
 describe("D1 scope guard — importer allow-list (dimension 2)", () => {
+  it("negative regression: an unauthorized demo-team file importing the goal server module is still rejected; the seed orchestrator is not a blanket exception", () => {
+    const importsGoalStore = `import { seedGoalCreateOnly } from "../personal-goals/server/goal-store";`;
+    expect(serverImportViolations([virtual("src/features/demo-team/plan.ts", importsGoalStore)])).toEqual(["src/features/demo-team/plan.ts"]);
+    expect(serverImportViolations([virtual("src/features/demo-team/personal-fixtures.ts", importsGoalStore)])).toEqual([
+      "src/features/demo-team/personal-fixtures.ts",
+    ]);
+    expect(serverImportViolations([virtual("src/features/demo-team/personal-seed.ts", importsGoalStore)])).toEqual([]);
+  });
+
   it("passes on the real tree", () => {
     expect(serverImportViolations(realFiles)).toEqual([]);
     expect(storeImporterViolations(realFiles)).toEqual([]);

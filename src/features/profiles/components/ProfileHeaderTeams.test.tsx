@@ -30,8 +30,8 @@ describe("ProfileHeaderTeams", () => {
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
       teams: [
-        { teamId: "t1", name: "Plattform", relationship: "member", isMember: true },
-        { teamId: "t2", name: "Design", relationship: "admin", isMember: false },
+        { teamId: "t1", name: "Plattform", relationship: "member", isMember: true, canOpen: true },
+        { teamId: "t2", name: "Design", relationship: "none", isMember: false, canOpen: true },
         { teamId: "t3", name: "Data", relationship: "request_pending" },
       ],
     });
@@ -48,8 +48,8 @@ describe("ProfileHeaderTeams", () => {
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
       teams: [
-        { teamId: "t1", name: "Plattform", relationship: "admin", isMember: true },
-        { teamId: "t2", name: "Design", relationship: "admin", isMember: false },
+        { teamId: "t1", name: "Plattform", relationship: "member", isMember: true, canOpen: true },
+        { teamId: "t2", name: "Design", relationship: "none", isMember: false, canOpen: true },
       ],
     });
 

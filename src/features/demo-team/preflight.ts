@@ -1,3 +1,4 @@
+import { ASSESSMENT_ATTRIBUTES } from "../team-systems/domain/team-system";
 import { openRoadmapItemDocument } from "../roadmap/domain/roadmap-item-content-codec";
 import { openSkillProgressDocument } from "../skill-trees/server/skill-progress-content-codec";
 import { openTeamDocument } from "../teams/domain/team-content-codec";
@@ -15,6 +16,10 @@ import { isValidSurvey } from "../surveys/domain/survey";
 import { isValidTeamStatus } from "../teams/domain/team";
 import { isValidMembershipFor } from "../teams/domain/team-membership";
 import type { DemoSeedConfig } from "./config";
+import { openTeamProjectDocument } from "../team-projects/server/team-project-codec";
+import { openTeamSystemDocument } from "../team-systems/server/team-system-codec";
+import { openCompetencePlanDocument } from "../team-competence-plan/server/competence-plan-codec";
+import { openTeamSkillDocument } from "../team-owned-skills/server/team-skill-codec";
 import { DEMO_AUDIT_ACTOR, DEMO_MINIMUM_RESPONSES, DEMO_TEAM_ID } from "./fixtures";
 import {
   ALLOWED_COLLECTIONS,
@@ -80,7 +85,8 @@ export type ConflictReason =
   | "team-disabled"
   | "membership-mismatch"
   | "structure-mismatch"
-  | "undecryptable";
+  | "undecryptable"
+  | "team-missing";
 
 /** `create`: absent path; `set`: compatible upsert; `skip`: compatible create-only; `blocked`: conflict. */
 export type PathAction = "create" | "set" | "skip" | "blocked";
@@ -119,7 +125,15 @@ export type DemoPreflightResult =
       classifications: readonly ClassifiedPath[];
     };
 
+/** The team the plan writes into. `reuseExistingTeam` = the team must already exist and is never written; the presenter owns it. */
+export interface DemoScope {
+  teamId: string;
+  reuseExistingTeam: boolean;
+  presenterUid: string;
+}
+
 export interface DemoPreflightInput {
+  scope?: DemoScope;
   config: Pick<DemoSeedConfig, "network" | "presenterUid">;
   operations: readonly PlannedOperation[];
   manifest: readonly ManifestEntry[];
@@ -167,7 +181,7 @@ function isValidDate(value: unknown): value is Date {
   return value instanceof Date && !Number.isNaN(value.getTime());
 }
 
-function classifyTeam(existing: Record<string, unknown>, docId: string, crypto: DemoCrypto): Verdict {
+function classifyTeam(existing: Record<string, unknown>, docId: string, crypto: DemoCrypto, expectedCreator: string): Verdict {
   // A plaintext name or a missing envelope is a malformed document; an envelope that does not open is undecryptable.
   if (Object.hasOwn(existing, "name") || readRecordEnvelope(existing.content) === null) return conflict("malformed-shape");
   let opened: unknown;
@@ -186,20 +200,20 @@ function classifyTeam(existing: Record<string, unknown>, docId: string, crypto: 
     return conflict("malformed-shape");
   }
   if (existing.status !== "active") return conflict("team-disabled");
-  if (existing.createdBy !== DEMO_AUDIT_ACTOR) return conflict("foreign-creator");
+  if (existing.createdBy !== expectedCreator) return conflict("foreign-creator");
   return OK;
 }
 
-function classifyMembership(existing: Record<string, unknown>, expected: Record<string, unknown>): Verdict {
-  const identity = { uid: String(expected.uid), teamId: DEMO_TEAM_ID };
+function classifyMembership(existing: Record<string, unknown>, expected: Record<string, unknown>, scope: DemoScope): Verdict {
+  const identity = { uid: String(expected.uid), teamId: scope.teamId };
   if (!isValidMembershipFor(existing, identity)) return conflict("membership-mismatch");
   if (existing.grantedBy !== DEMO_AUDIT_ACTOR) return conflict("membership-mismatch");
   return OK;
 }
 
-function classifySurvey(existing: Record<string, unknown>, docId: string, crypto: DemoCrypto): Verdict {
+function classifySurvey(existing: Record<string, unknown>, docId: string, crypto: DemoCrypto, scope: DemoScope): Verdict {
   // Scope is plaintext metadata, so it is checked before anything is decrypted.
-  if (existing.teamId !== DEMO_TEAM_ID) return conflict("scope-mismatch");
+  if (existing.teamId !== scope.teamId) return conflict("scope-mismatch");
   if (readRecordEnvelope(existing.content) === null) return conflict("malformed-shape");
   let opened: unknown;
   try {
@@ -242,14 +256,15 @@ function classifyResponse(
   expected: Record<string, unknown>,
   crypto: DemoCrypto,
   docId: string,
+  scope: DemoScope,
 ): Verdict {
   const existingKeys = Object.keys(existing).sort().join(",");
   const expectedKeys = Object.keys(expected).sort().join(",");
   if (existingKeys !== expectedKeys || !hasEncryptedShape(existing)) return conflict("malformed-shape");
-  if (existing.surveyId !== expected.surveyId || existing.teamId !== DEMO_TEAM_ID) {
+  if (existing.surveyId !== expected.surveyId || existing.teamId !== scope.teamId) {
     return conflict("scope-mismatch");
   }
-  return openRecordTo(existing, surveyResponseContext(DEMO_TEAM_ID, String(existing.surveyId), docId), crypto, isValidAnswerPayload)
+  return openRecordTo(existing, surveyResponseContext(scope.teamId, String(existing.surveyId), docId), crypto, isValidAnswerPayload)
     ? OK
     : conflict("undecryptable");
 }
@@ -281,12 +296,12 @@ function openRecordTo(
   }
 }
 
-function classifyChallenge(existing: Record<string, unknown>, docId: string, crypto: DemoCrypto): Verdict {
+function classifyChallenge(existing: Record<string, unknown>, docId: string, crypto: DemoCrypto, scope: DemoScope): Verdict {
   if (!isValidChallenge({ ...existing, challengeId: docId }, { challengeId: docId })) {
     return conflict("malformed-shape");
   }
-  if (existing.teamId !== DEMO_TEAM_ID) return conflict("scope-mismatch");
-  return openRecordTo(existing, challengeContext(DEMO_TEAM_ID, docId), crypto, (plain) => validateChallengeText(plain).ok)
+  if (existing.teamId !== scope.teamId) return conflict("scope-mismatch");
+  return openRecordTo(existing, challengeContext(scope.teamId, docId), crypto, (plain) => validateChallengeText(plain).ok)
     ? OK
     : conflict("undecryptable");
 }
@@ -329,10 +344,11 @@ function classifySkillProgress(
   expected: Record<string, unknown>,
   docId: string,
   crypto: DemoCrypto,
+  scope: DemoScope,
 ): Verdict {
   // Scope is plaintext metadata, so it is checked first. A plaintext stage or a missing envelope is malformed; an envelope
   // that does not open is undecryptable.
-  if (existing.teamId !== DEMO_TEAM_ID || existing.treeId !== expected.treeId) return conflict("scope-mismatch");
+  if (existing.teamId !== scope.teamId || existing.treeId !== expected.treeId) return conflict("scope-mismatch");
   if (Object.hasOwn(existing, "currentNodeId") || readRecordEnvelope(existing.content) === null) return conflict("malformed-shape");
   let opened: unknown;
   try {
@@ -345,12 +361,12 @@ function classifySkillProgress(
 }
 
 /** Compatible = valid roadmap shape for this team/tree/doc id, created by the seed. Later presenter edits are tolerated. */
-function classifyRoadmapItem(existing: Record<string, unknown>, expected: Record<string, unknown>, docId: string, crypto: DemoCrypto): Verdict {
+function classifyRoadmapItem(existing: Record<string, unknown>, expected: Record<string, unknown>, docId: string, crypto: DemoCrypto, scope: DemoScope): Verdict {
   // Scope is plaintext metadata, so it is checked before anything is decrypted.
   if (
-    existing.teamId !== DEMO_TEAM_ID ||
+    existing.teamId !== scope.teamId ||
     existing.treeId !== expected.treeId ||
-    docId !== roadmapItemDocId(DEMO_TEAM_ID, String(existing.treeId))
+    docId !== roadmapItemDocId(scope.teamId, String(existing.treeId))
   ) {
     return conflict("scope-mismatch");
   }
@@ -367,41 +383,220 @@ function classifyRoadmapItem(existing: Record<string, unknown>, expected: Record
   return parsed.createdBy === DEMO_AUDIT_ACTOR ? OK : conflict("foreign-creator");
 }
 
-function classifyExisting(op: PlannedOperation, data: unknown, crypto: DemoCrypto): Verdict {
+/** A competence plan: same team, and the opened title, milestones and metadata equal the planned plan. Unopenable is a conflict. */
+function classifyTeamCompetencePlan(
+  existing: Record<string, unknown>,
+  expected: Record<string, unknown>,
+  docId: string,
+  scope: DemoScope,
+  crypto: DemoCrypto,
+): Verdict {
+  if (existing.teamId !== scope.teamId) return conflict("scope-mismatch");
+  const stored = openCompetencePlanDocument(docId, existing, crypto.openRecord);
+  if (stored === null || stored === undefined) return conflict("undecryptable");
+  const planned = openCompetencePlanDocument(docId, expected, crypto.openRecord);
+  if (planned === null || planned === undefined) return conflict("malformed-shape");
+  return JSON.stringify(stored) === JSON.stringify(planned) ? OK : conflict("structure-mismatch");
+}
+
+/** A team skill: same team, and the opened name, description, category and guidance equal the planned skill. */
+function classifyTeamSkill(
+  existing: Record<string, unknown>,
+  expected: Record<string, unknown>,
+  docId: string,
+  scope: DemoScope,
+  crypto: DemoCrypto,
+): Verdict {
+  if (existing.teamId !== scope.teamId) return conflict("scope-mismatch");
+  const stored = openTeamSkillDocument(docId, existing, crypto.openRecord);
+  if (stored === null || stored === undefined) return conflict("undecryptable");
+  const planned = openTeamSkillDocument(docId, expected, crypto.openRecord);
+  if (planned === null || planned === undefined) return conflict("malformed-shape");
+  return JSON.stringify(stored) === JSON.stringify(planned) ? OK : conflict("structure-mismatch");
+}
+
+/** A system opens completely only when its name and every present note opened. A partly opened document is never compared. */
+function isFullyOpenedSystem(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as Record<string, unknown>;
+  if (typeof record.name !== "string") return false;
+  return ASSESSMENT_ATTRIBUTES.every((attribute) => {
+    const assessment = record[attribute];
+    if (typeof assessment !== "object" || assessment === null) return true;
+    const note = (assessment as Record<string, unknown>).note;
+    return note === null || typeof note === "string";
+  });
+}
+
+/** A team system: same team, and the opened name, description and every attribute value and note equal the planned system. */
+function classifyTeamSystem(
+  existing: Record<string, unknown>,
+  expected: Record<string, unknown>,
+  docId: string,
+  scope: DemoScope,
+  crypto: DemoCrypto,
+): Verdict {
+  if (existing.teamId !== scope.teamId) return conflict("scope-mismatch");
+  const stored = openTeamSystemDocument(docId, existing, crypto.openRecord) as Record<string, unknown> | null | undefined;
+  if (!isFullyOpenedSystem(stored)) return conflict("undecryptable");
+
+  const planned = openTeamSystemDocument(docId, expected, crypto.openRecord);
+  if (!isFullyOpenedSystem(planned)) return conflict("malformed-shape");
+  return JSON.stringify(stored) === JSON.stringify(planned) ? OK : conflict("structure-mismatch");
+}
+
+/** A team project: same team, and the decrypted title and plaintext fields equal the planned project. */
+function classifyTeamProject(
+  existing: Record<string, unknown>,
+  expected: Record<string, unknown>,
+  docId: string,
+  scope: DemoScope,
+  crypto: DemoCrypto,
+): Verdict {
+  if (existing.teamId !== scope.teamId) return conflict("scope-mismatch");
+  const stored = openTeamProjectDocument(docId, existing, crypto.openRecord);
+  if (stored === null) return conflict("undecryptable");
+  const planned = openTeamProjectDocument(docId, expected, crypto.openRecord);
+  if (planned === null) return conflict("malformed-shape");
+  const keys = ["teamId", "title", "startDate", "endDate", "lifecycleStatus", "priority", "archived"] as const;
+  return keys.every((key) => stored[key] === planned[key]) ? OK : conflict("structure-mismatch");
+}
+
+function classifyExisting(op: PlannedOperation, data: unknown, crypto: DemoCrypto, scope: DemoScope): Verdict {
   const existing = asRecord(data);
   const expected = asRecord(op.data);
   if (existing === null || expected === null) return conflict("malformed-shape");
 
   switch (op.collection) {
     case "teams":
-      return classifyTeam(existing, op.docId, crypto);
+      return classifyTeam(existing, op.docId, crypto, scope.reuseExistingTeam ? scope.presenterUid : DEMO_AUDIT_ACTOR);
     case "teamMemberships":
-      return classifyMembership(existing, expected);
+      return classifyMembership(existing, expected, scope);
     case "surveys":
-      return classifySurvey(existing, op.docId, crypto);
+      return classifySurvey(existing, op.docId, crypto, scope);
     case "surveyResponses":
-      return classifyResponse(existing, expected, crypto, op.docId);
+      return classifyResponse(existing, expected, crypto, op.docId, scope);
     case "challenges":
-      return classifyChallenge(existing, op.docId, crypto);
+      return classifyChallenge(existing, op.docId, crypto, scope);
     case "skillTrees":
       return classifySkillTree(existing, expected, op.docId, crypto);
     case "skillProgress":
-      return classifySkillProgress(existing, expected, op.docId, crypto);
+      return classifySkillProgress(existing, expected, op.docId, crypto, scope);
+    case "teamCompetencePlans":
+      return classifyTeamCompetencePlan(existing, expected, op.docId, scope, crypto);
+    case "teamSkills":
+      return classifyTeamSkill(existing, expected, op.docId, scope, crypto);
+    case "teamSystems":
+      return classifyTeamSystem(existing, expected, op.docId, scope, crypto);
+    case "teamProjects":
+      return classifyTeamProject(existing, expected, op.docId, scope, crypto);
     case "roadmapItems":
-      return classifyRoadmapItem(existing, expected, op.docId, crypto);
+      return classifyRoadmapItem(existing, expected, op.docId, crypto, scope);
   }
 }
 
-function classifyPath(op: PlannedOperation, read: DemoReadResult, crypto: DemoCrypto): ClassifiedPath {
+/** Fields compared per collection: the opened values a stored document must share with its planned twin. Extra fields set later by the application are not compared. */
+function logicalView(op: PlannedOperation, data: unknown, crypto: DemoCrypto, scope: DemoScope): Record<string, unknown> | null {
+  const record = asRecord(data);
+  if (record === null) return null;
+  const open = (envelope: RecordEnvelope, context: string) => crypto.openRecord(envelope, context);
+  try {
+    switch (op.collection) {
+      case "teams":
+        return asRecord(openTeamDocument(op.docId, record, open));
+      case "surveys":
+        return asRecord(openSurveyDocument(op.docId, record, open));
+      case "skillTrees":
+        return asRecord(openSkillTreeDocument(op.docId, record, open));
+      case "skillProgress":
+        return asRecord(openSkillProgressDocument(record, open));
+      case "roadmapItems":
+        return asRecord(openRoadmapItemDocument(record, open));
+      case "teamProjects":
+        return asRecord(openTeamProjectDocument(op.docId, record, open));
+      case "teamSystems": {
+        const opened = asRecord(openTeamSystemDocument(op.docId, record, open));
+        return isFullyOpenedSystem(opened) ? opened : null;
+      }
+      case "teamCompetencePlans":
+        return asRecord(openCompetencePlanDocument(op.docId, record, open));
+      case "teamSkills":
+        return asRecord(openTeamSkillDocument(op.docId, record, open));
+      case "teamMemberships":
+        return { uid: record.uid, teamId: record.teamId, createdVia: record.createdVia, grantedBy: record.grantedBy, createdAt: record.createdAt };
+      case "surveyResponses": {
+        const envelope = readRecordEnvelope(record);
+        if (envelope === null) return null;
+        const plain = open(envelope, surveyResponseContext(scope.teamId, String(record.surveyId), op.docId));
+        return { plain, surveyId: record.surveyId, teamId: record.teamId, submittedAt: record.submittedAt };
+      }
+      case "challenges": {
+        const envelope = readRecordEnvelope(record);
+        if (envelope === null) return null;
+        const plain = open(envelope, challengeContext(scope.teamId, op.docId));
+        return {
+          plain,
+          teamId: record.teamId,
+          submittedAt: record.submittedAt,
+          resolvedAt: record.resolvedAt,
+          resolvedBy: record.resolvedBy,
+          archivedAt: record.archivedAt,
+          archivedBy: record.archivedBy,
+        };
+      }
+      default:
+        return null;
+    }
+  } catch {
+    return null;
+  }
+}
+
+/** Fields an administrator changes by design, outside the seed: team visibility. Never a reason for a conflict. */
+const ADMIN_GOVERNED_FIELDS = ["visibility", "visibilityUpdatedAt"];
+
+/** Audit metadata (`updatedAt`, `updatedBy`) changes on any later edit and is not fixture content, so it is not compared. */
+function withoutAudit(view: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (view === null) return null;
+  return Object.fromEntries(Object.entries(view).filter(([key]) => key !== "updatedAt" && key !== "updatedBy"));
+}
+
+function canonicalValue(value: unknown): string | undefined {
+  return JSON.stringify(value, (_key, inner: unknown) => (inner instanceof Date ? inner.toISOString() : inner));
+}
+
+/** "same" only when every compared field of the stored document equals the planned one. Anything unreadable is never "same". */
+function sameLogicalDocument(op: PlannedOperation, existingData: unknown, crypto: DemoCrypto, scope: DemoScope): "same" | ConflictReason {
+  const stored = withoutAudit(logicalView(op, existingData, crypto, scope));
+  if (stored === null) return "undecryptable";
+  const planned = withoutAudit(logicalView(op, op.data, crypto, scope));
+  if (planned === null) return "malformed-shape";
+  // Every compared key of either side must match. Fields governed by administrators (team visibility) are the only exception.
+  const keys = new Set([...Object.keys(planned), ...Object.keys(stored)].filter((key) => !ADMIN_GOVERNED_FIELDS.includes(key)));
+  for (const key of keys) {
+    if (canonicalValue(stored[key]) !== canonicalValue(planned[key])) return "structure-mismatch";
+  }
+  return "same";
+}
+
+function classifyPath(op: PlannedOperation, read: DemoReadResult, crypto: DemoCrypto, scope: DemoScope): ClassifiedPath {
   const base = { path: op.path, collection: op.collection, writeClass: op.writeClass };
 
-  if (!read.exists) return { ...base, state: "ABSENT", action: "create" };
+  if (!read.exists) {
+    // Reuse never creates a team: an absent existing team is a refusal, not an ABSENT create.
+    if (scope.reuseExistingTeam && op.collection === "teams") return { ...base, state: "CONFLICT", action: "blocked", reason: "team-missing" };
+    return { ...base, state: "ABSENT", action: "create" };
+  }
 
-  const verdict = classifyExisting(op, read.data, crypto);
+  const verdict = classifyExisting(op, read.data, crypto, scope);
   if (!verdict.compatible) {
     return { ...base, state: "CONFLICT", action: "blocked", reason: verdict.reason };
   }
-  return { ...base, state: "COMPATIBLE", action: op.writeClass === "C" ? "skip" : "set" };
+  // The existing team is owned and governed by the presenter; reuse never compares or rewrites it.
+  if (op.collection === "teams" && scope.reuseExistingTeam) return { ...base, state: "COMPATIBLE", action: "skip" };
+  const same = sameLogicalDocument(op, read.data, crypto, scope);
+  if (same !== "same") return { ...base, state: "CONFLICT", action: "blocked", reason: same };
+  return { ...base, state: "COMPATIBLE", action: "skip" };
 }
 
 // ---------------------------------------------------------------------------
@@ -420,6 +615,7 @@ function failure(category: PreflightErrorCategory, classifications: readonly Cla
  */
 export async function runDemoPreflight(input: DemoPreflightInput): Promise<DemoPreflightResult> {
   const { config, operations, manifest, crypto, online } = input;
+  const scope: DemoScope = input.scope ?? { teamId: DEMO_TEAM_ID, reuseExistingTeam: false, presenterUid: config.presenterUid };
 
   assertManifestValid(manifest);
   assertOperationsMatchManifest(operations, manifest);
@@ -455,7 +651,7 @@ export async function runDemoPreflight(input: DemoPreflightInput): Promise<DemoP
     } catch {
       return failure("read-failed");
     }
-    classifications.push(classifyPath(op, read, crypto));
+    classifications.push(classifyPath(op, read, crypto, scope));
   }
 
   if (classifications.some((c) => c.state === "CONFLICT")) return failure("conflict", classifications);
@@ -474,7 +670,7 @@ export async function runDemoPreflight(input: DemoPreflightInput): Promise<DemoP
 // ---------------------------------------------------------------------------
 
 export interface DemoDryRunReportInput {
-  config: Pick<DemoSeedConfig, "mode" | "projectId" | "presenterUid" | "asOf">;
+  config: Pick<DemoSeedConfig, "mode" | "projectId" | "presenterUid" | "asOf" | "teamId">;
   operations: readonly PlannedOperation[];
   result: DemoPreflightResult;
 }
@@ -491,7 +687,8 @@ export function formatDemoDryRunReport(input: DemoDryRunReportInput): string[] {
     config.mode === "write" ? "Demo Team seed — preflight before write" : "Demo Team seed — dry-run (no writes)",
     `Resolved project id: ${config.projectId}`,
     `Mode: ${config.mode}`,
-    `Team id: ${DEMO_TEAM_ID}`,
+    `Team id: ${config.teamId}`,
+    config.teamId === DEMO_TEAM_ID ? "Team mode: create the demo team (default)" : "Team mode: reuse the existing team (never created or rewritten)",
     `Presenter uid: ${config.presenterUid}`,
     `As-of date: ${config.asOf.toISOString().slice(0, 10)}`,
     `Local crypto round-trip: ${result.ok || result.error.category !== "crypto-failed" ? "ok" : "FAILED"} (does not prove the key matches ciphertext already stored in Firestore)`,

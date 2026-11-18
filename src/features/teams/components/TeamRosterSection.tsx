@@ -6,10 +6,10 @@ import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
-import { LoadingState } from "../../../components/ui/LoadingState";
 import { InitialsAvatar } from "../../../components/ui/dashboard/DashboardPrimitives";
 import { fetchTeamRoster, type FetchTeamRosterResult } from "../client/team-roster-gateway";
 import { teamsCopy } from "../copy";
+import { TeamRosterSkeleton } from "./TeamAdminSkeletons";
 
 type RosterState =
   | { phase: "idle" }
@@ -94,7 +94,7 @@ export function TeamRosterSection({ teamId, token }: { teamId: string; token: st
 
 function RosterBody({ state, onRetry }: { state: RosterState; onRetry: () => void }) {
   if (state.phase === "idle" || state.phase === "loading") {
-    return <LoadingState label={teamsCopy.roster.loading} />;
+    return <TeamRosterSkeleton label={teamsCopy.roster.loading} />;
   }
 
   if (state.phase === "error") {

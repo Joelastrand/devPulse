@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Card } from "../../../components/ui/Card";
+import { Skeleton } from "../../../components/ui/Skeleton";
 import { ProjectStatusBadge } from "../../team-projects/components/project-presentation";
 import type { ClientTeamProject } from "../../team-projects/client/team-projects-gateway";
 
@@ -59,7 +60,12 @@ export function TeamOversiktProjects({ teamId, read }: { teamId: string; read: P
         ) : null}
       </div>
       {read.status === "loading" ? (
-        <p className="text-sm text-text-secondary" aria-live="polite">{PROJECTS_COPY.loading}</p>
+        <div className="flex flex-col gap-3 py-1">
+          <span className="sr-only">{PROJECTS_COPY.loading}</span>
+          <Skeleton aria-hidden="true" className="h-10 w-full" />
+          <Skeleton aria-hidden="true" className="h-10 w-full" />
+          <Skeleton aria-hidden="true" className="h-10 w-4/5" />
+        </div>
       ) : read.status === "forbidden" ? (
         <p className="text-sm text-text-secondary">{PROJECTS_COPY.forbidden}</p>
       ) : read.status === "unavailable" ? (

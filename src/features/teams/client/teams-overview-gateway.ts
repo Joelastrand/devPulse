@@ -13,17 +13,18 @@ export type TeamsOverviewFetchResult =
 
 const KNOWN_ERROR_STATUSES = new Set(["unauthenticated", "read_failed"]);
 
-const RELATIONSHIPS = new Set(["admin", "member", "request_pending", "request_rejected", "none"]);
+const RELATIONSHIPS = new Set(["teamadmin", "member", "request_pending", "request_rejected", "none"]);
 
 function isTeamOverviewEntry(value: unknown): value is TeamOverviewEntry {
   if (typeof value !== "object" || value === null) {
     return false;
   }
-  const { teamId, name, relationship, isMember } = value as Record<string, unknown>;
+  const { teamId, name, relationship, isMember, canOpen } = value as Record<string, unknown>;
   return (
     typeof teamId === "string" &&
     typeof name === "string" &&
     typeof isMember === "boolean" &&
+    typeof canOpen === "boolean" &&
     typeof relationship === "string" &&
     RELATIONSHIPS.has(relationship)
   );

@@ -117,8 +117,9 @@ describe("Oversikt is a dashboard, not the editing form (ref 07)", () => {
     await screen.findByRole("heading", { name: "Kompetanseprofil" });
     fireEvent.click(screen.getByRole("button", { name: "Radar" }));
     expect(screen.getByRole("button", { name: "Radar" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("img", { name: "Radardiagram over 3 vurderte ferdigheter, nivå 1 til 4." })).toBeTruthy();
-    const table = screen.getByRole("table", { name: "Nivå per vurdert ferdighet" });
+    // The radar is code-split, so it appears once its chart code has loaded.
+    expect(await screen.findByRole("img", { name: "Radardiagram over 3 vurderte ferdigheter, nivå 1 til 4." })).toBeTruthy();
+    const table = await screen.findByRole("table", { name: "Nivå per vurdert ferdighet" });
     expect(within(table).getByText("Avansert")).toBeTruthy();
     expect(within(table).queryByText("Driftsmiljø")).toBeNull();
     expect(screen.getByText("1 ikke vurdert: vises ikke i radaren.")).toBeTruthy();

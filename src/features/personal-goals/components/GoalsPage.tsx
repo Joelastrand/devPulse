@@ -8,7 +8,7 @@ import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { GoalsIllustration } from "../../../components/ui/illustrations/illustrations";
-import { LoadingState } from "../../../components/ui/LoadingState";
+import { LoadingRegion, Skeleton, SkeletonCard } from "../../../components/ui/Skeleton";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import { createGoal, deleteGoal, fetchGoals, updateGoal, type GoalMutationError } from "../client/goals-gateway";
 import { goalsCopy } from "../copy";
@@ -32,6 +32,23 @@ type ViewState =
  * `initialTreeId` (role-profiles "Opprett mål", PG-11) opens the create form once, with that tree preselected when it is
  * an option. Nothing is created until an explicit submit.
  */
+/** Placeholder for the goals list: three goal rows (title, target date, status badge) in the loaded order. No goal text. */
+function GoalsListSkeleton({ label }: { label: string }) {
+  return (
+    <LoadingRegion label={label} className="flex flex-col gap-3">
+      {[0, 1, 2].map((index) => (
+        <SkeletonCard key={index} className="flex items-center justify-between gap-3 p-4">
+          <div aria-hidden="true" className="flex min-w-0 flex-1 flex-col gap-2">
+            <Skeleton className="h-5 w-2/3" />
+            <Skeleton className="h-4 w-1/3" />
+          </div>
+          <Skeleton aria-hidden="true" className="h-6 w-20 shrink-0 rounded-full" />
+        </SkeletonCard>
+      ))}
+    </LoadingRegion>
+  );
+}
+
 export function GoalsPage({ initialTreeId }: { initialTreeId?: string } = {}) {
   const [state, setState] = useState<ViewState>({ phase: "loading" });
 
@@ -57,7 +74,7 @@ export function GoalsPage({ initialTreeId }: { initialTreeId?: string } = {}) {
   }
 
   if (state.phase === "loading") {
-    return <LoadingState label={goalsCopy.loading} />;
+    return <GoalsListSkeleton label={goalsCopy.loading} />;
   }
 
   if (state.phase === "signed_out") {

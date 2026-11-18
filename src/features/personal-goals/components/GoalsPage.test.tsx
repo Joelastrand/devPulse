@@ -88,6 +88,9 @@ describe("GoalsPage", () => {
     expect(screen.queryByText(goalsCopy.empty)).toBeNull();
     expect(fetchGoalsMock).toHaveBeenCalledTimes(1);
     expect(fetchGoalsMock).toHaveBeenCalledWith("a-token");
+    // The loading placeholder is decorative: it is hidden from assistive technology and carries no goal text.
+    expect(document.querySelector('[aria-hidden="true"]')).not.toBeNull();
+    expect(screen.getByRole("status").parentElement?.getAttribute("aria-busy")).toBe("true");
   });
 
   it("shows the empty state, with the privacy copy, only when goals and recovery items are both empty", async () => {

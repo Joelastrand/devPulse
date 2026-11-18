@@ -1,3 +1,4 @@
+import { teamPlanCounts } from "./team-plan-counts";
 import { openSkillProgressDocument } from "../skill-trees/server/skill-progress-content-codec";
 import { createHash, randomBytes } from "node:crypto";
 import { openSkillTreeDocument } from "../skill-trees/domain/skill-tree-content-codec";
@@ -78,15 +79,19 @@ function countBy(operations: readonly PlannedOperation[]) {
 describe("demo dataset shape", () => {
   const { operations, manifest } = plan();
 
-  it("plans exactly 85 documents with the approved per-collection counts", () => {
-    expect(operations).toHaveLength(85);
+  it("plans the team documents with the approved per-collection counts (skill trees include the eight personal catalog trees)", () => {
+    expect(operations).toHaveLength(teamPlanCounts().total);
     expect(countBy(operations)).toEqual({
       teams: 1,
       teamMemberships: 1,
       surveys: 9,
       surveyResponses: 59,
       challenges: 5,
-      skillTrees: 4,
+      skillTrees: 12,
+      teamProjects: 6,
+      teamSystems: 8,
+      teamCompetencePlans: 6,
+      teamSkills: 25,
       skillProgress: 3,
       roadmapItems: 3,
     });
@@ -108,6 +113,14 @@ describe("demo dataset shape", () => {
       "demo-skill-delivery",
       "demo-skill-observability",
       "demo-skill-secure-dev",
+      "demo-skill-typescript",
+      "demo-skill-api",
+      "demo-skill-cloud",
+      "demo-skill-accessibility",
+      "demo-skill-architecture",
+      "demo-skill-mentoring",
+      "demo-skill-data",
+      "demo-skill-incident",
     ]);
     expect(ids("skillProgress")).toEqual([
       "demo-team__demo-skill-testing",
@@ -123,22 +136,15 @@ describe("demo dataset shape", () => {
     expect(ids("surveyResponses").at(-1)).toBe("demo-response-s08-r08");
   });
 
-  it("assigns the approved write classes (C for team, membership, scheduled survey, roadmap plans; U for the rest)", () => {
-    const cPaths = operations.filter((o) => o.writeClass === "C").map((o) => o.path);
-    expect(cPaths).toEqual([
-      "teams/demo-team",
-      `teamMemberships/${PRESENTER}__demo-team`,
-      "surveys/demo-survey-next",
-      "roadmapItems/demo-team__demo-skill-testing",
-      "roadmapItems/demo-team__demo-skill-observability",
-      "roadmapItems/demo-team__demo-skill-delivery",
-    ]);
-    expect(operations.filter((o) => o.writeClass === "U")).toHaveLength(79);
+  it("every team document is create-only: the plan contains no upsert (writeClass U) operation", () => {
+    expect(operations.filter((o) => o.writeClass === "U")).toHaveLength(0);
+    expect(operations.every((o) => o.writeClass === "C")).toBe(true);
+    expect(operations.filter((o) => o.writeClass === "C").map((o) => o.path)).toEqual(operations.map((o) => o.path));
   });
 
   it("has an explicit manifest of 85 unique, allow-listed paths that the plan matches exactly", () => {
-    expect(manifest).toHaveLength(85);
-    expect(new Set(manifest.map((m) => m.path)).size).toBe(85);
+    expect(manifest).toHaveLength(teamPlanCounts().total);
+    expect(new Set(manifest.map((m) => m.path)).size).toBe(teamPlanCounts().total);
     expect(new Set(manifest.map((m) => m.collection))).toEqual(new Set(ALLOWED_COLLECTIONS));
     expect(operations.map((o) => o.path)).toEqual(manifest.map((m) => m.path));
     expect(() => assertOperationsMatchManifest(operations, manifest)).not.toThrow();
@@ -224,7 +230,7 @@ describe("surveys and dates", () => {
       expect(() => plan(bad)).toThrow(/midnight UTC/);
     }
     const leap = plan(new Date("2028-02-29T00:00:00.000Z"));
-    expect(leap.operations).toHaveLength(85);
+    expect(leap.operations).toHaveLength(teamPlanCounts().total);
 
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2001-01-01T00:00:00Z"));
@@ -365,11 +371,14 @@ describe("skill trees and progress", () => {
   const nodesOf = (docId: string) =>
     (trees.find((t) => t.docId === docId)!.data as { nodes: { nodeId: string }[] }).nodes;
 
-  it("has four valid, linear, org-wide 'Demo – ' trees with the approved stage counts", () => {
+  it("has twelve valid, linear, org-wide 'Demo – ' trees: four team trees and eight personal catalog trees, with the approved stage counts", () => {
     expect(trees.map((t) => (t.data as { name: string }).name)).toEqual([
       "Demo – Testautomatisering", "Demo – Leveranse", "Demo – Observerbarhet", "Demo – Sikker utvikling",
+      "Demo – TypeScript og React", "Demo – API-design og integrasjon", "Demo – Skyarkitektur", "Demo – Universell utforming",
+      "Demo – Arkitekturbeslutninger", "Demo – Mentorering og teknisk ledelse", "Demo – Datamodellering og datakvalitet",
+      "Demo – Hendelseshåndtering",
     ]);
-    expect(trees.map((t) => nodesOf(t.docId).length)).toEqual([5, 6, 4, 4]);
+    expect(trees.map((t) => nodesOf(t.docId).length)).toEqual([5, 6, 4, 4, 4, 4, 4, 4, 3, 3, 4, 3]);
     for (const t of trees) {
       expect(isValidSkillTree(t.data)).toBe(true);
       expect(Object.keys(t.data as object).sort()).toEqual(["createdAt", "createdBy", "name", "nodes"]);
@@ -432,7 +441,7 @@ describe("team, membership, presenter uid and privacy", () => {
     }
     expect([...actorKeys].sort()).toEqual([
       "challenges.archivedBy", "challenges.resolvedBy", "roadmapItems.createdBy", "roadmapItems.updatedBy", "skillProgress.updatedBy",
-      "skillTrees.createdBy", "surveys.createdBy", "teamMemberships.grantedBy", "teams.createdBy",
+      "skillTrees.createdBy", "surveys.createdBy", "teamMemberships.grantedBy", "teamSkills.createdBy", "teamSkills.updatedBy", "teamSystems.createdBy", "teamSystems.updatedBy", "teams.createdBy",
     ]);
   });
 
@@ -472,7 +481,7 @@ describe("determinism", () => {
     // compared by identity instead; every other operation is compared byte for byte.
     const strip = (p: ReturnType<typeof plan>) =>
       JSON.stringify(
-        p.operations.map((o) => (o.collection === "roadmapItems" ? { ...o, data: { ...(o.data as object), content: "<sealed>" } } : o)),
+        p.operations.map((o) => (["roadmapItems", "teamCompetencePlans"].includes(o.collection) ? { ...o, data: { ...(o.data as object), content: "<sealed>" } } : o)),
         (_k, v) => (typeof v === "string" && /^\d{4}-\d\d-\d\d(T|$)/.test(v) ? "<date>" : v),
       );
     expect(strip(b)).toBe(strip(a));

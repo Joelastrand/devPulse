@@ -210,6 +210,65 @@ async function updateInTransaction<C, DTO>(
 }
 
 /** Deletes one record by path. Never decrypts, so a key failure cannot block or alter a deletion (PR-SI-5). */
+/** Outcome of a create-only seed write: created, or an identical record already existed. */
+export type RecordSeedAction = "create" | "skip";
+
+/** Thrown when the stored record at the seed's id differs from the planned one, or cannot be opened. Carries no content. */
+export class RecordSeedConflictError extends Error {
+  constructor() {
+    super("record seed conflict");
+    this.name = "RecordSeedConflictError";
+  }
+}
+
+function canonicalJson(value: unknown): string {
+  return JSON.stringify(value, (_key, inner: unknown) => {
+    if (inner instanceof Date) return inner.toISOString();
+    if (inner !== null && typeof inner === "object" && !Array.isArray(inner)) {
+      return Object.fromEntries(Object.entries(inner as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)));
+    }
+    return inner;
+  });
+}
+
+/**
+ * Trusted create-only seed for one planned record with a caller-chosen id (feature-owned; not an HTTP path). The
+ * record is validated by its schema, sealed by `encodeSourceRecord` with `personal-record:<uid>:<collection>:<id>` AAD,
+ * and written inside the erasure-fenced transaction. An existing record at that id is skipped only when its opened
+ * content and timestamps are identical; anything else is a conflict and is never overwritten.
+ */
+export async function seedRecordCreateOnly<C>(
+  store: PersonalRecordStore,
+  ownerUid: string,
+  schema: RecordSchema<C>,
+  id: string,
+  content: C,
+  stamps: { createdAt: Date; updatedAt: Date },
+): Promise<RecordSeedAction> {
+  const { payload, plain } = schema.split(content);
+  const validated = schema.fromInput({ ...payload, ...plain });
+  if (!validated.ok) throw new RecordSeedConflictError();
+
+  return store.runFenced<RecordSeedAction>(ownerUid, async (tx) => {
+    const stored = await tx.get(schema.collection, id);
+    if (stored !== undefined) {
+      const read = readStoredRecord({ id, data: stored }, schema, ownerUid);
+      const same =
+        read.kind === "ok" &&
+        canonicalJson(read.content) === canonicalJson(content) &&
+        read.createdAt.getTime() === stamps.createdAt.getTime() &&
+        read.updatedAt.getTime() === stamps.updatedAt.getTime();
+      if (!same) throw new RecordSeedConflictError();
+      return "skip";
+    }
+    const encoded = encodeSourceRecord(payload, sourceRecordContext(ownerUid, schema.collection, id));
+    // A key outage is an operational failure, not a content conflict (same class as the owner write path).
+    if (!encoded.ok) throw new Error("record seed key unavailable");
+    tx.set(schema.collection, id, { ...encoded.envelope, ...plain, createdAt: stamps.createdAt, updatedAt: stamps.updatedAt });
+    return "create";
+  });
+}
+
 export async function deleteRecord(
   store: PersonalRecordStore,
   ownerUid: string,

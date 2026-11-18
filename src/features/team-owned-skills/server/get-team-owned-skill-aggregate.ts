@@ -2,7 +2,7 @@ import "server-only";
 import { authRefusalFor, type AuthRefusal } from "../../auth/server/auth-refusal";
 import { verifyIdToken, type VerifiedIdentity, type VerifyIdTokenDeps } from "../../auth/server/verify-identity";
 import { sortSkillRows } from "../../skill-profiles/domain/skill-profile-view";
-import { isEffectiveSkillContribution } from "../../team-skills/domain/skill-contribution";
+import { isEffectiveSkillContribution, readSkillContribution } from "../../team-skills/domain/skill-contribution";
 import { SKILL_COVERAGE_MIN_CONTRIBUTORS, TEAM_SKILL_COHORT_SCAN_MAX } from "../../team-skills/domain/skill-coverage-policy";
 import { deriveTeamLevel } from "../../team-skills/domain/team-level";
 import { getDefaultSkillContributionStore, type SkillContributionStore } from "../../team-skills/server/skill-contribution-store";
@@ -27,7 +27,11 @@ export type TeamOwnedSkillAggregateRow =
   | { skillId: string; name: string; state: "insufficient_data" };
 
 export type TeamOwnedSkillAggregateResponse =
-  | { availability: "available"; rows: TeamOwnedSkillAggregateRow[] }
+  /**
+   * `includesSimulated` is true when at least one counted contributor is fictional demo consent. It is a label, not a
+   * count: it says nothing about how many people contributed or who they are.
+   */
+  | { availability: "available"; rows: TeamOwnedSkillAggregateRow[]; includesSimulated: boolean }
   /** The scan or read budget was exceeded: nothing is derived from a known-incomplete cohort. */
   | { availability: "incomplete"; rows: [] };
 
@@ -77,19 +81,26 @@ async function gateAndLoadActiveSkills(
 
 /**
  * Uids of members of this team who have an effective contribution (opt-in at the current notice version). Each document
- * must match its own id and the team; anything else is ignored. Duplicates collapse. Internal: never returned.
+ * must match its own id and the team; anything else is ignored. Duplicates collapse. Internal: never returned. `simulated`
+ * reports whether any counted uid holds fictional demo consent; it is never a uid or a count.
  */
-function optedInUids(docs: ReadonlyArray<{ id: string; data: unknown }>, teamId: string): string[] {
+function optedInContributors(
+  docs: ReadonlyArray<{ id: string; data: unknown }>,
+  teamId: string,
+): { uids: string[]; simulated: boolean } {
   const uids = new Set<string>();
+  let simulated = false;
   for (const { id, data } of docs) {
     if (typeof data !== "object" || data === null) continue;
     const { uid, teamId: storedTeamId } = data as Record<string, unknown>;
     if (typeof uid !== "string" || uid.length === 0 || storedTeamId !== teamId) continue;
     if (id !== membershipDocId(uid, teamId)) continue;
-    if (!isEffectiveSkillContribution(data)) continue;
+    const context = { uid, teamId };
+    if (!isEffectiveSkillContribution(data, context)) continue;
     uids.add(uid);
+    if (readSkillContribution(data, context)?.origin === "simulated") simulated = true;
   }
-  return [...uids];
+  return { uids: [...uids], simulated };
 }
 
 /**
@@ -108,14 +119,14 @@ export function createGetTeamOwnedSkillAggregate(deps: GetTeamOwnedSkillAggregat
       const gated = await gateAndLoadActiveSkills(deps.skillStore ?? getDefaultTeamSkillStore(), verified.identity, teamId);
       if (!gated.ok) return gated;
       const { skills } = gated;
-      if (skills.length === 0) return { ok: true, availability: "available", rows: [] };
+      if (skills.length === 0) return { ok: true, availability: "available", rows: [], includesSimulated: false };
 
       const scanned = await (deps.contributionStore ?? getDefaultSkillContributionStore()).listMembershipsForCoverage(
         teamId,
         TEAM_SKILL_COHORT_SCAN_MAX + 1,
       );
       if (scanned.length > TEAM_SKILL_COHORT_SCAN_MAX) return { ok: true, availability: "incomplete", rows: [] };
-      const uids = optedInUids(scanned, teamId);
+      const { uids, simulated: includesSimulated } = optedInContributors(scanned, teamId);
 
       if (uids.length * skills.length > TEAM_OWNED_AGGREGATE_MAX_READS) return { ok: true, availability: "incomplete", rows: [] };
 
@@ -139,7 +150,7 @@ export function createGetTeamOwnedSkillAggregate(deps: GetTeamOwnedSkillAggregat
         return { skillId, name: record.name, state: "value", level: derived.level };
       });
 
-      return { ok: true, availability: "available", rows: sortRows(rows, skills) };
+      return { ok: true, availability: "available", rows: sortRows(rows, skills), includesSimulated };
     } catch {
       return { ok: false, error: "read_failed" };
     }

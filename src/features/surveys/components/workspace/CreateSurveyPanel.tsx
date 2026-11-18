@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Alert } from "../../../../components/ui/Alert";
 import { Button } from "../../../../components/ui/Button";
 import { Card } from "../../../../components/ui/Card";
@@ -38,12 +38,19 @@ export function CreateSurveyPanel({ teamId, token, onCreated, onCancel }: Create
   const [endAt, setEndAt] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const inFlight = useRef(false);
+  const currentToken = useRef(token);
+  useEffect(() => {
+    currentToken.current = token;
+  }, [token]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (submitting) {
+    // A ref, so a second submit before the next render cannot create a second survey.
+    if (inFlight.current) {
       return;
     }
+    inFlight.current = true;
     const input: CreateAdminSurveyInput = {
       accessMode,
       minimumResponses: Number(minimumResponses),
@@ -55,13 +62,23 @@ export function CreateSurveyPanel({ teamId, token, onCreated, onCancel }: Create
     };
     setSubmitting(true);
     setError(null);
-    const result = await createAdminSurvey(token, teamId, input);
-    setSubmitting(false);
-    if (result.ok) {
-      onCreated(result.surveyId);
-      return;
+    const submittedWith = token;
+    try {
+      const result = await createAdminSurvey(token, teamId, input);
+      setSubmitting(false);
+      if (currentToken.current !== submittedWith) {
+        // The signed-in identity changed while the request was in flight: the outcome belongs to the previous session
+        // and is not shown or acted on.
+        return;
+      }
+      if (result.ok) {
+        onCreated(result.surveyId);
+        return;
+      }
+      setError(validationMessage(result.error));
+    } finally {
+      inFlight.current = false;
     }
-    setError(validationMessage(result.error));
   }
 
   return (

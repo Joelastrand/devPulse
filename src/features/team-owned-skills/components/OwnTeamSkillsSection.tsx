@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import { fetchTeamsOverview } from "../../teams/client/teams-overview-gateway";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
-import { LoadingState } from "../../../components/ui/LoadingState";
+import { LoadingRegion, Skeleton } from "../../../components/ui/Skeleton";
 import { SELF_ASSESSED_LEVEL_COPY } from "../../skill-profiles/copy";
 import { teamSkillsCopy } from "../copy";
 import type { TeamSkillLevel } from "../domain/team-skill";
@@ -41,13 +41,24 @@ function ratingFor(list: Extract<TeamSkillsListResult, { status: "ok" }>, skillI
  * through the server, and the list is reloaded after each change so the stored state is what is shown.
  */
 export function OwnTeamSkillsSection() {
-  const [token, setToken] = useState<string | null>(null);
   const [blocks, setBlocks] = useState<TeamBlock[] | null>(null);
   const [overviewFailed, setOverviewFailed] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
+  /** Rating keys (`teamId:skillId`) with a write in flight. Mirrored in a ref so a repeat click is blocked before re-render. */
+  const [pendingKeys, setPendingKeys] = useState<ReadonlySet<string>>(() => new Set());
+  const pendingRef = useRef(new Set<string>());
+  /** The current identity and its generation. Every late result is checked against the generation it was started under. */
+  const current = useRef<{ token: string | null; generation: number; isCurrent: (generation: number) => boolean }>({
+    token: null,
+    generation: 0,
+    isCurrent: () => false,
+  });
 
-  useAuthGatedResource((nextToken) => {
-    setToken(nextToken);
+  useAuthGatedResource((nextToken, generation, isCurrentGeneration) => {
+    current.current = { token: nextToken, generation, isCurrent: isCurrentGeneration };
+    // A new auth state drops every in-flight rating and the previous identity's blocks.
+    pendingRef.current = new Set();
+    setPendingKeys(new Set());
     setBlocks(null);
     setOverviewFailed(false);
     if (nextToken === null) {
@@ -56,6 +67,7 @@ export function OwnTeamSkillsSection() {
     }
     void (async () => {
       const overview = await fetchTeamsOverview(nextToken);
+      if (!isCurrentGeneration(generation)) return;
       if (overview.status !== "ok") {
         setOverviewFailed(true);
         setBlocks([]);
@@ -70,28 +82,49 @@ export function OwnTeamSkillsSection() {
           error: null,
         })),
       );
+      if (!isCurrentGeneration(generation)) return;
       setBlocks(loaded);
     })();
   }, []);
 
+  /** Re-reads one team with the identity that is current when called. A result from a superseded generation is dropped. */
   async function reloadTeam(teamId: string, error: string | null) {
+    const { token, generation, isCurrent } = current.current;
     if (token === null) return;
     const list = await fetchTeamSkills(token, teamId);
-    setBlocks((current) => current?.map((block) => (block.teamId === teamId ? { ...block, list, error } : block)) ?? null);
+    if (!isCurrent(generation)) return;
+    setBlocks((existing) => existing?.map((block) => (block.teamId === teamId ? { ...block, list, error } : block)) ?? null);
   }
 
   async function rate(teamId: string, skillId: string, level: TeamSkillLevel | null) {
-    if (token === null) return;
-    const outcome = level === null ? await clearOwnTeamSkillRating(token, teamId, skillId) : await setOwnTeamSkillRating(token, teamId, skillId, level);
-    if (outcome.status === "ok") {
-      await reloadTeam(teamId, null);
-      return;
+    const key = `${teamId}:${skillId}`;
+    const { token, generation, isCurrent } = current.current;
+    if (token === null || pendingRef.current.has(key)) return;
+    pendingRef.current.add(key);
+    setPendingKeys(new Set(pendingRef.current));
+    try {
+      const outcome =
+        level === null
+          ? await clearOwnTeamSkillRating(token, teamId, skillId)
+          : await setOwnTeamSkillRating(token, teamId, skillId, level);
+      if (!isCurrent(generation)) {
+        // The auth state changed mid-write: no success or failure is shown; the team is re-read for the current identity.
+        await reloadTeam(teamId, null);
+        return;
+      }
+      if (outcome.status === "ok") {
+        await reloadTeam(teamId, null);
+        return;
+      }
+      const message = (teamSkillsCopy.errors as Record<string, string>)[outcome.status] ?? teamSkillsCopy.errors.write_failed;
+      await reloadTeam(teamId, message);
+    } finally {
+      pendingRef.current.delete(key);
+      setPendingKeys(new Set(pendingRef.current));
     }
-    const message = (teamSkillsCopy.errors as Record<string, string>)[outcome.status] ?? teamSkillsCopy.errors.write_failed;
-    await reloadTeam(teamId, message);
   }
 
-  if (blocks === null) return <LoadingState label={teamSkillsCopy.loading} />;
+  if (blocks === null) return <OwnTeamSkillsSkeleton label={teamSkillsCopy.loading} />;
   if (overviewFailed) return <Alert variant="error">{teamSkillsCopy.errors.read_failed}</Alert>;
   if (blocks.length === 0) return <EmptyState>{teamSkillsCopy.own.emptyTeam}</EmptyState>;
 
@@ -109,6 +142,7 @@ export function OwnTeamSkillsSection() {
           key={block.teamId}
           block={block}
           filter={filter}
+          pendingKeys={pendingKeys}
           onRate={(skillId, level) => void rate(block.teamId, skillId, level)}
         />
       ))}
@@ -142,13 +176,43 @@ function FilterButtons({ value, onChange }: { value: Filter; onChange: (next: Fi
   );
 }
 
+/** Placeholder with the final layout: heading, filter row, one team card with skill rows. Decorative; the region announces once. */
+function OwnTeamSkillsSkeleton({ label }: { label: string }) {
+  return (
+    <LoadingRegion label={label} className="flex flex-col gap-4">
+      <div aria-hidden="true" className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
+          <Skeleton className="h-6 w-1/3" />
+          <Skeleton className="h-4 w-2/3" />
+        </div>
+        <div className="flex flex-col gap-3 rounded-surface border border-border-subtle bg-surface p-4">
+          <Skeleton className="h-5 w-1/4" />
+          <ul className="flex flex-col divide-y divide-border-subtle">
+            {[0, 1, 2].map((index) => (
+              <li key={index} className="flex flex-col gap-2 py-3 md:flex-row md:items-center md:justify-between">
+                <div className="flex min-w-0 flex-1 flex-col gap-2">
+                  <Skeleton className="h-4 w-1/2" />
+                  <Skeleton className="h-3 w-1/4" />
+                </div>
+                <Skeleton className="h-8 w-48 md:shrink-0" />
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </LoadingRegion>
+  );
+}
+
 function TeamBlockView({
   block,
   filter,
+  pendingKeys,
   onRate,
 }: {
   block: TeamBlock;
   filter: Filter;
+  pendingKeys: ReadonlySet<string>;
   onRate: (skillId: string, level: TeamSkillLevel | null) => void;
 }) {
   const heading = teamSkillsCopy.own.teamHeading(block.name);
@@ -182,7 +246,13 @@ function TeamBlockView({
       {active.length > 0 && visible.length === 0 ? <p className="text-sm text-text-secondary">{teamSkillsCopy.own.emptyTeam}</p> : null}
       <ul className="flex flex-col divide-y divide-border-subtle">
         {visible.map((skill) => (
-          <SkillRatingRow key={skill.skillId} skill={skill} rating={ratingFor(list, skill.skillId)} onRate={(level) => onRate(skill.skillId, level)} />
+          <SkillRatingRow
+            key={skill.skillId}
+            skill={skill}
+            rating={ratingFor(list, skill.skillId)}
+            pending={pendingKeys.has(`${block.teamId}:${skill.skillId}`)}
+            onRate={(level) => onRate(skill.skillId, level)}
+          />
         ))}
       </ul>
       {inactive.length > 0 ? (
@@ -208,10 +278,13 @@ function TeamBlockView({
 function SkillRatingRow({
   skill,
   rating,
+  pending,
   onRate,
 }: {
   skill: TeamSkillView;
   rating: OwnTeamSkillRating | undefined;
+  /** True while this skill's write is in flight: only this row's controls are disabled. */
+  pending: boolean;
   onRate: (level: TeamSkillLevel | null) => void;
 }) {
   return (
@@ -243,12 +316,13 @@ function SkillRatingRow({
         </details>
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-2">
-        <TeamSkillRatingControl skillName={skill.name} value={rating?.level ?? null} onSelect={(level) => onRate(level)} />
+        <TeamSkillRatingControl skillName={skill.name} value={rating?.level ?? null} disabled={pending} onSelect={(level) => onRate(level)} />
         {rating ? (
-          <Button size="sm" variant="tertiary" onClick={() => onRate(null)}>
+          <Button size="sm" variant="tertiary" disabled={pending} onClick={() => onRate(null)}>
             {teamSkillsCopy.own.clearButton}
           </Button>
         ) : null}
+        {pending ? <span className="text-xs text-text-secondary">{teamSkillsCopy.savingButton}</span> : null}
       </div>
     </li>
   );

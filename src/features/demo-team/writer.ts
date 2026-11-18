@@ -40,6 +40,7 @@ function validateOperations(operations: readonly PlannedOperation[], manifest: r
 
     for (const op of operations) {
       assertAllowedEntry(op);
+      if (op.writeClass !== "C") throw new Error("not create-only");
       const owned = byPath.get(op.path);
       if (owned === undefined || owned.collection !== op.collection || owned.writeClass !== op.writeClass) {
         throw new Error("not in manifest");
@@ -56,7 +57,7 @@ function validateOperations(operations: readonly PlannedOperation[], manifest: r
 
 /**
  * Validates the entire operation list, then writes it through one batch:
- * class `C` → `create`, class `U` → `set`, a single `commit`. Any validation
+ * every operation → `create` (create-only), a single `commit`. Any validation
  * failure throws before `createBatch` is even called. A failing commit leaves
  * nothing written (batch atomicity) and is reported as `write_failed`.
  */
@@ -78,11 +79,9 @@ export async function writeDemoOperations(input: {
   try {
     const batch = createBatch();
     for (const op of operations) {
-      if (op.writeClass === "C") {
-        batch.create(op.path, op.data);
-      } else {
-        batch.set(op.path, op.data);
-      }
+      // Create-only for every collection: a precondition on each document. The batch commits atomically, so a document that
+      // appeared since preflight fails the whole commit, never overwrites it. There is no set path.
+      batch.create(op.path, op.data);
     }
     await batch.commit();
   } catch {

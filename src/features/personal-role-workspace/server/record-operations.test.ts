@@ -7,10 +7,17 @@ import {
   deleteResponsibility,
   listAchievements,
   listResponsibilities,
+  RecordSeedLinkError,
+  seedAchievementCreateOnly,
+  seedResponsibilityCreateOnly,
   updateResponsibility,
   type PersonalRecordDeps,
 } from "./record-operations";
+import { RecordSeedConflictError } from "./record-engine";
 import { encodeSourceRecord, sourceRecordContext } from "./source-record-codec";
+import { ErasureWriteRefused } from "../../auth/server/erasure-write-fence";
+import type { AchievementContent } from "../domain/achievement";
+import type { ResponsibilityContent } from "../domain/responsibility";
 import { RESPONSIBILITY_CAP } from "../domain/constants";
 
 const KEY = Buffer.alloc(32, 7).toString("base64");
@@ -21,6 +28,108 @@ const OTHER_USER = "other-uid";
 const KNOWN_GOAL = "goal-1";
 
 let store: FakePersonalRecordStore;
+describe("personal records — trusted create-only seed (feature-owned)", () => {
+  const OWNER_A = "owner-a";
+  const STAMP = { createdAt: new Date("2026-02-01T00:00:00.000Z"), updatedAt: new Date("2026-02-02T00:00:00.000Z") };
+  const seedDeps = (store: FakePersonalRecordStore): PersonalRecordDeps => ({
+    store,
+    goalExists: async (_owner, goalId) => goalId === "demo-goal-01",
+    clock: () => STAMP.createdAt,
+  });
+  const responsibility = (title = "Syntetisk ansvar for test"): ResponsibilityContent => ({
+    title,
+    description: "Syntetisk beskrivelse for test",
+    status: "active",
+    relationToRole: "within",
+    startDate: "2026-01-01",
+    endDate: null,
+    goalIds: ["demo-goal-01"],
+  });
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = KEY;
+  });
+
+  it("creates a seeded responsibility at the explicit owner path, readable only under its own AAD", async () => {
+    const store = new FakePersonalRecordStore();
+    const seedDepsForTest = seedDeps(store);
+    await expect(seedResponsibilityCreateOnly(OWNER_A, "demo-resp-01", responsibility(), STAMP, seedDepsForTest)).resolves.toBe("create");
+    expect(store.count(OWNER_A, "responsibilities")).toBe(1);
+    expect(store.count("someone-else", "responsibilities")).toBe(0);
+
+    const listed = await listResponsibilities(OWNER_A, seedDepsForTest);
+    expect(listed).toMatchObject({ ok: true });
+    const items = (listed as { result: { items: Array<{ kind: string; dto?: { id: string; title: string } }> } }).result.items;
+    expect(items).toEqual([expect.objectContaining({ kind: "record", dto: expect.objectContaining({ id: "demo-resp-01", title: "Syntetisk ansvar for test" }) })]);
+  });
+
+  it("never stores the title or description as plaintext", async () => {
+    const store = new FakePersonalRecordStore();
+    await seedResponsibilityCreateOnly(OWNER_A, "demo-resp-01", responsibility("Unik tittel 4711"), STAMP, seedDeps(store));
+    const stored = JSON.stringify(store.peek(OWNER_A, "responsibilities", "demo-resp-01"));
+    expect(stored).not.toContain("Unik tittel 4711");
+    expect(stored).not.toContain("Syntetisk beskrivelse for test");
+  });
+
+  it("skips an identical existing record without writing", async () => {
+    const store = new FakePersonalRecordStore();
+    const deps = seedDeps(store);
+    await seedResponsibilityCreateOnly(OWNER_A, "demo-resp-01", responsibility(), STAMP, deps);
+    const before = JSON.stringify(store.peek(OWNER_A, "responsibilities", "demo-resp-01"));
+    await expect(seedResponsibilityCreateOnly(OWNER_A, "demo-resp-01", responsibility(), STAMP, deps)).resolves.toBe("skip");
+    expect(store.count(OWNER_A, "responsibilities")).toBe(1);
+    expect(JSON.stringify(store.peek(OWNER_A, "responsibilities", "demo-resp-01"))).toBe(before);
+  });
+
+  it("rejects a conflicting existing record and never overwrites it", async () => {
+    const store = new FakePersonalRecordStore();
+    const deps = seedDeps(store);
+    await seedResponsibilityCreateOnly(OWNER_A, "demo-resp-01", responsibility("Original"), STAMP, deps);
+    const before = JSON.stringify(store.peek(OWNER_A, "responsibilities", "demo-resp-01"));
+    await expect(seedResponsibilityCreateOnly(OWNER_A, "demo-resp-01", responsibility("Annen"), STAMP, deps)).rejects.toBeInstanceOf(
+      RecordSeedConflictError,
+    );
+    expect(JSON.stringify(store.peek(OWNER_A, "responsibilities", "demo-resp-01"))).toBe(before);
+  });
+
+  it("refuses a dangling goal reference and writes nothing", async () => {
+    const store = new FakePersonalRecordStore();
+    const dangling = { ...responsibility(), goalIds: ["missing-goal"] };
+    await expect(seedResponsibilityCreateOnly(OWNER_A, "demo-resp-02", dangling, STAMP, seedDeps(store))).rejects.toBeInstanceOf(
+      RecordSeedLinkError,
+    );
+    expect(store.count(OWNER_A, "responsibilities")).toBe(0);
+  });
+
+  it("creates a seeded achievement that references an existing responsibility", async () => {
+    const store = new FakePersonalRecordStore();
+    const deps = seedDeps(store);
+    await seedResponsibilityCreateOnly(OWNER_A, "demo-resp-01", responsibility(), STAMP, deps);
+    const achievement: AchievementContent = {
+      title: "Syntetisk prestasjon",
+      description: "Syntetisk beskrivelse",
+      outcome: null,
+      relationToRole: "beyond",
+      periodStart: null,
+      periodEnd: null,
+      goalIds: ["demo-goal-01"],
+      responsibilityIds: ["demo-resp-01"],
+    };
+    await expect(seedAchievementCreateOnly(OWNER_A, "demo-ach-01", achievement, STAMP, deps)).resolves.toBe("create");
+    await expect(seedAchievementCreateOnly(OWNER_A, "demo-ach-02", { ...achievement, responsibilityIds: ["nope"] }, STAMP, deps)).rejects.toBeInstanceOf(
+      RecordSeedLinkError,
+    );
+  });
+
+  it("is refused by the erasure fence without any write", async () => {
+    const store = new FakePersonalRecordStore();
+    store.fencedUids.add(OWNER_A);
+    await expect(seedResponsibilityCreateOnly(OWNER_A, "demo-resp-01", responsibility(), STAMP, seedDeps(store))).rejects.toBeInstanceOf(
+      ErasureWriteRefused,
+    );
+    expect(store.count(OWNER_A, "responsibilities")).toBe(0);
+  });
+});
+
 let deps: PersonalRecordDeps;
 
 beforeEach(() => {

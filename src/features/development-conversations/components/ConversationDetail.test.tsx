@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expectHeadingStructure } from "../../../components/ui/heading-structure";
 import { conversationsCopy } from "../copy";
@@ -802,5 +802,103 @@ describe("conversation detail heading structure (visual-redesign TASK-019)", () 
   it("keeps a valid heading hierarchy for the owner detail with its section tabs", async () => {
     await renderOwner();
     expectHeadingStructure(document.body, { ownsPageTitle: false });
+  });
+});
+
+/** A read whose answer the test decides, so a late response can be delivered after the account has changed. */
+function deferredRead() {
+  let resolve!: (value: FetchConversationResult) => void;
+  const promise = new Promise<FetchConversationResult>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+describe("ConversationDetail: role-neutral loading and account isolation (Phase 2E.4)", () => {
+  /** Captures the auth observer so the test can emit account changes, including the early `account_changing` signal. */
+  function captureAuth() {
+    let emit: (token: string | null, uid: string | null, signal?: "account_changing") => void = () => {};
+    observeIdTokenMock.mockImplementation((callback: (token: string | null, uid: string | null, signal?: "account_changing") => void) => {
+      emit = (token, uid, signal) => act(() => callback(token, uid, signal));
+      callback("token-a", "uid-a");
+      return () => {};
+    });
+    return (token: string | null, uid: string | null, signal?: "account_changing") => emit(token, uid, signal);
+  }
+
+  it("unknown role during the first read shows only the neutral skeleton, with no owner or participant controls", async () => {
+    captureAuth();
+    fetchConversationMock.mockReturnValueOnce(new Promise(() => {}));
+    render(<ConversationDetail conversationId={CONVERSATION_ID} />);
+
+    expect(screen.getByText(conversationsCopy.detailLoading)).toBeTruthy();
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.queryByRole("heading", { level: 2 })).toBeNull();
+  });
+
+  it("account A's owner content disappears at the early account_changing signal, before B's token resolves", async () => {
+    const emit = captureAuth();
+    fetchConversationMock.mockResolvedValueOnce(ownerView(owner()));
+    render(<ConversationDetail conversationId={CONVERSATION_ID} />);
+    await screen.findByRole("heading", { level: 2, name: conversationsCopy.titleSection });
+
+    // B's token never resolves in this test: the page must not keep A's content while B is pending.
+    fetchConversationMock.mockReturnValueOnce(new Promise(() => {}));
+    emit(null, "uid-a", "account_changing");
+
+    expect(screen.queryByText("Kommunikasjon i prosjekter")).toBeNull();
+    expect(screen.queryByRole("heading", { level: 2 })).toBeNull();
+    expect(screen.queryByRole("textbox")).toBeNull();
+  });
+
+  it("a late response for account A cannot restore A's view after the switch to account B", async () => {
+    const emit = captureAuth();
+    const lateA = deferredRead();
+    fetchConversationMock.mockReturnValueOnce(lateA.promise);
+    render(<ConversationDetail conversationId={CONVERSATION_ID} />);
+
+    emit(null, "uid-a", "account_changing");
+    const readB = deferredRead();
+    fetchConversationMock.mockReturnValueOnce(readB.promise);
+    emit("token-b", "uid-b");
+
+    await act(async () => {
+      lateA.resolve(ownerView(owner()));
+    });
+    expect(screen.queryByText("Kommunikasjon i prosjekter")).toBeNull();
+    expect(screen.getByText(conversationsCopy.detailLoading)).toBeTruthy();
+
+    await act(async () => {
+      readB.resolve(ownerView(owner({ title: "Konto B tittel" })));
+    });
+    expect(await screen.findByDisplayValue("Konto B tittel")).toBeTruthy();
+    expect(screen.queryByText("Kommunikasjon i prosjekter")).toBeNull();
+  });
+
+  it("sign-out clears the protected owner view and shows the sign-in prompt", async () => {
+    const emit = captureAuth();
+    fetchConversationMock.mockResolvedValueOnce(ownerView(owner()));
+    render(<ConversationDetail conversationId={CONVERSATION_ID} />);
+    await screen.findByRole("heading", { level: 2, name: conversationsCopy.titleSection });
+
+    emit(null, null);
+
+    expect(await screen.findByRole("link", { name: conversationsCopy.signInLink })).toBeTruthy();
+    expect(screen.queryByText("Kommunikasjon i prosjekter")).toBeNull();
+    expect(screen.queryByRole("textbox")).toBeNull();
+  });
+
+  it("same-account token refresh re-reads in place and keeps the participant's unsaved notes draft", async () => {
+    const emit = captureAuth();
+    fetchConversationMock.mockResolvedValue({ status: "ok", view: { kind: "participant", conversation: participant() } } as FetchConversationResult);
+    render(<ConversationDetail conversationId={CONVERSATION_ID} />);
+    const field = await screen.findByRole("textbox", { name: conversationsCopy.participantNotesLabel });
+    await userEvent.type(field, "ein ny tanke");
+
+    emit("token-a-refreshed", "uid-a", undefined);
+
+    await waitFor(() => expect(fetchConversationMock).toHaveBeenCalledTimes(2));
+    expect((screen.getByRole("textbox", { name: conversationsCopy.participantNotesLabel }) as HTMLTextAreaElement).value).toBe("ein ny tanke");
   });
 });

@@ -1,3 +1,4 @@
+import { teamPlanCounts } from "./team-plan-counts";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -162,7 +163,7 @@ describe("offline dry-run", () => {
     const text = allOutput(out);
     expect(text).toContain(`Resolved project id: ${PROJECT}`);
     expect(text).toContain("Mode: offline-dry-run");
-    expect(text).toContain("Writes planned: 85");
+    expect(text).toContain(`Writes planned: ${teamPlanCounts().total}`);
     expect(text).toContain("Deletes: 0");
     expect(text).toContain("not checked (offline");
     expectNoSecrets(text);
@@ -192,8 +193,8 @@ describe("online dry-run", () => {
     });
 
     const reads = online.log.filter((l) => l.startsWith("get "));
-    expect(reads).toHaveLength(85);
-    expect(new Set(reads).size).toBe(85);
+    expect(reads).toHaveLength(teamPlanCounts().total);
+    expect(new Set(reads).size).toBe(teamPlanCounts().total);
     expect(online.log[0]).toBe("userExists");
     expect(online.counts()).toEqual({ commits: 0, batches: 0 });
     expect(online.store.size).toBe(0);
@@ -240,11 +241,11 @@ describe("write mode (fake adapters only)", () => {
 
     expect(out.exitCode).toBe(0);
     expect(online.counts()).toEqual({ commits: 1, batches: 1 });
-    expect(online.store.size).toBe(85);
+    expect(online.store.size).toBe(teamPlanCounts().total);
     const commitIndex = online.log.indexOf("commit");
-    expect(online.log.slice(0, commitIndex).filter((l) => l.startsWith("get "))).toHaveLength(85);
+    expect(online.log.slice(0, commitIndex).filter((l) => l.startsWith("get "))).toHaveLength(teamPlanCounts().total);
     expect(online.log.slice(commitIndex + 1)).toEqual([]);
-    expect(allOutput(out)).toContain("Write: committed 85 documents in one batch. Deletes: 0");
+    expect(allOutput(out)).toContain(`Write: committed ${teamPlanCounts().total} documents in one batch. Deletes: 0`);
     expect(out.stdout[0]).toBe("Demo Team seed — preflight before write");
     expectNoSecrets(allOutput(out));
   });
@@ -274,7 +275,7 @@ describe("write mode (fake adapters only)", () => {
     expect(serialized).not.toMatch(/[[1-5],[1-5],[1-5]]/);
   });
 
-  it("a rerun converges: same ids, no duplicates, C records skipped, ciphertext differs", async () => {
+  it("a rerun converges: nothing is written, ciphertext is unchanged, and no second batch is committed", async () => {
     const online = fakeOnline();
     await run(WRITE_ARGS, online).result;
     const firstKeys = [...online.store.keys()].sort();
@@ -283,11 +284,10 @@ describe("write mode (fake adapters only)", () => {
     const second = await run(WRITE_ARGS, online).result;
     expect(second.exitCode).toBe(0);
     expect([...online.store.keys()].sort()).toEqual(firstKeys);
-    expect(online.store.size).toBe(85);
-    expect(allOutput(second)).toContain("Write: committed 79 documents in one batch");
-    const secondResponse = online.store.get("surveyResponses/demo-response-s01-r01") as { ciphertext: string };
-    expect(secondResponse.ciphertext).not.toBe(firstResponse.ciphertext);
-    expect(online.counts().commits).toBe(2);
+    expect(online.store.size).toBe(teamPlanCounts().total);
+    expect(allOutput(second)).toContain("nothing to write");
+    expect((online.store.get("surveyResponses/demo-response-s01-r01") as { ciphertext: string }).ciphertext).toBe(firstResponse.ciphertext);
+    expect(online.counts().commits).toBe(1);
   });
 
   it("a conflict → exit 1, zero batches, nothing written", async () => {

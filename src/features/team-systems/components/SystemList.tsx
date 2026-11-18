@@ -1,7 +1,14 @@
 import { Pencil } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
 import { Icon } from "../../../components/ui/Icon";
-import { ASSESSMENT_ATTRIBUTES, ASSESSMENT_ATTRIBUTE_LABELS } from "../domain/team-system";
+import {
+  ASSESSMENT_ATTRIBUTES,
+  ASSESSMENT_ATTRIBUTE_LABELS,
+  BUSINESS_CRITICALITY_LABELS,
+  SYSTEM_TYPE_LABELS,
+  USER_REACH_LABELS,
+  type SystemClassification,
+} from "../domain/team-system";
 import type { TeamSystemView } from "../server/list-team-systems";
 import { systemsCopy } from "../copy";
 import { AssessmentStatusIcon, BackstageIconLink, BackstageLink, KnowledgeSummary, RiskBadge } from "./SystemStatusBadges";
@@ -15,6 +22,17 @@ export interface SystemListProps {
 
 function knowledgeNames(system: TeamSystemView): (string | null)[] {
   return system.knowledge.map((member) => member.displayName);
+}
+
+/** Compact, readable classification line: no extra table column, so the wide matrix does not grow. */
+function ClassificationLine({ classification }: { classification: SystemClassification }) {
+  const copy = systemsCopy.classification;
+  return (
+    <span className="block text-help text-text-muted">
+      {SYSTEM_TYPE_LABELS[classification.systemType]} · {copy.compactCriticality}: {BUSINESS_CRITICALITY_LABELS[classification.businessCriticality]} ·{" "}
+      {copy.compactReach}: {USER_REACH_LABELS[classification.userReach]}
+    </span>
+  );
 }
 
 function EditButton({ system, onEdit }: { system: TeamSystemView; onEdit: (system: TeamSystemView) => void }) {
@@ -58,6 +76,7 @@ export function SystemList({ systems, canEdit, onEdit }: SystemListProps) {
                 <th scope="row" className="px-3 py-3 font-normal">
                   <span className="block text-label font-semibold text-text-primary">{system.name}</span>
                   <span className="block text-help text-text-muted">{system.description ?? systemsCopy.empty.noDescription}</span>
+                  <ClassificationLine classification={system.classification} />
                 </th>
                 {ASSESSMENT_ATTRIBUTES.map((attribute) => (
                   <td key={attribute} className="px-2 py-3 text-center">
@@ -90,6 +109,7 @@ export function SystemList({ systems, canEdit, onEdit }: SystemListProps) {
             <div className="flex flex-col gap-1">
               <h3 className="text-label font-semibold text-text-primary">{system.name}</h3>
               <p className="text-help text-text-muted">{system.description ?? systemsCopy.empty.noDescription}</p>
+              <ClassificationLine classification={system.classification} />
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <RiskBadge band={system.knowledgeRisk} />

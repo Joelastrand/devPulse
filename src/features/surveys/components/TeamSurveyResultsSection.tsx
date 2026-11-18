@@ -5,7 +5,7 @@ import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
-import { LoadingState } from "../../../components/ui/LoadingState";
+import { LoadingRegion, Skeleton } from "../../../components/ui/Skeleton";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import {
   fetchSurveyResults,
@@ -74,7 +74,12 @@ export function TeamSurveyResultsSection({ teamId }: { teamId: string }) {
     if (!token || results[surveyId]) {
       return;
     }
+    const generation = generationRef.current;
     const result = await fetchSurveyResults(token, teamId, surveyId);
+    // Applied only while the same identity and team are still current; a late result must not be cached for the next one.
+    if (generation !== generationRef.current) {
+      return;
+    }
     setResults((previous) => ({ ...previous, [surveyId]: result }));
   }
 
@@ -88,7 +93,20 @@ export function TeamSurveyResultsSection({ teamId }: { teamId: string }) {
           <p className="text-help text-text-muted">{builderCopy.teamResults.hint}</p>
         </div>
 
-        {list.status === "loading" ? <LoadingState label={builderCopy.teamResults.loading} /> : null}
+        {list.status === "loading" ? (
+          // Rows mirror the loaded list: a survey title on the left and its show/hide button on the right. The region
+          // carries the single announcement; the blocks stay decorative.
+          <LoadingRegion label={builderCopy.teamResults.loading} className="flex flex-col gap-3">
+            <ul aria-hidden="true" className="flex flex-col gap-3">
+              {[0, 1].map((index) => (
+                <li key={index} className="flex flex-wrap items-center justify-between gap-3">
+                  <Skeleton className="h-5 w-2/3 max-w-full" />
+                  <Skeleton className="h-8 w-20 shrink-0 rounded-control" />
+                </li>
+              ))}
+            </ul>
+          </LoadingRegion>
+        ) : null}
 
         {list.status === "error" ? (
           <Alert variant={list.reason === "read_failed" ? "error" : "info"}>
@@ -130,7 +148,11 @@ export function TeamSurveyResultsSection({ teamId }: { teamId: string }) {
                       {results[survey.surveyId] ? (
                         <ResultsBody result={results[survey.surveyId]} />
                       ) : (
-                        <LoadingState label={builderCopy.results.loading} />
+                        <LoadingRegion label={builderCopy.results.loading} className="flex flex-col gap-2">
+                          <Skeleton aria-hidden="true" className="h-4 w-full" />
+                          <Skeleton aria-hidden="true" className="h-4 w-4/5" />
+                          <Skeleton aria-hidden="true" className="h-4 w-2/3" />
+                        </LoadingRegion>
                       )}
                     </div>
                   ) : null}

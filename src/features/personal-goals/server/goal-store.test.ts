@@ -2,7 +2,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { applyGoalChange, createGoal, parseStoredGoal, type Goal } from "../domain/goal";
 import { ErasureWriteRefused } from "../../auth/server/erasure-write-fence";
-import { getDefaultGoalStore } from "./goal-store";
+import { classifyGoalSeed, getDefaultGoalStore, GoalSeedConflictError, seedGoalCreateOnly } from "./goal-store";
 
 const holder = vi.hoisted(() => ({ db: undefined as unknown }));
 vi.mock("../../../lib/firebase/admin", () => ({
@@ -426,6 +426,76 @@ describe("goal store (Admin SDK) — erasure fence on every write (TASK-026, BR-
     expect(work).not.toHaveBeenCalled();
     expect(log).toEqual(["runTransaction", "tx.get|accountErasures/u1"]);
     expect(written).toEqual([]);
+  });
+
+  it.each([
+    ["a valid in-progress record", { status: "in_progress" }],
+    ["a malformed record", "not-a-record"],
+  ])("the trusted goal seed with %s refuses as ErasureWriteRefused, writes nothing and never reads the goal", async (_label, erasure) => {
+    const { log, written } = install({ erasure });
+    await expect(seedGoalCreateOnly("u1", "demo-goal-01", createGoal({ title: "Seed under fence" }, T0))).rejects.toBeInstanceOf(
+      ErasureWriteRefused,
+    );
+    expect(log).toEqual(["runTransaction", "tx.get|accountErasures/u1"]);
+    expect(written).toEqual([]);
+  });
+});
+
+describe("goal store — trusted create-only seed operation (feature-owned)", () => {
+  const SEED_GOAL = { ownerUid: "u1", goalId: "demo-goal-01" };
+  const seedGoal = (): Goal =>
+    createGoal({ title: "Seed-tittel for test", treeId: "demo-skill-cloud", targetDate: "2027-01-15" }, T0);
+
+  it("creates an absent goal at the explicit owner path, sealed with the goal AAD (round-trips only under that path)", async () => {
+    const { written } = install();
+    await expect(seedGoalCreateOnly(SEED_GOAL.ownerUid, SEED_GOAL.goalId, seedGoal())).resolves.toBe("create");
+    expect(written).toHaveLength(1);
+    expect(written[0].op).toBe("create");
+    expect(written[0].path).toBe("userDevelopment/u1/goals/demo-goal-01");
+
+    // Opening under the same owner and id succeeds, so the AAD is `goal:u1:demo-goal-01`.
+    install({ docData: written[0].data });
+    const raw = await store.get("u1", "demo-goal-01");
+    expect(parseStoredGoal(raw).ok).toBe(true);
+    // Substitution: the same ciphertext under another goal id does not open.
+    install({ docData: written[0].data });
+    expect(parseStoredGoal(await store.get("u1", "demo-goal-02")).ok).toBe(false);
+  });
+
+  it("never writes the title or target date as plaintext", async () => {
+    const { written } = install();
+    await seedGoalCreateOnly(SEED_GOAL.ownerUid, SEED_GOAL.goalId, seedGoal());
+    const serialized = JSON.stringify(written[0].data);
+    expect(serialized).not.toContain("Seed-tittel for test");
+    expect(serialized).not.toContain("2027-01-15");
+    expect(written[0].data).not.toHaveProperty("title");
+    expect(written[0].data).not.toHaveProperty("targetDate");
+  });
+
+  it("skips an identical existing goal without any write", async () => {
+    const first = install();
+    await seedGoalCreateOnly(SEED_GOAL.ownerUid, SEED_GOAL.goalId, seedGoal());
+    install({ docData: first.written[0].data });
+    const again = install({ docData: first.written[0].data });
+    await expect(seedGoalCreateOnly(SEED_GOAL.ownerUid, SEED_GOAL.goalId, seedGoal())).resolves.toBe("skip");
+    expect(again.written).toHaveLength(0);
+  });
+
+  it("rejects a conflicting existing goal and never overwrites it", async () => {
+    const first = install();
+    await seedGoalCreateOnly(SEED_GOAL.ownerUid, SEED_GOAL.goalId, seedGoal());
+    const different = createGoal({ title: "Annen tittel", treeId: "demo-skill-cloud" }, T0);
+    const recording = install({ docData: first.written[0].data });
+    await expect(seedGoalCreateOnly(SEED_GOAL.ownerUid, SEED_GOAL.goalId, different)).rejects.toBeInstanceOf(GoalSeedConflictError);
+    expect(recording.written).toHaveLength(0);
+  });
+
+  it("classifies a readable-but-different planned goal as a conflict, and an unreadable existing one as a conflict", () => {
+    const goal = seedGoal();
+    expect(classifyGoalSeed(goal, undefined)).toBe("create");
+    expect(classifyGoalSeed(goal, { title: goal.title, treeId: goal.treeId, targetDate: goal.targetDate, status: "active", createdAt: goal.createdAt, updatedAt: goal.updatedAt })).toBe("skip");
+    expect(classifyGoalSeed(goal, { status: "active", createdAt: goal.createdAt, updatedAt: goal.updatedAt })).toBe("conflict");
+    expect(classifyGoalSeed(goal, { title: "Endret", treeId: goal.treeId, targetDate: goal.targetDate, status: "active", createdAt: goal.createdAt, updatedAt: goal.updatedAt })).toBe("conflict");
   });
 });
 

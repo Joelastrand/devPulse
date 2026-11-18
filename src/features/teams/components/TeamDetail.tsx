@@ -5,7 +5,6 @@ import { useState, type ReactNode } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button, buttonClassName } from "../../../components/ui/Button";
 import { PageHeader } from "../../../components/ui/PageHeader";
-import { LoadingState } from "../../../components/ui/LoadingState";
 import { useAnnounceTeamName } from "../../../components/nav/TeamContext";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import {
@@ -22,6 +21,7 @@ import { TeamPageHeader } from "./TeamPageHeader";
 import { TeamOversiktSummary } from "./TeamOversiktSummary";
 import { TeamOversiktChallenges, type OversiktChallengesState } from "./TeamOversiktChallenges";
 import { TeamHeaderMetrics } from "./TeamHeaderMetrics";
+import { TeamOverviewSkeleton } from "./TeamOverviewSkeleton";
 
 type DeniedRelationship = "none" | "request_pending" | "request_rejected";
 
@@ -80,6 +80,7 @@ async function loadTeamDetail(idToken: string, teamId: string): Promise<TeamDeta
 
   if (
     entry &&
+    !entry.canOpen &&
     (entry.relationship === "none" ||
       entry.relationship === "request_pending" ||
       entry.relationship === "request_rejected")
@@ -208,7 +209,7 @@ export function TeamDetail({ teamId }: { teamId: string }) {
   }
 
   if (state.phase === "loading") {
-    return <LoadingState label={teamsCopy.detail.loading} />;
+    return <TeamOverviewSkeleton label={teamsCopy.detail.loading} />;
   }
 
   if (state.phase === "signed_out") {
@@ -233,18 +234,6 @@ export function TeamDetail({ teamId }: { teamId: string }) {
           <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
             <TeamHeaderMetrics key={`metrics:${generation}`} teamId={teamId} token={token} competenceAreas={competenceAreas} />
             <div className="flex flex-wrap items-center gap-3">
-              <Link
-                href={`/teams/${encodeURIComponent(teamId)}/results`}
-                className="text-label font-medium text-text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-              >
-                {teamsCopy.results.openLink}
-              </Link>
-              <Link
-                href={`/teams/${encodeURIComponent(teamId)}/surveys`}
-                className="text-label font-medium text-text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-              >
-                {teamsCopy.results.surveysLink}
-              </Link>
               <Link href={`/teams/${encodeURIComponent(teamId)}/settings`} className={buttonClassName({ variant: "secondary", size: "sm" })}>
                 {teamsCopy.detail.editTeam}
               </Link>

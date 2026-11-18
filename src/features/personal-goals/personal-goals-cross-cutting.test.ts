@@ -27,6 +27,24 @@ vi.mock("./server/skill-catalog", async (importOriginal) => ({
   getDefaultSkillCatalogReader: () => catalogReader,
 }));
 
+/**
+ * The only demo-team files allowed to name personal-goal identifiers: the fictional fixture content and the one trusted
+ * seed orchestrator. Exact paths, approved for this naming check only (see the D1 seed decision). No other demo-team file,
+ * and no directory-wide exemption, is permitted.
+ */
+const DEMO_PERSONAL_NAMING_EXCEPTIONS: ReadonlySet<string> = new Set([
+  "src/features/demo-team/personal-fixtures.ts",
+  "src/features/demo-team/personal-seed.ts",
+]);
+
+/** Demo-team files (not exempt) that name personal-goal identifiers. */
+function demoPersonalNamingViolations(files: ReadonlyArray<{ path: string; text: string }>): string[] {
+  return files
+    .filter((f) => !DEMO_PERSONAL_NAMING_EXCEPTIONS.has(f.path))
+    .filter((f) => /user-?development|personal-?goals?|developmentGoals/i.test(f.text))
+    .map((f) => f.path);
+}
+
 const SECRET_TITLE = "SECRET-GOAL-TITLE";
 const SECRET_TREE = "SECRET-TREE-NAME";
 const SECRET_FIELD = "SECRET-MALFORMED-FIELD";
@@ -224,7 +242,18 @@ describe("D1 static regression — logging, env, packages, Demo Team, indexes (B
   it("Demo Team fixtures, plan, seed and writer name no personal-goal data", () => {
     const demo = walk("src/features/demo-team").filter((p) => !isTest(p));
     expect(demo.length).toBeGreaterThan(5);
-    expect(demo.filter((p) => /user-?development|personal-?goals?|developmentGoals/i.test(read(p)))).toEqual([]);
+    expect(demoPersonalNamingViolations(demo.map((p) => ({ path: p, text: read(p) })))).toEqual([]);
+  });
+
+  it("the Demo Team naming exception covers exactly the two approved files, and an unlisted file naming goal data is still flagged", () => {
+    expect([...DEMO_PERSONAL_NAMING_EXCEPTIONS].sort()).toEqual([
+      "src/features/demo-team/personal-fixtures.ts",
+      "src/features/demo-team/personal-seed.ts",
+    ]);
+    const unlisted = [{ path: "src/features/demo-team/plan.ts", text: "const x = 'userDevelopment';" }];
+    expect(demoPersonalNamingViolations(unlisted)).toEqual(["src/features/demo-team/plan.ts"]);
+    const approved = [{ path: "src/features/demo-team/personal-seed.ts", text: "const x = PersonalGoalFixture;" }];
+    expect(demoPersonalNamingViolations(approved)).toEqual([]);
   });
 
   it("firestore.indexes.json is unchanged by D1: no goal index and the same four collection-group indexes", () => {

@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useState, type ReactNode } from "react";
+import dynamic from "next/dynamic";
+import { catchError } from "next/error";
+import { useId, useState, type ComponentProps, type ReactNode } from "react";
 import { ChartColumn, Sprout, Target } from "lucide-react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
-import { LoadingState } from "../../../components/ui/LoadingState";
+import { SkillOverviewSkeleton } from "./SkillSkeletons";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import { fetchOwnSkills } from "../client/skill-profile-gateway";
 import { SELF_ASSESSED_LEVEL_COPY, skillProfileCopy, skillViewCopy } from "../copy";
@@ -14,7 +16,22 @@ import { SELF_ASSESSED_LEVELS, type SelfAssessedLevel } from "../domain/self-ass
 import { buildOverviewModel, type OverviewAreaRow, type OverviewModel } from "../domain/overview-model";
 import { buildPersonalRadarModel } from "../domain/personal-radar";
 import type { SkillRowDto } from "../domain/skill-profile-view";
-import { PersonalRadar } from "./PersonalRadar";
+import type { PersonalRadar as PersonalRadarComponent } from "./PersonalRadar";
+import { ChartLoadError, ChartPlaceholder } from "../../../components/ui/LazyChart";
+
+/**
+ * `PersonalRadar` is code-split out of the skills route's client bundle; `recharts` loads only when the radar is shown.
+ * Declared at module scope for webpack chunk matching. The loading box keeps the radar's own size.
+ */
+const LazyPersonalRadar = dynamic<ComponentProps<typeof PersonalRadarComponent>>(
+  () => import("./PersonalRadar").then((mod) => mod.PersonalRadar),
+  {
+    ssr: false,
+    loading: () => <ChartPlaceholder className="mx-auto h-[300px] w-full max-w-[360px]" />,
+  },
+);
+
+const PersonalRadarBoundary = catchError(ChartLoadError);
 
 /** How many skill areas the overview lists. The full, editable list lives in the Kompetansekart view. */
 const OVERVIEW_AREA_LIMIT = 7;
@@ -69,7 +86,7 @@ export function SkillOverview() {
     [reloadKey],
   );
 
-  if (state.phase === "loading") return <LoadingState label={skillProfileCopy.loading} />;
+  if (state.phase === "loading") return <SkillOverviewSkeleton label={skillProfileCopy.loading} />;
 
   if (state.phase === "signed_out") {
     return (
@@ -251,7 +268,9 @@ function ProfilePanel({ model }: { readonly model: OverviewModel }) {
           {hidden > 0 ? <p className="text-xs text-text-secondary">{copy.moreAreas(hidden)}</p> : null}
         </>
       ) : radar.status === "ready" ? (
-        <PersonalRadar points={radar.points} unassessedCount={radar.unassessedCount} omittedByCap={radar.omittedByCap} />
+        <PersonalRadarBoundary>
+          <LazyPersonalRadar points={radar.points} unassessedCount={radar.unassessedCount} omittedByCap={radar.omittedByCap} />
+        </PersonalRadarBoundary>
       ) : (
         <p className="text-sm text-text-secondary">{copy.radarTooFew(radar.assessedCount)}</p>
       )}

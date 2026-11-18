@@ -7,6 +7,93 @@ import { createFakeConversationStore } from "./fake-conversation-store";
 import { createFakeTeamEligibilityReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
 import { issueErasureOwnerCleanupCapability } from "./erasure-owner-cleanup-capability";
 import type { FakeConversationStore } from "./fake-conversation-store";
+import { randomBytes } from "node:crypto";
+import { afterEach, beforeEach, describe as describeSeed, expect as expectSeed, it as itSeed, vi } from "vitest";
+import { ConversationSeedConflictError, seedOwnerConversationCreateOnly } from "./create-conversation";
+import { createFakeConversationStore as createSeedStore } from "./fake-conversation-store";
+import type { ConversationContent } from "../domain/content-payload";
+
+const SEED_OWNER = "seed-owner-1";
+const SEED_ID = "demo-conversation-01";
+const SEED_CONTENT: ConversationContent = {
+  title: "Syntetisk samtale for test",
+  ownerNotes: "Syntetiske notater for test",
+  nextSteps: ["Første syntetiske steg"],
+  participantNotes: "",
+  sharedGoals: [],
+  sharedEvidence: [],
+};
+const SEED_STAMPS = { createdAt: new Date("2026-03-01T00:00:00.000Z"), updatedAt: new Date("2026-03-02T00:00:00.000Z") };
+const seedInput = (store: FakeConversationStore, content: ConversationContent = SEED_CONTENT) => ({
+  store,
+  ownerUid: SEED_OWNER,
+  conversationId: SEED_ID,
+  content,
+  plannedFor: "2026-04-01",
+  stamps: SEED_STAMPS,
+});
+
+describeSeed("owner conversation — trusted create-only seed (feature-owned)", () => {
+  beforeEach(() => {
+    vi.stubEnv("ENCRYPTION_KEY", randomBytes(32).toString("base64"));
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  itSeed("creates an owner-only conversation, sealed and readable only under its own owner AAD, and writes no participation index", async () => {
+    const store = createSeedStore();
+    await expectSeed(seedOwnerConversationCreateOnly(seedInput(store))).resolves.toBe("create");
+    const stored = await store.runOwnerTransaction(SEED_OWNER, (tx) => tx.getOwner(SEED_OWNER, SEED_ID));
+    expectSeed(stored).toBeDefined();
+    expectSeed(stored).toMatchObject({ status: "open", teamId: null, participantUid: null, plannedFor: "2026-04-01" });
+    const participation = await store.runTransaction((tx) => tx.getParticipation(SEED_OWNER, SEED_ID));
+    expectSeed(participation).toBeUndefined();
+  });
+
+  itSeed("never stores the title or notes as plaintext", async () => {
+    const store = createSeedStore();
+    await seedOwnerConversationCreateOnly(seedInput(store));
+    const stored = await store.runOwnerTransaction(SEED_OWNER, (tx) => tx.getOwner(SEED_OWNER, SEED_ID));
+    const serialized = JSON.stringify(stored);
+    expectSeed(serialized).not.toContain("Syntetisk samtale for test");
+    expectSeed(serialized).not.toContain("Syntetiske notater for test");
+    expectSeed(stored).not.toHaveProperty("title");
+  });
+
+  itSeed("skips an identical existing conversation without writing", async () => {
+    const store = createSeedStore();
+    await seedOwnerConversationCreateOnly(seedInput(store));
+    const before = JSON.stringify(await store.runOwnerTransaction(SEED_OWNER, (tx) => tx.getOwner(SEED_OWNER, SEED_ID)));
+    await expectSeed(seedOwnerConversationCreateOnly(seedInput(store))).resolves.toBe("skip");
+    expectSeed(JSON.stringify(await store.runOwnerTransaction(SEED_OWNER, (tx) => tx.getOwner(SEED_OWNER, SEED_ID)))).toBe(before);
+  });
+
+  itSeed("rejects a conflicting existing conversation without overwriting it", async () => {
+    const store = createSeedStore();
+    await seedOwnerConversationCreateOnly(seedInput(store));
+    const before = JSON.stringify(await store.runOwnerTransaction(SEED_OWNER, (tx) => tx.getOwner(SEED_OWNER, SEED_ID)));
+    await expectSeed(
+      seedOwnerConversationCreateOnly(seedInput(store, { ...SEED_CONTENT, title: "Annen tittel for test" })),
+    ).rejects.toBeInstanceOf(ConversationSeedConflictError);
+    expectSeed(JSON.stringify(await store.runOwnerTransaction(SEED_OWNER, (tx) => tx.getOwner(SEED_OWNER, SEED_ID)))).toBe(before);
+  });
+
+  itSeed("treats the same fixture id under another owner as a separate, create-only record (ownership is part of the path)", async () => {
+    const store = createSeedStore();
+    await seedOwnerConversationCreateOnly(seedInput(store));
+    // Another owner has no document at this id, so a seed there creates a fresh, separately sealed record.
+    await expectSeed(seedOwnerConversationCreateOnly({ ...seedInput(store), ownerUid: "seed-owner-2" })).resolves.toBe("create");
+  });
+
+  itSeed("is refused by the erasure fence without writing", async () => {
+    const store = createSeedStore({ erasingUids: [SEED_OWNER] });
+    await expectSeed(seedOwnerConversationCreateOnly(seedInput(store))).rejects.toThrow();
+    // Test-only unfenced read: the refused seed must have left no document behind.
+    const stored = await store.runTransaction((tx) => tx.getOwner(SEED_OWNER, SEED_ID));
+    expectSeed(stored).toBeUndefined();
+  });
+});
 
 const OWNER_UID = "owner-1";
 const OTHER_UID = "owner-2";

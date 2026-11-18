@@ -1,12 +1,14 @@
 "use client";
 
+import dynamic from "next/dynamic";
+import { catchError } from "next/error";
 import Link from "next/link";
 import { ArrowRight, Layers, MessageSquare, Target, UserRound, Users, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Alert } from "../../../components/ui/Alert";
 import { Card } from "../../../components/ui/Card";
 import { Icon } from "../../../components/ui/Icon";
-import { LoadingState } from "../../../components/ui/LoadingState";
+import { LoadingRegion, Skeleton, SkeletonCard } from "../../../components/ui/Skeleton";
 import { ActionListItem, SummaryPanel } from "../../../components/ui/dashboard/DashboardPrimitives";
 import { Section } from "../../../components/ui/Section";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
@@ -17,9 +19,25 @@ import type { OwnerSummaryWire } from "../../development-conversations/client/co
 import type { SurveyResultSummary } from "../../results/client/team-results-gateway";
 import { resultsCopy } from "../../results/copy";
 import { formatSurveyDate } from "../../results/domain/format-survey-date";
-import { TrendChart } from "../../results/components/TrendChart";
 import type { TeamOverviewEntry } from "../../teams/client/teams-overview-gateway";
 import { authenticatedHomeCopy } from "../copy";
+import { ChartLoadError } from "../../../components/ui/LazyChart";
+import { TrendChartSkeleton } from "../../results/components/TrendChartSkeleton";
+
+/**
+ * `TrendChart` is code-split out of the home route's client bundle: `recharts` loads only when a signed-in user has
+ * survey results to show. Declared at module scope for webpack chunk matching (as in `TeamResultsView`).
+ */
+const LazyTrendChart = dynamic<{ results: readonly SurveyResultSummary[] }>(
+  () => import("../../results/components/TrendChart").then((mod) => mod.TrendChart),
+  {
+    ssr: false,
+    loading: () => <TrendChartSkeleton />,
+  },
+);
+
+const TrendChartBoundary = catchError(ChartLoadError);
+
 
 const copy = authenticatedHomeCopy;
 
@@ -58,7 +76,6 @@ function CountTile({ label, read, count }: { label: string; read: Read<unknown>;
   return (
     <Card as="section" variant="bordered" padding="sm" aria-label={label} className="flex flex-col gap-2">
       <p className="text-label font-medium text-text-secondary">{label}</p>
-      {read.phase === "loading" ? <p className="text-help text-text-muted">{LOADING_TEXT}</p> : null}
       {read.phase === "error" ? <ReadErrorText /> : null}
       {read.phase === "ok" && count !== null ? (
         <p className="text-metric font-semibold tabular-nums text-text-primary">{count}</p>
@@ -67,15 +84,27 @@ function CountTile({ label, read, count }: { label: string; read: Read<unknown>;
   );
 }
 
+/** Placeholder with the same rows as the loaded team entry, so the tile keeps its height. The text is visually hidden. */
+function TeamEntryLoading() {
+  return (
+    <Card as="section" variant="bordered" padding="sm" aria-label={copy.tiles.team.label} className="flex flex-col gap-2">
+      <p className="text-label font-medium text-text-secondary">{copy.teamPanelTitle}</p>
+      <span className="sr-only">{LOADING_TEXT}</span>
+      <Skeleton aria-hidden="true" className="h-6 w-40" />
+      <Skeleton aria-hidden="true" className="h-4 w-28" />
+    </Card>
+  );
+}
+
 /** Team entry tile: the first team the viewer belongs to, linked to its overview. */
 export function TeamEntryTile({ read }: { read: Read<TeamOverviewEntry[]> }) {
   if (read.phase === "loading") {
-    return <CountTile label={copy.tiles.team.label} read={read} count={null} />;
+    return <TeamEntryLoading />;
   }
   if (read.phase === "error") {
     return <CountTile label={copy.tiles.team.label} read={read} count={null} />;
   }
-  const team = read.value.find((entry) => entry.relationship === "admin" || entry.relationship === "member");
+  const team = read.value.find((entry) => entry.canOpen);
   if (!team) {
     return (
       <Card as="section" variant="bordered" padding="sm" aria-label={copy.tiles.team.label} className="flex flex-col gap-2">
@@ -147,7 +176,15 @@ function PulseContent({
   results: Read<SurveyResultSummary[]>;
 }) {
   if (teams.phase === "loading" || (teamId !== null && results.phase === "loading")) {
-    return <p className="text-help text-text-muted">{LOADING_TEXT}</p>;
+    return (
+      <div className="flex flex-col gap-2">
+        <span className="sr-only">{LOADING_TEXT}</span>
+        <Skeleton aria-hidden="true" className="h-4 w-32" />
+        <Skeleton aria-hidden="true" className="h-5 w-full" />
+        <Skeleton aria-hidden="true" className="h-5 w-full" />
+        <Skeleton aria-hidden="true" className="h-5 w-full" />
+      </div>
+    );
   }
   if (teams.phase === "error" || results.phase === "error") return <ReadErrorText />;
   if (teamId === null) return <p className="text-help text-text-secondary">{copy.tiles.team.emptyText}</p>;
@@ -191,12 +228,24 @@ export function GoalsPanel({ goals }: { goals: Read<GoalDto[]> }) {
         </Link>
       }
     >
-      {goals.phase === "loading" ? <p className="text-help text-text-muted">{LOADING_TEXT}</p> : null}
+      {goals.phase === "loading" ? <GoalRowsLoading /> : null}
       {goals.phase === "error" ? <ReadErrorText /> : null}
       {goals.phase === "ok" ? (
         <GoalRows goals={goals.value} />
       ) : null}
     </SummaryPanel>
+  );
+}
+
+/** Three goal-row placeholders (title, date, status badge) so the panel keeps its height. */
+function GoalRowsLoading() {
+  return (
+    <div className="flex flex-col gap-3">
+      <span className="sr-only">{LOADING_TEXT}</span>
+      {[0, 1, 2].map((index) => (
+        <Skeleton key={index} aria-hidden="true" className="h-10 w-full" />
+      ))}
+    </div>
   );
 }
 
@@ -227,7 +276,14 @@ export function NextConversationPanel({ conversations }: { conversations: Read<O
   const conversationId = next?.conversationId ?? "";
   return (
     <SummaryPanel title={copy.conversation.title} icon={MessageSquare}>
-      {conversations.phase === "loading" ? <p className="text-help text-text-muted">{LOADING_TEXT}</p> : null}
+      {conversations.phase === "loading" ? (
+        <div className="flex flex-col gap-3">
+          <span className="sr-only">{LOADING_TEXT}</span>
+          <Skeleton aria-hidden="true" className="h-5 w-3/4" />
+          <Skeleton aria-hidden="true" className="h-4 w-1/2" />
+          <Skeleton aria-hidden="true" className="h-9 w-32" />
+        </div>
+      ) : null}
       {conversations.phase === "error" ? <ReadErrorText /> : null}
       {conversations.phase === "ok" && next === null ? (
         <p className="text-help text-text-secondary">{copy.conversation.empty}</p>
@@ -282,8 +338,9 @@ export function TeamDevelopmentPanel({
   results: Read<SurveyResultSummary[]>;
 }) {
   // A teams read that is still loading or has failed is never an empty team state (SPEC BR-32).
+  // The chart card's own placeholder: a text line here would let the card jump in when the chart appears.
   if (teams.phase === "loading") {
-    return <p className="text-help text-text-muted">{LOADING_TEXT}</p>;
+    return <TrendChartSkeleton />;
   }
   if (teams.phase === "error") {
     return <ReadErrorText />;
@@ -292,7 +349,7 @@ export function TeamDevelopmentPanel({
     return <DevelopmentEmpty />;
   }
   if (results.phase === "loading") {
-    return <p className="text-help text-text-muted">{LOADING_TEXT}</p>;
+    return <TrendChartSkeleton />;
   }
   if (results.phase === "error") {
     return <ReadErrorText />;
@@ -300,12 +357,16 @@ export function TeamDevelopmentPanel({
   if (results.value.length === 0) {
     return <DevelopmentEmpty />;
   }
-  return <TrendChart results={results.value} />;
+  return (
+    <TrendChartBoundary>
+      <LazyTrendChart results={results.value} />
+    </TrendChartBoundary>
+  );
 }
 
 /** The first team the viewer belongs to (admin or member). Requests and rejections are not used. */
 export function firstMemberTeamId(teams: readonly TeamOverviewEntry[]): string | null {
-  return teams.find((entry) => entry.relationship === "admin" || entry.relationship === "member")?.teamId ?? null;
+  return teams.find((entry) => entry.canOpen)?.teamId ?? null;
 }
 
 function DevelopmentEmpty() {
@@ -362,7 +423,12 @@ export function TeamsSection({
 }) {
   return (
     <Section title={copy.teamsSectionTitle} description={copy.teamsSectionDescription}>
-      {teams.phase === "loading" ? <LoadingState label={teamsCopy.overview.loading} /> : null}
+      {teams.phase === "loading" ? (
+        <LoadingRegion label={teamsCopy.overview.loading} className="flex flex-col gap-4">
+          <SkeletonCard className="h-20" />
+          <SkeletonCard className="h-20" />
+        </LoadingRegion>
+      ) : null}
       {teams.phase === "error" ? <Alert variant="error">{teamsCopy.overview.error}</Alert> : null}
       {teams.phase === "ok" ? (
         <TeamsOverview initialTeams={teams.value} onTeamsChanged={onTeamsChanged} />

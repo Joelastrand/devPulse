@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import Link from "next/link";
 import { Button } from "../../../components/ui/Button";
+import { LoadingRegion, Skeleton } from "../../../components/ui/Skeleton";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import { fetchTeamsOverview } from "../../teams/client/teams-overview-gateway";
 import type { TeamOverviewEntry } from "../../teams/client/teams-overview-gateway";
@@ -24,13 +25,18 @@ export function OwnCompetenceSharing() {
   const [auth, setAuth] = useState<AuthState>({ phase: "loading" });
   const [teams, setTeams] = useState<TeamsState>({ phase: "loading" });
 
+  const [explainingTeam, setExplainingTeam] = useState<string | null>(null);
+
   useAuthGatedResource((token) => {
     setAuth(token ? { phase: "signed_in", token } : { phase: "signed_out" });
+    // Every auth change (sign-out, a direct switch to another account, or a token refresh) drops the team list that was read
+    // under the previous token. The browser cannot tell a switch from a refresh, so the list is re-read for the current
+    // token instead of keeping the previous account's teams on screen while the new read is pending.
+    setTeams({ phase: "loading" });
+    setExplainingTeam(null);
   }, []);
 
   const token = auth.phase === "signed_in" ? auth.token : null;
-  const [explainingTeam, setExplainingTeam] = useState<string | null>(null);
-
   useEffect(() => {
     if (token === null) return;
     let cancelled = false;
@@ -43,13 +49,31 @@ export function OwnCompetenceSharing() {
     };
   }, [token]);
 
-  if (token === null || teams.phase === "loading") {
+  if (auth.phase === "signed_out") {
     return (
       <section aria-labelledby="own-sharing-heading" className="flex flex-col gap-2">
         <h2 id="own-sharing-heading" className="text-lg font-semibold text-text-primary">
           Deling med team
         </h2>
-        <p className="text-text-secondary">Laster delingsvalgene dine…</p>
+        <p className="text-text-secondary">Logg inn for å se delingsvalgene dine.</p>
+      </section>
+    );
+  }
+
+  if (token === null || teams.phase === "loading") {
+    return (
+      <section aria-labelledby="own-sharing-heading" className="flex flex-col gap-4">
+        <h2 id="own-sharing-heading" className="text-lg font-semibold text-text-primary">
+          Deling med team
+        </h2>
+        {/* Reserves the team block (open-explanation button and the sharing control) so the list does not jump on load. */}
+        <LoadingRegion label="Laster delingsvalgene dine…" className="flex flex-col gap-2">
+          <div aria-hidden="true" className="flex flex-col gap-2">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-16 w-full" />
+          </div>
+        </LoadingRegion>
       </section>
     );
   }
@@ -81,7 +105,7 @@ export function OwnCompetenceSharing() {
         </p>
       </div>
       {memberTeams.length === 0 ? (
-        teams.teams.some((team) => team.relationship === "admin") ? (
+        teams.teams.some((team) => team.canOpen && !team.isMember) ? (
           <div className="flex flex-col gap-2 text-text-secondary">
             <p>{adminWithoutMembershipCopy.body}</p>
             <p>

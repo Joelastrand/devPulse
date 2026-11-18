@@ -45,7 +45,7 @@ function goalContext(owner: string, goalId: string): string {
   return `goal:${owner}:${goalId}`;
 }
 
-function toFirestoreGoalData(owner: string, goalId: string, goal: Goal): Record<string, unknown> {
+export function toFirestoreGoalData(owner: string, goalId: string, goal: Goal): Record<string, unknown> {
   const stored = toStoredGoalData(goal);
   const content = {
     title: stored.title,
@@ -66,7 +66,7 @@ function toFirestoreGoalData(owner: string, goalId: string, goal: Goal): Record<
  * result. A tampered, substituted or malformed content envelope yields a document without `title`, so the parser refuses
  * it like any other invalid stored goal. Key configuration failures are rethrown, not hidden as invalid goals.
  */
-function toRawGoalData(owner: string, goalId: string, data: Record<string, unknown>): RawGoalData {
+export function toRawGoalData(owner: string, goalId: string, data: Record<string, unknown>): RawGoalData {
   // Every key except the encrypted content is passed through, so unknown keys still reach the parser and fail closed.
   const lifecycle: Record<string, unknown> = Object.fromEntries(
     Object.entries(data)
@@ -90,6 +90,56 @@ function openGoalContent(owner: string, goalId: string, value: unknown): Record<
     return null;
   }
   return typeof json === "object" && json !== null && !Array.isArray(json) ? (json as Record<string, unknown>) : null;
+}
+
+/** Outcome of a create-only seed write: the record was created, or an identical record already existed. */
+export type GoalSeedAction = "create" | "skip";
+
+/** Thrown when a stored goal at the seed's id differs from the planned one. Carries no content. */
+export class GoalSeedConflictError extends Error {
+  constructor() {
+    super("goal seed conflict");
+    this.name = "GoalSeedConflictError";
+  }
+}
+
+/**
+ * Pure create-only decision for one planned goal (no Firestore access). `existing` is the raw stored data as the read
+ * path returns it (content already opened). Absent → create. Present and identical in every business and lifecycle
+ * field → skip. Anything else, including content that cannot be opened → conflict, never an overwrite.
+ */
+export function classifyGoalSeed(goal: Goal, existing: RawGoalData | undefined): GoalSeedAction | "conflict" {
+  if (existing === undefined) return "create";
+  const sameTime = (a: unknown, b: Date | undefined) =>
+    b !== undefined && a instanceof Date && a.getTime() === b.getTime();
+  const same =
+    existing.title === goal.title &&
+    existing.treeId === goal.treeId &&
+    existing.targetDate === goal.targetDate &&
+    existing.status === goal.status &&
+    sameTime(existing.createdAt, goal.createdAt) &&
+    sameTime(existing.updatedAt, goal.updatedAt) &&
+    (goal.status === "completed"
+      ? sameTime(existing.completedAt, goal.completedAt)
+      : existing.completedAt === undefined);
+  return same ? "skip" : "conflict";
+}
+
+/**
+ * Trusted seed write for one planned goal of one owner (create-only). Only the goal-owning module can build the document,
+ * so the seed reuses `toFirestoreGoalData`, the same v2 envelope and `goal:<uid>:<goalId>` AAD as every other write.
+ * Runs in the person-owned write fence (erasure refusals still apply). Not an HTTP route and not exported to the app.
+ */
+export async function seedGoalCreateOnly(owner: string, goalId: string, goal: Goal): Promise<GoalSeedAction> {
+  const ref = goalRef(owner, goalId);
+  return runFencedTransaction(getFirestoreDb(), owner, async (tx) => {
+    const snapshot = await tx.get(ref);
+    const existing = snapshot.exists ? toRawGoalData(owner, goalId, snapshot.data() ?? {}) : undefined;
+    const decision = classifyGoalSeed(goal, existing);
+    if (decision === "conflict") throw new GoalSeedConflictError();
+    if (decision === "create") tx.create(ref, toFirestoreGoalData(owner, goalId, goal));
+    return decision;
+  });
 }
 
 /**

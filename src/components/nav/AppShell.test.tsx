@@ -290,15 +290,19 @@ describe("AppShell", () => {
     usePathnameMock.mockReturnValue("/");
   });
 
-  it.each(["/me/skills/x", "/me/goals/x"])("does not mark a personal entry current on the nested path %s", async (path) => {
+  it.each([
+    ["/me/skills/x", "Ferdigheter"],
+    ["/me/goals/x", "Mål"],
+  ])("marks only the parent navigation entry current on the nested path %s", async (path, label) => {
     usePathnameMock.mockReturnValue(path);
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchOwnAdminStatusMock.mockResolvedValue({ ok: true, isAdmin: false });
 
     render(<AppShell />);
 
-    await screen.findByRole("link", { name: /^ferdigheter$/i });
-    expect(Array.from(document.querySelectorAll('[aria-current="page"]'))).toHaveLength(0);
+    const current = await screen.findAllByRole("link", { current: "page" });
+    expect(current).toHaveLength(1);
+    expect(current[0]?.textContent).toBe(label);
     usePathnameMock.mockReturnValue("/");
   });
 

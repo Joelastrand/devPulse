@@ -52,7 +52,7 @@ Signed-out navigation shows Hjem, Logg inn and Opprett konto (`PublicHeader`). S
 ### Team pages
 
 `/teams` (`app/(app)/teams/page.tsx`) lists teams the person can see, with a request-access action for non-members.
-`/teams/[teamId]` is the team overview. Its tab bar (`TeamRouteNav`) shows five tabs, in this order:
+`/teams/[teamId]` is the team overview. Its tab bar (`TeamRouteNav`) shows seven tabs, in this order. On narrow screens the row scrolls horizontally:
 
 | Tab label | Route | File |
 | --- | --- | --- |
@@ -61,13 +61,13 @@ Signed-out navigation shows Hjem, Logg inn and Opprett konto (`PublicHeader`). S
 | Kompetanseplan | `/teams/[teamId]/competence-plan` | `.../competence-plan/page.tsx` |
 | Teamkompetanse | `/teams/[teamId]/competence` | `.../competence/page.tsx` |
 | Systemoversikt | `/teams/[teamId]/systems` | `.../systems/page.tsx` |
+| Resultater og trender | `/teams/[teamId]/results` | `.../results/page.tsx` |
+| Undersøkelser | `/teams/[teamId]/surveys` | `.../surveys/page.tsx` |
 
 Pages reached from the overview or from elsewhere, not from the tab bar:
 
 | Route | File | Purpose |
 | --- | --- | --- |
-| `/teams/[teamId]/results` | `.../results/page.tsx` | Survey history, trends and the competence ladder (linked from Oversikt, "Se resultater og trender") |
-| `/teams/[teamId]/surveys` | `.../surveys/page.tsx` | Team survey workspace for administrators (linked from team administration) |
 | `/teams/[teamId]/settings` | `.../settings/page.tsx` | Team settings, including team visibility |
 | `/teams/[teamId]/forum/[threadId]` | `.../forum/[threadId]/page.tsx` | Forum thread. Returns `notFound` unless `FEATURE_FORUM_ENABLED=true` |
 

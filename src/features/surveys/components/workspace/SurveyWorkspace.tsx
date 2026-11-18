@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { Alert } from "../../../../components/ui/Alert";
 import { Button } from "../../../../components/ui/Button";
-import { LoadingState } from "../../../../components/ui/LoadingState";
+import { LoadingRegion, Skeleton, SkeletonCard } from "../../../../components/ui/Skeleton";
 import { PageHeader } from "../../../../components/ui/PageHeader";
 import { useAuthGatedResource } from "../../../auth/client/use-auth-gated-resource";
 import {
@@ -210,7 +210,17 @@ export function SurveyWorkspace({ teamId }: SurveyWorkspaceProps) {
 
       {feedback ? <Alert variant={feedback.tone === "success" ? "success" : "error"}>{feedback.text}</Alert> : null}
 
-      {load.status === "loading" ? <LoadingState label={builderCopy.workspace.loading} /> : null}
+      {load.status === "loading" ? (
+        // The "new survey" action appears only after a successful read, so it is not reserved here (no false affordance).
+        <LoadingRegion label={builderCopy.workspace.loading} className="flex flex-col gap-3">
+          {[0, 1, 2].map((index) => (
+            <SkeletonCard key={index} className="flex flex-col gap-2 p-4">
+              <Skeleton className="h-5 w-1/2" />
+              <Skeleton className="h-4 w-1/3" />
+            </SkeletonCard>
+          ))}
+        </LoadingRegion>
+      ) : null}
 
       {load.status === "error" ? (
         <Alert variant={load.reason === "read_failed" ? "error" : "info"}>

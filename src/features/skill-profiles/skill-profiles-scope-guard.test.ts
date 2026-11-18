@@ -29,6 +29,11 @@ import { SKILL_PROFILE_PERSISTED_KEYS } from "./domain/skill-profile";
 
 const ROOT = process.cwd();
 const GUARD_FILE = "src/features/skill-profiles/skill-profiles-scope-guard.test.ts";
+/**
+ * Emulator verification test (approved exact file, collection-name checks only, never the importer or identifier checks):
+ * an isolated-emulator end-to-end test that reads the owner collections for verification. Test code, not production.
+ */
+const EMULATOR_VERIFICATION_FILE = "src/features/demo-team/personal-seed.emulator.test.ts";
 const C1_FEATURE_DIR = "src/features/skill-profiles/";
 const C1_SERVER_DIR = "src/features/skill-profiles/server/";
 const C1_ROUTE_DIR = "app/api/me/skills/";
@@ -73,6 +78,8 @@ const APPROVED_ERASURE_METADATA_COLLECTION_REFERENCES = [
 
 /** Dimension 2: files outside the feature that may import `src/features/skill-profiles/server/**`. */
 const APPROVED_SERVER_IMPORTERS = [
+  // Trusted demo seed orchestrator (approved exact file): calls only the create-only skill-level seed.
+  "src/features/demo-team/personal-seed.ts",
   "app/api/me/skills/[treeId]/route.test.ts",
   "app/api/me/skills/[treeId]/route.ts",
   "app/api/me/skills/owner-isolation.test.ts",
@@ -100,6 +107,8 @@ const SERVER_DIR_PREFIX = "src/features/skill-profiles/server";
 
 /** Module-level map: the only files that may import `skill-profile-store` (C1 owner operations, the adapter, tests). */
 const APPROVED_STORE_IMPORTERS = [
+  // Trusted demo seed orchestrator (approved exact file): calls only the create-only skill-level seed.
+  "src/features/demo-team/personal-seed.ts",
   "app/api/me/skills/owner-isolation.test.ts",
   "src/features/skill-profiles/server/clear-own-skill-level.test.ts",
   "src/features/skill-profiles/server/clear-own-skill-level.ts",
@@ -204,7 +213,12 @@ function reExportTargets(file: SourceFile): string[] {
  * asserts this exemption by name, so no other file gains it.
  */
 const C2_GUARD_FILE = "src/features/team-skills/team-skills-scope-guard.test.ts";
-const isGuarded = (path: string) => path !== GUARD_FILE && path !== C2_GUARD_FILE;
+/**
+ * Guard-definition test files are not source files under inspection: the cross-cutting C1 test holds the guard's own
+ * negative fixtures (import statements and identifiers written as test strings). Excluded structurally, never per check.
+ */
+const C1_GUARD_DEFINITION_FILES: readonly string[] = [GUARD_FILE, C2_GUARD_FILE, "src/features/skill-profiles/skill-profiles-cross-cutting.test.ts"];
+const isGuarded = (path: string) => !C1_GUARD_DEFINITION_FILES.includes(path);
 
 function collectionReferenceViolations(files: SourceFile[]): string[] {
   const allowed = new Set([
@@ -213,7 +227,7 @@ function collectionReferenceViolations(files: SourceFile[]): string[] {
     ...APPROVED_ERASURE_METADATA_COLLECTION_REFERENCES,
   ]);
   return files
-    .filter((file) => isGuarded(file.path) && COLLECTION_TOKEN.test(file.text) && !allowed.has(file.path))
+    .filter((file) => isGuarded(file.path) && file.path !== EMULATOR_VERIFICATION_FILE && COLLECTION_TOKEN.test(file.text) && !allowed.has(file.path))
     .map((file) => file.path);
 }
 
@@ -381,8 +395,20 @@ const virtual = (path: string, text: string): SourceFile => ({ path, text });
 /* ----------------------------------- tests ----------------------------------- */
 
 describe("C1 scope guard — collection reference allow-list (Dimension 1)", () => {
+  it("negative regression: the emulator verification exception is exact-file; other files naming the collection are still flagged", () => {
+    const naming = `db.collection("skillProfiles")`;
+    const emulator = { path: "src/features/demo-team/personal-seed.emulator.test.ts", text: naming };
+    const other = { path: "src/features/demo-team/personal-seed.test.ts", text: naming };
+    const production = { path: "src/features/demo-team/plan.ts", text: naming };
+    expect(collectionReferenceViolations([emulator])).toEqual([]);
+    expect(collectionReferenceViolations([other])).toEqual(["src/features/demo-team/personal-seed.test.ts"]);
+    expect(collectionReferenceViolations([production])).toEqual(["src/features/demo-team/plan.ts"]);
+  });
+
   it("the files that reference the collection identifier equal the approved C1 set", () => {
-    const found = realFiles.filter((f) => isGuarded(f.path) && COLLECTION_TOKEN.test(f.text)).map((f) => f.path);
+    const found = realFiles
+      .filter((f) => isGuarded(f.path) && f.path !== EMULATOR_VERIFICATION_FILE && COLLECTION_TOKEN.test(f.text))
+      .map((f) => f.path);
     const required = new Set(APPROVED_COLLECTION_REFERENCES);
     expect(
       found.filter(
@@ -430,6 +456,15 @@ describe("C1 scope guard — collection reference allow-list (Dimension 1)", () 
 });
 
 describe("C1 scope guard — module/import allow-list (Dimension 2)", () => {
+  it("negative regression: an unauthorized demo-team file importing the skill-profile server module is still rejected; the seed orchestrator is exact-file only", () => {
+    const importsStore = `import { seedSkillLevelsCreateOnly } from "../skill-profiles/server/skill-profile-store";`;
+    expect(serverImportViolations([virtual("src/features/demo-team/plan.ts", importsStore)])).toEqual(["src/features/demo-team/plan.ts"]);
+    expect(serverImportViolations([virtual("src/features/demo-team/personal-fixtures.ts", importsStore)])).toEqual([
+      "src/features/demo-team/personal-fixtures.ts",
+    ]);
+    expect(serverImportViolations([virtual("src/features/demo-team/personal-seed.ts", importsStore)])).toEqual([]);
+  });
+
   it("only the approved owner routes (and their tests) outside the feature import skill-profiles server modules", () => {
     expect(serverImportViolations(realFiles)).toEqual([]);
     const importers = realFiles
@@ -724,7 +759,12 @@ describe("C1 scope guard — reverse/static independence (BR-23/BR-24 reverse di
 
   it("only the collection-owning C1 files can reference the collection, so no other feature code (e.g. skill progress) can", () => {
     const outsideC1 = realFiles.filter(
-      (f) => isGuarded(f.path) && !f.path.startsWith(C1_FEATURE_DIR) && !f.path.startsWith(C1_ROUTE_DIR) && COLLECTION_TOKEN.test(f.text),
+      (f) =>
+        isGuarded(f.path) &&
+        f.path !== EMULATOR_VERIFICATION_FILE &&
+        !f.path.startsWith(C1_FEATURE_DIR) &&
+        !f.path.startsWith(C1_ROUTE_DIR) &&
+        COLLECTION_TOKEN.test(f.text),
     );
     expect(outsideC1.map((f) => f.path).sort()).toEqual(
       [...APPROVED_WHEN_PRESENT_COLLECTION_REFERENCES, ...APPROVED_ERASURE_METADATA_COLLECTION_REFERENCES]

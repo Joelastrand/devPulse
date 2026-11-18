@@ -121,6 +121,7 @@ describe("team-owned skill aggregate (privacy-thresholded)", () => {
       ok: true,
       availability: "available",
       rows: [{ skillId: SKILL, name: "Testautomatisering", state: "value", level: 3 }],
+      includesSimulated: false,
     });
   });
 
@@ -228,7 +229,7 @@ describe("team-owned skill aggregate (privacy-thresholded)", () => {
   it("performs no membership scan when the team has no active skills", async () => {
     const { run, deps } = setup({ skills: { [SKILL_INACTIVE]: skillDoc({ active: false }) } });
 
-    expect(await run(MEMBER, T)).toEqual({ ok: true, availability: "available", rows: [] });
+    expect(await run(MEMBER, T)).toEqual({ ok: true, availability: "available", rows: [], includesSimulated: false });
     expect(deps.contributionStore?.listMembershipsForCoverage).not.toHaveBeenCalled();
   });
 

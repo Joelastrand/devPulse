@@ -9,7 +9,7 @@ import { Card } from "../../../components/ui/Card";
 import { Icon } from "../../../components/ui/Icon";
 import { ChevronRight } from "lucide-react";
 import { EmptyState } from "../../../components/ui/EmptyState";
-import { LoadingState } from "../../../components/ui/LoadingState";
+import { TeamsGridSkeleton } from "./TeamAdminSkeletons";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import { teamsCopy } from "../copy";
 import {
@@ -146,7 +146,7 @@ export function TeamsOverview({
   }
 
   if (state.phase === "loading") {
-    return <LoadingState label={teamsCopy.overview.loading} />;
+    return <TeamsGridSkeleton label={teamsCopy.overview.loading} />;
   }
 
   if (state.phase === "signed_out") {
@@ -172,9 +172,10 @@ export function TeamsOverview({
     <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
       {teams.map((team) => {
         const action = actionStates[team.teamId] ?? { status: "idle" as const };
+        // Access comes from `canOpen` (membership, or the existing superadmin rule). The badge shows the team role only.
         const canRequestAccess =
-          team.relationship === "none" || team.relationship === "request_rejected";
-        const canOpen = team.relationship === "admin" || team.relationship === "member";
+          !team.canOpen && (team.relationship === "none" || team.relationship === "request_rejected");
+        const canOpen = team.canOpen;
 
         return (
           <Card

@@ -7,7 +7,8 @@ const observeIdTokenMock = vi.fn();
 let mockPathname = "/teams/team-1";
 
 vi.mock("../../features/auth/client/auth-client", () => ({
-  observeIdToken: observeIdTokenMock,
+  // Lazy wrapper: the provider imports this module at load time, before the top-level mock above is initialised.
+  observeIdToken: (callback: (token: string | null) => void) => observeIdTokenMock(callback),
   signOut: vi.fn(),
 }));
 vi.mock("../../features/teams/client/own-admin-status-gateway", () => ({

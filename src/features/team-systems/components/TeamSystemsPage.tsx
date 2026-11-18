@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
 import { EmptyState } from "../../../components/ui/EmptyState";
-import { LoadingState } from "../../../components/ui/LoadingState";
+import { SystemListSkeleton } from "./SystemListSkeleton";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import { TeamPageHeader } from "../../teams/components/TeamPageHeader";
 import {
@@ -57,7 +57,7 @@ export function TeamSystemsPage({ teamId }: { teamId: string }) {
     <div className="flex flex-col gap-6">
       <TeamPageHeader teamId={teamId} />
       <p className="text-text-secondary">{systemsCopy.pageDescription}</p>
-      {state.phase === "loading" && <LoadingState label={systemsCopy.loading} />}
+      {state.phase === "loading" && <SystemListSkeleton label={systemsCopy.loading} />}
       {state.phase === "signed_out" && (
         <p className="text-text-secondary">
           <Link href="/sign-in" className="font-medium text-text-primary underline">
@@ -95,6 +95,7 @@ function toSummaryInput(system: TeamSystemView): SystemSummaryInput {
     knowledgeCount: system.knowledge.length,
     attention: system.attention,
     inGoodStanding: ASSESSMENT_ATTRIBUTES.every((attribute) => system.assessments[attribute].value === "god"),
+    classification: system.classification,
   };
 }
 
@@ -116,7 +117,7 @@ function SystemsContent({ token, teamId }: { token: string; teamId: string }) {
   }, [token, teamId, reloadKey]);
 
   if (list.phase === "loading") {
-    return <LoadingState label={systemsCopy.loading} />;
+    return <SystemListSkeleton label={systemsCopy.loading} />;
   }
   if (list.phase === "forbidden") {
     return <Alert variant="error">{systemsCopy.forbidden}</Alert>;

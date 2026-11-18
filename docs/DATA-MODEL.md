@@ -30,8 +30,10 @@ UUID.
 | `teamSkillNeeds` | `{teamId}__{treeId}` | team-skills | `requiredLevel`, `requiredCoverage` are sealed (`content`). `teamId`, `treeId`, timestamps plaintext | Team requirement per skill-tree. No actor data |
 | `teamCompetencePlans` | auto UUID | team-competence-plan | `teamId`, `title`, `treeId` (optional label, `null` on creation), `targetStage`, `priority`, `archived`, `milestones[]`, timestamps | Independent of any competence area. No uid, no rating. Writes by superadmin or `teamadmin` |
 
-Consent is not a separate collection. It is the `skillContribution` field on `teamMemberships/{uid}__{teamId}`
-(`SKILL_CONTRIBUTION_FIELD`). `version` must equal `SKILL_CONTRIBUTION_NOTICE_VERSION` (2) to be effective.
+Consent is not a separate collection. It is the consent field on `teamMemberships/{uid}__{teamId}`
+(`SKILL_CONTRIBUTION_FIELD`). `noticeVersion` must equal `SKILL_CONTRIBUTION_NOTICE_VERSION` (2) to be effective. Production
+records hold exactly `noticeVersion` and `consentedAt`. The only other permitted shape is the demo marker
+`simulated: true`, accepted only for the ten fictional demo members in the designated demo team (see `docs/SECURITY.md`).
 
 ## 3. Skill trees, progress and roadmap
 
@@ -42,7 +44,7 @@ Consent is not a separate collection. It is the `skillContribution` field on `te
 | `roadmapItems` | `{teamId}__{treeId}` | roadmap | `targetNodeId`, `priority`, `status`, dates, `completedAt` and `ownerRef` are sealed (`content`). `ownerRefIndex` (keyed index), `teamId`, `treeId`, audit and archive fields plaintext | One plan per team and competency area. The ID is a uniqueness key, not authorization |
 | `teamProjects` | auto | team-projects | project name, lifecycle (`planned` / `completed`), archive fields | Team delivery projects |
 | `teamProjectParticipations` | auto | team-projects | `teamId`, `projectId`, `memberRef`, planned interval | Planned member-to-project intervals. Referenced by `memberRef`, not uid |
-| `teamSystems` | `{systemId}` | team-systems | `teamId`, `name`, `description`, `backstageUrl`, seven attributes (`availability`, `deployability`, `maintainability`, `observability`, `reliability`, `security`, `testability`), each `{value, note, assessedAt, assessedBy}`, `knowledgeMemberRefs[]` | Attributes default to `ikke_vurdert`. `assessedBy` is stored for audit and never returned to clients |
+| `teamSystems` | `{systemId}` | team-systems | `teamId`, `name`, `description`, `systemType`, `businessCriticality`, `userReach`, `backstageUrl`, seven attributes (`availability`, `deployability`, `maintainability`, `observability`, `reliability`, `security`, `testability`), each `{value, note, assessedAt, assessedBy}`, `knowledgeMemberRefs[]` | Attributes default to `ikke_vurdert`. Classification defaults to not assessed (`uavklart` / `ikke_vurdert`) and is never inferred. `assessedBy` is stored for audit and never returned to clients |
 
 ## 4. Surveys and anonymous feedback
 
@@ -85,8 +87,10 @@ collection. The conversation-level eligibility check uses `teamMemberships`.
 - Membership links an account to a team. Every team read or write joins through `teamMemberships/{uid}__{teamId}`.
 - A `memberRef` is a team-scoped, opaque handle to a membership. Roadmap owners, project participations, system knowledge
   references and conversation participant views refer to people through `memberRef`. A `memberRef` never authorizes access.
-- `teamSkillAssessments` (private) feed the consent-gated aggregate in `team-owned-skills`. Only the aggregate and the
-  collaborative level leave the server.
+- `teamSkillAssessments` (private, one document per person and team skill) feed the consent-gated aggregate in
+  `team-owned-skills`, which is what the Teamkompetanse page shows. Only the aggregate and the collaborative level leave the
+  server. `skillProfiles` (personal skill-tree levels) feed only the categorical C2 coverage view in `team-skills`, not the
+  Teamkompetanse aggregate.
 - `skillTrees` are referenced by `skillProgress`, `roadmapItems`, `teamSkillNeeds` and personal skills.
 - Anonymous collections (`surveyResponses`, `challenges`) have no relation to any person. `surveyParticipations` holds
   identity only for duplicate prevention.
@@ -158,7 +162,7 @@ and gap.
 | `teamCompetencePlans/{planId}` | `content` (title, milestones) | `teamId`, `treeId` (organisational label), `targetStage`, `priority`, `archived`, timestamps | v2 `content` | `competence-plan:<teamId>:<planId>` | `competence-plan-codec.test.ts` |
 | `teamProjects/{projectId}` | `title` (in `content`) | `teamId`, dates, lifecycle, priority, archive fields | v2 `content` | `team-project:<teamId>:<projectId>` | `team-project-codec.test.ts` |
 | `teamProjectParticipations/{id}` | `note` | `teamId`, `projectId`, `memberRef`, dates, `archived` | v2 | `team-project-participation:<teamId>:<id>` | `team-project-codec.test.ts` |
-| `teamSystems/{systemId}` | `content` (name, description); each attribute `note` | `teamId`, attribute `value`, `assessedAt`, `assessedBy` (never returned), `backstageUrl`, `knowledgeMemberRefs` | v2 | `team-system:<teamId>:<systemId>`; `team-system-note:<teamId>:<systemId>:<attribute>` | `team-system-codec.test.ts` |
+| `teamSystems/{systemId}` | `content` (name, description, systemType, businessCriticality, userReach); each attribute `note` | `teamId`, attribute `value`, `assessedAt`, `assessedBy` (never returned), `backstageUrl`, `knowledgeMemberRefs` | v2 | `team-system:<teamId>:<systemId>`; `team-system-note:<teamId>:<systemId>:<attribute>` | `team-system-codec.test.ts` |
 | `skillProfiles/{uid}` | each `levels.<treeId>` | tree-id map keys, `createdAt`, `updatedAt` | v2 | `skill-profile:<uid>:<treeId>` | `skill-level-codec.test.ts`, `collection-independence.test.ts`, `skill-profile-batch-read.test.ts` |
 | `userDevelopment/{uid}/goals/{goalId}` | `content` (title, treeId, targetDate) | lifecycle (`status`, timestamps) | v2 `content` | `goal:<uid>:<goalId>` | `goal-store.test.ts`, personal-goals suites |
 | `userDevelopment/{uid}/responsibilities`, `achievements` | title, description, outcome | ids, timestamps | v2 `content` + `keyCheck` | `personal-record:<ownerUid>:<collection>:<id>` | `source-record-codec.test.ts`, `record-operations.test.ts`, `owned-evidence-source.test.ts` |

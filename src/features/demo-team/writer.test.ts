@@ -1,3 +1,4 @@
+import { teamPlanCounts } from "./team-plan-counts";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -94,10 +95,10 @@ describe("writeDemoOperations — happy path", () => {
     const fake = fakeStore();
     const result = await writeDemoOperations({ operations, manifest, createBatch: fake.createBatch });
 
-    expect(result).toEqual({ written: 85 });
+    expect(result).toEqual({ written: teamPlanCounts().total });
     expect(fake.batches).toBe(1);
     expect(fake.commits).toBe(1);
-    expect(fake.store.size).toBe(85);
+    expect(fake.store.size).toBe(teamPlanCounts().total);
   });
 
   it("maps class C to create and class U to set", async () => {
@@ -105,26 +106,29 @@ describe("writeDemoOperations — happy path", () => {
     await writeDemoOperations({ operations, manifest, createBatch: fake.createBatch });
 
     const creates = operations.filter((o) => o.writeClass === "C").length;
-    expect(creates).toBe(6);
+    expect(creates).toBe(teamPlanCounts().createOnly);
     expect(fake.calls.filter((c) => c === "create")).toHaveLength(creates);
     expect(fake.calls.filter((c) => c === "set")).toHaveLength(operations.length - creates);
   });
 
-  it("accepts a manifest-owned subset (compatible C records skipped upstream)", async () => {
+  it("accepts a manifest-owned subset of create-only operations in one batch", async () => {
     const fake = fakeStore();
-    const subset = operations.filter((o) => o.writeClass === "U");
+    const subset = operations.slice(0, 5);
     await expect(
       writeDemoOperations({ operations: subset, manifest, createBatch: fake.createBatch }),
     ).resolves.toEqual({ written: subset.length });
     expect(fake.commits).toBe(1);
+    expect(fake.calls.every((c) => c === "create")).toBe(true);
   });
 
-  it("re-running over the same store converges without duplicates (U set) but a C collision fails", async () => {
+  it("a second create-only run over the same store is a collision: it fails and writes nothing new", async () => {
     const fake = fakeStore();
-    const uOnly = operations.filter((o) => o.writeClass === "U");
-    await writeDemoOperations({ operations: uOnly, manifest, createBatch: fake.createBatch });
-    await writeDemoOperations({ operations: uOnly, manifest, createBatch: fake.createBatch });
-    expect(fake.store.size).toBe(uOnly.length);
+    await writeDemoOperations({ operations, manifest, createBatch: fake.createBatch });
+    const before = fake.store.size;
+    const error = await writeDemoOperations({ operations, manifest, createBatch: fake.createBatch }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(DemoWriteError);
+    expect((error as DemoWriteError).category).toBe("write_failed");
+    expect(fake.store.size).toBe(before);
   });
 });
 

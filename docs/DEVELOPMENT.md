@@ -50,6 +50,8 @@ Open `http://localhost:3000`. Never commit `.env.local` or any credential.
 | `pnpm test:emulator` | Emulator suites only. Fails when no Firestore emulator answers |
 | `pnpm verify:browser` | Playwright specs in `browser/` (see `TESTING.md`) |
 | `pnpm seed:demo-team` | Demo-team seed CLI (dry-run unless its flags are given) |
+| `pnpm seed:demo-team-identities` | Fictional team members: 10 disabled Auth accounts (`example.com`, no password) plus memberships and profiles. Offline and read-only live preflight by default; writes need `--write --confirm=<projectId>` and a conflict-free plan |
+| `pnpm seed:demo-team-roadmap` | Six additional roadmap plans for trees without a team plan, each owned by a fictional member's existing memberRef. Create-only; existing plans are never touched. Same dry-run and `--write --confirm=<projectId>` gates as the identities seed |
 
 Other scripts are run directly with Node (see §6).
 

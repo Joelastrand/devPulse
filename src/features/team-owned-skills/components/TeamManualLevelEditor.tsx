@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
 import { Select } from "../../../components/ui/Select";
@@ -28,7 +28,8 @@ export function TeamManualLevelEditor({
   readonly token: string;
   readonly skills: readonly TeamSkillView[];
   readonly assessments: readonly TeamManualAssessmentView[];
-  readonly onChanged: () => void;
+  /** Called only after the server confirms a save. The message is shown by the page, which outlives the reload. */
+  readonly onChanged: (message: string) => void;
 }) {
   return (
     <section aria-labelledby="team-manual-editor-heading" className="flex flex-col gap-3">
@@ -52,7 +53,7 @@ export function TeamManualLevelEditor({
   );
 }
 
-type RowStatus = { kind: "idle" } | { kind: "saving" } | { kind: "saved"; message: string } | { kind: "failed" };
+type RowStatus = { kind: "idle" } | { kind: "saving" } | { kind: "denied" } | { kind: "failed" };
 
 function ManualRow({
   teamId,
@@ -65,28 +66,38 @@ function ManualRow({
   readonly token: string;
   readonly skill: TeamSkillView;
   readonly current: TeamManualAssessmentView | null;
-  readonly onChanged: () => void;
+  readonly onChanged: (message: string) => void;
 }) {
   const [level, setLevel] = useState<string>(current === null ? "" : String(current.level));
   const [note, setNote] = useState<string>(current?.note ?? "");
   const [status, setStatus] = useState<RowStatus>({ kind: "idle" });
+  const inFlight = useRef(false);
   const selectId = `manual-level-${skill.skillId}`;
   const noteId = `manual-note-${skill.skillId}`;
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    // A ref, not the render-time status: two submits before a re-render still see the first one in flight.
+    if (inFlight.current) return;
+    inFlight.current = true;
     setStatus({ kind: "saving" });
-    const trimmedNote = note.trim();
-    const result =
-      level === ""
-        ? await clearTeamManualAssessment(token, teamId, skill.skillId)
-        : await setTeamManualAssessment(token, teamId, skill.skillId, Number(level) as TeamSkillLevel, trimmedNote === "" ? null : trimmedNote);
-    if (result.status !== "ok") {
-      setStatus({ kind: "failed" });
-      return;
+    try {
+      const trimmedNote = note.trim();
+      const result =
+        level === ""
+          ? await clearTeamManualAssessment(token, teamId, skill.skillId)
+          : await setTeamManualAssessment(token, teamId, skill.skillId, Number(level) as TeamSkillLevel, trimmedNote === "" ? null : trimmedNote);
+      if (result.status !== "ok") {
+        // Authorization outcomes are not a network failure: they get their own message and do not invite a retry.
+        const denied = result.status === "forbidden" || result.status === "unauthenticated" || result.status === "team_disabled";
+        setStatus(denied ? { kind: "denied" } : { kind: "failed" });
+        return;
+      }
+      setStatus({ kind: "idle" });
+      onChanged(level === "" ? copy.cleared : copy.saved);
+    } finally {
+      inFlight.current = false;
     }
-    setStatus({ kind: "saved", message: level === "" ? copy.cleared : copy.saved });
-    onChanged();
   }
 
   return (
@@ -123,9 +134,9 @@ function ManualRow({
         />
         <div className="flex flex-wrap items-center gap-3">
           <Button type="submit" variant="primary" size="sm" disabled={status.kind === "saving"} aria-busy={status.kind === "saving"}>
-            {copy.save}
+            {status.kind === "saving" ? copy.saving : copy.save}
           </Button>
-          {status.kind === "saved" ? <span className="text-sm text-text-secondary">{status.message}</span> : null}
+          {status.kind === "denied" ? <Alert variant="info">{copy.denied}</Alert> : null}
           {status.kind === "failed" ? <Alert variant="error">{copy.failed}</Alert> : null}
         </div>
       </form>

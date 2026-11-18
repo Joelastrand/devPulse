@@ -56,6 +56,8 @@ export const teamsCopy = {
     competencePlan: "Kompetanseplan",
     competence: "Teamkompetanse",
     systems: "Systemoversikt",
+    results: "Resultater og trender",
+    surveys: "Undersøkelser",
   },
   /**
    * `/teams/[teamId]/results` (BR-5): survey history, trends and the long
@@ -65,8 +67,6 @@ export const teamsCopy = {
   results: {
     title: "Resultater",
     description: "Undersøkelser, trender og kompetansestiger for teamet.",
-    openLink: "Se resultater og trender",
-    surveysLink: "Undersøkelser",
     backToOverview: "Tilbake til Oversikt",
     loading: "Laster resultater…",
     forbidden: "Du har ikke tilgang til resultatene for dette teamet.",
@@ -89,7 +89,7 @@ export const teamsCopy = {
     truncated: "Listen viser bare de første medlemmene og er ikke fullstendig.",
   },
   relationshipLabels: {
-    admin: "Admin",
+    teamadmin: "Teamadmin",
     member: "Medlem",
     request_pending: "Forespørsel venter",
     request_rejected: "Forespørsel avvist",

@@ -9,6 +9,7 @@ vi.mock("./auth-client", () => ({
 }));
 
 const { useAuthGatedResource } = await import("./use-auth-gated-resource");
+type AuthChange = import("./use-auth-gated-resource").AuthChange;
 
 /** Captures the subscribed callback so a test can fire auth events at will. */
 function capturingObserver() {
@@ -47,6 +48,7 @@ function Host({
     token: string | null,
     generation: number,
     isCurrentGeneration: IsCurrentGeneration,
+    change: AuthChange,
   ) => void;
   onApi: (api: { isCurrentGeneration: IsCurrentGeneration }) => void;
   resetDeps?: readonly unknown[];
@@ -78,7 +80,7 @@ describe("useAuthGatedResource", () => {
     render(<Host onAuthChange={onAuthChange} onApi={() => {}} />);
     observer.emit(null);
 
-    expect(onAuthChange).toHaveBeenCalledWith(null, 1, expect.any(Function));
+    expect(onAuthChange).toHaveBeenCalledWith(null, 1, expect.any(Function), "signed_out");
   });
 
   it("invokes onAuthChange with the token and generation 1 for an initial authenticated emission", () => {
@@ -88,7 +90,7 @@ describe("useAuthGatedResource", () => {
     render(<Host onAuthChange={onAuthChange} onApi={() => {}} />);
     observer.emit("a-token");
 
-    expect(onAuthChange).toHaveBeenCalledWith("a-token", 1, expect.any(Function));
+    expect(onAuthChange).toHaveBeenCalledWith("a-token", 1, expect.any(Function), "signed_in");
   });
 
   it("passes isCurrentGeneration as the callback's third argument, matching the returned one", () => {

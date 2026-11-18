@@ -21,8 +21,21 @@ export interface AuthGateway {
   /** Reloads the signed-in account from Firebase and reports its current verification flag. False when signed out. */
   reloadEmailVerified(): Promise<boolean>;
   signOut(): Promise<void>;
-  subscribeToIdToken(callback: (token: string | null) => void): () => void;
+  /**
+   * Reports the ID token and the Firebase account UID it belongs to, or `null` for both when signed out. The UID is a
+   * client-side identity-change signal only; it is never an authorization input (the server verifies the token).
+   */
+  subscribeToIdToken(callback: IdTokenCallback): () => void;
 }
+
+/**
+ * `account_changing` is emitted synchronously, before the new account's token is read, when Firebase reports a different
+ * account than the last one delivered. It carries no token and no UID: its only job is to invalidate the previous
+ * account's protected UI at once, instead of after the new token has loaded. It does not mean the new account is signed in.
+ */
+export type IdentitySignal = "account_changing";
+
+export type IdTokenCallback = (token: string | null, uid: string | null, signal?: IdentitySignal) => void;
 
 function getDefaultGateway(): AuthGateway {
   const auth = getFirebaseAuth();
@@ -50,17 +63,32 @@ function getDefaultGateway(): AuthGateway {
       await firebaseSignOut(auth);
     },
     subscribeToIdToken(callback) {
+      /** UID last delivered with a token. Used only to detect a real account change, never as authorization. */
+      let deliveredUid: string | null = null;
       return onIdTokenChanged(auth, async (user) => {
         if (!user) {
-          callback(null);
+          deliveredUid = null;
+          callback(null, null);
           return;
         }
 
-        try {
-          callback(await user.getIdToken());
-        } catch {
-          callback(null);
+        const uid = user.uid;
+        if (deliveredUid !== null && deliveredUid !== uid) {
+          // Invalidate the previous account now. Waiting for `getIdToken()` below would leave its protected UI visible.
+          callback(null, null, "account_changing");
         }
+        let token: string | null;
+        try {
+          token = await user.getIdToken();
+        } catch {
+          token = null;
+        }
+        // The token read is asynchronous. If the Firebase account changed while it was pending, this result belongs to a
+        // superseded account and is dropped: a later emission reports the current account. Without this check an
+        // older account's token could be delivered last and be treated as the signed-in account.
+        if (auth.currentUser?.uid !== uid) return;
+        deliveredUid = token === null ? null : uid;
+        callback(token, token === null ? null : uid);
       });
     },
   };
@@ -177,7 +205,7 @@ export async function signOut(deps: AuthActionDeps = {}): Promise<SignOutResult>
  * for the server to verify (`.claude/rules/security.md`).
  */
 export function observeIdToken(
-  callback: (token: string | null) => void,
+  callback: IdTokenCallback,
   deps: AuthActionDeps = {},
 ): () => void {
   const gateway = deps.gateway ?? getDefaultGateway();

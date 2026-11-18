@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
-import { LoadingState } from "../../../components/ui/LoadingState";
+import { SelectorControlSkeleton } from "./ConversationSkeletons";
 import { Select } from "../../../components/ui/Select";
 import { fetchSelectableMembers, type OwnerParticipantWire, type SelectableMemberWire } from "../client/conversations-gateway";
 import { conversationsCopy } from "../copy";
@@ -158,7 +158,7 @@ export function ParticipantPanel({
 
       {choosing && confirming === undefined && (
         <div className="flex flex-col gap-3">
-          {colleagues.phase === "loading" && <LoadingState label={conversationsCopy.colleagueOptionsLoading} />}
+          {colleagues.phase === "loading" && <SelectorControlSkeleton label={conversationsCopy.colleagueOptionsLoading} />}
           {colleagues.phase === "unavailable" && (
             <div className="flex flex-col items-start gap-3">
               <Alert variant="error">{conversationsCopy.colleagueOptionsError}</Alert>

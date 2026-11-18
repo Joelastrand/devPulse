@@ -3,7 +3,7 @@ import { achievementSchema, type AchievementContent } from "../domain/achievemen
 import type { RecordCollection } from "../domain/record-schema";
 import { responsibilitySchema, type ResponsibilityContent } from "../domain/responsibility";
 import { getDefaultPersonalRecordStore, type PersonalRecordStore } from "./personal-record-store";
-import { createRecord, deleteRecord, listRecords, updateRecord, type LinkChecker, type RecordError, type RecordListItem, type RecordListResult } from "./record-engine";
+import { createRecord, deleteRecord, listRecords, seedRecordCreateOnly, updateRecord, type LinkChecker, type RecordError, type RecordListItem, type RecordListResult, type RecordSeedAction } from "./record-engine";
 import { ownedGoalExists } from "./owned-goal-reader";
 
 /**
@@ -51,6 +51,41 @@ async function guarded<T>(work: () => Promise<T>): Promise<T | { ok: false; erro
     return await work();
   } catch {
     return { ok: false, error: "persistence_failed" };
+  }
+}
+
+/**
+ * Trusted create-only seed for one planned responsibility (feature-owned; reached only from the trusted seed workflow).
+ * Link references must already exist, so the seed refuses a dangling goal reference like the owner write path does.
+ */
+export async function seedResponsibilityCreateOnly(
+  ownerUid: string,
+  id: string,
+  content: ResponsibilityContent,
+  stamps: { createdAt: Date; updatedAt: Date },
+  deps: PersonalRecordDeps,
+): Promise<RecordSeedAction> {
+  if (!(await responsibilityLinks(deps)(ownerUid, content))) throw new RecordSeedLinkError();
+  return seedRecordCreateOnly(deps.store, ownerUid, responsibilitySchema, id, content, stamps);
+}
+
+/** Trusted create-only seed for one planned achievement; goal and responsibility references must already exist. */
+export async function seedAchievementCreateOnly(
+  ownerUid: string,
+  id: string,
+  content: AchievementContent,
+  stamps: { createdAt: Date; updatedAt: Date },
+  deps: PersonalRecordDeps,
+): Promise<RecordSeedAction> {
+  if (!(await achievementLinks(deps)(ownerUid, content))) throw new RecordSeedLinkError();
+  return seedRecordCreateOnly(deps.store, ownerUid, achievementSchema, id, content, stamps);
+}
+
+/** A seed reference points at a record that does not exist for the owner. Carries no id and no content. */
+export class RecordSeedLinkError extends Error {
+  constructor() {
+    super("record seed link missing");
+    this.name = "RecordSeedLinkError";
   }
 }
 

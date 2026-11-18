@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ArrowRight } from "lucide-react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
@@ -85,6 +85,11 @@ function summarize(question: SurveyQuestion, value: DraftAnswer): string {
  */
 export function SurveyResponseForm({ surveyId, idToken, questions, mode = "respond" }: SurveyResponseFormProps) {
   const [answers, setAnswers] = useState<Record<string, DraftAnswer>>({});
+  const inFlight = useRef(false);
+  const currentToken = useRef(idToken);
+  useEffect(() => {
+    currentToken.current = idToken;
+  }, [idToken]);
   const [step, setStep] = useState(0);
   const [status, setStatus] = useState<Status>("idle");
 
@@ -103,16 +108,30 @@ export function SurveyResponseForm({ surveyId, idToken, questions, mode = "respo
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (mode === "preview" || !allRequiredAnswered) {
+    // A ref, so a second submit before the next render (Enter key) cannot send a second response.
+    if (mode === "preview" || !allRequiredAnswered || inFlight.current) {
       return;
     }
+    inFlight.current = true;
+    const submittedWith = idToken;
     setStatus("submitting");
-    const result = await submitSurveyResponse(surveyId, buildPayload(questions, answers), idToken ?? undefined);
-    if (result.status === "ok") {
-      setStatus("success");
-      return;
+    try {
+      const result = await submitSurveyResponse(surveyId, buildPayload(questions, answers), idToken ?? undefined);
+      if (currentToken.current !== submittedWith) {
+        // The signed-in identity changed while the request was in flight. The outcome belongs to the previous session:
+        // it is not shown, and that session's answers are cleared rather than left for the next user.
+        setAnswers({});
+        setStatus("idle");
+        return;
+      }
+      if (result.status === "ok") {
+        setStatus("success");
+        return;
+      }
+      setStatus(result.status === "already_submitted" ? "already_submitted" : "error");
+    } finally {
+      inFlight.current = false;
     }
-    setStatus(result.status === "already_submitted" ? "already_submitted" : "error");
   }
 
   if (status === "success") {

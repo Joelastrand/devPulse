@@ -25,11 +25,49 @@ function walk(dir: string): string[] {
   });
 }
 
-// Matches a team-nav link whose sub-route is NOT one of the five SPEC BR-30 tabs (Oversikt is the bare base).
+// Matches a team-nav link whose sub-route is NOT one of the seven documented team tabs (Oversikt is the bare base; see docs/ROUTES.md).
 // `skills` is the team-owned skills administration tab (docs/archive/features/team-owned-skills/SPEC.md §4), an explicit owner request.
-const UNAPPROVED_TEAM_NAV_HREF = /href:\s*`\$\{base\}\/(?!(roadmap|systems|competence-plan|competence|skills)`)/;
+const UNAPPROVED_TEAM_NAV_HREF = /href:\s*`\$\{base\}\/(?!(roadmap|systems|competence-plan|competence|results|surveys|skills)`)/;
 
 const isTest =(path: string) => /\.test\.tsx?$/.test(path);
+
+/**
+ * The only demo-team files allowed to name skill-profile data for the C2 naming check: the fictional personal fixtures, the
+ * trusted demo seed orchestrator, and the Teamkompetanse demo seeder. Exact paths, approved for this naming check only. No
+ * directory-wide exemption.
+ *
+ * The Teamkompetanse entries are the four production files of `src/features/demo-team/teamkompetanse/`, and only those. Why
+ * the exception exists: the directory holds synthetic demo fixtures and seeding infrastructure for the ten disabled fictional
+ * accounts in the designated demo team. It is restricted to that team and those uids (`isSimulatedContributionContext`),
+ * introduces no new production C2 data flow, and relaxes no consent, authorization, erasure or aggregation privacy rule.
+ * The naming check is not a privacy control, and the exception does not widen it: any other file, or a new file in that
+ * directory, is still flagged.
+ */
+const DEMO_C2_NAMING_EXCEPTIONS: ReadonlySet<string> = new Set([
+  "src/features/demo-team/personal-fixtures.ts",
+  "src/features/demo-team/personal-seed.ts",
+  "src/features/demo-team/teamkompetanse/cli.ts",
+  "src/features/demo-team/teamkompetanse/fixtures.ts",
+  "src/features/demo-team/teamkompetanse/live.ts",
+  "src/features/demo-team/teamkompetanse/plan.ts",
+]);
+
+/**
+ * Controlled demo-data maintenance (docs/DEMO-DATA-MAINTENANCE.md): exact files only. Each one is a gated tool, not a naming
+ * exemption: the write gate is asserted below. Any other file, including a lookalike name, is still flagged.
+ */
+const CONTROLLED_DEMO_MAINTENANCE_FILES: ReadonlySet<string> = new Set([
+  "src/features/demo-team/teamkompetanse/rating-update.ts",
+  "src/features/demo-team/teamkompetanse/rating-update-cli.ts",
+]);
+
+/** Demo-team files (not exempt) that name team-skill or skill-profile data. */
+function demoC2NamingOffenders(files: ReadonlyArray<{ path: string; text: string }>): string[] {
+  return files
+    .filter((f) => !DEMO_C2_NAMING_EXCEPTIONS.has(f.path) && !CONTROLLED_DEMO_MAINTENANCE_FILES.has(f.path))
+    .filter((f) => /team-?skill-?needs|skill-?contribution|skill-?profile|team-skills/i.test(f.text))
+    .map((f) => f.path);
+}
 const read = (path: string) => readFileSync(join(ROOT, path), "utf8");
 
 /**
@@ -62,8 +100,49 @@ describe("C2 scope regression — nothing outside the approved surface (BR-35, B
   it("Demo Team fixtures, plan, seed and writer name no C2 or personal-assessment data", () => {
     const demo = walk("src/features/demo-team").filter((p) => !isTest(p));
     expect(demo.length).toBeGreaterThan(5);
-    const offenders = demo.filter((p) => /team-?skill-?needs|skill-?contribution|skill-?profile|team-skills/i.test(read(p)));
+    const offenders = demoC2NamingOffenders(demo.map((p) => ({ path: p, text: read(p) })));
     expect(offenders).toEqual([]);
+  });
+
+  it("the C2 naming exception is exactly the approved demo-team files; any other file naming skill-profile data is still flagged", () => {
+    expect([...DEMO_C2_NAMING_EXCEPTIONS].sort()).toEqual([
+      "src/features/demo-team/personal-fixtures.ts",
+      "src/features/demo-team/personal-seed.ts",
+      "src/features/demo-team/teamkompetanse/cli.ts",
+      "src/features/demo-team/teamkompetanse/fixtures.ts",
+      "src/features/demo-team/teamkompetanse/live.ts",
+      "src/features/demo-team/teamkompetanse/plan.ts",
+    ]);
+    const naming = "import type { SelfAssessedLevel } from \"../skill-profiles/domain/self-assessed-level\";";
+    expect(demoC2NamingOffenders([{ path: "src/features/demo-team/plan.ts", text: naming }])).toEqual(["src/features/demo-team/plan.ts"]);
+    expect(demoC2NamingOffenders([{ path: "src/features/demo-team/personal-fixtures.ts", text: naming }])).toEqual([]);
+    expect(demoC2NamingOffenders([{ path: "src/features/demo-team/personal-seed.ts", text: naming }])).toEqual([]);
+  });
+
+  it("the controlled demo-maintenance exemption is exactly the two gated rating-update files, and each carries the write gate", () => {
+    expect([...CONTROLLED_DEMO_MAINTENANCE_FILES].sort()).toEqual([
+      "src/features/demo-team/teamkompetanse/rating-update-cli.ts",
+      "src/features/demo-team/teamkompetanse/rating-update.ts",
+    ]);
+    const engine = read("src/features/demo-team/teamkompetanse/rating-update.ts");
+    const cli = read("src/features/demo-team/teamkompetanse/rating-update-cli.ts");
+    expect(engine).toContain("confirmation-required");
+    expect(engine).toContain("confirmation-mismatch");
+    expect(engine).toContain("ratingUpdatePlanDigest");
+    // The project and team are fixed constants, never taken from an unchecked argument alone.
+    expect(cli).toContain('const REQUIRED_PROJECT_ID = "devpulse-nve"');
+    expect(cli).toContain("args.project !== REQUIRED_PROJECT_ID");
+    expect(cli).toContain("args.team !== SIMULATED_CONTRIBUTION_TEAM_ID");
+  });
+
+  it("a lookalike or unapproved file in the same directory is still flagged (no broad filename exemption)", () => {
+    const naming = "import { x } from \"../../team-skills/domain/skill-contribution\";";
+    expect(demoC2NamingOffenders([{ path: "src/features/demo-team/teamkompetanse/rating-update-2.ts", text: naming }])).toEqual([
+      "src/features/demo-team/teamkompetanse/rating-update-2.ts",
+    ]);
+    expect(demoC2NamingOffenders([{ path: "src/features/demo-team/teamkompetanse/rating-update.test.ts", text: naming }])).toEqual([
+      "src/features/demo-team/teamkompetanse/rating-update.test.ts",
+    ]);
   });
 
   it("no production code introduces D1/D2 concepts", () => {
@@ -135,7 +214,7 @@ describe("C2 scope regression — nothing outside the approved surface (BR-35, B
     expect(C2_PRODUCTION.filter((p) => /\.(set|create|update|delete)\(/.test(read(p)) && !/skill-needs-store|skill-contribution-store/.test(p))).toEqual([]);
   });
 
-  it("team navigation exposes only the approved destinations (the five SPEC BR-30 tabs — no other sub-route)", () => {
+  it("team navigation exposes only the approved destinations (the seven documented team tabs — no other sub-route)", () => {
     const nav = walk("src/features/teams/components").filter((p) => /Nav\.tsx$/.test(p));
     expect(nav.length).toBeGreaterThan(0);
     // Links are declared as `{ href: base | `${base}/<approved>`, label }`. The approved set is exactly the five
@@ -144,8 +223,8 @@ describe("C2 scope regression — nothing outside the approved surface (BR-35, B
     for (const p of nav) expect(read(p)).not.toMatch(UNAPPROVED_TEAM_NAV_HREF);
   });
 
-  it("team navigation guard rejects unapproved destinations and accepts the five approved tabs", () => {
-    for (const sub of ["roadmap", "systems", "competence-plan", "competence", "skills"]) {
+  it("team navigation guard rejects unapproved destinations and accepts the seven documented tabs", () => {
+    for (const sub of ["roadmap", "systems", "competence-plan", "competence", "results", "surveys", "skills"]) {
       expect(`href: \`\${base}/${sub}\``).not.toMatch(UNAPPROVED_TEAM_NAV_HREF);
     }
     for (const sub of ["skill-needs", "competence-plan/extra", "competence-x", "forum"]) {

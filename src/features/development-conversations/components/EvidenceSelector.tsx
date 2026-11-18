@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
-import { LoadingState } from "../../../components/ui/LoadingState";
+import { SelectorOptionsSkeleton } from "./ConversationSkeletons";
 import { fetchEvidenceSources, type EvidenceSourceWire, type SharedEvidenceWire } from "../client/conversations-gateway";
 import { conversationsCopy } from "../copy";
 import { SHARED_EVIDENCE_MAX_ACHIEVEMENTS, SHARED_EVIDENCE_MAX_RESPONSIBILITIES } from "../domain/conversation-constants";
@@ -214,7 +214,7 @@ export function EvidenceSelector({
         <h3 className="font-medium text-text-primary">{conversationsCopy.evidenceSelectorHeading}</h3>
         <p className="text-sm text-text-secondary">{conversationsCopy.evidenceSelectorCopy}</p>
 
-        {options.phase === "loading" && <LoadingState label={conversationsCopy.evidenceLoading} />}
+        {options.phase === "loading" && <SelectorOptionsSkeleton label={conversationsCopy.evidenceLoading} />}
         {options.phase === "unavailable" && <Alert variant="error">{conversationsCopy.evidenceError}</Alert>}
         {options.phase === "ready" && options.items.length === 0 && <p className="text-text-muted">{conversationsCopy.evidenceEmpty}</p>}
         {ready !== null && ready.items.length > 0 && (

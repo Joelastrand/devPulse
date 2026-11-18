@@ -46,6 +46,24 @@ export const systemsCopy = {
     attentionOnly: "Trenger oppfølging",
     knowledgeLabel: "Kompetanserisiko",
     knowledgeAll: "Alle nivåer",
+    systemTypeLabel: "Systemtype",
+    systemTypeAll: "Alle systemtyper",
+    criticalityLabel: "Virksomhetskritikalitet",
+    criticalityAll: "Alle nivåer",
+  },
+
+  /** Classification labels for the form, the list and the filters (domain/team-system.ts holds the values). */
+  classification: {
+    groupLabel: "Klassifisering",
+    systemTypeLabel: "Systemtype",
+    systemTypeHelp: "Gjelder hvem systemet er laget for eller brukes av, ikke hvor det driftes eller hvem som eier leverandøren.",
+    criticalityLabel: "Virksomhetskritikalitet",
+    criticalityHelp: "Konsekvensen for virksomheten hvis systemet er utilgjengelig eller feiler. Utledes ikke av systemtypen.",
+    reachLabel: "Brukeromfang",
+    reachHelp: "En kvalitativ vurdering av hvor mange som bruker systemet, ikke et antall brukere.",
+    /** Compact secondary line in the list. */
+    compactCriticality: "Kritikalitet",
+    compactReach: "Brukeromfang",
   },
 
   matrix: {

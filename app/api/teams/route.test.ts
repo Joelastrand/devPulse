@@ -80,7 +80,7 @@ describe("GET /api/teams", () => {
 
     getTeamsOverviewMock.mockResolvedValue({
       ok: true,
-      teams: [{ teamId: "team-1", name: "Team One", relationship: "admin" }],
+      teams: [{ teamId: "team-1", name: "Team One", relationship: "none", isMember: false, canOpen: true }],
     });
     await GET(requestWithAuth("Bearer valid-token"));
 

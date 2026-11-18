@@ -12,8 +12,16 @@ import { extractMemberUid, isValidMembershipFor, membershipDocId } from "../../t
 import {
   ASSESSMENT_ATTRIBUTES,
   TEAM_SYSTEM_LIMITS,
+  UNASSESSED_CLASSIFICATION,
   chunkMemberRefs,
   isAssessmentValue,
+  isBusinessCriticality,
+  isSystemType,
+  isUserReach,
+  type BusinessCriticality,
+  type SystemClassification,
+  type SystemType,
+  type UserReach,
   parseBackstageUrl,
   parseOptionalText,
   parseSystemName,
@@ -32,7 +40,16 @@ const SYSTEMS_COLLECTION = "teamSystems";
 const MEMBERSHIPS_COLLECTION = "teamMemberships";
 const TEAMS_COLLECTION = "teams";
 
-const ALLOWED_KEYS = ["name", "description", "backstageUrl", "assessments", "knowledgeMemberRefs"];
+const ALLOWED_KEYS = [
+  "name",
+  "description",
+  "backstageUrl",
+  "systemType",
+  "businessCriticality",
+  "userReach",
+  "assessments",
+  "knowledgeMemberRefs",
+];
 
 const DEFAULT_ASSESSMENT: StoredAssessment = { value: "ikke_vurdert", note: null, assessedAt: null, assessedBy: null };
 
@@ -136,6 +153,10 @@ export interface ParsedTeamSystemInput {
   name?: string;
   description?: string | null;
   backstageUrl?: string | null;
+  /** Each classification value is set only when present in the request; absent keeps the stored value (or the default on create). */
+  systemType?: SystemType;
+  businessCriticality?: BusinessCriticality;
+  userReach?: UserReach;
   assessments?: Partial<Record<AssessmentAttribute, { value: AssessmentValue; note: string | null }>>;
   knowledgeMemberRefs?: string[];
 }
@@ -173,6 +194,21 @@ export function parseTeamSystemInput(
     const url = parseBackstageUrl(body.backstageUrl);
     if (!url.ok) return "invalid_input";
     out.backstageUrl = url.value;
+  }
+
+  if ("systemType" in body) {
+    if (!isSystemType(body.systemType)) return "invalid_input";
+    out.systemType = body.systemType;
+  }
+
+  if ("businessCriticality" in body) {
+    if (!isBusinessCriticality(body.businessCriticality)) return "invalid_input";
+    out.businessCriticality = body.businessCriticality;
+  }
+
+  if ("userReach" in body) {
+    if (!isUserReach(body.userReach)) return "invalid_input";
+    out.userReach = body.userReach;
   }
 
   if ("assessments" in body) {
@@ -276,11 +312,15 @@ export async function writeTeamSystem(
         assessments[attribute] = next === undefined ? { ...previous } : traceAssessment(previous, next, now, uid);
       }
 
+      const previousClassification: SystemClassification = existing?.classification ?? UNASSESSED_CLASSIFICATION;
       const data: Record<string, unknown> = {
         teamId,
         name: parsed.name ?? existing?.name,
         description: parsed.description !== undefined ? parsed.description : (existing?.description ?? null),
         backstageUrl: parsed.backstageUrl !== undefined ? parsed.backstageUrl : (existing?.backstageUrl ?? null),
+        systemType: parsed.systemType ?? previousClassification.systemType,
+        businessCriticality: parsed.businessCriticality ?? previousClassification.businessCriticality,
+        userReach: parsed.userReach ?? previousClassification.userReach,
         ...Object.fromEntries(ASSESSMENT_ATTRIBUTES.map((attribute) => [attribute, toStorage(assessments[attribute])])),
         knowledgeMemberRefs: knowledgeRefs,
         createdAt: existing?.createdAt ?? now,

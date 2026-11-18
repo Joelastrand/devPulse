@@ -7,8 +7,9 @@ import { useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
-import { LoadingState } from "../../../components/ui/LoadingState";
+import { LoadingRegion, Skeleton, SkeletonCard } from "../../../components/ui/Skeleton";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
+import { TrendChartSkeleton } from "../../results/components/TrendChartSkeleton";
 import { PeriodSummary } from "../../results/components/PeriodSummary";
 import { ResultsSummaryStrip } from "../../results/components/ResultsSummaryStrip";
 import { TrendTable } from "../../results/components/TrendTable";
@@ -39,7 +40,7 @@ const LazyTrendChart = dynamic<{ results: readonly SurveyResultSummary[] }>(
   () => import("../../results/components/TrendChart").then((mod) => mod.TrendChart),
   {
     ssr: false,
-    loading: () => <LoadingState label={resultsCopy.trendChart.loading} />,
+    loading: () => <TrendChartSkeleton label={resultsCopy.trendChart.loading} />,
   },
 );
 
@@ -128,7 +129,7 @@ export function TeamResultsView({ teamId }: { teamId: string }) {
   );
 
   if (state.phase === "loading") {
-    return <LoadingState label={teamsCopy.results.loading} />;
+    return <ResultsViewSkeleton label={teamsCopy.results.loading} />;
   }
 
   if (state.phase === "signed_out") {
@@ -165,6 +166,76 @@ export function TeamResultsView({ teamId }: { teamId: string }) {
       )}
       <TeamSurveyResultsSection teamId={teamId} />
     </div>
+  );
+}
+
+/**
+ * Placeholder for the results route in the order it renders: summary strip, current survey, latest period, trend
+ * table, chart. One region announces loading; the blocks are decorative and keep the loaded layout's rhythm.
+ */
+function ResultsViewSkeleton({ label }: { label: string }) {
+  return (
+    <LoadingRegion label={label} className="flex flex-col gap-6">
+      <div aria-hidden="true" className="flex flex-col gap-6">
+        {/* ResultsSummaryStrip: a bordered term list. A latest-date row, then three dimension cells (stacked on mobile). */}
+        <div className="grid gap-3 rounded-control border border-border-subtle bg-surface px-4 py-3 sm:grid-cols-3">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 sm:col-span-3">
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-4 w-32" />
+          </div>
+          {Array.from({ length: 3 }, (_, index) => (
+            <div key={index} className="flex flex-col gap-1">
+              <Skeleton className="h-4 w-16" />
+              <Skeleton className="h-7 w-14" />
+            </div>
+          ))}
+        </div>
+
+        {/* CurrentSurveySection: heading, then title, type line, and the answer link. */}
+        <SkeletonCard className="flex flex-col gap-3 p-6">
+          <Skeleton className="h-5 w-44" />
+          <Skeleton className="h-4 w-3/4" />
+          <Skeleton className="h-4 w-1/2" />
+          <Skeleton className="h-4 w-28" />
+        </SkeletonCard>
+
+        {/* PeriodSummary: heading, a title and date line, three dimension values, then the response count. */}
+        <SkeletonCard className="flex flex-col gap-3 p-6">
+          <Skeleton className="h-5 w-44" />
+          <Skeleton className="h-4 w-1/2" />
+          <div className="mt-1 grid grid-cols-3 gap-4">
+            {Array.from({ length: 3 }, (_, index) => (
+              <div key={index} className="flex flex-col gap-1">
+                <Skeleton className="h-4 w-14" />
+                <Skeleton className="h-7 w-12" />
+              </div>
+            ))}
+          </div>
+          <Skeleton className="h-4 w-28" />
+        </SkeletonCard>
+
+        {/* TrendTable: a plain section (no card) with a header row and three body rows, as in the loaded table. */}
+        <section className="flex flex-col gap-3">
+          <Skeleton className="h-5 w-44" />
+          <div className="flex flex-col overflow-hidden">
+            <div className="grid grid-cols-5 gap-4 border-b border-border-subtle py-2">
+              {Array.from({ length: 5 }, (_, index) => (
+                <Skeleton key={index} className="h-4 w-full" />
+              ))}
+            </div>
+            {Array.from({ length: 3 }, (_, index) => (
+              <div key={index} className="grid grid-cols-5 gap-4 border-b border-border-subtle py-2 last:border-0">
+                {Array.from({ length: 5 }, (_, cell) => (
+                  <Skeleton key={cell} className="h-4 w-full" />
+                ))}
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+      {/* The chart card keeps the loaded heading and description as real text; only its plot box is decorative (aria-hidden). */}
+      <TrendChartSkeleton />
+    </LoadingRegion>
   );
 }
 

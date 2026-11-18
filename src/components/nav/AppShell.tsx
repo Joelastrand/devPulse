@@ -16,7 +16,7 @@ import { MobileDrawer } from "./MobileDrawer";
 import { AccountMenu } from "./AccountMenu";
 import { useTeamName } from "./TeamContext";
 import { navCopy } from "./copy";
-import { NavGroupList, type NavGroup } from "./NavGroupList";
+import { activeNavHref, NavGroupList, type NavGroup } from "./NavGroupList";
 
 type HeaderState =
   | { phase: "loading" }
@@ -122,7 +122,8 @@ export function AppShell({ children }: AppShellProps) {
     state.phase === "signed_in"
       ? { pending: signingOut, onSignOut: () => handleSignOut(state.generation) }
       : undefined;
-  const currentLabel = groups.flatMap((group) => group.items).find((item) => item.href === pathname)?.label;
+  const activeHref = activeNavHref(groups, pathname);
+  const currentLabel = groups.flatMap((group) => group.items).find((item) => item.href === activeHref)?.label;
 
   return (
     <>

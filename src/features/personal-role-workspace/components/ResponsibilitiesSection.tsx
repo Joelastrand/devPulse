@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
-import { LoadingState } from "../../../components/ui/LoadingState";
 import { Select } from "../../../components/ui/Select";
 import { TextArea } from "../../../components/ui/TextArea";
 import { TextField } from "../../../components/ui/TextField";
@@ -25,6 +24,7 @@ import {
 } from "../client/records-gateway";
 import { RELATION_TO_ROLE_VALUES, type RelationToRole, type ResponsibilityStatus } from "../domain/constants";
 import { LinkPicker } from "./LinkPicker";
+import { RecordListSkeleton } from "./RoleSkeletons";
 
 type Notice = { variant: "success" | "error"; text: string };
 type StatusFilter = "all" | ResponsibilityStatus;
@@ -76,7 +76,26 @@ export function ResponsibilitiesSection({ onChanged }: { onChanged?: () => void 
   const [values, setValues] = useState<FormValues>(valuesFrom(null));
   const [notice, setNotice] = useState<Notice | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  // Messages and open confirmations are dropped on every auth change (including a refresh). The draft is dropped only when
+  // the account changes (a direct switch or sign-out), using the UID-based account epoch; a same-account refresh keeps it.
+  // Both resets run during render, so the previous account's content never paints.
+  const [seenEpoch, setSeenEpoch] = useState(records.authEpoch);
+  if (seenEpoch !== records.authEpoch) {
+    setSeenEpoch(records.authEpoch);
+    setNotice(null);
+    setConfirmId(null);
+  }
+  const [seenAccountEpoch, setSeenAccountEpoch] = useState(records.accountEpoch);
+  if (seenAccountEpoch !== records.accountEpoch) {
+    setSeenAccountEpoch(records.accountEpoch);
+    setEditing(null);
+    setValues(valuesFrom(null));
+  }
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  /** Record ids with a toggle or delete in flight. Mirrored in a ref so a repeat click is blocked before the next render. */
+  const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(() => new Set());
+  const busyRef = useRef(new Set<string>());
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
   /** Goal choices are read when the form opens, so a goal created elsewhere is selectable at once. */
@@ -95,49 +114,73 @@ export function ResponsibilitiesSection({ onChanged }: { onChanged?: () => void 
     setNotice(null);
   };
 
-  /** Runs one write through the owner gateway. A success reloads the canonical list and returns true. */
+  /**
+   * Runs one write through the owner gateway. A success reloads the canonical list and returns true. A superseded outcome (the
+   * auth state changed mid-write) shows nothing and returns false.
+   */
   const run = async (action: (token: string) => Promise<GatewayResult<unknown>>, success: string): Promise<boolean> => {
-    const result = await records.mutate(action);
-    if (result.ok) {
+    const outcome = await records.mutate(action);
+    if (outcome.status === "superseded") return false;
+    if (outcome.result.ok) {
       setNotice({ variant: "success", text: success });
       onChanged?.();
     } else {
-      setNotice(errorNotice(result.error));
+      setNotice(errorNotice(outcome.result.error));
     }
-    return result.ok;
+    return outcome.result.ok;
+  };
+
+  /** One row action with its own pending state. The ref blocks a repeat click before the next render; other rows stay usable. */
+  const runRow = async (id: string, action: (token: string) => Promise<GatewayResult<unknown>>, success: string): Promise<boolean> => {
+    if (busyRef.current.has(id)) return false;
+    busyRef.current.add(id);
+    setBusyIds(new Set(busyRef.current));
+    try {
+      return await run(action, success);
+    } finally {
+      busyRef.current.delete(id);
+      setBusyIds(new Set(busyRef.current));
+    }
   };
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!editing) return;
+    if (!editing || savingRef.current) return;
     if (values.title.trim() === "") {
       setNotice({ variant: "error", text: workspaceCopy.errors.invalid_input });
       return;
     }
+    savingRef.current = true;
     setSaving(true);
-    const ok =
-      editing.mode === "create"
-        ? await run((token) => createResponsibility(token, inputFrom(values, "active")), copy.success.created)
-        : await run(
-            (token) => updateResponsibility(token, editing.record.id, inputFrom(values, editing.record.status)),
-            copy.success.updated,
-          );
-    setSaving(false);
-    if (ok) closeForm();
+    try {
+      const ok =
+        editing.mode === "create"
+          ? await run((token) => createResponsibility(token, inputFrom(values, "active")), copy.success.created)
+          : await run(
+              (token) => updateResponsibility(token, editing.record.id, inputFrom(values, editing.record.status)),
+              copy.success.updated,
+            );
+      if (ok) closeForm();
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
   };
 
   const toggleStatus = (record: ResponsibilityDto) => {
     const next: ResponsibilityStatus = record.status === "active" ? "completed" : "active";
-    void run(
+    void runRow(
+      record.id,
       (token) => updateResponsibility(token, record.id, { status: next }),
       next === "completed" ? copy.success.completed : copy.success.reopened,
     );
   };
 
-  const remove = (id: string) => {
+  /** The confirmation stays open while the delete is pending, so its button shows the pending label. It closes either way. */
+  const remove = async (id: string) => {
+    const ok = await runRow(id, (token) => deleteResponsibility(token, id), copy.success.deleted);
     setConfirmId(null);
-    if (editing?.mode === "edit" && editing.record.id === id) closeForm();
-    void run((token) => deleteResponsibility(token, id), copy.success.deleted);
+    if (ok && editing?.mode === "edit" && editing.record.id === id) closeForm();
   };
 
   const goalChoices = isReady(goals.state) ? goals.state.data : [];
@@ -232,7 +275,7 @@ export function ResponsibilitiesSection({ onChanged }: { onChanged?: () => void 
               onChange={(goalIds) => setValues({ ...values, goalIds })}
             />
             <div className="flex flex-wrap gap-2">
-              <Button type="submit" pending={saving}>{workspaceCopy.responsibilities.save}</Button>
+              <Button type="submit" pending={saving}>{saving ? copy.saving : workspaceCopy.responsibilities.save}</Button>
               <Button type="button" variant="secondary" onClick={cancelForm}>{copy.cancel}</Button>
             </div>
           </form>
@@ -245,9 +288,10 @@ export function ResponsibilitiesSection({ onChanged }: { onChanged?: () => void 
         onRetry={() => void records.reload()}
         onEdit={(record) => openForm({ mode: "edit", record })}
         onToggle={toggleStatus}
+        busyIds={busyIds}
         confirmId={confirmId}
         onAskDelete={setConfirmId}
-        onDelete={remove}
+        onDelete={(id) => void remove(id)}
       />
     </section>
   );
@@ -264,14 +308,16 @@ interface ResponsibilityListProps {
   onRetry: () => void;
   onEdit: (record: ResponsibilityDto) => void;
   onToggle: (record: ResponsibilityDto) => void;
+  /** Ids with a toggle or delete in flight. Only those rows are disabled; the list itself is never replaced. */
+  busyIds: ReadonlySet<string>;
   confirmId: string | null;
   onAskDelete: (id: string | null) => void;
   onDelete: (id: string) => void;
 }
 
 /** Renders the owner's list in every state: loading, signed out, error, empty, and ready with recovery items. */
-function ResponsibilityList({ state, statusFilter, onRetry, onEdit, onToggle, confirmId, onAskDelete, onDelete }: ResponsibilityListProps) {
-  if (state.phase === "loading") return <LoadingState />;
+function ResponsibilityList({ state, statusFilter, onRetry, onEdit, onToggle, busyIds, confirmId, onAskDelete, onDelete }: ResponsibilityListProps) {
+  if (state.phase === "loading") return <RecordListSkeleton label={copy.loading} />;
   if (state.phase === "signed_out") return <EmptyState>{workspaceCopy.signedOut}</EmptyState>;
   if (state.phase === "error") {
     return (
@@ -305,15 +351,23 @@ function ResponsibilityList({ state, statusFilter, onRetry, onEdit, onToggle, co
                 {record.endDate ? ` · til ${record.endDate}` : ""}
               </p>
               <div className="flex flex-wrap gap-2">
-                <Button type="button" size="sm" variant="secondary" onClick={() => onEdit(record)}>{copy.edit}</Button>
-                <Button type="button" size="sm" variant="secondary" onClick={() => onToggle(record)}>
-                  {record.status === "active" ? copy.complete : copy.reopen}
-                </Button>
-                {confirmId === record.id ? (
-                  <ConfirmDelete onConfirm={() => onDelete(record.id)} onCancel={() => onAskDelete(null)} />
-                ) : (
-                  <Button type="button" size="sm" variant="destructive" onClick={() => onAskDelete(record.id)}>{copy.delete}</Button>
-                )}
+                {/* Only this row's controls are disabled while its own write is pending. */}
+                {(() => {
+                  const busy = busyIds.has(record.id);
+                  return (
+                    <>
+                      <Button type="button" size="sm" variant="secondary" disabled={busy} onClick={() => onEdit(record)}>{copy.edit}</Button>
+                      <Button type="button" size="sm" variant="secondary" pending={busy} onClick={() => onToggle(record)}>
+                        {busy ? copy.updating : record.status === "active" ? copy.complete : copy.reopen}
+                      </Button>
+                      {confirmId === record.id ? (
+                        <ConfirmDelete pending={busy} onConfirm={() => onDelete(record.id)} onCancel={() => onAskDelete(null)} />
+                      ) : (
+                        <Button type="button" size="sm" variant="destructive" disabled={busy} onClick={() => onAskDelete(record.id)}>{copy.delete}</Button>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </Card>
           </li>
@@ -328,9 +382,9 @@ function ResponsibilityList({ state, statusFilter, onRetry, onEdit, onToggle, co
             {data.recoveryItems.map((item) => (
               <li key={item.id} className="flex flex-wrap items-center gap-2">
                 {confirmId === item.id ? (
-                  <ConfirmDelete onConfirm={() => onDelete(item.id)} onCancel={() => onAskDelete(null)} />
+                  <ConfirmDelete pending={busyIds.has(item.id)} onConfirm={() => onDelete(item.id)} onCancel={() => onAskDelete(null)} />
                 ) : (
-                  <Button type="button" size="sm" variant="destructive" onClick={() => onAskDelete(item.id)}>{copy.recoveryDelete}</Button>
+                  <Button type="button" size="sm" variant="destructive" disabled={busyIds.has(item.id)} onClick={() => onAskDelete(item.id)}>{copy.recoveryDelete}</Button>
                 )}
               </li>
             ))}
@@ -341,12 +395,14 @@ function ResponsibilityList({ state, statusFilter, onRetry, onEdit, onToggle, co
   );
 }
 
-function ConfirmDelete({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: () => void }) {
+function ConfirmDelete({ pending, onConfirm, onCancel }: { pending: boolean; onConfirm: () => void; onCancel: () => void }) {
   return (
     <div role="group" aria-label={copy.deleteConfirm} className="flex flex-wrap items-center gap-2">
       <span className="text-sm text-text-primary">{copy.deleteConfirm}</span>
-      <Button type="button" size="sm" variant="destructive" onClick={onConfirm}>{copy.confirmDelete}</Button>
-      <Button type="button" size="sm" variant="secondary" onClick={onCancel}>{copy.cancel}</Button>
+      <Button type="button" size="sm" variant="destructive" pending={pending} onClick={onConfirm}>
+        {pending ? copy.deleting : copy.confirmDelete}
+      </Button>
+      <Button type="button" size="sm" variant="secondary" disabled={pending} onClick={onCancel}>{copy.cancel}</Button>
     </div>
   );
 }

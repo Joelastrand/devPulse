@@ -416,3 +416,52 @@ describe("ProfileForm anchor (visual-redesign TASK-016)", () => {
     expect(form?.querySelector("input")).not.toBeNull();
   });
 });
+
+describe("ProfileForm — a save that resolves after the identity changed", () => {
+  function controllableIdentity() {
+    let emit: (token: string | null) => void = () => {};
+    observeIdTokenMock.mockImplementation((callback: (token: string | null) => void) => {
+      emit = callback;
+      return () => {};
+    });
+    return (token: string | null) => emit(token);
+  }
+
+  it("does not confirm a save for the previous session after sign-out", async () => {
+    const setIdentity = controllableIdentity();
+    fetchOwnProfileMock.mockResolvedValue({ status: "ok", displayName: "Anna Berg" });
+    let resolveSave: (value: unknown) => void = () => {};
+    saveOwnProfileMock.mockImplementation(() => new Promise((resolve) => { resolveSave = resolve; }));
+    const user = userEvent.setup();
+    render(<ProfileForm />);
+    setIdentity("a-token");
+    await screen.findByLabelText("Visningsnavn");
+
+    await user.click(screen.getByRole("button", { name: "Lagre" }));
+    setIdentity(null);
+    resolveSave({ ok: true, displayName: "Anna Berg" });
+
+    expect(await screen.findByRole("link", { name: /logg inn/i })).toBeTruthy();
+    expect(screen.queryByText("Visningsnavnet er lagret.")).toBeNull();
+  });
+
+  it("does not show a save failure from the previous account after an account switch, and frees the save button", async () => {
+    const setIdentity = controllableIdentity();
+    fetchOwnProfileMock.mockResolvedValue({ status: "ok", displayName: "Anna Berg" });
+    let resolveSave: (value: unknown) => void = () => {};
+    saveOwnProfileMock.mockImplementation(() => new Promise((resolve) => { resolveSave = resolve; }));
+    const user = userEvent.setup();
+    render(<ProfileForm />);
+    setIdentity("a-token");
+    await screen.findByLabelText("Visningsnavn");
+
+    await user.click(screen.getByRole("button", { name: "Lagre" }));
+    setIdentity("b-token");
+    await screen.findByLabelText("Visningsnavn");
+    resolveSave({ ok: false, error: "server_error" });
+
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Lagrer…" })).toBeNull());
+    expect(screen.getByRole("button", { name: "Lagre" }).getAttribute("aria-busy")).not.toBe("true");
+    expect(screen.queryByText("Visningsnavnet er lagret.")).toBeNull();
+  });
+});

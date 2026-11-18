@@ -12,6 +12,9 @@ export type OwnerRecordsState<T> =
 
 type Fetcher<T> = (token: string) => Promise<GatewayResult<T>>;
 
+/** `superseded`: the auth state changed during the write, so its result must not be shown as success or failure. */
+export type MutationOutcome<R> = { status: "done"; result: GatewayResult<R> } | { status: "superseded" };
+
 /**
  * Loads one owner-scoped list through a gateway and keeps it fresh (the signed-in person's own records only). A response
  * from a superseded auth state is discarded (the same generation guard as the other client resources). After each
@@ -19,6 +22,8 @@ type Fetcher<T> = (token: string) => Promise<GatewayResult<T>>;
  */
 export function useOwnerRecords<T>(fetcher: Fetcher<T>) {
   const [state, setState] = useState<OwnerRecordsState<T>>({ phase: "loading" });
+  const [authEpoch, setAuthEpoch] = useState(0);
+  const [accountEpoch, setAccountEpoch] = useState(0);
   const tokenRef = useRef<string | null>(null);
   const generationRef = useRef(0);
 
@@ -33,9 +38,14 @@ export function useOwnerRecords<T>(fetcher: Fetcher<T>) {
     [fetcher],
   );
 
-  const { isCurrentGeneration } = useAuthGatedResource((token, generation, isCurrent) => {
+  const { isCurrentGeneration } = useAuthGatedResource((token, generation, isCurrent, change) => {
     tokenRef.current = token;
     generationRef.current = generation;
+    // Every auth change, including a token refresh, bumps `authEpoch`: callers drop transient messages and open
+    // confirmations. Only a real account change or sign-out bumps `accountEpoch`: callers drop account-scoped drafts. A
+    // refresh for the same account keeps the draft.
+    setAuthEpoch((current) => current + 1);
+    if (change === "switched" || change === "signed_out") setAccountEpoch((current) => current + 1);
     if (!token) {
       setState({ phase: "signed_out" });
       return;
@@ -53,21 +63,29 @@ export function useOwnerRecords<T>(fetcher: Fetcher<T>) {
   }, [load, isCurrentGeneration]);
 
   /**
-   * Runs one mutation with the current token. Returns the gateway result for the form to show; on success the list is reloaded.
+   * Runs one mutation with the current token. On success the canonical list is reloaded. If the auth generation changed while
+   * the write was in flight (sign-out, account switch, or a token refresh), the outcome is `superseded`: the caller must show
+   * neither success nor failure, because the write may have completed on the server. The canonical list is re-read for the
+   * current state instead, so the view shows what the server now holds.
    */
   const mutate = useCallback(
-    async <R>(action: (token: string) => Promise<GatewayResult<R>>): Promise<GatewayResult<R>> => {
+    async <R>(action: (token: string) => Promise<GatewayResult<R>>): Promise<MutationOutcome<R>> => {
       const token = tokenRef.current;
-      if (!token) return { ok: false, error: "unauthenticated" };
+      if (!token) return { status: "done", result: { ok: false, error: "unauthenticated" } };
+      const generation = generationRef.current;
       const result = await action(token);
+      if (generation !== generationRef.current) {
+        void reload();
+        return { status: "superseded" };
+      }
       if (result.ok) await reload();
       else if (result.error === "unauthenticated") setState({ phase: "signed_out" });
-      return result;
+      return { status: "done", result };
     },
     [reload],
   );
 
-  return { state, reload, mutate };
+  return { state, reload, mutate, authEpoch, accountEpoch };
 }
 
 export type OwnerRecords<T> = ReturnType<typeof useOwnerRecords<T>>;

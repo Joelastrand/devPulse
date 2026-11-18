@@ -3,7 +3,8 @@ import { FieldPath, FieldValue } from "firebase-admin/firestore";
 import { getFirestoreDb } from "../../../lib/firebase/admin";
 import { runFencedTransaction } from "../../auth/server/erasure-write-fence";
 import type { SelfAssessedLevel } from "../domain/self-assessed-level";
-import { openSkillProfileDocument, sealSkillLevel } from "./skill-level-codec";
+import { classifySkillLevelSeed, type SkillSeedAction } from "../domain/skill-level-seed";
+import { openSkillLevels, openSkillProfileDocument, sealSkillLevel } from "./skill-level-codec";
 
 const SKILL_PROFILES_COLLECTION = "skillProfiles";
 const SKILL_TREES_COLLECTION = "skillTrees";
@@ -44,6 +45,43 @@ export interface SkillProfileStore {
   runTransaction<T>(uid: string, work: (tx: SkillProfileTransaction) => Promise<T>): Promise<T>;
   /** Physically deletes `skillProfiles/{uid}` whatever it contains; succeeds when it is absent (SPEC BR-14). */
   delete(uid: string): Promise<void>;
+}
+
+/** Thrown when the stored profile differs from the planned levels, or a planned level is missing. Carries no content. */
+export class SkillSeedConflictError extends Error {
+  constructor() {
+    super("skill seed conflict");
+    this.name = "SkillSeedConflictError";
+  }
+}
+
+/**
+ * Trusted create-only seed of a person's planned self-assessed levels (feature-owned; reached only from the trusted seed
+ * workflow). Each level is sealed by `sealSkillLevel` with `skill-profile:<uid>:<treeId>` AAD. The write runs in the
+ * erasure-fenced transaction and creates the profile only when it is absent.
+ */
+export async function seedSkillLevelsCreateOnly(
+  uid: string,
+  planned: readonly { treeId: string; level: SelfAssessedLevel }[],
+  stamps: { createdAt: Date; updatedAt: Date },
+): Promise<SkillSeedAction> {
+  const db = getFirestoreDb();
+  const ref = db.collection(SKILL_PROFILES_COLLECTION).doc(uid);
+  return runFencedTransaction(db, uid, async (tx) => {
+    const snapshot = await tx.get(ref);
+    const data = snapshot.exists ? (snapshot.data() ?? {}) : undefined;
+    const stored = data?.levels;
+    const opened = typeof stored === "object" && stored !== null && !Array.isArray(stored)
+      ? openSkillLevels(uid, stored as Record<string, unknown>)
+      : {};
+    const decision = classifySkillLevelSeed(data !== undefined, opened, planned);
+    if (decision === "conflict") throw new SkillSeedConflictError();
+    if (decision === "create") {
+      const levels = Object.fromEntries(planned.map(({ treeId, level }) => [treeId, sealSkillLevel(uid, treeId, level)]));
+      tx.create(ref, { levels, createdAt: stamps.createdAt, updatedAt: stamps.updatedAt });
+    }
+    return decision;
+  });
 }
 
 /** Maximum document refs per Firestore `getAll` call made by {@link readSkillProfilesBatch}. */

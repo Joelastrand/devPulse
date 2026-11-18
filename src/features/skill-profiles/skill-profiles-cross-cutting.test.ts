@@ -30,6 +30,28 @@ const C1_PRODUCTION = [
 /** Built indirectly so this file is not itself a collection reference for the TASK-005 allow-list guard. */
 const PERSONAL_COLLECTION = new RegExp(["skill", "Profiles"].join(""));
 
+/**
+ * The only demo-team file allowed to import skill-profile DOMAIN types, to define fictional skill-level fixture data. The
+ * exception covers that restriction only: the personal collection name and any skill-profile server import are rejected
+ * in every demo-team file, including this one.
+ */
+const C1_FIXTURE_DOMAIN_EXCEPTIONS: ReadonlySet<string> = new Set(["src/features/demo-team/personal-fixtures.ts"]);
+
+/** The trusted demo seed orchestrator: approved exact file for the C1 importer and naming checks, nothing else. */
+const C1_DEMO_ORCHESTRATOR = "src/features/demo-team/personal-seed.ts";
+
+function c1DemoFixtureViolations(entries: ReadonlyArray<readonly [string, string]>): string[] {
+  return entries
+    .filter(([path, text]) => {
+      if (path === C1_DEMO_ORCHESTRATOR) return false;
+      // The emulator verification test (approved exact file) may name the collection in its verification reads, and nothing else.
+      if (PERSONAL_COLLECTION.test(text)) return path !== "src/features/demo-team/personal-seed.emulator.test.ts";
+      if (/skill-profiles\/server/.test(text)) return true;
+      return /skill-profiles/.test(text) && !C1_FIXTURE_DOMAIN_EXCEPTIONS.has(path);
+    })
+    .map(([path]) => path);
+}
+
 const stripComments = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 
 /**
@@ -273,7 +295,19 @@ describe("C1 scope on all C1 surfaces including the page route (BR-19, BR-29, BR
   it("no composite index mentions the personal collection and the personal collection has no Demo fixture", () => {
     expect(read("firestore.indexes.json")).not.toMatch(PERSONAL_COLLECTION);
     const demo = walk("src/features/demo-team").map((p) => [p, read(p)] as const);
-    expect(demo.filter(([, text]) => PERSONAL_COLLECTION.test(text) || /skill-profiles/.test(text)).map(([p]) => p)).toEqual([]);
+    expect(c1DemoFixtureViolations(demo)).toEqual([]);
     expect(existsSync(`${ROOT}/src/features/demo-team`)).toBe(true);
+  });
+
+  it("the demo-team fixture exception is exactly one file and only for skill-profile domain types; other demo files and server imports stay rejected", () => {
+    expect([...C1_FIXTURE_DOMAIN_EXCEPTIONS]).toEqual(["src/features/demo-team/personal-fixtures.ts"]);
+    const domainImport = 'import type { SelfAssessedLevel } from "../skill-profiles/domain/self-assessed-level";';
+    expect(c1DemoFixtureViolations([["src/features/demo-team/personal-fixtures.ts", domainImport]])).toEqual([]);
+    expect(c1DemoFixtureViolations([["src/features/demo-team/plan.ts", domainImport]])).toEqual(["src/features/demo-team/plan.ts"]);
+    expect(
+      c1DemoFixtureViolations([
+        ["src/features/demo-team/personal-fixtures.ts", 'import { x } from "../skill-profiles/server/skill-profile-store";'],
+      ]),
+    ).toEqual(["src/features/demo-team/personal-fixtures.ts"]);
   });
 });

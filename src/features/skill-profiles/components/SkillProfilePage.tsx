@@ -8,7 +8,7 @@ import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
-import { LoadingState } from "../../../components/ui/LoadingState";
+import { SkillListSkeleton } from "./SkillSkeletons";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import { DeleteConfirmation, type DeleteActionState } from "../../forum/components/DeleteConfirmation";
 import { TeamSkillRatingControl } from "../../team-owned-skills/components/TeamSkillRatingControl";
@@ -206,7 +206,7 @@ export function SkillProfilePage() {
   }
 
   if (state.phase === "loading") {
-    return <StackedWithSide><LoadingState label={skillProfileCopy.loading} /></StackedWithSide>;
+    return <SkillListSkeleton label={skillProfileCopy.loading} />;
   }
 
   if (state.phase === "signed_out") {

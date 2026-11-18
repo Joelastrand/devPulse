@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
-import { LoadingState } from "../../../components/ui/LoadingState";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import {
   acceptInvitation,
@@ -17,6 +16,7 @@ import {
   type PendingInvitationWire,
 } from "../client/conversations-gateway";
 import { conversationsCopy } from "../copy";
+import { ConversationDetailSkeleton } from "./ConversationSkeletons";
 import { OwnerConversationEditor } from "./OwnerConversationEditor";
 import { ParticipantConversation } from "./ParticipantConversation";
 import { PendingInvitation } from "./PendingInvitation";
@@ -269,7 +269,7 @@ interface DetailActions {
 function DetailBody({ state, actions }: { state: ViewState; actions: DetailActions }) {
   switch (state.phase) {
     case "loading":
-      return <LoadingState label={conversationsCopy.detailLoading} />;
+      return <ConversationDetailSkeleton label={conversationsCopy.detailLoading} />;
     case "signed_out":
       return (
         <p className="text-zinc-600 dark:text-zinc-400">

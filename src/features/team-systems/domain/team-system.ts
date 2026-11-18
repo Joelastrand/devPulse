@@ -155,3 +155,66 @@ export function parseOptionalText(input: unknown, max: number): string | null | 
   if (trimmed.length === 0) return null;
   return trimmed.length > max ? undefined : trimmed;
 }
+
+/**
+ * System classification (product decision, task 4). Three independent dimensions, none inferred from another:
+ * - `systemType`: the intended audience or use of the system (not hosting location or vendor ownership).
+ * - `businessCriticality`: the consequence if the system is unavailable or fails.
+ * - `userReach`: a qualitative breadth of use, never an invented user count.
+ * Every dimension has an explicit "not assessed" value; an existing system is never classified silently.
+ */
+export const SYSTEM_TYPES = ["internt", "eksternt", "uavklart"] as const;
+export type SystemType = (typeof SYSTEM_TYPES)[number];
+
+export const SYSTEM_TYPE_LABELS: Record<SystemType, string> = {
+  internt: "Internt system",
+  eksternt: "Eksternt produkt eller tjeneste",
+  uavklart: "Uavklart",
+};
+
+export const BUSINESS_CRITICALITIES = ["lav", "middels", "hoy", "kritisk", "ikke_vurdert"] as const;
+export type BusinessCriticality = (typeof BUSINESS_CRITICALITIES)[number];
+
+export const BUSINESS_CRITICALITY_LABELS: Record<BusinessCriticality, string> = {
+  lav: "Lav",
+  middels: "Middels",
+  hoy: "Høy",
+  kritisk: "Kritisk",
+  ikke_vurdert: "Ikke vurdert",
+};
+
+export const USER_REACHES = ["faa_brukere", "ett_team", "flere_avdelinger", "virksomhetsomfattende", "ikke_vurdert"] as const;
+export type UserReach = (typeof USER_REACHES)[number];
+
+export const USER_REACH_LABELS: Record<UserReach, string> = {
+  faa_brukere: "Få brukere",
+  ett_team: "En avdeling eller et team",
+  flere_avdelinger: "Flere avdelinger",
+  virksomhetsomfattende: "Mange brukere / virksomhetsomfattende",
+  ikke_vurdert: "Ikke vurdert",
+};
+
+export interface SystemClassification {
+  systemType: SystemType;
+  businessCriticality: BusinessCriticality;
+  userReach: UserReach;
+}
+
+/** The classification of every record stored before these fields existed, and of any unknown stored value. */
+export const UNASSESSED_CLASSIFICATION: SystemClassification = {
+  systemType: "uavklart",
+  businessCriticality: "ikke_vurdert",
+  userReach: "ikke_vurdert",
+};
+
+export function isSystemType(value: unknown): value is SystemType {
+  return typeof value === "string" && (SYSTEM_TYPES as readonly string[]).includes(value);
+}
+
+export function isBusinessCriticality(value: unknown): value is BusinessCriticality {
+  return typeof value === "string" && (BUSINESS_CRITICALITIES as readonly string[]).includes(value);
+}
+
+export function isUserReach(value: unknown): value is UserReach {
+  return typeof value === "string" && (USER_REACHES as readonly string[]).includes(value);
+}

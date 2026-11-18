@@ -1,15 +1,20 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import * as nodeCrypto from "node:crypto";
 import { generateMemberRef, isMemberRef, memberRefOf, resolveMemberRef } from "./member-ref";
 
-vi.mock("node:crypto", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("node:crypto")>();
-  return { ...actual, randomBytes: vi.fn(actual.randomBytes) };
-});
+// The generator draws from Web Crypto (`crypto.getRandomValues`), so that is the source the test controls.
+const getRandomValuesSpy = vi.spyOn(globalThis.crypto, "getRandomValues");
 
 afterEach(() => {
-  vi.mocked(nodeCrypto.randomBytes).mockClear();
+  getRandomValuesSpy.mockClear();
 });
+
+/** Fills the array the generator passes in, as the CSPRNG would, with the given byte. */
+function fillNextDrawWith(byte: number) {
+  getRandomValuesSpy.mockImplementationOnce((array) => {
+    (array as Uint8Array).fill(byte);
+    return array;
+  });
+}
 
 const ALPHABET = /^[0-9a-hjkmnp-tv-z]{26}$/;
 
@@ -19,14 +24,16 @@ describe("generateMemberRef", () => {
   });
 
   it("draws exactly 16 bytes (128 bits) from the CSPRNG and encodes them deterministically", () => {
-    vi.mocked(nodeCrypto.randomBytes).mockReturnValueOnce(Buffer.alloc(16, 0) as never);
+    fillNextDrawWith(0x00);
     expect(generateMemberRef()).toBe("0".repeat(26));
 
-    vi.mocked(nodeCrypto.randomBytes).mockReturnValueOnce(Buffer.alloc(16, 0xff) as never);
+    fillNextDrawWith(0xff);
     // 128 one-bits = 25 full "z" groups + a final group padded with two zero bits.
     expect(generateMemberRef()).toBe(`${"z".repeat(25)}w`);
 
-    expect(nodeCrypto.randomBytes).toHaveBeenLastCalledWith(16);
+    const lastDraw = getRandomValuesSpy.mock.calls.at(-1)?.[0];
+    expect(lastDraw).toBeInstanceOf(Uint8Array);
+    expect((lastDraw as Uint8Array).length).toBe(16);
   });
 
   it("takes no input, so a ref can never be derived from a uid, e-mail or doc id", () => {

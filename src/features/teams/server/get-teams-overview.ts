@@ -13,14 +13,19 @@ import {
   resolveInvitations,
   type ResolveInvitationsCollection,
 } from "./resolve-invitations";
+import { membershipRoleOf } from "../domain/team-membership";
 import { type AuthRefusal, authRefusalFor } from "../../auth/server/auth-refusal";
 
 const MEMBERSHIPS_COLLECTION = "teamMemberships";
 const REQUESTS_COLLECTION = "teamAccessRequests";
 const TEAMS_COLLECTION = "teams";
 
+/**
+ * The caller's actual team relationship: the membership role of their own `teamMemberships` document, or a pending/rejected
+ * access request, or none. Global superadmin status is NOT a team relationship; it is expressed by `canOpen` alone.
+ */
 export type TeamRelationship =
-  | "admin"
+  | "teamadmin"
   | "member"
   | "request_pending"
   | "request_rejected"
@@ -42,6 +47,11 @@ export interface TeamOverviewEntry {
    * Gates per-team participation (`/me/skills` sharing), which must never be implied by admin status.
    */
   isMember: boolean;
+  /**
+   * Whether the caller may open this team's pages: a genuine membership, or a global superadmin (the existing access rule).
+   * Access only: it never implies a team role, so the badge uses `relationship`, not this flag.
+   */
+  canOpen: boolean;
 }
 
 /**
@@ -170,10 +180,12 @@ export async function getTeamsOverview(
   }
 
   const membershipTeamIds = new Set<string>();
+  const membershipRoleByTeam = new Map<string, "teamadmin" | "member">();
   for (const raw of rawMemberships) {
     const teamId = readTeamId(raw);
     if (teamId) {
       membershipTeamIds.add(teamId);
+      membershipRoleByTeam.set(teamId, membershipRoleOf(raw));
     }
   }
 
@@ -193,8 +205,9 @@ export async function getTeamsOverview(
   }
 
   function relationshipFor(teamId: string): TeamRelationship {
-    if (admin) {
-      return "admin";
+    // The team role comes only from the caller's own membership document. Global admin status never changes it.
+    if (membershipRoleByTeam.get(teamId) === "teamadmin") {
+      return "teamadmin";
     }
     if (membershipTeamIds.has(teamId)) {
       return "member";
@@ -215,6 +228,7 @@ export async function getTeamsOverview(
     name: team.name,
     relationship: relationshipFor(team.teamId),
     isMember: membershipTeamIds.has(team.teamId),
+    canOpen: admin || membershipTeamIds.has(team.teamId),
   }));
 
   const extraTeamIds = new Set<string>();
@@ -257,6 +271,7 @@ export async function getTeamsOverview(
       name: data.name,
       relationship: relationshipFor(teamId),
       isMember: membershipTeamIds.has(teamId),
+      canOpen: admin || membershipTeamIds.has(teamId),
     });
   }
 

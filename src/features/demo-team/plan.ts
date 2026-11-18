@@ -1,5 +1,12 @@
 import { toPersistedSkillProgress } from "../skill-trees/server/skill-progress-content-codec";
 import { toPersistedTeam } from "../teams/domain/team-content-codec";
+import { toPersistedTeamProject } from "../team-projects/server/team-project-codec";
+import { toPersistedTeamSystem } from "../team-systems/server/team-system-codec";
+import { toPersistedCompetencePlan } from "../team-competence-plan/server/competence-plan-codec";
+import { toPersistedTeamSkill } from "../team-owned-skills/server/team-skill-codec";
+import type { CompetencePlan } from "../team-competence-plan/domain/competence-plan";
+import type { TeamSkillRecord } from "../team-owned-skills/domain/team-skill";
+import { DEMO_COMPETENCE_PLANS, DEMO_TEAM_SKILLS, competencePlanRecord, teamSkillRecord } from "./team-catalog-fixtures";
 import { toPersistedSurvey } from "../surveys/server/survey-content-codec";
 import type { RecordEnvelope } from "../../lib/encryption/record-envelope";
 import { surveyResponseContext } from "../surveys/domain/response-context";
@@ -16,6 +23,10 @@ import {
   buildDemoLogicalFixtures,
   CLOSED_PERIOD_COUNT,
   DEMO_ROADMAP_PLANS,
+  DEMO_TEAM_PROJECTS,
+  teamProjectRecord,
+  DEMO_TEAM_SYSTEMS,
+  teamSystemRecord,
   DEMO_SKILL_TREES,
   DEMO_SURVEY_NEXT_ID,
   DEMO_TEAM_ID,
@@ -43,6 +54,10 @@ export const ALLOWED_COLLECTIONS = [
   "skillTrees",
   "skillProgress",
   "roadmapItems",
+  "teamProjects",
+  "teamSystems",
+  "teamCompetencePlans",
+  "teamSkills",
 ] as const;
 
 export type DemoCollection = (typeof ALLOWED_COLLECTIONS)[number];
@@ -91,6 +106,10 @@ export type PlannedOperation = OperationBase &
     | { collection: "skillTrees"; data: PersistedSkillTree }
     | { collection: "skillProgress"; data: PersistedSkillProgress }
     | { collection: "roadmapItems"; data: PersistedRoadmapItem }
+    | { collection: "teamProjects"; data: Record<string, unknown> }
+    | { collection: "teamSystems"; data: Record<string, unknown> }
+    | { collection: "teamCompetencePlans"; data: Record<string, unknown> }
+    | { collection: "teamSkills"; data: Record<string, unknown> }
   );
 
 /** v2 record seal, bound to the record context (AAD). Every demo collection with business content is sealed with it. */
@@ -107,30 +126,34 @@ function entry(collection: DemoCollection, docId: string, writeClass: WriteClass
  * a path is defined by membership in this list, never by an id prefix or a
  * field value.
  */
-export function buildDemoManifest(presenterUid: string): readonly ManifestEntry[] {
+export function buildDemoManifest(presenterUid: string, teamId: string = DEMO_TEAM_ID): readonly ManifestEntry[] {
   assertValidPresenterUid(presenterUid);
 
   const periods = Array.from({ length: CLOSED_PERIOD_COUNT }, (_, i) => i + 1);
 
   const manifest: ManifestEntry[] = [
-    entry("teams", DEMO_TEAM_ID, "C"),
-    entry("teamMemberships", membershipDocId(presenterUid, DEMO_TEAM_ID), "C"),
-    ...periods.map((p) => entry("surveys", demoSurveyId(p), "U")),
+    entry("teams", teamId, "C"),
+    entry("teamMemberships", membershipDocId(presenterUid, teamId), "C"),
+    ...periods.map((p) => entry("surveys", demoSurveyId(p), "C")),
     entry("surveys", DEMO_SURVEY_NEXT_ID, "C"),
     ...periods.flatMap((p) =>
       Array.from({ length: periodResponseCount(p) }, (_, r) =>
-        entry("surveyResponses", demoResponseId(p, r + 1), "U"),
+        entry("surveyResponses", demoResponseId(p, r + 1), "C"),
       ),
     ),
-    ...Array.from({ length: 5 }, (_, i) => entry("challenges", demoChallengeId(i + 1), "U")),
-    ...DEMO_SKILL_TREES.map(({ id }) => entry("skillTrees", id, "U")),
+    ...Array.from({ length: 5 }, (_, i) => entry("challenges", demoChallengeId(i + 1), "C")),
+    ...DEMO_SKILL_TREES.map(({ id }) => entry("skillTrees", id, "C")),
     ...DEMO_TRACKED_SKILLS.map(({ treeId }) =>
-      entry("skillProgress", skillProgressDocId(DEMO_TEAM_ID, treeId), "U"),
+      entry("skillProgress", skillProgressDocId(teamId, treeId), "C"),
     ),
     // Create-only: a presenter's real edits to a plan are never overwritten.
     ...DEMO_ROADMAP_PLANS.map(({ treeId }) =>
-      entry("roadmapItems", roadmapItemDocId(DEMO_TEAM_ID, treeId), "C"),
+      entry("roadmapItems", roadmapItemDocId(teamId, treeId), "C"),
     ),
+    ...DEMO_TEAM_PROJECTS.map((p) => entry("teamProjects", p.projectId, "C")),
+    ...DEMO_TEAM_SYSTEMS.map((s) => entry("teamSystems", s.systemId, "C")),
+    ...DEMO_COMPETENCE_PLANS.map((p) => entry("teamCompetencePlans", p.planId, "C")),
+    ...DEMO_TEAM_SKILLS.map((s) => entry("teamSkills", s.skillId, "C")),
   ];
 
   assertManifestValid(manifest);
@@ -208,14 +231,16 @@ export interface DemoSeedPlan {
  */
 export function buildDemoSeedPlan(input: {
   presenterUid: string;
+  teamId?: string;
   asOf: Date;
   sealRecord: DemoSealRecord;
 }): DemoSeedPlan {
   const { presenterUid, asOf, sealRecord } = input;
+  const teamId = input.teamId ?? DEMO_TEAM_ID;
   assertValidAsOf(asOf);
 
-  const fixtures = buildDemoLogicalFixtures({ presenterUid, asOf });
-  const manifest = buildDemoManifest(presenterUid);
+  const fixtures = buildDemoLogicalFixtures({ presenterUid, asOf, teamId });
+  const manifest = buildDemoManifest(presenterUid, teamId);
   const classOf = new Map(manifest.map((m) => [m.path, m.writeClass]));
 
   const op = <C extends DemoCollection>(
@@ -232,32 +257,36 @@ export function buildDemoSeedPlan(input: {
   };
 
   const operations: PlannedOperation[] = [
-    op("teams", DEMO_TEAM_ID, toPersistedTeam(DEMO_TEAM_ID, { ...fixtures.team }, sealRecord)),
-    op("teamMemberships", membershipDocId(presenterUid, DEMO_TEAM_ID), fixtures.membership),
+    op("teams", teamId, toPersistedTeam(teamId, { ...fixtures.team }, sealRecord)),
+    op("teamMemberships", membershipDocId(presenterUid, teamId), fixtures.membership),
     ...fixtures.closedSurveys.map(({ id, record }) => op("surveys", id, toPersistedSurvey(id, { ...record }, sealRecord))),
     op("surveys", fixtures.scheduledSurvey.id, toPersistedSurvey(fixtures.scheduledSurvey.id, { ...fixtures.scheduledSurvey.record }, sealRecord)),
     ...fixtures.responses.map((r) =>
       op("surveyResponses", r.id, {
         surveyId: r.surveyId,
-        teamId: DEMO_TEAM_ID,
-        ...sealRecord(JSON.stringify(r.answers), surveyResponseContext(DEMO_TEAM_ID, r.surveyId, r.id)),
+        teamId: teamId,
+        ...sealRecord(JSON.stringify(r.answers), surveyResponseContext(teamId, r.surveyId, r.id)),
         submittedAt: r.submittedAt,
       }),
     ),
     ...fixtures.challenges.map(({ id, text, ...rest }) =>
       op("challenges", id, {
-        teamId: DEMO_TEAM_ID,
-        ...sealRecord(text, challengeContext(DEMO_TEAM_ID, id)),
+        teamId: teamId,
+        ...sealRecord(text, challengeContext(teamId, id)),
         ...rest,
       }),
     ),
     ...fixtures.skillTrees.map((t) => op("skillTrees", t.id, toPersistedSkillTree(t.id, { ...t.record }, sealRecord))),
     ...fixtures.skillProgress.map((p) =>
-      op("skillProgress", skillProgressDocId(DEMO_TEAM_ID, p.treeId), toPersistedSkillProgress({ ...p.record }, sealRecord)),
+      op("skillProgress", skillProgressDocId(teamId, p.treeId), toPersistedSkillProgress({ ...p.record }, sealRecord)),
     ),
     ...fixtures.roadmapItems.map((r) =>
-      op("roadmapItems", roadmapItemDocId(DEMO_TEAM_ID, r.treeId), toPersistedRoadmapItem({ ...r.record }, sealRecord)),
+      op("roadmapItems", roadmapItemDocId(teamId, r.treeId), toPersistedRoadmapItem({ ...r.record }, sealRecord)),
     ),
+    ...DEMO_TEAM_PROJECTS.map((p) => op("teamProjects", p.projectId, toPersistedTeamProject(p.projectId, teamProjectRecord(p, teamId, asOf), sealRecord))),
+    ...DEMO_TEAM_SYSTEMS.map((s) => op("teamSystems", s.systemId, toPersistedTeamSystem(s.systemId, teamSystemRecord(s, teamId, asOf), sealRecord))),
+    ...DEMO_COMPETENCE_PLANS.map((p) => op("teamCompetencePlans", p.planId, toPersistedCompetencePlan(p.planId, competencePlanRecord(p, teamId, asOf) as CompetencePlan, sealRecord))),
+    ...DEMO_TEAM_SKILLS.map((s, i) => op("teamSkills", s.skillId, toPersistedTeamSkill(s.skillId, teamSkillRecord(s, teamId, asOf, i * 10) as TeamSkillRecord, sealRecord))),
   ];
 
   assertOperationsMatchManifest(operations, manifest);

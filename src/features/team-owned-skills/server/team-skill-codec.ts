@@ -36,36 +36,54 @@ function teamSkillContext(teamId: string, skillId: string): string {
   return `team-skill:${teamId}:${skillId}`;
 }
 
-export function sealTeamSkillContent(teamId: string, skillId: string, content: TeamSkillContent): RecordEnvelope {
-  return encryptRecord(JSON.stringify(content), teamSkillContext(teamId, skillId));
+export function sealTeamSkillContent(
+  teamId: string,
+  skillId: string,
+  content: TeamSkillContent,
+  seal: (plaintext: string, context: string) => RecordEnvelope = encryptRecord,
+): RecordEnvelope {
+  return seal(JSON.stringify(content), teamSkillContext(teamId, skillId));
 }
 
 /** Splits a domain record into its plaintext metadata and its sealed content, ready for persistence. */
-export function toPersistedTeamSkill(skillId: string, record: TeamSkillRecord): Record<string, unknown> {
+export function toPersistedTeamSkill(
+  skillId: string,
+  record: TeamSkillRecord,
+  seal: (plaintext: string, context: string) => RecordEnvelope = encryptRecord,
+): Record<string, unknown> {
   const { name, description, category, guidance, ...metadata } = record;
-  return { ...metadata, [TEAM_SKILL_CONTENT_FIELD]: sealTeamSkillContent(record.teamId, skillId, { name, description, category, guidance }) };
+  return { ...metadata, [TEAM_SKILL_CONTENT_FIELD]: sealTeamSkillContent(record.teamId, skillId, { name, description, category, guidance }, seal) };
 }
 
 /**
  * Opens a stored team skill document back into the domain shape (plaintext fields restored from the envelope). Returns
  * `undefined` for an absent document, `null` for anything that cannot be opened or that carries plaintext content.
  */
-export function openTeamSkillDocument(skillId: string, data: unknown): unknown {
+export function openTeamSkillDocument(
+  skillId: string,
+  data: unknown,
+  open: (envelope: RecordEnvelope, context: string) => string = decryptRecord,
+): unknown {
   if (data === undefined) return undefined;
   if (!isPlainObject(data)) return null;
   const { [TEAM_SKILL_CONTENT_FIELD]: sealed, ...metadata } = data;
   if (SEALED_KEYS.some((key) => Object.hasOwn(metadata, key))) return null;
   if (typeof metadata.teamId !== "string") return null;
-  const content = openContent(metadata.teamId, skillId, sealed);
+  const content = openContent(metadata.teamId, skillId, sealed, open);
   return content === null ? null : { ...metadata, ...content };
 }
 
-function openContent(teamId: string, skillId: string, value: unknown): TeamSkillContent | null {
+function openContent(
+  teamId: string,
+  skillId: string,
+  value: unknown,
+  open: (envelope: RecordEnvelope, context: string) => string,
+): TeamSkillContent | null {
   const envelope = readRecordEnvelope(value);
   if (envelope === null) return null;
   let parsed: unknown;
   try {
-    parsed = JSON.parse(decryptRecord(envelope, teamSkillContext(teamId, skillId)));
+    parsed = JSON.parse(open(envelope, teamSkillContext(teamId, skillId)));
   } catch (error) {
     if (error instanceof RecordEnvelopeError && error.code !== "authentication_failed" && error.code !== "malformed") {
       throw error;

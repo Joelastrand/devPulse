@@ -74,7 +74,7 @@ function eligibleUids(docs: ReadonlyArray<{ id: string; data: unknown }>, teamId
     const { uid, teamId: storedTeamId } = data as Record<string, unknown>;
     if (typeof uid !== "string" || uid.length === 0 || storedTeamId !== teamId) continue;
     if (id !== membershipDocId(uid, teamId)) continue;
-    if (!isEffectiveSkillContribution(data)) continue;
+    if (!isEffectiveSkillContribution(data, { uid, teamId: storedTeamId })) continue;
     uids.add(uid);
   }
   return [...uids];

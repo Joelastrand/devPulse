@@ -25,6 +25,22 @@ export const teamCompetenceCopy = {
   agreedLevel: (level: number, name: string) => `Nivå ${level}: ${name}`,
   outdated: "Gjelder eldre kriterier",
   radarTooFew: "Radaren vises når minst tre områder har nok data.",
+  areaSelector: {
+    legend: "Velg områder i radaren",
+    help: (max: number) => `Radaren viser opptil ${max} områder. Velg hvilke som vises. Søylediagrammet og tabellen viser alle områder.`,
+    limitReached: "Radaren viser åtte områder. Fjern ett område for å velge et annet.",
+    summaryAction: "Velg kompetanseområder",
+    summaryCount: (selected: number, total: number) => `${selected} av ${total} områder valgt`,
+    reset: "Tilbakestill utvalg",
+  },
+  fullTable: {
+    open: "Vis alle kompetanser i tabell",
+  },
+  levelChart: {
+    title: "Nivå per område",
+    description: "Søylene viser teamets nivå for hvert område der nivå er beregnet. Tallet ved hver søyle er nivået.",
+    label: "Teamets nivå per kompetanseområde, sortert etter navn",
+  },
   listCaption: "Kompetansenivåer i visningen",
   columns: {
     area: "Kompetanseområde",
@@ -37,6 +53,8 @@ export const teamCompetenceCopy = {
     read_failed: "Teamkompetansen kan ikke lastes akkurat nå.",
     incomplete: "Statusen kan ikke beregnes for dette teamet akkurat nå.",
   },
+  simulatedNotice:
+    "Denne visningen inneholder simulerte demodata for fiktive teammedlemmer. Det er ikke ekte samtykke fra ansatte, og tallene skal ikke tolkes som ekte kompetanse.",
   editor: {
     heading: "Felles vurdering: registrer teamets nivå",
     description: "Velg nivået teamet er enige om, eller fjern den felles vurderingen. Individuelle vurderinger endres ikke.",
@@ -44,9 +62,11 @@ export const teamCompetenceCopy = {
     none: "Ikke vurdert",
     note: "Merknad",
     save: "Lagre",
+    saving: "Lagrer …",
     clear: "Fjern felles vurdering",
     saved: "Lagret.",
     failed: "Kunne ikke lagre. Prøv igjen.",
+    denied: "Du har ikke tilgang til å endre teamkompetansen.",
     cleared: "Fjernet.",
   },
   admin: {

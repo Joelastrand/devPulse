@@ -18,6 +18,7 @@ import {
   needsAttention,
   type AssessmentAttribute,
   type KnowledgeRiskBand,
+  type SystemClassification,
 } from "../domain/team-system";
 import { parseTeamSystemRecord, type StoredAssessment, type TeamSystemRecord } from "../domain/team-system-record";
 import { openTeamSystemDocument } from "./team-system-codec";
@@ -47,6 +48,7 @@ export interface TeamSystemView {
   name: string;
   description: string | null;
   backstageUrl: string | null;
+  classification: SystemClassification;
   assessments: Record<AssessmentAttribute, AssessmentView>;
   knowledge: KnowledgeMemberView[];
   knowledgeRisk: KnowledgeRiskBand;
@@ -267,6 +269,7 @@ export function toTeamSystemView(
     name: record.name,
     description: record.description,
     backstageUrl: record.backstageUrl,
+    classification: { ...record.classification },
     assessments,
     knowledge,
     knowledgeRisk: knowledgeRiskBand(knowledge.length),

@@ -1,9 +1,10 @@
 import "server-only";
 import { CONVERSATION_LIMIT } from "../domain/conversation-constants";
-import type { ConversationContent } from "../domain/content-payload";
+import { parseConversationContent, type ConversationContent } from "../domain/content-payload";
+import type { StoredEnvelope } from "../domain/stored-owner-conversation";
 import { normalizePlannedFor } from "../domain/plan-date";
 import { normalizeTitle } from "../domain/text-rules";
-import { encodeContent as encodeContentWithKey, probeKey as probeKeyOnce } from "./content-codec";
+import { decodeContent, encodeContent as encodeContentWithKey, probeKey as probeKeyOnce } from "./content-codec";
 import { conversationContext } from "../domain/stored-owner-conversation";
 import type { EncodeContentResult, ProbeKeyResult } from "./content-codec";
 import { writeRefusalFor } from "../../auth/server/erasure-write-fence";
@@ -21,6 +22,129 @@ import {
  * owner. The owner uid is the first argument and is never read from the input. The input arrives from the route
  * layer (TASK-023) as `unknown` and is validated here again, so the operation never trusts its caller's types.
  */
+
+/** Outcome of a create-only seed write: the owner conversation was created, or an identical one already existed. */
+export type ConversationSeedAction = "create" | "skip";
+
+/** Thrown when the stored owner conversation at the seed's id differs from the planned one, or cannot be opened. */
+export class ConversationSeedConflictError extends Error {
+  constructor() {
+    super("conversation seed conflict");
+    this.name = "ConversationSeedConflictError";
+  }
+}
+
+export interface ConversationSeedInput {
+  store: ConversationStore;
+  ownerUid: string;
+  /** Stable fixture id (a valid conversation id). The codec binds the content to it by AAD. */
+  conversationId: string;
+  content: ConversationContent;
+  plannedFor: string | null;
+  stamps: { createdAt: Date; updatedAt: Date };
+}
+
+/**
+ * Trusted create-only seed of one owner-only conversation (feature-owned; reached only from the trusted seed workflow).
+ * The owner document is sealed with the same codec and `dev-conversation:<uid>:<id>` AAD as `createConversation`, carries
+ * the same canonical key set, and writes no participation index: an owner-only conversation has no participant. The write
+ * runs in the owner transaction (erasure-fenced). An identical existing document is skipped; any other is a conflict.
+ */
+export async function seedOwnerConversationCreateOnly(input: ConversationSeedInput): Promise<ConversationSeedAction> {
+  const { store, ownerUid, conversationId, content, plannedFor, stamps } = input;
+  const checked = parseConversationContent(content);
+  if (!checked.ok) throw new ConversationSeedConflictError();
+  const planned = {
+    teamId: null,
+    participantUid: null,
+    participantMemberRef: null,
+    participantState: null,
+    participantInvitedAt: null,
+    participantAcceptedAt: null,
+    plannedFor,
+    status: "open" as const,
+    completedAt: null,
+    createdAt: stamps.createdAt,
+    updatedAt: stamps.updatedAt,
+  };
+
+  return store.runOwnerTransaction(ownerUid, async (tx) => {
+    const existing = await tx.getOwner(ownerUid, conversationId);
+    if (existing === undefined) {
+      if (!probeKeyOnce().ok) throw new Error("conversation seed key unavailable");
+      const encoded = encodeContentWithKey(content, conversationContext(ownerUid, conversationId));
+      if (!encoded.ok) throw new Error("conversation seed key unavailable");
+      tx.createOwner(ownerUid, conversationId, { ...planned, ...encoded.content });
+      return "create";
+    }
+    if (!sameOwnerConversation(existing, planned, content, conversationContext(ownerUid, conversationId))) {
+      throw new ConversationSeedConflictError();
+    }
+    return "skip";
+  });
+}
+
+const PLAIN_OWNER_KEYS = [
+  "teamId",
+  "participantUid",
+  "participantMemberRef",
+  "participantState",
+  "participantInvitedAt",
+  "participantAcceptedAt",
+  "plannedFor",
+  "status",
+  "completedAt",
+  "createdAt",
+  "updatedAt",
+] as const;
+
+/** Plain fields equal, and the sealed content opens under the same AAD to the planned content. */
+function sameOwnerConversation(
+  stored: Record<string, unknown>,
+  planned: Record<(typeof PLAIN_OWNER_KEYS)[number], unknown>,
+  content: ConversationContent,
+  context: string,
+): boolean {
+  const plainSame = PLAIN_OWNER_KEYS.every((key) => {
+    const a = stored[key];
+    const b = planned[key];
+    if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
+    return a === b || (a === undefined && b === null);
+  });
+  if (!plainSame) return false;
+  const envelope = {
+    ciphertext: stored.ciphertext,
+    iv: stored.iv,
+    authTag: stored.authTag,
+    keyVersion: stored.keyVersion,
+    keyId: stored.keyId,
+    keyCheck: stored.keyCheck,
+  };
+  if (!isStoredEnvelope(envelope)) return false;
+  const opened = decodeContent(envelope, context);
+  if (!opened.ok) return false;
+  return canonicalContent(opened.content) === canonicalContent(content);
+}
+
+/** Key-order-independent JSON of a conversation payload, so equal content compares equal regardless of field order. */
+function canonicalContent(value: unknown): string {
+  return JSON.stringify(value, (_key, inner: unknown) =>
+    inner !== null && typeof inner === "object" && !Array.isArray(inner)
+      ? Object.fromEntries(Object.entries(inner as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)))
+      : inner,
+  );
+}
+
+function isStoredEnvelope(value: { [key: string]: unknown }): value is StoredEnvelope {
+  return (
+    typeof value.ciphertext === "string" &&
+    typeof value.iv === "string" &&
+    typeof value.authTag === "string" &&
+    value.keyVersion === "v2" &&
+    value.keyId === "k1" &&
+    typeof value.keyCheck === "string"
+  );
+}
 
 /** The only codec operations create needs. The real codec module and the test fake both satisfy it. */
 export interface CreateConversationCodec {

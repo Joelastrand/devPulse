@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SurveyResponseForm } from "./SurveyResponseForm";
 import { getBuiltInTemplate } from "../domain/templates";
@@ -182,5 +182,73 @@ describe("SurveyResponseForm composition (visual-redesign TASK-017)", () => {
     expect(screen.getByText(surveysCopy.form.stepper.progress(1, 3))).toBeTruthy();
     expect(screen.getByText(surveysCopy.form.stepper.nextDisabled)).toBeTruthy();
     expect(document.body.textContent ?? "").not.toMatch(/minutt|ca\. \d|\d+\s?%/i);
+  });
+});
+
+describe("SurveyResponseForm — submission while a request is pending", () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  /** Returns a fetch mock whose responses the test resolves itself, so a response can arrive after the identity changed. */
+  function controllableFetch() {
+    const resolvers: Array<(value: Response) => void> = [];
+    const fetchMock = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    return { fetchMock, resolveLast: (value: Response) => resolvers[resolvers.length - 1](value) };
+  }
+
+  it("sends one response when the form is submitted again while the first is in flight", async () => {
+    const { fetchMock, resolveLast } = controllableFetch();
+    const user = userEvent.setup();
+    render(<SurveyResponseForm surveyId="survey-1" idToken={null} questions={TEAM_PULSE} />);
+    await fillAllFields(user);
+    const form = submitButton().closest("form") as HTMLFormElement;
+
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    resolveLast(new Response(JSON.stringify({ ok: true }), { status: 201 }));
+    await screen.findByRole("status");
+  });
+
+  it("does not show success for a response that arrives after the signed-in identity has gone", async () => {
+    const { resolveLast } = controllableFetch();
+    const user = userEvent.setup();
+    const { rerender } = render(<SurveyResponseForm surveyId="survey-1" idToken="token-a" questions={TEAM_PULSE} />);
+    await fillAllFields(user);
+    await user.click(submitButton());
+
+    rerender(<SurveyResponseForm surveyId="survey-1" idToken={null} questions={TEAM_PULSE} />);
+    resolveLast(new Response(JSON.stringify({ ok: true }), { status: 201 }));
+
+    await waitFor(() => expect(screen.queryByRole("button", { name: /sender inn/i })).not.toBeNull());
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("does not show an error for a failed response that arrives after an account switch, and leaves the form usable", async () => {
+    const { resolveLast } = controllableFetch();
+    const user = userEvent.setup();
+    const { rerender } = render(<SurveyResponseForm surveyId="survey-1" idToken="token-a" questions={TEAM_PULSE} />);
+    await fillAllFields(user);
+    await user.click(submitButton());
+
+    rerender(<SurveyResponseForm surveyId="survey-1" idToken="token-b" questions={TEAM_PULSE} />);
+    resolveLast(new Response(JSON.stringify({ error: "server" }), { status: 500 }));
+
+    // The previous session's answers are cleared, so the form returns to its first step: no error, no success, and no
+    // control left in a pending state.
+    await waitFor(() => expect(document.querySelector("form")).not.toBeNull());
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(document.querySelector('[aria-busy="true"]')).toBeNull();
   });
 });

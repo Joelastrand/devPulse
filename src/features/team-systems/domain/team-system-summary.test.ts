@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { UNASSESSED_CLASSIFICATION } from "./team-system";
 import {
   DEFAULT_SYSTEM_FILTER,
   filterSystems,
@@ -13,6 +14,7 @@ const base = (overrides: Partial<SystemSummaryInput>): SystemSummaryInput => ({
   knowledgeCount: 0,
   attention: false,
   inGoodStanding: false,
+  classification: UNASSESSED_CLASSIFICATION,
   ...overrides,
 });
 
@@ -80,5 +82,34 @@ describe("filterSystems (BR-13)", () => {
 
   it("returns an empty list when nothing matches (no-results state input)", () => {
     expect(filterSystems(systems, { ...DEFAULT_SYSTEM_FILTER, query: "finnes-ikke" })).toEqual([]);
+  });
+});
+
+describe("filterSystems — system type and criticality (task 4)", () => {
+  const systems = [
+    base({ name: "Intern", classification: { systemType: "internt", businessCriticality: "kritisk", userReach: "flere_avdelinger" } }),
+    base({ name: "Ekstern", classification: { systemType: "eksternt", businessCriticality: "lav", userReach: "faa_brukere" } }),
+    base({ name: "Ukjent", classification: UNASSESSED_CLASSIFICATION }),
+  ];
+
+  it("filters by system type exactly", () => {
+    expect(filterSystems(systems, { ...DEFAULT_SYSTEM_FILTER, systemType: "eksternt" }).map((s) => s.name)).toEqual(["Ekstern"]);
+  });
+
+  it("filters by business criticality exactly", () => {
+    expect(filterSystems(systems, { ...DEFAULT_SYSTEM_FILTER, criticality: "kritisk" }).map((s) => s.name)).toEqual(["Intern"]);
+  });
+
+  it("finds systems that are not assessed on a dimension", () => {
+    expect(filterSystems(systems, { ...DEFAULT_SYSTEM_FILTER, criticality: "ikke_vurdert" }).map((s) => s.name)).toEqual(["Ukjent"]);
+  });
+
+  it("combines with the search and competency-risk filters without widening them", () => {
+    const found = filterSystems(systems, { ...DEFAULT_SYSTEM_FILTER, systemType: "internt", query: "ekstern" });
+    expect(found).toEqual([]);
+  });
+
+  it("leaves the default filter unchanged", () => {
+    expect(filterSystems(systems, DEFAULT_SYSTEM_FILTER)).toHaveLength(3);
   });
 });

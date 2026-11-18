@@ -289,7 +289,7 @@ describe("TeamDetail", () => {
     }
 
     it.each(["ok", "read_failed"] as const)(
-      "renders the five team tabs navigation plus 'Se roadmap' in the %s branch",
+      "renders the seven team tabs navigation plus 'Se roadmap' in the %s branch",
       async (resultsStatus) => {
         mockAuthorized(resultsStatus);
 
@@ -303,6 +303,8 @@ describe("TeamDetail", () => {
           "/teams/team-1/competence-plan",
           "/teams/team-1/competence",
           "/teams/team-1/systems",
+          "/teams/team-1/results",
+          "/teams/team-1/surveys",
         ]);
         // The roadmap link now lives on the Teamkompetanse/Roadmap sub-pages, not on the overview.
         expect(screen.queryByRole("link", { name: "Se roadmap" })).toBeNull();
@@ -329,7 +331,7 @@ describe("TeamDetail", () => {
       render(<TeamDetail teamId="team-1" />);
 
       const nav = await screen.findByRole("navigation", { name: teamsCopy.nav.label });
-      expect(within(nav).getAllByRole("link")).toHaveLength(5);
+      expect(within(nav).getAllByRole("link")).toHaveLength(7);
     });
   });
 
@@ -868,7 +870,7 @@ describe("TeamDetail tabs and insufficient data (visual-redesign TASK-008)", () 
     fetchTeamResultsMock.mockReset();
   });
 
-  it("offers only the approved team routes as tabs (Oversikt, Roadmap, Kompetanseplan, Teamkompetanse, Systemoversikt)", async () => {
+  it("offers the seven team routes as tabs (Oversikt, Roadmap, Kompetanseplan, Teamkompetanse, Systemoversikt, Resultater og trender, Undersøkelser)", async () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
@@ -889,6 +891,8 @@ describe("TeamDetail tabs and insufficient data (visual-redesign TASK-008)", () 
       "/teams/team-1/competence-plan",
       "/teams/team-1/competence",
       "/teams/team-1/systems",
+      "/teams/team-1/results",
+      "/teams/team-1/surveys",
     ]);
   });
 
@@ -944,7 +948,7 @@ describe("TeamDetail Oversikt after the results move (team-experience-redesign B
     render(<TeamDetail teamId="team-1" />);
     await screen.findByRole("heading", { level: 1 });
 
-    const link = screen.getByRole("link", { name: teamsCopy.results.openLink });
+    const link = screen.getByRole("link", { name: teamsCopy.nav.results });
     expect(link.getAttribute("href")).toBe("/teams/team-1/results");
     expect(screen.queryByText("7 svar")).toBeNull();
     expect(screen.queryByText(/minst 5 personer har svart/i)).toBeNull();
@@ -982,7 +986,7 @@ describe("TeamDetail overview composition (team overview redesign, reference 18)
 
     await screen.findByRole("heading", { level: 1 });
     expect(screen.getByRole("link", { name: teamsCopy.detail.editTeam }).getAttribute("href")).toBe("/teams/team-1/settings");
-    expect(screen.getByRole("link", { name: teamsCopy.results.openLink }).getAttribute("href")).toBe("/teams/team-1/results");
+    expect(screen.getByRole("link", { name: teamsCopy.nav.results }).getAttribute("href")).toBe("/teams/team-1/results");
 
     const challengesCard = document.getElementById("team-oversikt-challenges")?.closest("section");
     expect(challengesCard?.textContent).toMatch(/Deploy owner unclear/);

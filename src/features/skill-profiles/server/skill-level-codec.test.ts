@@ -2,6 +2,47 @@ import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { encryptRecord } from "../../../lib/encryption/record-envelope";
 import { openSkillLevels, openSkillProfileDocument, sealSkillLevel } from "./skill-level-codec";
+import { classifySkillLevelSeed } from "../domain/skill-level-seed";
+
+describe("trusted skill-level seed decision (create-only, feature-owned)", () => {
+  beforeEach(() => {
+    vi.stubEnv("ENCRYPTION_KEY", randomBytes(32).toString("base64"));
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  const planned = [
+    { treeId: "demo-skill-typescript", level: 4 as const },
+    { treeId: "demo-skill-cloud", level: 2 as const },
+  ];
+
+  it("creates when no profile exists, and skips only when every planned level opens to the same value", () => {
+    expect(classifySkillLevelSeed(false, {}, planned)).toBe("create");
+    expect(classifySkillLevelSeed(true, { "demo-skill-typescript": 4, "demo-skill-cloud": 2 }, planned)).toBe("skip");
+  });
+
+  it("refuses a partial, different or unreadable existing profile as a conflict", () => {
+    expect(classifySkillLevelSeed(true, { "demo-skill-typescript": 4 }, planned)).toBe("conflict");
+    expect(classifySkillLevelSeed(true, { "demo-skill-typescript": 4, "demo-skill-cloud": 3 }, planned)).toBe("conflict");
+    expect(classifySkillLevelSeed(true, {}, planned)).toBe("conflict");
+  });
+
+  it("binds each level to its own person and tree: a level sealed for another tree or person does not open", () => {
+    const sealed = sealSkillLevel("uid-a", "demo-skill-cloud", 2);
+    const stored = { "demo-skill-cloud": sealed };
+    expect(openSkillLevels("uid-a", stored)).toEqual({ "demo-skill-cloud": 2 });
+    expect(openSkillLevels("uid-b", stored)).toEqual({});
+    expect(openSkillLevels("uid-a", { "demo-skill-typescript": sealed })).toEqual({});
+  });
+
+  it("never stores a plaintext level value in the sealed envelope", () => {
+    const serialized = JSON.stringify(sealSkillLevel("uid-a", "demo-skill-cloud", 2));
+    expect(serialized).not.toContain('"level"');
+    expect(serialized).not.toContain("demo-skill-cloud");
+  });
+});
 
 describe("skill level codec (personal skill levels)", () => {
   beforeEach(() => {

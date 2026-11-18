@@ -33,6 +33,10 @@ export const workspaceCopy = {
     limit: "Du kan koble opptil 5 elementer.",
   },
   responsibilities: {
+    loading: "Laster ansvarsområdene dine…",
+    saving: "Lagrer…",
+    updating: "Oppdaterer…",
+    deleting: "Sletter…",
     heading: "Mine ansvarsområder",
     description: "Ansvar du har i rollen din, med eventuelle koblede mål.",
     add: "Legg til ansvarsområde",
@@ -74,6 +78,9 @@ export const workspaceCopy = {
     },
   },
   achievements: {
+    loading: "Laster bidragene dine…",
+    saving: "Lagrer…",
+    deleting: "Sletter…",
     heading: "Mine bidrag og resultater",
     description: "Konkrete resultater og bidrag du vil ta med i en utviklingssamtale.",
     add: "Legg til bidrag",

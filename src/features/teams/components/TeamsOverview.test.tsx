@@ -119,27 +119,27 @@ describe("TeamsOverview", () => {
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
       teams: [
-        { teamId: "team-1", name: "Platform", relationship: "member", isMember: true },
-        { teamId: "team-2", name: "Mobile", relationship: "admin" },
-        { teamId: "team-3", name: "Data", relationship: "none", isMember: false },
+        { teamId: "team-1", name: "Platform", relationship: "teamadmin", isMember: true, canOpen: true },
+        { teamId: "team-2", name: "Mobile", relationship: "none", isMember: false, canOpen: true },
+        { teamId: "team-3", name: "Data", relationship: "member", isMember: true, canOpen: true },
       ],
     });
 
     render(<TeamsOverview />);
 
     await screen.findByText("Platform");
-    expect(screen.getByText("Mobile")).toBeTruthy();
-    expect(screen.getByText("Data")).toBeTruthy();
+    expect(screen.getByText("Teamadmin")).toBeTruthy();
     expect(screen.getByText("Medlem")).toBeTruthy();
-    expect(screen.getByText("Admin")).toBeTruthy();
-    expect(screen.getByText("Ikke medlem")).toBeTruthy();
+    // A superadmin without membership sees "Ikke medlem" (no team role), yet keeps access to open the team.
+    expect(screen.getAllByText("Ikke medlem")).toHaveLength(1);
+    expect(screen.queryByText("Admin")).toBeNull();
   });
 
   it("renders each team's relationship label via the shared Badge primitive, not a bare paragraph (BR-10)", async () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform", relationship: "member", isMember: true }],
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "member", isMember: true, canOpen: true }],
     });
 
     render(<TeamsOverview />);
@@ -153,9 +153,9 @@ describe("TeamsOverview", () => {
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
       teams: [
-        { teamId: "team-1", name: "Platform", relationship: "member", isMember: true },
-        { teamId: "team-2", name: "Mobile", relationship: "admin" },
-        { teamId: "team-3", name: "Data", relationship: "none", isMember: false },
+        { teamId: "team-1", name: "Platform", relationship: "member", isMember: true, canOpen: true },
+        { teamId: "team-2", name: "Mobile", relationship: "none", isMember: false, canOpen: true },
+        { teamId: "team-3", name: "Data", relationship: "none", isMember: false, canOpen: false },
       ],
     });
 
@@ -185,7 +185,7 @@ describe("TeamsOverview", () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false }],
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false, canOpen: false }],
     });
 
     render(<TeamsOverview />);
@@ -211,7 +211,7 @@ describe("TeamsOverview", () => {
     fetchTeamsOverviewMock
       .mockResolvedValueOnce({
         status: "ok",
-        teams: [{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false }],
+        teams: [{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false, canOpen: false }],
       })
       .mockResolvedValueOnce({
         status: "ok",
@@ -235,7 +235,7 @@ describe("TeamsOverview", () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false }],
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false, canOpen: false }],
     });
     requestTeamAccessMock.mockImplementation(
       () =>
@@ -261,7 +261,7 @@ describe("TeamsOverview", () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false }],
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false, canOpen: false }],
     });
     requestTeamAccessMock.mockResolvedValue({ ok: false, error: "team_disabled" });
 
@@ -278,7 +278,7 @@ describe("TeamsOverview", () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform", relationship: "member", isMember: true }],
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "member", isMember: true, canOpen: true }],
     });
 
     const { container } = render(<TeamsOverview />);
@@ -318,7 +318,7 @@ describe("TeamsOverview", () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false }],
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false, canOpen: false }],
     });
 
     render(<TeamsOverview />);
@@ -351,7 +351,7 @@ describe("TeamsOverview auth-state races", () => {
 
     calls.resolve(0, {
       status: "ok",
-      teams: [{ teamId: "team-a", name: "Team A", relationship: "member", isMember: true }],
+      teams: [{ teamId: "team-a", name: "Team A", relationship: "member", isMember: true, canOpen: true }],
     });
     await flushMicrotasks();
 
@@ -372,13 +372,13 @@ describe("TeamsOverview auth-state races", () => {
 
     calls.resolve(1, {
       status: "ok",
-      teams: [{ teamId: "team-b", name: "Team B", relationship: "member", isMember: true }],
+      teams: [{ teamId: "team-b", name: "Team B", relationship: "member", isMember: true, canOpen: true }],
     });
     await screen.findByText("Team B");
 
     calls.resolve(0, {
       status: "ok",
-      teams: [{ teamId: "team-a", name: "Team A", relationship: "member", isMember: true }],
+      teams: [{ teamId: "team-a", name: "Team A", relationship: "member", isMember: true, canOpen: true }],
     });
     await flushMicrotasks();
 
@@ -399,7 +399,7 @@ describe("TeamsOverview auth-state races", () => {
 
     calls.resolve(0, {
       status: "ok",
-      teams: [{ teamId: "team-a", name: "Team A", relationship: "member", isMember: true }],
+      teams: [{ teamId: "team-a", name: "Team A", relationship: "member", isMember: true, canOpen: true }],
     });
     await flushMicrotasks();
 
@@ -408,7 +408,7 @@ describe("TeamsOverview auth-state races", () => {
 
     calls.resolve(1, {
       status: "ok",
-      teams: [{ teamId: "team-b", name: "Team B", relationship: "member", isMember: true }],
+      teams: [{ teamId: "team-b", name: "Team B", relationship: "member", isMember: true, canOpen: true }],
     });
     await screen.findByText("Team B");
   });
@@ -426,13 +426,13 @@ describe("TeamsOverview auth-state races", () => {
 
     calls.resolve(1, {
       status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform", relationship: "member", isMember: true }],
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "member", isMember: true, canOpen: true }],
     });
     await screen.findByText("Medlem");
 
     calls.resolve(0, {
       status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform (stale)", relationship: "none", isMember: false }],
+      teams: [{ teamId: "team-1", name: "Platform (stale)", relationship: "none", isMember: false, canOpen: false }],
     });
     await flushMicrotasks();
 
@@ -452,7 +452,7 @@ describe("TeamsOverview auth-state races", () => {
 
     calls.resolve(0, {
       status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false }],
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false, canOpen: false }],
     });
     const button = await screen.findByRole("button", { name: /be om tilgang/i });
     await user.click(button);
@@ -486,7 +486,7 @@ describe("TeamsOverview auth-state races", () => {
 
     calls.resolve(0, {
       status: "ok",
-      teams: [{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false }],
+      teams: [{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false, canOpen: false }],
     });
     const button = await screen.findByRole("button", { name: /be om tilgang/i });
     await user.click(button);
@@ -497,7 +497,7 @@ describe("TeamsOverview auth-state races", () => {
 
     calls.resolve(2, {
       status: "ok",
-      teams: [{ teamId: "team-2", name: "Mobile", relationship: "member", isMember: true }],
+      teams: [{ teamId: "team-2", name: "Mobile", relationship: "member", isMember: true, canOpen: true }],
     });
     await screen.findByText("Mobile");
 
@@ -525,7 +525,7 @@ describe("TeamsOverview auth-state races", () => {
     expect(() =>
       calls.resolve(0, {
         status: "ok",
-        teams: [{ teamId: "team-1", name: "Platform", relationship: "member", isMember: true }],
+        teams: [{ teamId: "team-1", name: "Platform", relationship: "member", isMember: true, canOpen: true }],
       }),
     ).not.toThrow();
     await flushMicrotasks();
@@ -547,8 +547,8 @@ describe("TeamsOverview directory composition (visual-redesign TASK-006)", () =>
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
       teams: [
-        { teamId: "t-1", name: "Demo Team", relationship: "member", isMember: true },
-        { teamId: "t-2", name: "Plattform", relationship: "none", isMember: false },
+        { teamId: "t-1", name: "Demo Team", relationship: "member", isMember: true, canOpen: true },
+        { teamId: "t-2", name: "Plattform", relationship: "none", isMember: false, canOpen: false },
       ],
     });
 
@@ -566,7 +566,7 @@ describe("TeamsOverview directory composition (visual-redesign TASK-006)", () =>
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
-      teams: [{ teamId: "t-1", name: "Demo Team", relationship: "member", isMember: true }],
+      teams: [{ teamId: "t-1", name: "Demo Team", relationship: "member", isMember: true, canOpen: true }],
     });
 
     render(<TeamsOverview />);
@@ -582,7 +582,7 @@ describe("TeamsOverview directory composition (visual-redesign TASK-006)", () =>
   it("renders the teams the parent supplies and makes no fetch", async () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
 
-    render(<TeamsOverview initialTeams={[{ teamId: "t-1", name: "Supplied Team", relationship: "member", isMember: true }]} />);
+    render(<TeamsOverview initialTeams={[{ teamId: "t-1", name: "Supplied Team", relationship: "member", isMember: true, canOpen: true }]} />);
 
     await screen.findByText("Supplied Team");
     expect(fetchTeamsOverviewMock).not.toHaveBeenCalled();
@@ -601,7 +601,7 @@ describe("TeamsOverview directory composition (visual-redesign TASK-006)", () =>
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchTeamsOverviewMock.mockResolvedValue({
       status: "ok",
-      teams: [{ teamId: "t-1", name: "Fetched Team", relationship: "member", isMember: true }],
+      teams: [{ teamId: "t-1", name: "Fetched Team", relationship: "member", isMember: true, canOpen: true }],
     });
 
     render(<TeamsOverview />);
@@ -618,7 +618,7 @@ describe("TeamsOverview directory composition (visual-redesign TASK-006)", () =>
 
     render(
       <TeamsOverview
-        initialTeams={[{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false }]}
+        initialTeams={[{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false, canOpen: false }]}
         onTeamsChanged={onTeamsChanged}
       />,
     );
@@ -638,7 +638,7 @@ describe("TeamsOverview directory composition (visual-redesign TASK-006)", () =>
 
     render(
       <TeamsOverview
-        initialTeams={[{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false }]}
+        initialTeams={[{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false, canOpen: false }]}
         onTeamsChanged={onTeamsChanged}
       />,
     );
@@ -656,7 +656,7 @@ describe("TeamsOverview directory composition (visual-redesign TASK-006)", () =>
     fetchTeamsOverviewMock
       .mockResolvedValueOnce({
         status: "ok",
-        teams: [{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false }],
+        teams: [{ teamId: "team-1", name: "Platform", relationship: "none", isMember: false, canOpen: false }],
       })
       .mockResolvedValueOnce({
         status: "ok",

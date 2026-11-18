@@ -17,7 +17,7 @@ describe("skill contribution", () => {
 
   it("is effective at the current notice version and reuses the policy constant", () => {
     expect(isEffectiveSkillContribution(membership(current))).toBe(true);
-    expect(readSkillContribution(membership(current))).toEqual(current);
+    expect(readSkillContribution(membership(current))).toEqual({ ...current, origin: "genuine" });
   });
 
   it("accepts a Timestamp-like consentedAt", () => {
