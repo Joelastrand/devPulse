@@ -9,8 +9,11 @@ const fetchTeamSystemsMock = vi.fn();
 const fetchAssignableMembersMock = vi.fn();
 const createTeamSystemMock = vi.fn();
 
-vi.mock("next/navigation", () => ({
-  usePathname: () => "/teams/team-1/systems",
+vi.mock("next/navigation", async () => (await import("./systems-navigation-test-helper")).navigationMock);
+
+vi.mock("../client/system-favorites-gateway", () => ({
+  fetchSystemFavorites: vi.fn(async () => ({ status: "ok", systemIds: [] })),
+  setSystemFavorite: vi.fn(),
 }));
 
 vi.mock("../../teams/client/teams-overview-gateway", () => ({

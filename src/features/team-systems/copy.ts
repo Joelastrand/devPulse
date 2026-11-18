@@ -40,14 +40,40 @@ export const systemsCopy = {
     label: "Søk etter system",
     placeholder: "Søk etter navn eller beskrivelse",
   },
+  /** Personal favorites (Phase 2F.1). Only the person who set a favorite sees it. */
+  favorites: {
+    add: (name: string) => `Legg til favoritt: ${name}`,
+    remove: (name: string) => `Fjern favoritt: ${name}`,
+    loadError: "Favorittene kunne ikke lastes. Systemene vises uten favorittmarkering.",
+    writeError: {
+      unauthenticated: "Du må logge inn på nytt for å endre favoritter.",
+      forbidden: "Du har ikke tilgang til å endre favoritter for dette teamet.",
+      team_disabled: "Teamet er deaktivert, så favoritter kan ikke endres.",
+      invalid_request: "Favoritten kunne ikke endres. Prøv igjen.",
+      not_found: "Systemet finnes ikke lenger i teamet.",
+      erasure_in_progress: "Kontoen er under sletting, så favoritter kan ikke endres.",
+      persistence_failed: "Favoritten kunne ikke lagres. Prøv igjen senere.",
+      request_failed: "Favoritten kunne ikke lagres. Kontroller tilkoblingen og prøv igjen.",
+    },
+  },
+
+  list: {
+    showing: (shown: number, total: number) => `Viser ${shown} av ${total} systemer`,
+    showMore: "Vis flere",
+    resetFilters: "Nullstill filtre",
+    activeFilters: (count: number) => (count === 1 ? "1 aktivt filter" : `${count} aktive filtre`),
+  },
   filters: {
     attentionLabel: "Oppfølging",
     attentionAll: "Alle systemer",
     attentionOnly: "Trenger oppfølging",
     knowledgeLabel: "Kompetanserisiko",
     knowledgeAll: "Alle nivåer",
-    systemTypeLabel: "Systemtype",
-    systemTypeAll: "Alle systemtyper",
+    /** Filter on the existing `systemType` field (internal/external classification). Relabelled, not a second filter. */
+    systemTypeLabel: "Plassering",
+    systemTypeAll: "Alle systemer",
+    systemTypeOptions: { internt: "Interne", eksternt: "Eksterne", uavklart: "Ikke vurdert" },
+    favoritesOnly: "Kun favoritter",
     criticalityLabel: "Virksomhetskritikalitet",
     criticalityAll: "Alle nivåer",
   },
@@ -55,8 +81,9 @@ export const systemsCopy = {
   /** Classification labels for the form, the list and the filters (domain/team-system.ts holds the values). */
   classification: {
     groupLabel: "Klassifisering",
-    systemTypeLabel: "Systemtype",
-    systemTypeHelp: "Gjelder hvem systemet er laget for eller brukes av, ikke hvor det driftes eller hvem som eier leverandøren.",
+    systemTypeLabel: "Plassering",
+    systemTypeHelp:
+      "Intern: laget for eller brukt av organisasjonen. Ekstern: laget for eller brukt av eksterne parter. Ikke vurdert: ikke avklart ennå. Dette er en forretningsklassifisering, ikke en vurdering av nettverkseksponering.",
     criticalityLabel: "Virksomhetskritikalitet",
     criticalityHelp: "Konsekvensen for virksomheten hvis systemet er utilgjengelig eller feiler. Utledes ikke av systemtypen.",
     reachLabel: "Brukeromfang",
@@ -79,15 +106,11 @@ export const systemsCopy = {
     },
     knowledgeHeader: "Kompetanserisiko",
     actionsHeader: "Handlinger",
+    details: "Detaljer",
     legend: "Vurderingsstatus",
-    edit: "Rediger",
   },
 
   explanation: {
-    open: "Forklaring",
-    title: "Forklaring av kvalitetsvurderinger",
-    intro:
-      "Vurderingene er kvalitative egenvurderinger fra teamet, ikke automatiske målinger eller sikkerhetsskanninger.",
     statusTitle: "Vurderingsstatus",
     statusHelp: {
       god: "Teamet mener egenskapen fungerer tilfredsstillende.",
@@ -109,8 +132,16 @@ export const systemsCopy = {
     observability: "Hvor godt teamet kan forstå systemets tilstand gjennom logger, målinger og spor.",
   },
 
+  /** The list row action opens the system's detail page; editing happens there. */
+  detail: {
+    back: "Tilbake til systemoversikt",
+    edit: "Rediger",
+    assessmentsTitle: "Kvalitetsvurderinger",
+    missingTitle: "Systemet finnes ikke",
+    missingBody: "Systemet finnes ikke i dette teamet, eller det er fjernet. Gå tilbake til systemoversikten.",
+  },
+
   addSystem: "Legg til system",
-  editSystem: "Rediger",
   cancel: "Avbryt",
   saving: "Lagrer…",
 

@@ -6,16 +6,18 @@ import { teamProjectsCopy } from "../copy";
 import type { ClientTeamProject } from "../client/team-projects-gateway";
 
 /**
- * Bar and dot colours cycle per project from the six chart tokens. Colour never carries the status or the project name
- * alone: every bar and legend entry also names the project in text.
+ * Bar and dot colours cycle per project through the timeline tokens (globals.css `--timeline-*`). The colour identifies a
+ * project only; it encodes no status, so it is the same in the Prosjektplan Gantt and in the participation timeline, where
+ * the same project id maps to the same tone. Colour never carries the status or the project name alone: every bar and
+ * legend entry also names the project in text, and participation bars keep their dashed outline for overlaps.
  */
 export const PROJECT_TONE_CLASSES = [
-  { bar: "bg-chart-1", dot: "bg-chart-1" },
-  { bar: "bg-chart-2", dot: "bg-chart-2" },
-  { bar: "bg-chart-3", dot: "bg-chart-3" },
-  { bar: "bg-chart-4", dot: "bg-chart-4" },
-  { bar: "bg-chart-5", dot: "bg-chart-5" },
-  { bar: "bg-chart-6", dot: "bg-chart-6" },
+  { bar: "bg-timeline-1", dot: "bg-timeline-1" },
+  { bar: "bg-timeline-2", dot: "bg-timeline-2" },
+  { bar: "bg-timeline-3", dot: "bg-timeline-3" },
+  { bar: "bg-timeline-4", dot: "bg-timeline-4" },
+  { bar: "bg-timeline-5", dot: "bg-timeline-5" },
+  { bar: "bg-timeline-6", dot: "bg-timeline-6" },
 ] as const;
 
 /** Stable tone index from the opaque project id (not from display order, so sorting never recolours a project). */

@@ -148,6 +148,9 @@ const PERSON_OWNED: readonly InventoryRow[] = [
   // I-19 (docs/archive/features/team-owned-skills/SPEC.md §7): a person's private team-skill ratings, one document per
   // (person, team skill). Located by the stored `uid` field, not by the id, so the sweep is a field equality.
   { id: "I-19", collection: "teamSkillAssessments", locator: "uidField", class: "DELETE", fields: [uid("uid")] },
+  // I-20 (Phase 2F.1): a person's personal Systemoversikt favorites, one document per favorited system id. The document holds
+  // only an encrypted envelope (the team id, bound to the path) and a timestamp. No system data is copied into it.
+  { id: "I-20", collection: "userDevelopment/{uid}/systemFavorites", locator: "subtree", class: "DELETE", fields: [] },
 ];
 
 /** A-rows: actor and audit identities on preserved records (D5). Each field is set to null or to the erased marker. */

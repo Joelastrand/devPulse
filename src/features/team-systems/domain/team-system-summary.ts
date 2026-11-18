@@ -68,6 +68,8 @@ export interface SystemFilter {
   knowledge: KnowledgeFilter;
   systemType: SystemTypeFilter;
   criticality: CriticalityFilter;
+  /** "Kun favoritter": only the current user's favorite systems. Personal, so it is applied with the favorite ids. */
+  favoritesOnly: boolean;
 }
 
 export const DEFAULT_SYSTEM_FILTER: SystemFilter = {
@@ -76,13 +78,24 @@ export const DEFAULT_SYSTEM_FILTER: SystemFilter = {
   knowledge: "all",
   systemType: "all",
   criticality: "all",
+  favoritesOnly: false,
 };
 
 /** The fields filtering reads; a full system view satisfies this structurally. */
-export type SystemFilterFields = Pick<SystemSummaryInput, "name" | "description" | "knowledgeRisk" | "attention" | "classification">;
+export type SystemFilterFields = Pick<
+  SystemSummaryInput,
+  "name" | "description" | "knowledgeRisk" | "attention" | "classification"
+> & { systemId?: string };
 
-/** BR-13: case-insensitive substring over name and description; filters are exact. Never widens the input. */
-export function filterSystems<T extends SystemFilterFields>(systems: readonly T[], filter: SystemFilter): T[] {
+/**
+ * BR-13: case-insensitive substring over name and description; filters are exact. Never widens the input. `favoriteIds` is
+ * the current user's favorite system ids. It is consulted only when `favoritesOnly` is set.
+ */
+export function filterSystems<T extends SystemFilterFields>(
+  systems: readonly T[],
+  filter: SystemFilter,
+  favoriteIds: ReadonlySet<string> = new Set(),
+): T[] {
   const needle = filter.query.trim().toLocaleLowerCase("nb");
   return systems.filter((system) => {
     if (needle.length > 0) {
@@ -93,10 +106,22 @@ export function filterSystems<T extends SystemFilterFields>(systems: readonly T[
     if (filter.knowledge !== "all" && system.knowledgeRisk !== filter.knowledge) return false;
     if (filter.systemType !== "all" && system.classification.systemType !== filter.systemType) return false;
     if (filter.criticality !== "all" && system.classification.businessCriticality !== filter.criticality) return false;
+    if (filter.favoritesOnly && (system.systemId === undefined || !favoriteIds.has(system.systemId))) return false;
     return true;
   });
 }
 
 export const KNOWLEDGE_BAND_ORDER: readonly KnowledgeRiskBand[] = ["none", "high", "elevated", "lower"];
+
+/** How many filter controls differ from the default: a non-blank search counts as one. Drives the "N aktive filtre" label. */
+export function countActiveFilters(filter: SystemFilter): number {
+  let count = filter.query.trim().length > 0 ? 1 : 0;
+  if (filter.attention !== DEFAULT_SYSTEM_FILTER.attention) count += 1;
+  if (filter.knowledge !== DEFAULT_SYSTEM_FILTER.knowledge) count += 1;
+  if (filter.systemType !== DEFAULT_SYSTEM_FILTER.systemType) count += 1;
+  if (filter.criticality !== DEFAULT_SYSTEM_FILTER.criticality) count += 1;
+  if (filter.favoritesOnly) count += 1;
+  return count;
+}
 
 export { KNOWLEDGE_RISK_LABELS };

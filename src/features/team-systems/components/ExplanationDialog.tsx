@@ -4,7 +4,7 @@ import { Info } from "lucide-react";
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Button } from "../../../components/ui/Button";
 import { Icon } from "../../../components/ui/Icon";
-import { ASSESSMENT_ATTRIBUTES, ASSESSMENT_ATTRIBUTE_LABELS, ASSESSMENT_VALUES, ASSESSMENT_VALUE_LABELS, type AssessmentValue } from "../domain/team-system";
+import { ASSESSMENT_ATTRIBUTES, ASSESSMENT_ATTRIBUTE_LABELS } from "../domain/team-system";
 import { systemsCopy } from "../copy";
 
 const TABBABLE = "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])";
@@ -106,39 +106,3 @@ export function AttributeInfoButton({ attribute }: { attribute: (typeof ASSESSME
   );
 }
 
-/** Shared "Forklaring" control above the matrix (reference 16): all seven attributes and the four statuses. */
-export function QualityExplanation() {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <Button type="button" variant="secondary" size="sm" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
-        <Icon icon={Info} size="inline" />
-        {systemsCopy.explanation.open}
-      </Button>
-      {open && (
-        <ExplanationDialog title={systemsCopy.explanation.title} onClose={() => setOpen(false)}>
-          <p className="text-help text-text-muted">{systemsCopy.explanation.intro}</p>
-          <dl className="flex flex-col gap-3">
-            {ASSESSMENT_ATTRIBUTES.map((attribute) => (
-              <div key={attribute}>
-                <dt className="text-label font-semibold text-text-primary">{ASSESSMENT_ATTRIBUTE_LABELS[attribute]}</dt>
-                <dd className="text-help text-text-secondary">{systemsCopy.qualityPanel[attribute].body}</dd>
-              </div>
-            ))}
-          </dl>
-          <div>
-            <h3 className="text-label font-semibold text-text-primary">{systemsCopy.explanation.statusTitle}</h3>
-            <dl className="mt-2 flex flex-col gap-2">
-              {ASSESSMENT_VALUES.map((value: AssessmentValue) => (
-                <div key={value} className="flex flex-col">
-                  <dt className="text-label font-medium text-text-primary">{ASSESSMENT_VALUE_LABELS[value]}</dt>
-                  <dd className="text-help text-text-secondary">{systemsCopy.explanation.statusHelp[value]}</dd>
-                </div>
-              ))}
-            </dl>
-          </div>
-        </ExplanationDialog>
-      )}
-    </>
-  );
-}

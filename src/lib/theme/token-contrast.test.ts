@@ -89,6 +89,12 @@ const CONTRAST_PAIRS: Pair[] = [
   { foreground: "chart-4", background: "surface", kind: "non-text" },
   { foreground: "chart-5", background: "surface", kind: "non-text" },
   { foreground: "chart-6", background: "surface", kind: "non-text" },
+  { foreground: "timeline-1", background: "surface", kind: "non-text" },
+  { foreground: "timeline-2", background: "surface", kind: "non-text" },
+  { foreground: "timeline-3", background: "surface", kind: "non-text" },
+  { foreground: "timeline-4", background: "surface", kind: "non-text" },
+  { foreground: "timeline-5", background: "surface", kind: "non-text" },
+  { foreground: "timeline-6", background: "surface", kind: "non-text" },
   // Visual-redesign pairs (TASK-019): new dashboard compositions.
   { foreground: "text-secondary", background: "surface-elevated", kind: "text" },
   { foreground: "text-secondary", background: "primary-subtle", kind: "text" },

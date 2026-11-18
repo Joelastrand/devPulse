@@ -36,12 +36,12 @@ export function TeamRouteNav({ teamId }: { teamId: string }) {
   const pathname = normalizePathname(usePathname());
   const activeLinkRef = useRef<HTMLAnchorElement | null>(null);
   const base = `/teams/${encodeURIComponent(teamId)}`;
-  const links: readonly { href: string; label: string; icon: LucideIcon }[] = [
+  const links: readonly { href: string; label: string; icon: LucideIcon; matchChildren?: boolean }[] = [
     { href: base, label: teamsCopy.nav.overview, icon: House },
     { href: `${base}/roadmap`, label: teamsCopy.nav.roadmap, icon: CalendarRange },
     { href: `${base}/competence-plan`, label: teamsCopy.nav.competencePlan, icon: GraduationCap },
     { href: `${base}/competence`, label: teamsCopy.nav.competence, icon: ChartPie },
-    { href: `${base}/systems`, label: teamsCopy.nav.systems, icon: Layers3 },
+    { href: `${base}/systems`, label: teamsCopy.nav.systems, icon: Layers3, matchChildren: true },
     { href: `${base}/results`, label: teamsCopy.nav.results, icon: ChartNoAxesCombined },
     { href: `${base}/surveys`, label: teamsCopy.nav.surveys, icon: ClipboardList },
   ];
@@ -58,7 +58,9 @@ export function TeamRouteNav({ teamId }: { teamId: string }) {
     <nav aria-label={teamsCopy.nav.label} className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
       <ul className="flex w-max min-w-full gap-1 border-b border-border-subtle sm:w-auto sm:min-w-0">
         {links.map((link) => {
-          const current = pathname === link.href;
+          // Systemoversikt also stays active on its own system detail pages (`/systems/[systemId]`), the one longest-prefix case.
+          const current =
+            pathname === link.href || (link.matchChildren === true && pathname !== null && pathname.startsWith(`${link.href}/`));
           return (
             <li key={link.href} className="shrink-0">
               <Link

@@ -18,6 +18,7 @@ type Seed = {
   responsibilities?: Record<string, string[]>;
   achievements?: Record<string, string[]>;
   teamAssessments?: Record<string, string[]>;
+  systemFavorites?: Record<string, string[]>;
 };
 
 function fakeData(seed: Seed = {}) {
@@ -30,6 +31,9 @@ function fakeData(seed: Seed = {}) {
   );
   const achievements = new Map<string, Set<string>>(Object.entries(seed.achievements ?? {}).map(([uid, ids]) => [uid, new Set(ids)]));
   const teamAssessments = new Map<string, Set<string>>(Object.entries(seed.teamAssessments ?? {}).map(([uid, ids]) => [uid, new Set(ids)]));
+  const systemFavorites = new Map<string, Set<string>>(
+    Object.entries(seed.systemFavorites ?? {}).map(([uid, ids]) => [uid, new Set(ids)]),
+  );
   const log: string[] = [];
 
   const port: PersonalDataErasurePort = {
@@ -82,9 +86,16 @@ function fakeData(seed: Seed = {}) {
       log.push(`teamAssessment:${uid}:${assessmentId}`);
       teamAssessments.get(uid)?.delete(assessmentId);
     },
+    async systemFavoriteIds(uid, limit) {
+      return [...(systemFavorites.get(uid) ?? [])].slice(0, limit);
+    },
+    async deleteSystemFavorite(uid, systemId) {
+      log.push(`systemFavorite:${uid}:${systemId}`);
+      systemFavorites.get(uid)?.delete(systemId);
+    },
   };
 
-  return { port, skill, profiles, roleAssignments, goals, responsibilities, achievements, teamAssessments, log };
+  return { port, skill, profiles, roleAssignments, goals, responsibilities, achievements, teamAssessments, systemFavorites, log };
 }
 
 async function runToDone(port: PersonalDataErasurePort, uid: string, maxWrites = 100): Promise<number> {
@@ -196,6 +207,15 @@ describe("personal data erasure step (TASK-022)", () => {
 
     expect(store.teamAssessments.get(UID)?.size).toBe(0);
     expect(store.teamAssessments.get(OTHER)?.has("keep__s9")).toBe(true);
+  });
+
+  it("removes every personal system favorite of the erased person (I-20), paged, and keeps other people's", async () => {
+    const store = fakeData({ systemFavorites: { [UID]: ["s1", "s2", "s3"], [OTHER]: ["keep-s"] } });
+
+    await runToDone(store.port, UID, 2);
+
+    expect(store.systemFavorites.get(UID)?.size).toBe(0);
+    expect(store.systemFavorites.get(OTHER)).toEqual(new Set(["keep-s"]));
   });
 
   it("the personal records step needs no encryption key: it only deletes by path", async () => {

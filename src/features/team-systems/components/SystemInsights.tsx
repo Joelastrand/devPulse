@@ -4,7 +4,14 @@ import { Icon } from "../../../components/ui/Icon";
 import { Monitor, ShieldCheck, TriangleAlert, Users, Wrench, Activity, CircleCheck } from "lucide-react";
 import { KNOWLEDGE_BAND_ORDER } from "../domain/team-system-summary";
 import type { TeamSystemSummary } from "../domain/team-system-summary";
-import { ASSESSMENT_ATTRIBUTES, KNOWLEDGE_RISK_LABELS, type AssessmentAttribute } from "../domain/team-system";
+import {
+  ASSESSMENT_ATTRIBUTES,
+  ASSESSMENT_VALUES,
+  ASSESSMENT_VALUE_LABELS,
+  KNOWLEDGE_RISK_LABELS,
+  type AssessmentAttribute,
+  type AssessmentValue,
+} from "../domain/team-system";
 import { systemsCopy } from "../copy";
 
 const ATTRIBUTE_ICONS: Record<AssessmentAttribute, LucideIcon> = {
@@ -108,6 +115,17 @@ export function QualityPanel() {
           </li>
         ))}
       </ul>
+      <div className="flex flex-col gap-2 border-t border-border-subtle pt-4">
+        <h3 className="text-label font-semibold text-text-primary">{systemsCopy.explanation.statusTitle}</h3>
+        <dl className="grid grid-cols-1 gap-2 md:grid-cols-2">
+          {ASSESSMENT_VALUES.map((value: AssessmentValue) => (
+            <div key={value} className="flex flex-col">
+              <dt className="text-label font-medium text-text-primary">{ASSESSMENT_VALUE_LABELS[value]}</dt>
+              <dd className="text-help text-text-secondary">{systemsCopy.explanation.statusHelp[value]}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
     </Card>
   );
 }

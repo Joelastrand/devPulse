@@ -74,6 +74,14 @@ export function createPersonalDataPort(): PersonalDataErasurePort {
     async deleteAchievement(uid, achievementId) {
       await owned(uid).collection("achievements").doc(achievementId).delete();
     },
+    // I-20 (Phase 2F.1): personal system favorites. Path-only, no decryption; deleting an absent document succeeds.
+    async systemFavoriteIds(uid, limit) {
+      const snapshot = await owned(uid).collection("systemFavorites").select().limit(limit).get();
+      return snapshot.docs.map((doc) => doc.id);
+    },
+    async deleteSystemFavorite(uid, systemId) {
+      await owned(uid).collection("systemFavorites").doc(systemId).delete();
+    },
     // I-19 (team-owned skills): one document per (person, team skill), located by its stored `uid` field.
     async teamSkillAssessmentIds(uid, limit) {
       assertUidSegment(uid);

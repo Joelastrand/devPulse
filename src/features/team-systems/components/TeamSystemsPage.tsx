@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
@@ -8,15 +9,8 @@ import { EmptyState } from "../../../components/ui/EmptyState";
 import { SystemListSkeleton } from "./SystemListSkeleton";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import { TeamPageHeader } from "../../teams/components/TeamPageHeader";
-import {
-  createTeamSystem,
-  fetchAssignableMembers,
-  fetchTeamSystems,
-  updateTeamSystem,
-  type AssignableMemberOption,
-  type TeamSystemMutationResult,
-  type TeamSystemsReadResult,
-} from "../client/team-systems-gateway";
+import { fetchTeamSystems, type TeamSystemsReadResult } from "../client/team-systems-gateway";
+import { useSystemFavorites, type SystemFavoritesState } from "../client/use-system-favorites";
 import { systemsCopy } from "../copy";
 import {
   DEFAULT_SYSTEM_FILTER,
@@ -25,13 +19,22 @@ import {
   type SystemFilter,
   type SystemSummaryInput,
 } from "../domain/team-system-summary";
+import {
+  SYSTEM_PAGE_SIZE_MAX,
+  SYSTEM_PAGE_SIZE_STEP,
+  parseSystemListQuery,
+  serializeSystemListQuery,
+  systemsListHref,
+  type SystemListState,
+} from "../domain/system-list-query";
 import { ASSESSMENT_ATTRIBUTES } from "../domain/team-system";
 import type { TeamSystemView } from "../server/list-team-systems";
-import { QualityExplanation } from "./ExplanationDialog";
 import { SystemFilters } from "./SystemFilters";
-import { SystemForm } from "./SystemForm";
+import { SystemEditorPanel } from "./SystemEditorPanel";
 import { KnowledgeRiskPanel, QualityPanel, SystemSummaryCards } from "./SystemInsights";
 import { SystemList } from "./SystemList";
+
+const NO_FAVORITES: ReadonlySet<string> = new Set();
 
 type ViewState =
   | { phase: "loading" }
@@ -85,7 +88,8 @@ function toListState(result: TeamSystemsReadResult): ListState {
   return { phase: "error" };
 }
 
-type FormState = { mode: "create" } | { mode: "edit"; system: TeamSystemView } | null;
+/** The list opens the create form only. Existing systems are edited on their detail page. */
+type FormState = { mode: "create" } | null;
 
 function toSummaryInput(system: TeamSystemView): SystemSummaryInput {
   return {
@@ -100,11 +104,21 @@ function toSummaryInput(system: TeamSystemView): SystemSummaryInput {
 }
 
 function SystemsContent({ token, teamId }: { token: string; teamId: string }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [list, setList] = useState<ListState>({ phase: "loading" });
   const [reloadKey, setReloadKey] = useState(0);
-  const [filter, setFilter] = useState<SystemFilter>(DEFAULT_SYSTEM_FILTER);
+  // The browsing state (search, filters, favorites-only, rows shown) lives in the URL, so returning from a detail page or
+  // reloading keeps it. The initial value is read from the URL once, when this content mounts for the token and team.
+  const [listState, setListState] = useState<SystemListState>(() => parseSystemListQuery(searchParams));
+  const favorites = useSystemFavorites(token, teamId);
   const [form, setForm] = useState<FormState>(null);
   const [saved, setSaved] = useState(false);
+
+  function commitListState(next: SystemListState) {
+    setListState(next);
+    router.replace(systemsListHref(teamId, next), { scroll: false });
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -140,8 +154,9 @@ function SystemsContent({ token, teamId }: { token: string; teamId: string }) {
       systems={list.systems}
       canEdit={list.canEdit}
       truncated={list.truncated}
-      filter={filter}
-      onFilterChange={setFilter}
+      listState={listState}
+      onListStateChange={commitListState}
+      favorites={favorites}
       form={form}
       onOpenForm={(next) => {
         setSaved(false);
@@ -163,8 +178,9 @@ interface LoadedSystemsProps {
   systems: TeamSystemView[];
   canEdit: boolean;
   truncated: boolean;
-  filter: SystemFilter;
-  onFilterChange: (next: SystemFilter) => void;
+  listState: SystemListState;
+  onListStateChange: (next: SystemListState) => void;
+  favorites: SystemFavoritesState;
   form: FormState;
   onOpenForm: (next: FormState) => void;
   saved: boolean;
@@ -177,15 +193,28 @@ function LoadedSystems({
   systems,
   canEdit,
   truncated,
-  filter,
-  onFilterChange,
+  listState,
+  onListStateChange,
+  favorites,
   form,
   onOpenForm,
   saved,
   onSaved,
 }: LoadedSystemsProps) {
+  const { filter, pageSize } = listState;
+  const favoriteIds = favorites.load.status === "ready" ? favorites.load.ids : NO_FAVORITES;
   const summary = useMemo(() => summarizeSystems(systems.map(toSummaryInput)), [systems]);
-  const visible = useMemo(() => filterSystems(systems, filter), [systems, filter]);
+  const visible = useMemo(() => filterSystems(systems, filter, favoriteIds), [systems, filter, favoriteIds]);
+  // Progressive disclosure: only the first page of matches is rendered. A filter change starts again from the first page, so
+  // the count and the "Vis flere" control always describe the current matches. The page size is part of the URL state.
+  const shownSystems = visible.slice(0, pageSize);
+  const returnQuery = serializeSystemListQuery(listState);
+  function changeFilter(next: SystemFilter) {
+    onListStateChange({ filter: next, pageSize: SYSTEM_PAGE_SIZE_STEP });
+  }
+  function showMore() {
+    onListStateChange({ filter, pageSize: Math.min(pageSize + SYSTEM_PAGE_SIZE_STEP, SYSTEM_PAGE_SIZE_MAX) });
+  }
   const hasAnySystem = systems.length > 0;
   const hasAssessment = systems.some((system) => ASSESSMENT_ATTRIBUTES.some((a) => system.assessments[a].value !== "ikke_vurdert"));
 
@@ -201,9 +230,17 @@ function LoadedSystems({
 
       {saved && form === null && <Alert variant="success">{systemsCopy.form.saved}</Alert>}
       {truncated && <Alert variant="info">{systemsCopy.truncated}</Alert>}
+      {favorites.load.status === "error" && <Alert variant="error">{systemsCopy.favorites.loadError}</Alert>}
+      {favorites.failure !== null && <Alert variant="error">{systemsCopy.favorites.writeError[favorites.failure.error]}</Alert>}
 
       {form !== null && (
-        <EditorPanel token={token} teamId={teamId} form={form} onCancel={() => onOpenForm(null)} onSaved={onSaved} />
+        <SystemEditorPanel
+          token={token}
+          teamId={teamId}
+          system={null}
+          onCancel={() => onOpenForm(null)}
+          onSaved={onSaved}
+        />
       )}
 
       <SystemSummaryCards summary={summary} />
@@ -211,19 +248,41 @@ function LoadedSystems({
       {hasAnySystem ? (
         <section aria-label="Systemliste" className="flex flex-col gap-4 rounded-surface border border-border-subtle bg-surface p-4 shadow-card md:p-6">
           <div className="flex flex-col gap-3">
-            <div className="flex justify-end">
-              <QualityExplanation />
-            </div>
-            <SystemFilters filter={filter} onChange={onFilterChange} />
+            <SystemFilters filter={filter} onChange={changeFilter} />
           </div>
           {!hasAssessment && <p className="text-help text-text-muted">{systemsCopy.empty.noAssessmentsBody}</p>}
           {visible.length === 0 ? (
             <EmptyState>
               <span className="block font-medium text-text-primary">{systemsCopy.empty.noSearchResultsTitle}</span>
               {systemsCopy.empty.noSearchResultsBody}
+              <div className="mt-3">
+                <Button type="button" variant="secondary" size="sm" onClick={() => changeFilter(DEFAULT_SYSTEM_FILTER)}>
+                  {systemsCopy.list.resetFilters}
+                </Button>
+              </div>
             </EmptyState>
           ) : (
-            <SystemList systems={visible} canEdit={canEdit} onEdit={(system) => onOpenForm({ mode: "edit", system })} />
+            <>
+              <p className="text-help text-text-muted" aria-live="polite">
+                {systemsCopy.list.showing(shownSystems.length, visible.length)}
+              </p>
+              <SystemList
+                teamId={teamId}
+                systems={shownSystems}
+                returnQuery={returnQuery}
+                favoriteIds={favoriteIds}
+                favoritesReady={favorites.load.status === "ready"}
+                pendingFavoriteIds={favorites.pendingIds}
+                onToggleFavorite={(system, favorite) => void favorites.toggle(system.systemId, favorite)}
+              />
+              {shownSystems.length < visible.length && (
+                <div className="flex justify-center">
+                  <Button type="button" variant="secondary" onClick={showMore}>
+                    {systemsCopy.list.showMore}
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </section>
       ) : (
@@ -241,55 +300,3 @@ function LoadedSystems({
   );
 }
 
-/** Loads the knowledge selector options only when the form opens. */
-function EditorPanel({
-  token,
-  teamId,
-  form,
-  onCancel,
-  onSaved,
-}: {
-  token: string;
-  teamId: string;
-  form: NonNullable<FormState>;
-  onCancel: () => void;
-  onSaved: () => void;
-}) {
-  const [members, setMembers] = useState<AssignableMemberOption[]>([]);
-  const [membersStatus, setMembersStatus] = useState<"loading" | "ok" | "error">("loading");
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchAssignableMembers(token, teamId).then((result) => {
-      if (cancelled) return;
-      if (result.status === "ok") {
-        setMembers(result.members);
-        setMembersStatus("ok");
-      } else {
-        setMembersStatus("error");
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [token, teamId]);
-
-  async function submit(body: Record<string, unknown>): Promise<TeamSystemMutationResult> {
-    if (form.mode === "create") {
-      return createTeamSystem(token, teamId, body);
-    }
-    return updateTeamSystem(token, teamId, form.system.systemId, body);
-  }
-
-  return (
-    <SystemForm
-      key={form.mode === "edit" ? form.system.systemId : "create"}
-      system={form.mode === "edit" ? form.system : null}
-      members={members}
-      membersStatus={membersStatus}
-      onSubmit={submit}
-      onDone={onSaved}
-      onCancel={onCancel}
-    />
-  );
-}

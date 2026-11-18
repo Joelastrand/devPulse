@@ -8,7 +8,7 @@ import { Badge } from "../../../components/ui/Badge";
 import { Icon } from "../../../components/ui/Icon";
 import { Button } from "../../../components/ui/Button";
 import { EmptyState } from "../../../components/ui/EmptyState";
-import { LoadingState } from "../../../components/ui/LoadingState";
+import { CompetencePlanSkeleton } from "./CompetencePlanSkeleton";
 import { SELF_ASSESSED_LEVEL_COPY } from "../../skill-profiles/copy";
 import { PLAN_CARD_STATUS_LABEL, PRIORITY_LABEL, competencePlanCopy } from "../copy";
 import { planProgress, type PlanMilestone } from "../domain/competence-plan";
@@ -44,7 +44,7 @@ export function CompetencePlanSection({ teamId }: CompetencePlanSectionProps) {
   const inFlight = useRef(false);
 
   if (data.phase === "loading") {
-    return <LoadingState label={competencePlanCopy.loading} />;
+    return <CompetencePlanSkeleton label={competencePlanCopy.loading} />;
   }
   if (data.phase === "error") {
     return (

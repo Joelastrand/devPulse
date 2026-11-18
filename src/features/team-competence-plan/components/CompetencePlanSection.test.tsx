@@ -75,6 +75,16 @@ describe("CompetencePlanSection", () => {
     expect(screen.getByRole("status").textContent).toContain("Laster kompetanseplanen");
   });
 
+  it("reserves the plan layout while loading: one announcement, decorative placeholders, no empty state", () => {
+    hook.data = { phase: "loading" };
+    const { container } = render(<CompetencePlanSection teamId="team-1" />);
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+    expect(screen.getByRole("status").textContent).toBe("Laster kompetanseplanen…");
+    expect(container.querySelectorAll('[aria-hidden="true"]').length).toBeGreaterThan(0);
+    expect(screen.queryByText("Ingen kompetanseplaner ennå.")).toBeNull();
+    expect(screen.queryByRole("heading")).toBeNull();
+  });
+
   it("shows a forbidden error without a retry action", () => {
     hook.data = { phase: "error", reason: "forbidden" };
     render(<CompetencePlanSection teamId="team-1" />);

@@ -44,6 +44,14 @@
   --chart-4: #b4345e;
   --chart-5: #4b5870;
   --chart-6: #2e7d3f;
+  /* Roadmap and project timelines (Prosjektplan, prosjektdeltakelse). Cool, saturated-but-quiet hues, no brown or gold:
+     teal, blue, violet, fuchsia, slate, green. Kept apart from the chart tokens so charts elsewhere do not change. */
+  --timeline-1: #0f766e;
+  --timeline-2: #1d4ed8;
+  --timeline-3: #6d28d9;
+  --timeline-4: #a21caf;
+  --timeline-5: #475569;
+  --timeline-6: #15803d;
 }
 
 [data-theme="dark"] {
@@ -80,6 +88,12 @@
   --chart-4: #f08aa6;
   --chart-5: #a3b1c6;
   --chart-6: #6cc48f;
+  --timeline-1: #5eead4;
+  --timeline-2: #93c5fd;
+  --timeline-3: #c4b5fd;
+  --timeline-4: #f0abfc;
+  --timeline-5: #cbd5e1;
+  --timeline-6: #86efac;
 }
 
 /* Dark variants follow the explicit theme, not the operating system. */
@@ -126,6 +140,12 @@
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
   --color-chart-6: var(--chart-6);
+  --color-timeline-1: var(--timeline-1);
+  --color-timeline-2: var(--timeline-2);
+  --color-timeline-3: var(--timeline-3);
+  --color-timeline-4: var(--timeline-4);
+  --color-timeline-5: var(--timeline-5);
+  --color-timeline-6: var(--timeline-6);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }

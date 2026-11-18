@@ -41,6 +41,7 @@ const EXPECTED_URLS = [
   "/teams/[teamId]/skills",
   "/teams/[teamId]/surveys",
   "/teams/[teamId]/systems",
+  "/teams/[teamId]/systems/[systemId]",
 ];
 
 function listPages(dir: string, found: string[] = []) {

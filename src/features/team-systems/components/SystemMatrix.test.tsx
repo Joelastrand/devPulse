@@ -8,8 +8,11 @@ import { systemsCopy } from "../copy";
 const fetchTeamSystemsMock = vi.fn();
 const fetchAssignableMembersMock = vi.fn();
 
-vi.mock("next/navigation", () => ({
-  usePathname: () => "/teams/team-1/systems",
+vi.mock("next/navigation", async () => (await import("./systems-navigation-test-helper")).navigationMock);
+
+vi.mock("../client/system-favorites-gateway", () => ({
+  fetchSystemFavorites: vi.fn(async () => ({ status: "ok", systemIds: [] })),
+  setSystemFavorite: vi.fn(),
 }));
 
 vi.mock("../../teams/client/teams-overview-gateway", () => ({
@@ -40,6 +43,7 @@ vi.mock("../client/team-systems-gateway", () => ({
 }));
 
 const { TeamSystemsPage } = await import("./TeamSystemsPage");
+const { TeamSystemDetailPage } = await import("./TeamSystemDetailPage");
 
 const NOT_ASSESSED = { value: "ikke_vurdert" as const, note: null, assessedAt: null };
 
@@ -128,41 +132,29 @@ describe("Systemoversikt matrix (reference 16)", () => {
     await renderWith([system({ name: "Kontroll", backstageUrl: "https://backstage.example.test/kontroll" })]);
     const link = within(matrix()).getByRole("link", { name: "Åpne Kontroll i Backstage (åpnes i ny fane)" });
     expect(link.getAttribute("href")).toBe("https://backstage.example.test/kontroll");
-    expect(within(matrix()).getByRole("button", { name: "Rediger Kontroll" })).toBeTruthy();
+    expect(within(matrix()).getByRole("link", { name: "Detaljer: Kontroll" }).getAttribute("href")).toBe("/teams/team-1/systems/sys-Kontroll");
   });
 
   it("omits the edit action for readers without edit rights", async () => {
     await renderWith([system({ name: "Kontroll" })], false);
-    expect(screen.queryByRole("button", { name: "Rediger Kontroll" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Rediger/ })).toBeNull();
+    expect(within(matrix()).getByRole("link", { name: "Detaljer: Kontroll" })).toBeTruthy();
   });
 });
 
-describe("Shared explanation dialog (Forklaring)", () => {
-  it("opens an accessible dialog that explains all seven attributes and the four statuses", async () => {
+describe("Quality explanations (Forklaring button removed)", () => {
+  it("has no separate Forklaring button above the matrix", async () => {
     await renderWith([system({ name: "Kontroll" })]);
-    await userEvent.click(screen.getByRole("button", { name: "Forklaring" }));
-
-    const dialog = screen.getByRole("dialog", { name: systemsCopy.explanation.title });
-    expect(dialog.getAttribute("aria-modal")).toBe("true");
-    for (const label of ["Tilgjengelighet", "Pålitelighet", "Vedlikehold og endring", "Sikkerhet", "Testbarhet", "Utrullingsbarhet", "Observerbarhet"]) {
-      expect(within(dialog).getByText(label)).toBeTruthy();
-    }
-    for (const status of ["God", "Trenger oppfølging", "Kritisk", "Ikke vurdert"]) {
-      expect(within(dialog).getByText(status)).toBeTruthy();
-    }
-    expect(within(dialog).getByText(systemsCopy.explanation.intro)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Forklaring" })).toBeNull();
   });
 
-  it("closes on Escape and returns focus to the trigger", async () => {
+  it("keeps the status meanings in the Kvalitetsegenskaper section", async () => {
     await renderWith([system({ name: "Kontroll" })]);
-    const trigger = screen.getByRole("button", { name: "Forklaring" });
-    trigger.focus();
-    await userEvent.click(trigger);
-    expect(screen.getByRole("dialog")).toBeTruthy();
-
-    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
-    expect(screen.queryByRole("dialog")).toBeNull();
-    expect(document.activeElement).toBe(trigger);
+    const panel = screen.getByRole("region", { name: systemsCopy.qualityPanel.title });
+    expect(within(panel).getByText(systemsCopy.explanation.statusTitle)).toBeTruthy();
+    for (const status of ["God", "Trenger oppfølging", "Kritisk", "Ikke vurdert"]) {
+      expect(within(panel).getByText(status)).toBeTruthy();
+    }
   });
 });
 
@@ -179,9 +171,12 @@ describe("Search field (icon alignment structure)", () => {
 });
 
 describe("Progressive-disclosure assessment rows (reference 17)", () => {
+  // Editing lives on the system detail page now, so these tests open the editor there.
   async function openEditForm(systems: TeamSystemView[]) {
-    await renderWith(systems);
-    await userEvent.click(within(matrix()).getByRole("button", { name: "Rediger Kontroll" }));
+    fetchTeamSystemsMock.mockResolvedValue(okResult(systems));
+    fetchAssignableMembersMock.mockResolvedValue({ status: "ok", members: [] });
+    render(<TeamSystemDetailPage teamId="team-1" systemId={systems[0].systemId} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Rediger: Kontroll" }));
     await screen.findByRole("heading", { name: systemsCopy.form.editTitle });
   }
 

@@ -105,6 +105,17 @@ describe("TeamRouteNav", () => {
     expect(overview.hasAttribute("aria-current")).toBe(false);
   });
 
+  it("keeps Systemoversikt current on a system detail page, and only there", () => {
+    const { systems, overview } = renderAt("/teams/team-1/systems/sys-42");
+    expect(systems.getAttribute("aria-current")).toBe("page");
+    expect(overview.hasAttribute("aria-current")).toBe(false);
+  });
+
+  it("does not treat a similarly named path as Systemoversikt", () => {
+    const { systems } = renderAt("/teams/team-1/systemsX");
+    expect(systems.hasAttribute("aria-current")).toBe(false);
+  });
+
   it.each(["/teams/team-1/forum/t1", "/teams/team-1/roadmap/extra", "/teams/team-1/results/extra", "/teams/other", "/unknown", null])(
     "marks nothing current on %s",
     (pathname) => {

@@ -67,7 +67,6 @@ export const teamsCopy = {
   results: {
     title: "Resultater",
     description: "Undersøkelser, trender og kompetansestiger for teamet.",
-    backToOverview: "Tilbake til Oversikt",
     loading: "Laster resultater…",
     forbidden: "Du har ikke tilgang til resultatene for dette teamet.",
     error: "Resultatene kunne ikke lastes. Prøv igjen senere.",

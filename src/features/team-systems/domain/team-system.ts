@@ -166,10 +166,16 @@ export function parseOptionalText(input: unknown, max: number): string | null | 
 export const SYSTEM_TYPES = ["internt", "eksternt", "uavklart"] as const;
 export type SystemType = (typeof SYSTEM_TYPES)[number];
 
+/**
+ * Short labels for the internal/external classification. `systemType` is the single field for this: `internt` is intended
+ * for internal organizational use, `eksternt` for external parties, and `uavklart` ("Ikke vurdert") means not yet
+ * established, which includes every legacy record without the field. It is a business classification, not a measure of
+ * network exposure, and it is never inferred from a name or description.
+ */
 export const SYSTEM_TYPE_LABELS: Record<SystemType, string> = {
-  internt: "Internt system",
-  eksternt: "Eksternt produkt eller tjeneste",
-  uavklart: "Uavklart",
+  internt: "Internt",
+  eksternt: "Eksternt",
+  uavklart: "Ikke vurdert",
 };
 
 export const BUSINESS_CRITICALITIES = ["lav", "middels", "hoy", "kritisk", "ikke_vurdert"] as const;

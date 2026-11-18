@@ -33,6 +33,9 @@ export interface PersonalDataErasurePort {
   /** I-19: team-skill rating document ids whose stored `uid` is the erased person, at most `limit`. */
   teamSkillAssessmentIds(uid: string, limit: number): Promise<string[]>;
   deleteTeamSkillAssessment(uid: string, assessmentId: string): Promise<void>;
+  /** I-20: the uid's personal system favorite document ids (one per system id), at most `limit`. Path-only, no decryption. */
+  systemFavoriteIds(uid: string, limit: number): Promise<string[]>;
+  deleteSystemFavorite(uid: string, systemId: string): Promise<void>;
 }
 
 export interface PersonalDataStepDeps {
@@ -93,6 +96,15 @@ export async function runPersonalDataBatch(deps: PersonalDataStepDeps, uid: stri
   if (teamAssessments.length > 0) {
     for (const assessmentId of teamAssessments) {
       await port.deleteTeamSkillAssessment(uid, assessmentId);
+    }
+    return "more";
+  }
+
+  // I-20 (Phase 2F.1): personal system favorites. Path-only deletion; the sealed team id is never opened here.
+  const favorites = await port.systemFavoriteIds(uid, maxWrites);
+  if (favorites.length > 0) {
+    for (const systemId of favorites) {
+      await port.deleteSystemFavorite(uid, systemId);
     }
     return "more";
   }

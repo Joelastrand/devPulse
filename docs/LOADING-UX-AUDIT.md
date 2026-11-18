@@ -1080,3 +1080,49 @@ Existing tests already cover: a participant view with no owner controls, a not-f
 
 - During an account switch the page briefly shows the signed-out prompt (the early signal sets the state to signed out) until B's token arrives. This shows no protected data, but it is a visible state change.
 - The first-read skeleton is generic, so its shape differs from both loaded views. Its real fit is unverified without a browser check.
+
+## Phase 2F — System overview, detail route, loading and timeline polish (partial)
+
+Scope: the seven requirements of the Phase 2F brief. This section records what is implemented, what is not, and why. Implemented items are covered by focused tests; browser and emulator verification were not performed.
+
+### Implemented
+
+- **Kompetanseplan loading.** The text-only `Laster kompetanseplanen…` branch is now `CompetencePlanSkeleton`: a placeholder for the heading and intro, the link row, the overview card, and two plan cards with their progress rows. It reuses `LoadingRegion`, `Skeleton` and `SkeletonCard`; one `role="status"` announces the Norwegian label, and the blocks are `aria-hidden`. No looping animation. Fetching, permissions and calculations are unchanged.
+- **Systemoversikt progressive disclosure.** The list shows the first 10 matches and states `Viser X av Y systemer`. `Vis flere` adds 10 at a time. Any filter change returns to the first page. Search and the four existing filters still combine as before.
+- **Filter summary and reset.** When any filter differs from its default, the filter row shows `N aktive filtre` and `Nullstill filtre`. The no-match state also offers `Nullstill filtre`.
+- **Dedicated system detail page.** `/teams/[teamId]/systems/[systemId]` (`app/(app)/teams/[teamId]/systems/[systemId]/page.tsx`). It reads the team's list through the existing authorized gateway and shows the matching system. A system id outside the team's list, or a missing one, shows a not-found state, so no other team's data is revealed. It shows name, description, system classification (existing `systemType`, `businessCriticality`, `userReach`), knowledge risk, Backstage link and the seven quality assessments. Authorized editors can edit through the shared `SystemEditorPanel`, which is the same form and gateway the list used.
+- **Navigation.** `Tilbake til systemoversikt` returns to the list. Systemoversikt stays highlighted on its detail pages. This is the only longest-prefix match in `TeamRouteNav`; every other tab still matches exactly.
+- **Table action.** The row's `Rediger` button is replaced by a `Detaljer` link with a chevron icon, a 40px minimum touch target on small screens, and an accessible name that names the system. The whole row is not clickable.
+- **Forklaring removed.** The `Forklaring` button and its dialog are removed. Its status meanings (God, Trenger oppfølging, Kritisk, Ikke vurdert) now appear as a legend inside the existing `Kvalitetsegenskaper (fokus for teamet)` panel, so no explanation is lost. The per-attribute info buttons are unchanged.
+- **Redundant back links.** `Tilbake til Oversikt` is removed from `Resultater og trender` and `Undersøkelser`. The page headers and spacing are otherwise unchanged. The in-workspace `Tilbake til oversikten` inside the survey workspace is a different control and is left as it is.
+- **Timeline colours.** The Prosjektplan Gantt and the teammember participation timeline both took their bar and dot colours from the shared `chart-*` tokens. Those tokens are also used by results and skill charts, so they were not changed. Instead, six `--timeline-1..6` tokens were added to `app/globals.css` (teal, blue, violet, fuchsia, slate, green, with dark-theme values), and `PROJECT_TONE_CLASSES` maps to them. The colour identifies a project only and encodes no status. Both views share the same mapping, so a project keeps its colour across them. Dashed outlines, text labels and gridlines are unchanged.
+
+### Not implemented
+
+- **Internal/external classification (`systemExposure`).** Not implemented. The existing `systemType` already has the values `internt` (`Internt system`) and `eksternt` (`Eksternt produkt eller tjeneste`), with help text that describes intended audience. A separate field with the same meaning would duplicate it, and the brief says not to overload existing fields. This is an open product decision: either reuse `systemType` for the Plassering/Eksponering filter and add the `Ikke vurdert` option, or define a different meaning for the new field.
+- **Per-user favourites.** Not implemented. Persisting favourites needs a new server-side store, which in turn needs an erasure classification (`docs/DATA-MODEL.md`) and a decision on encryption of the favourite list. Neither was decided, so no store was added.
+- **Filter state across navigation.** Search, filters and the page size reset when a detail page is left, because they are component state. The brief's preferred URL-parameter approach was not added.
+- **Browser and emulator verification.** Not performed. No visual, mobile, theme or 30-system screenshot claim is made.
+
+### Tests added or changed
+
+- `TeamSystemsPage.paging.test.tsx`: 10-of-30 first page, `Vis flere`, no control when all shown, search combined with paging, active-filter count and reset, and the no-match reset.
+- `TeamSystemDetailPage.test.tsx`: loaded content, back link, missing system, forbidden, retry, edit control only with edit rights, and the shared editor opening.
+- `SystemMatrix.test.tsx`: the Forklaring button is gone; status meanings stay in the Kvalitetsegenskaper panel; the Detaljer link targets the detail route; the editing tests now open the editor on the detail page.
+- `TeamRouteNav.test.tsx`: Systemoversikt is current on a detail page and not on a similarly named path.
+- `CompetencePlanSection.test.tsx`: skeleton announced once, decorative, no empty state.
+- `results-route.test.tsx`: the removed back link is not rendered.
+- `project-presentation.test.ts`: tones map to timeline tokens; no brown or gold hue (20°–65°) in either theme.
+- `token-contrast.test.ts`: timeline tokens are checked for non-text contrast on the surface in both themes.
+
+### Checks run
+
+- `npx tsc --noEmit`: exit 0.
+- ESLint on the changed areas: 0 errors. 13 warnings, all in test files, most of them predating this phase.
+- `pnpm test:standard --files` on the changed areas: 157 files passed, 4 skipped; 2397 passed, 4 expected fail, 24 skipped; exit 0.
+- `pnpm test:full`: first run had one failure, `app/route-groups.test.ts`, because the complete page-URL list did not include the new detail route. The list was updated, and the rerun passed: 680 files passed, 14 skipped; 10,964 passed, 4 expected fail, 76 skipped; exit 0. The previous baseline was 10,933 passing, 4 expected fail, 76 skipped.
+
+### Remaining limitations
+
+- Favourites, classification and the Plassering filter are open, as listed above.
+- Layout and colour changes were not checked in a browser, so contrast is verified only by the token test, and no screenshot exists.

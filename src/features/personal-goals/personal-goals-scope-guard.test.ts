@@ -87,6 +87,11 @@ const APPROVED_COLLECTION_REFERENCES = [
   "src/features/account-erasure/server/erasure-adapters-conversations.test.ts",
   "src/features/account-erasure/server/erasure-end-to-end.test.ts",
   "src/features/account-erasure/server/production-composition.test.ts",
+  // Phase 2F.1 (personal system favorites, I-20): the favorites store names the owner subtree `userDevelopment/{uid}/systemFavorites`
+  // to read and write the caller's own favorite documents. It stores only a sealed team id and a timestamp, and is reached only
+  // through the authenticated favorites route. It is not a personal-goals access path and grants no goal access.
+  "src/features/team-systems/server/system-favorites.ts",
+  "src/features/team-systems/server/system-favorites.test.ts",
 ];
 /**
  * Account erasure (erasure-only persistence metadata, file-exact): the inventory registry is the one place that names the
