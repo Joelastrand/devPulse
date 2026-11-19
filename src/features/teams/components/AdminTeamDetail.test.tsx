@@ -30,6 +30,49 @@ const updateAdminTeamSkillProgressMock = vi.fn();
 const stopAdminTeamSkillTrackingMock = vi.fn();
 const fetchTeamSkillsMock = vi.fn();
 
+/**
+ * Minimal App Router stand-in: `push`/`replace` update the query that `useSearchParams` returns, so the tab shell
+ * re-renders from the URL the way it does in the browser. Tests reset it before each case.
+ */
+const routing = vi.hoisted(() => {
+  let snapshot = new URLSearchParams("");
+  const listeners = new Set<() => void>();
+  function setSearch(query: string) {
+    snapshot = new URLSearchParams(query);
+    for (const listener of listeners) listener();
+  }
+  function navigate(href: string) {
+    setSearch(href.split("?")[1] ?? "");
+  }
+  return {
+    setSearch,
+    getSnapshot: () => snapshot,
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    push: vi.fn((href: string) => navigate(href)),
+    replace: vi.fn((href: string) => navigate(href)),
+  };
+});
+
+vi.mock("next/navigation", async () => {
+  const { useSyncExternalStore } = await import("react");
+  return {
+    usePathname: () => "/admin/teams/team-1",
+    useRouter: () => ({ push: routing.push, replace: routing.replace }),
+    useSearchParams: () => useSyncExternalStore(routing.subscribe, routing.getSnapshot),
+  };
+});
+
+beforeEach(() => {
+  routing.setSearch("");
+  routing.push.mockClear();
+  routing.replace.mockClear();
+});
+
 vi.mock("../../auth/client/auth-client", () => ({
   observeIdToken: observeIdTokenMock,
 }));
@@ -90,6 +133,43 @@ function subscribingWith(token: string | null) {
 
 function flushMicrotasks() {
   return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/**
+ * Member actions live in a disclosure per row ("Flere handlinger for <name>"). The menu closes when an entry is chosen,
+ * so after choosing "Fjern fra teamet" only the inline confirmation remains with that label.
+ */
+async function openFirstMemberActions(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getAllByRole("button", { name: /^flere handlinger for/i })[0]);
+}
+
+async function removeFirstMemberViaMenu(user: ReturnType<typeof userEvent.setup>) {
+  await openFirstMemberActions(user);
+  await user.click(screen.getByRole("button", { name: /^fjern fra teamet$/i }));
+  await user.click(screen.getByRole("button", { name: /^fjern fra teamet$/i }));
+}
+
+/** A tracked competency area keeps its stage selector and stop action behind "Vis detaljer – <area>". */
+async function expandSkillTree(user: ReturnType<typeof userEvent.setup>, areaName: string) {
+  await user.click(await screen.findByRole("button", { name: new RegExp(`^vis detaljer – ${areaName}$`, "i") }));
+}
+
+/** A closed survey's "Slett/arkiver" is an entry in its "Flere handlinger – <title>" menu. */
+async function chooseSurveyRemoval(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: /^flere handlinger – /i }));
+  await user.click(screen.getByRole("button", { name: /^slett\/arkiver$/i }));
+}
+
+/** Challenge rows keep their actions in "Flere handlinger – <text>", with the text shortened as the component does. */
+function challengeMenuName(text: string): string {
+  const trimmed = text.trim();
+  const short = trimmed.length > 40 ? `${trimmed.slice(0, 40).trimEnd()}…` : trimmed;
+  return `Flere handlinger – ${short}`;
+}
+
+async function chooseChallengeAction(user: ReturnType<typeof userEvent.setup>, text: string, action: "Arkiver" | "Slett") {
+  await user.click(screen.getByRole("button", { name: challengeMenuName(text) }));
+  await user.click(screen.getByRole("button", { name: action }));
 }
 
 function mockOk({
@@ -243,7 +323,7 @@ describe("AdminTeamDetail", () => {
     await screen.findByText(/ingen ventende invitasjoner/i);
 
     await user.type(screen.getByLabelText(/e-postadresse/i), "new@example.com");
-    await user.click(screen.getByRole("button", { name: /^inviter$/i }));
+    await user.click(screen.getByRole("button", { name: /^send invitasjon$/i }));
 
     expect(inviteTeamMemberMock).toHaveBeenCalledWith("a-token", "team-1", "new@example.com");
     expect(fetchTeamInvitationsMock).toHaveBeenCalledTimes(2);
@@ -259,7 +339,7 @@ describe("AdminTeamDetail", () => {
     await screen.findByText(/ingen ventende invitasjoner/i);
 
     await user.type(screen.getByLabelText(/e-postadresse/i), "new@example.com");
-    await user.click(screen.getByRole("button", { name: /^inviter$/i }));
+    await user.click(screen.getByRole("button", { name: /^send invitasjon$/i }));
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/deaktivert/i);
@@ -277,7 +357,7 @@ describe("AdminTeamDetail", () => {
 
     const emailField = screen.getByLabelText(/e-postadresse/i);
     await user.type(emailField, "new@example.com");
-    await user.click(screen.getByRole("button", { name: /^inviter$/i }));
+    await user.click(screen.getByRole("button", { name: /^send invitasjon$/i }));
 
     const alert = await screen.findByRole("alert");
     expect(emailField.getAttribute("aria-invalid")).toBe("true");
@@ -311,7 +391,7 @@ describe("AdminTeamDetail", () => {
     render(<AdminTeamDetail teamId="team-1" />);
     await screen.findByText("member@example.com");
 
-    await user.click(screen.getByRole("button", { name: /fjern/i }));
+    await removeFirstMemberViaMenu(user);
 
     expect(removeAdminTeamMemberMock).toHaveBeenCalledWith("a-token", "team-1", "uid-1");
     expect(fetchTeamMembersMock).toHaveBeenCalledTimes(2);
@@ -521,12 +601,12 @@ describe("AdminTeamDetail", () => {
     render(<AdminTeamDetail teamId="team-1" />);
     await screen.findByText("member@example.com");
 
-    const button = screen.getByRole("button", { name: /fjern/i });
-    await user.click(button);
-    expect(button.hasAttribute("disabled")).toBe(true);
-
-    await user.click(button);
-    await user.click(button);
+    await removeFirstMemberViaMenu(user);
+    // While the removal is in flight the row's actions trigger is disabled, so repeated clicks cannot fire a second request.
+    const trigger = screen.getByRole("button", { name: /^flere handlinger for/i });
+    expect(trigger.hasAttribute("disabled")).toBe(true);
+    await user.click(trigger);
+    await user.click(trigger);
 
     expect(removeAdminTeamMemberMock).toHaveBeenCalledTimes(1);
 
@@ -978,7 +1058,7 @@ describe("AdminTeamDetail survey management", () => {
     render(<AdminTeamDetail teamId="team-1" />);
     await screen.findByRole("link", { name: "/survey/survey-1" });
 
-    await user.click(screen.getByRole("button", { name: /slett\/arkiver/i }));
+    await chooseSurveyRemoval(user);
     await screen.findByText(/er du sikker/i);
     expect(deleteOrArchiveAdminSurveyMock).not.toHaveBeenCalled();
 
@@ -1008,7 +1088,7 @@ describe("AdminTeamDetail survey management", () => {
     render(<AdminTeamDetail teamId="team-1" />);
     await screen.findByRole("link", { name: "/survey/survey-1" });
 
-    await user.click(screen.getByRole("button", { name: /slett\/arkiver/i }));
+    await chooseSurveyRemoval(user);
     await user.click(screen.getByRole("button", { name: /bekreft fjerning/i }));
 
     expect(deleteOrArchiveAdminSurveyMock).toHaveBeenCalledWith("a-token", "team-1", "survey-1");
@@ -1207,7 +1287,7 @@ describe("AdminTeamDetail stale mutation races", () => {
     const { rerender } = render(<AdminTeamDetail teamId="team-a" />);
     await screen.findByText("member-a@example.com");
 
-    await user.click(screen.getByRole("button", { name: /fjern/i }));
+    await removeFirstMemberViaMenu(user);
     expect(removeAdminTeamMemberMock).toHaveBeenCalledWith("a-token", "team-a", "uid-1");
 
     // Route changes to team B while team A's remove-member call is still
@@ -1497,7 +1577,7 @@ describe("AdminTeamDetail stale mutation races", () => {
     render(<AdminTeamDetail teamId="team-1" />);
     await screen.findByText("A challenge");
 
-    await user.click(screen.getByRole("button", { name: /^arkiver –/i }));
+    await chooseChallengeAction(user, "A challenge", "Arkiver");
 
     // Sign out while the archive call is still in flight.
     authCallback(null);
@@ -1594,12 +1674,16 @@ describe("AdminTeamDetail challenge management", () => {
   });
 
   it("renders active and archived challenges, active including both open and resolved", async () => {
+    const user = userEvent.setup();
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     mockOk({ challenges: [OPEN_CHALLENGE, RESOLVED_CHALLENGE, ARCHIVED_CHALLENGE] });
 
     render(<AdminTeamDetail teamId="team-1" />);
 
     await screen.findByText(OPEN_CHALLENGE.text);
+    // The default view shows open challenges only; "Alle" reveals the resolved and archived ones.
+    expect(screen.queryByText(RESOLVED_CHALLENGE.text)).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Alle" }));
     expect(screen.getByText(RESOLVED_CHALLENGE.text)).toBeTruthy();
     // Archived remains visible to the admin — the key difference from the
     // member-facing team page.
@@ -1646,7 +1730,7 @@ describe("AdminTeamDetail challenge management", () => {
     render(<AdminTeamDetail teamId="team-1" />);
     await screen.findByText(OPEN_CHALLENGE.text);
 
-    await user.click(screen.getByRole("button", { name: /^arkiver –/i }));
+    await chooseChallengeAction(user, OPEN_CHALLENGE.text, "Arkiver");
 
     expect(archiveAdminChallengeMock).toHaveBeenCalledWith("a-token", "team-1", "challenge-open");
     expect(fetchAdminChallengesMock).toHaveBeenCalledTimes(2);
@@ -1659,9 +1743,10 @@ describe("AdminTeamDetail challenge management", () => {
     archiveAdminChallengeMock.mockResolvedValue({ ok: true });
 
     render(<AdminTeamDetail teamId="team-1" />);
+    // Resolved challenges are not in the default "Åpne" view, so select "Alle" first.
+    await user.click(await screen.findByRole("button", { name: "Alle" }));
     await screen.findByText(RESOLVED_CHALLENGE.text);
-
-    await user.click(screen.getByRole("button", { name: /^arkiver –/i }));
+    await chooseChallengeAction(user, RESOLVED_CHALLENGE.text, "Arkiver");
 
     expect(archiveAdminChallengeMock).toHaveBeenCalledWith("a-token", "team-1", "challenge-resolved");
   });
@@ -1674,7 +1759,7 @@ describe("AdminTeamDetail challenge management", () => {
     render(<AdminTeamDetail teamId="team-1" />);
     await screen.findByText(OPEN_CHALLENGE.text);
 
-    await user.click(screen.getByRole("button", { name: /^slett –/i }));
+    await chooseChallengeAction(user, OPEN_CHALLENGE.text, "Slett");
     const prompt = await screen.findByText(/slettes permanent/i);
     expect(prompt).toBeTruthy();
     expect(deleteAdminChallengeMock).not.toHaveBeenCalled();
@@ -1693,7 +1778,7 @@ describe("AdminTeamDetail challenge management", () => {
     render(<AdminTeamDetail teamId="team-1" />);
     await screen.findByText(OPEN_CHALLENGE.text);
 
-    await user.click(screen.getByRole("button", { name: /^slett –/i }));
+    await chooseChallengeAction(user, OPEN_CHALLENGE.text, "Slett");
     await screen.findByText(/slettes permanent/i);
     await user.click(screen.getByRole("button", { name: /bekreft sletting/i }));
 
@@ -1716,14 +1801,16 @@ describe("AdminTeamDetail challenge management", () => {
     render(<AdminTeamDetail teamId="team-1" />);
     await screen.findByText(OPEN_CHALLENGE.text);
 
+    // The resolved row is outside the default "Åpne" view, so widen the filter to show both rows.
+    await user.click(screen.getByRole("button", { name: "Alle" }));
     const openRow = screen.getByText(OPEN_CHALLENGE.text).closest("li")!;
     const resolvedRow = screen.getByText(RESOLVED_CHALLENGE.text).closest("li")!;
 
     await user.click(within(openRow).getByRole("button", { name: /marker som løst/i }));
 
     expect(within(openRow).getByRole("button", { name: /markerer/i }).hasAttribute("disabled")).toBe(true);
-    const resolvedArchiveButton = within(resolvedRow).getByRole("button", { name: /^arkiver –/i });
-    expect(resolvedArchiveButton.hasAttribute("disabled")).toBe(false);
+    const resolvedMenuTrigger = within(resolvedRow).getByRole("button", { name: /^flere handlinger –/i });
+    expect(resolvedMenuTrigger.hasAttribute("disabled")).toBe(false);
 
     resolvePending({ ok: true });
     await flushMicrotasks();
@@ -1830,7 +1917,9 @@ describe("AdminTeamDetail skill tracking (TASK-006)", () => {
     // Rendered as already-tracked, at its true persisted stage, purely from
     // this fresh render's own read — no "start sporing" action was ever
     // clicked in this session.
-    const select = await screen.findByRole("combobox", { name: /sett stadium – containere/i });
+    const user = userEvent.setup();
+    await expandSkillTree(user, "containere");
+    const select = screen.getByRole("combobox", { name: /sett stadium – containere/i });
     expect((select as HTMLSelectElement).value).toBe("node-1");
     expect(screen.queryByRole("button", { name: /start sporing – containere/i })).toBeNull();
     expect(fetchTeamSkillsMock).toHaveBeenCalledWith("a-token", "team-1");
@@ -1848,7 +1937,8 @@ describe("AdminTeamDetail skill tracking (TASK-006)", () => {
 
     render(<AdminTeamDetail teamId="team-1" />);
 
-    const select = await screen.findByRole("combobox", { name: /sett stadium – containere/i });
+    await expandSkillTree(user, "containere");
+    const select = screen.getByRole("combobox", { name: /sett stadium – containere/i });
     await user.selectOptions(select, "node-1");
     expect(updateAdminTeamSkillProgressMock).toHaveBeenCalledWith("a-token", "team-1", "tree-1", "node-1");
     expect(startAdminTeamSkillTrackingMock).not.toHaveBeenCalled();
@@ -1872,7 +1962,7 @@ describe("AdminTeamDetail skill tracking (TASK-006)", () => {
 
     render(<AdminTeamDetail teamId="team-1" />);
 
-    await screen.findByRole("combobox", { name: /sett stadium – containere/i });
+    await screen.findByRole("button", { name: /vis detaljer – containere/i });
     // The already-tracked tree offers no "start" action; only the genuinely
     // untracked tree does.
     expect(screen.queryByRole("button", { name: /start sporing – containere/i })).toBeNull();
@@ -1908,7 +1998,7 @@ describe("AdminTeamDetail skill tracking (TASK-006)", () => {
     await user.click(screen.getByRole("button", { name: /start sporing – containere/i }));
 
     expect(startAdminTeamSkillTrackingMock).toHaveBeenCalledWith("a-token", "team-1", "tree-1");
-    await screen.findByRole("combobox", { name: /sett stadium – containere/i });
+    await screen.findByRole("button", { name: /vis detaljer – containere/i });
     expect(screen.queryByRole("button", { name: /start sporing – containere/i })).toBeNull();
     // Other sections remain untouched by this local state update.
     expect(screen.getByText("member@example.com")).toBeTruthy();
@@ -1924,7 +2014,8 @@ describe("AdminTeamDetail skill tracking (TASK-006)", () => {
     render(<AdminTeamDetail teamId="team-1" />);
     await user.click(await screen.findByRole("button", { name: /start sporing – containere/i }));
 
-    const select = await screen.findByRole("combobox", { name: /sett stadium – containere/i });
+    await expandSkillTree(user, "containere");
+    const select = screen.getByRole("combobox", { name: /sett stadium – containere/i });
     await user.selectOptions(select, "node-1");
     expect(updateAdminTeamSkillProgressMock).toHaveBeenCalledWith("a-token", "team-1", "tree-1", "node-1");
 
@@ -1942,6 +2033,7 @@ describe("AdminTeamDetail skill tracking (TASK-006)", () => {
     render(<AdminTeamDetail teamId="team-1" />);
     await user.click(await screen.findByRole("button", { name: /start sporing – containere/i }));
 
+    await expandSkillTree(user, "containere");
     await user.click(await screen.findByRole("button", { name: /stopp sporing – containere/i }));
 
     expect(stopAdminTeamSkillTrackingMock).toHaveBeenCalledWith("a-token", "team-1", "tree-1");
@@ -2010,11 +2102,21 @@ describe("AdminTeamDetail — member display names and team lead role", () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     mockOk({ teams: [{ teamId: "team-1", name: "Platform", status: team }], members });
     render(<AdminTeamDetail teamId="team-1" />);
-    await screen.findByText("Medlemmer");
+    await screen.findByRole("heading", { name: "Medlemmer" });
   }
 
   function rowOf(email: string): HTMLElement {
     return screen.getByText(email).closest("li") as HTMLElement;
+  }
+
+  /** Opens a member row's actions disclosure. Entries are read from inside that row only. */
+  async function openRowActions(user: ReturnType<typeof userEvent.setup>, row: HTMLElement) {
+    await user.click(within(row).getByRole("button", { name: /^flere handlinger for/i }));
+  }
+
+  async function chooseRowAction(user: ReturnType<typeof userEvent.setup>, row: HTMLElement, action: string) {
+    await openRowActions(user, row);
+    await user.click(within(row).getByRole("button", { name: action }));
   }
 
   it("shows the self-set display name as the primary text with the e-mail beside it", async () => {
@@ -2062,11 +2164,12 @@ describe("AdminTeamDetail — member display names and team lead role", () => {
       members: [{ uid: "uid-1", email: "a@example.com", displayName: null, role: "teamadmin" }],
     });
 
-    await user.click(screen.getByRole("button", { name: "Gjør til teamadmin" }));
+    await chooseRowAction(user, rowOf("a@example.com"), "Gjør til teamadmin");
 
     expect(setAdminTeamMemberRoleMock).toHaveBeenCalledWith("a-token", "team-1", "uid-1", "teamadmin");
     expect(await screen.findByText("Teamadmin")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Gjør til vanlig medlem" })).toBeTruthy();
+    await openRowActions(user, rowOf("a@example.com"));
+    expect(within(rowOf("a@example.com")).getByRole("button", { name: "Gjør til vanlig medlem" })).toBeTruthy();
   });
 
   it("demotes a lead with exactly role 'member'", async () => {
@@ -2081,10 +2184,11 @@ describe("AdminTeamDetail — member display names and team lead role", () => {
       members: [{ uid: "uid-1", email: "a@example.com", displayName: "Lea", role: "member" }],
     });
 
-    await user.click(screen.getByRole("button", { name: "Gjør til vanlig medlem" }));
+    await chooseRowAction(user, rowOf("a@example.com"), "Gjør til vanlig medlem");
 
     expect(setAdminTeamMemberRoleMock).toHaveBeenCalledWith("a-token", "team-1", "uid-1", "member");
-    expect(await screen.findByRole("button", { name: "Gjør til teamadmin" })).toBeTruthy();
+    await openRowActions(user, rowOf("a@example.com"));
+    expect(within(rowOf("a@example.com")).getByRole("button", { name: "Gjør til teamadmin" })).toBeTruthy();
     expect(screen.queryByText("Teamadmin")).toBeNull();
   });
 
@@ -2095,15 +2199,16 @@ describe("AdminTeamDetail — member display names and team lead role", () => {
     await renderWith([{ uid: "uid-1", email: "a@example.com", displayName: null, role: "member" }]);
     const row = rowOf("a@example.com");
 
-    await user.click(within(row).getByRole("button", { name: "Gjør til teamadmin" }));
-    const saving = within(row).getByRole("button", { name: "Lagrer…" }) as HTMLButtonElement;
-    await user.click(saving);
-    await user.click(within(row).getByRole("button", { name: "Fjern" }));
+    await chooseRowAction(user, row, "Gjør til teamadmin");
+    // While the role change is in flight the row shows its pending status and its actions trigger is disabled.
+    expect(within(row).getByText("Lagrer…")).toBeTruthy();
+    const trigger = within(row).getByRole("button", { name: /^flere handlinger for/i }) as HTMLButtonElement;
+    expect(trigger.disabled).toBe(true);
+    await user.click(trigger);
+    expect(within(row).queryByRole("button", { name: "Fjern fra teamet" })).toBeNull();
 
     expect(setAdminTeamMemberRoleMock).toHaveBeenCalledTimes(1);
     expect(removeAdminTeamMemberMock).not.toHaveBeenCalled();
-    expect(saving.disabled).toBe(true);
-    expect((within(row).getByRole("button", { name: "Fjern" }) as HTMLButtonElement).disabled).toBe(true);
 
     resolveRole({ ok: false, error: "persistence_failed" });
     await flushMicrotasks();
@@ -2114,7 +2219,7 @@ describe("AdminTeamDetail — member display names and team lead role", () => {
     setAdminTeamMemberRoleMock.mockResolvedValue({ ok: false, error: "persistence_failed" });
     await renderWith([{ uid: "uid-1", email: "a@example.com", displayName: null, role: "member" }]);
 
-    await user.click(screen.getByRole("button", { name: "Gjør til teamadmin" }));
+    await chooseRowAction(user, rowOf("a@example.com"), "Gjør til teamadmin");
 
     expect((await screen.findByRole("alert")).textContent).toMatch(/noe gikk galt/i);
     expect(screen.queryByText("Teamadmin")).toBeNull();
@@ -2126,7 +2231,7 @@ describe("AdminTeamDetail — member display names and team lead role", () => {
     setAdminTeamMemberRoleMock.mockResolvedValue({ ok: false, error: "team_disabled" });
     await renderWith([{ uid: "uid-1", email: "a@example.com", displayName: null, role: "member" }]);
 
-    await user.click(screen.getByRole("button", { name: "Gjør til teamadmin" }));
+    await chooseRowAction(user, rowOf("a@example.com"), "Gjør til teamadmin");
 
     expect((await screen.findByRole("alert")).textContent).toMatch(/aktiver det på nytt før du utnevner en teamadmin/i);
   });
@@ -2136,7 +2241,7 @@ describe("AdminTeamDetail — member display names and team lead role", () => {
     setAdminTeamMemberRoleMock.mockResolvedValue({ ok: false, error: "not_a_member" });
     await renderWith([{ uid: "uid-1", email: "a@example.com", displayName: null, role: "member" }]);
 
-    await user.click(screen.getByRole("button", { name: "Gjør til teamadmin" }));
+    await chooseRowAction(user, rowOf("a@example.com"), "Gjør til teamadmin");
 
     expect((await screen.findByRole("alert")).textContent).toMatch(/ikke lenger medlem/i);
   });
@@ -2152,7 +2257,9 @@ describe("AdminTeamDetail — member display names and team lead role", () => {
       "disabled",
     );
 
+    await openRowActions(user, rowOf("plain@example.com"));
     expect((within(rowOf("plain@example.com")).getByRole("button", { name: "Gjør til teamadmin" }) as HTMLButtonElement).disabled).toBe(true);
+    await openRowActions(user, rowOf("lead@example.com"));
     const demote = within(rowOf("lead@example.com")).getByRole("button", { name: "Gjør til vanlig medlem" }) as HTMLButtonElement;
     expect(demote.disabled).toBe(false);
 
@@ -2190,7 +2297,7 @@ describe("AdminTeamDetail — member display names and team lead role", () => {
       ],
     });
 
-    await user.click(within(rowOf("plain@example.com")).getByRole("button", { name: "Gjør til teamadmin" }));
+    await chooseRowAction(user, rowOf("plain@example.com"), "Gjør til teamadmin");
 
     expect(setAdminTeamMemberRoleMock).toHaveBeenCalledTimes(1);
     expect(setAdminTeamMemberRoleMock).toHaveBeenCalledWith("a-token", "team-1", "uid-2", "teamadmin");
@@ -2198,13 +2305,16 @@ describe("AdminTeamDetail — member display names and team lead role", () => {
   });
 
   it("does not offer to 'replace' or demote other leads when promoting (no singleton-manager behaviour)", async () => {
+    const user = userEvent.setup();
     await renderWith([
       { uid: "uid-1", email: "lead1@example.com", displayName: "Lea", role: "teamadmin" },
       { uid: "uid-2", email: "plain@example.com", displayName: "Per", role: "member" },
     ]);
 
     expect(screen.queryByText(/erstatt|bytt teamadmin|replace/i)).toBeNull();
+    await openRowActions(user, rowOf("lead1@example.com"));
     expect(within(rowOf("lead1@example.com")).getByRole("button", { name: "Gjør til vanlig medlem" })).toBeTruthy();
+    await openRowActions(user, rowOf("plain@example.com"));
     expect(within(rowOf("plain@example.com")).getByRole("button", { name: "Gjør til teamadmin" })).toBeTruthy();
   });
 
@@ -2221,7 +2331,8 @@ describe("AdminTeamDetail — member display names and team lead role", () => {
     removeAdminTeamMemberMock.mockResolvedValue({ ok: true });
     await renderWith([{ uid: "uid-1", email: "lead@example.com", displayName: "Lea", role: "teamadmin" }]);
 
-    await user.click(within(rowOf("lead@example.com")).getByRole("button", { name: "Fjern" }));
+    await chooseRowAction(user, rowOf("lead@example.com"), "Fjern fra teamet");
+    await user.click(within(rowOf("lead@example.com")).getByRole("button", { name: "Fjern fra teamet" }));
 
     expect(removeAdminTeamMemberMock).toHaveBeenCalledWith("a-token", "team-1", "uid-1");
     expect(setAdminTeamMemberRoleMock).not.toHaveBeenCalled();
@@ -2346,13 +2457,19 @@ describe("AdminTeamDetail scope marker and tabs (visual-redesign TASK-014)", () 
     await screen.findByRole("heading", { name: "Platform" });
 
     expect(screen.getAllByText("Administrasjon").length).toBeGreaterThan(0);
-    expect(screen.queryByRole("tab", { name: /Medlemmer|Tilganger|Innstillinger/ })).toBeNull();
-    // The "Gå til Medlemmer" jump link is an existing in-page anchor to the members section, not a route or tab.
-    const jumpLinks = screen.queryAllByRole("link", { name: /Medlemmer|Tilganger|Innstillinger/ });
-    expect(jumpLinks.length).toBeGreaterThan(0);
-    for (const link of jumpLinks) {
-      expect(link.getAttribute("href")?.startsWith("#")).toBe(true);
-    }
+    // Exactly the seven administration tabs, in order. No invented tab such as Tilganger or Innstillinger.
+    const tabNames = screen.getAllByRole("tab").map((tab) => tab.textContent?.trim());
+    expect(tabNames).toEqual([
+      "Oversikt",
+      "Medlemmer",
+      "Roller",
+      "Invitasjoner",
+      "Undersøkelser",
+      "Utfordringer",
+      "Kompetanse",
+    ]);
+    // The Phase 1 sticky in-page index and its jump links were removed; no link may stand in for a tab.
+    expect(screen.queryAllByRole("link", { name: /Tilganger|Innstillinger/ })).toHaveLength(0);
   });
 });
 

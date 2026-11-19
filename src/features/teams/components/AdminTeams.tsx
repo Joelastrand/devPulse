@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
+import { Plus } from "lucide-react";
 import { Alert } from "../../../components/ui/Alert";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
-import { Button } from "../../../components/ui/Button";
-import { Card } from "../../../components/ui/Card";
+import { Button, buttonClassName } from "../../../components/ui/Button";
 import { EmptyState } from "../../../components/ui/EmptyState";
+import { Icon } from "../../../components/ui/Icon";
 import { AdminTeamsListSkeleton } from "./TeamAdminSkeletons";
 import { TextField } from "../../../components/ui/TextField";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
@@ -18,6 +19,7 @@ import {
   type AdminTeamsFetchResult,
 } from "../client/admin-teams-gateway";
 import type { TeamStatus } from "../domain/team";
+import { matchesSearchQuery } from "../../../components/ui/search-match";
 import { TeamIdentity } from "./TeamIdentity";
 
 type ViewState =
@@ -34,6 +36,15 @@ type StatusActionState =
   | { status: "idle" }
   | { status: "pending" }
   | { status: "error"; message: string };
+
+/** Status filter for the team list. Client-side only; it narrows already-loaded teams and never sends a request. */
+type TeamStatusFilter = "all" | "active" | "disabled";
+
+const STATUS_FILTERS: ReadonlyArray<{ id: TeamStatusFilter; label: string }> = [
+  { id: "all", label: adminCopy.teams.filterAll },
+  { id: "active", label: adminCopy.teams.filterActive },
+  { id: "disabled", label: adminCopy.teams.filterDisabled },
+];
 
 function createErrorMessage(error: string): string {
   if (error === "invalid_name") {
@@ -60,6 +71,9 @@ function createErrorMessage(error: string): string {
  * what's currently shown, and a caller whose auth changes mid-operation
  * fails closed (the stale result is simply discarded, not rendered as if
  * it belonged to the new identity).
+ *
+ * Search and status filtering run over the already-loaded list (name and status only). They are reset on every auth-state
+ * change, so one account's filter text is never carried into another account's view.
  */
 export function AdminTeams() {
   const [state, setState] = useState<ViewState>({ phase: "loading" });
@@ -67,6 +81,8 @@ export function AdminTeams() {
   const [name, setName] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [statusActions, setStatusActions] = useState<Record<string, StatusActionState>>({});
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<TeamStatusFilter>("all");
 
   const { isCurrentGeneration } = useAuthGatedResource((token, generation) => {
     // A new auth state starts clean: no stale create/status-action
@@ -75,6 +91,8 @@ export function AdminTeams() {
     setStatusActions({});
     setName("");
     setFormOpen(false);
+    setQuery("");
+    setStatusFilter("all");
 
     if (!token) {
       setState({ phase: "signed_out" });
@@ -216,26 +234,32 @@ export function AdminTeams() {
   const { teams } = result;
   const activeCount = teams.filter((team) => team.status === "active").length;
   const disabledCount = teams.length - activeCount;
+  const visibleTeams = teams.filter(
+    (team) =>
+      (statusFilter === "all" || team.status === statusFilter) && matchesSearchQuery(query, [team.name]),
+  );
+  const isSearching = query.trim() !== "";
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          {teams.length > 0 && (
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              {adminCopy.teams.summary(activeCount, disabledCount)}
-            </p>
-          )}
-        </div>
+        {teams.length > 0 ? (
+          <dl className="flex flex-wrap gap-2">
+            <TeamStat label={adminCopy.teams.activeTeamsLabel} value={activeCount} />
+            <TeamStat label={adminCopy.teams.disabledTeamsLabel} value={disabledCount} />
+            <TeamStat label={adminCopy.teams.totalTeamsLabel} value={teams.length} />
+          </dl>
+        ) : null}
         <Button
           type="button"
-          variant="secondary"
+          variant="primary"
           size="sm"
-          className="shrink-0"
+          className="ml-auto inline-flex shrink-0 items-center gap-2"
           aria-expanded={formOpen}
           aria-controls="admin-team-create-form"
           onClick={() => setFormOpen((prev) => !prev)}
         >
+          <Icon icon={Plus} size="inline" />
           {adminCopy.teams.newTeamButton}
         </Button>
       </div>
@@ -264,63 +288,119 @@ export function AdminTeams() {
         </form>
       )}
 
+      {teams.length > 0 && (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0 sm:max-w-sm sm:flex-1">
+            <TextField
+              id="admin-team-search"
+              type="search"
+              label={adminCopy.teams.searchLabel}
+              value={query}
+              autoComplete="off"
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </div>
+          <div role="group" aria-label={adminCopy.teams.filterLabel} className="flex flex-wrap gap-1">
+            {STATUS_FILTERS.map((filter) => {
+              const pressed = statusFilter === filter.id;
+              return (
+                <button
+                  key={filter.id}
+                  type="button"
+                  aria-pressed={pressed}
+                  onClick={() => setStatusFilter(filter.id)}
+                  className={`rounded-control border px-3 py-1.5 text-sm font-medium transition-colors duration-micro ease-standard ${
+                    pressed
+                      ? "border-primary bg-primary-subtle text-text-primary"
+                      : "border-border-subtle text-text-secondary hover:bg-surface-subtle hover:text-text-primary"
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {teams.length === 0 ? (
         <EmptyState>{adminCopy.teams.empty}</EmptyState>
+      ) : visibleTeams.length === 0 ? (
+        <EmptyState>{emptyFilterMessage(isSearching, statusFilter)}</EmptyState>
       ) : (
         <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {teams.map((team) => {
+          {visibleTeams.map((team) => {
             const action = statusActions[team.teamId] ?? { status: "idle" as const };
             const nextStatus: TeamStatus = team.status === "active" ? "disabled" : "active";
             const isDisabling = team.status === "active";
 
             return (
-              <Card
-                as="li"
+              <li
                 key={team.teamId}
-                variant="bordered"
-                padding="sm"
-                className="flex flex-col gap-4 overflow-hidden"
+                className="flex flex-col overflow-hidden rounded-surface border border-border-subtle bg-surface shadow-card"
               >
                 <TeamIdentity teamId={team.teamId} />
-                <div className="min-w-0">
-                  <Link
-                    href={`/admin/teams/${encodeURIComponent(team.teamId)}`}
-                    className="break-words font-medium text-zinc-900 underline dark:text-zinc-50"
-                  >
-                    {team.name}
-                  </Link>
-                  <p className="mt-1 flex flex-wrap items-center gap-1 text-sm text-zinc-600 dark:text-zinc-400">
-                    <StatusBadge tone={team.status === "active" ? "success" : "neutral"}>
-                      {team.status === "active" ? adminCopy.teams.statusActive : adminCopy.teams.statusDisabled}
-                    </StatusBadge>
-                    <span>
-                      · {adminCopy.teams.teamIdLabel} {team.teamId}
-                    </span>
-                  </p>
+                <div className="flex flex-1 flex-col gap-3 px-4 py-4">
+                  <div className="min-w-0">
+                    <h2 className="break-words text-base font-semibold text-text-primary">{team.name}</h2>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <StatusBadge tone={team.status === "active" ? "success" : "neutral"}>
+                        {team.status === "active" ? adminCopy.teams.statusActive : adminCopy.teams.statusDisabled}
+                      </StatusBadge>
+                      <span className="break-all text-help text-text-muted">
+                        {adminCopy.teams.teamIdLabel} {team.teamId}
+                      </span>
+                    </div>
+                  </div>
                   {action.status === "error" && (
-                    <Alert variant="error" className="mt-1 text-sm">
+                    <Alert variant="error" className="text-sm">
                       {action.message}
                     </Alert>
                   )}
+                  <div className="mt-auto flex flex-wrap items-center gap-2 pt-1">
+                    <Link
+                      href={`/admin/teams/${encodeURIComponent(team.teamId)}`}
+                      className={buttonClassName({ variant: "primary", size: "sm", className: "inline-flex items-center" })}
+                    >
+                      {adminCopy.teams.administerTeamButton}
+                    </Link>
+                    <Button
+                      variant={isDisabling ? "destructive" : "secondary"}
+                      size="sm"
+                      pending={action.status === "pending"}
+                      onClick={() => handleSetStatus(token, generation, team.teamId, nextStatus)}
+                    >
+                      {action.status === "pending"
+                        ? adminCopy.teams.updatingButton
+                        : isDisabling
+                          ? adminCopy.teams.disableButton
+                          : adminCopy.teams.enableButton}
+                    </Button>
+                  </div>
                 </div>
-                <Button
-                  variant={isDisabling ? "destructive" : "secondary"}
-                  size="sm"
-                  className="shrink-0"
-                  pending={action.status === "pending"}
-                  onClick={() => handleSetStatus(token, generation, team.teamId, nextStatus)}
-                >
-                  {action.status === "pending"
-                    ? adminCopy.teams.updatingButton
-                    : isDisabling
-                      ? adminCopy.teams.disableButton
-                      : adminCopy.teams.enableButton}
-                </Button>
-              </Card>
+              </li>
             );
           })}
         </ul>
       )}
+    </div>
+  );
+}
+
+function emptyFilterMessage(isSearching: boolean, statusFilter: TeamStatusFilter): string {
+  if (isSearching) {
+    return `${adminCopy.teams.noSearchResults} ${adminCopy.teams.tryAnotherSearch}`;
+  }
+  if (statusFilter === "active") return adminCopy.teams.noActiveTeams;
+  if (statusFilter === "disabled") return adminCopy.teams.noDisabledTeams;
+  return adminCopy.teams.empty;
+}
+
+function TeamStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="flex items-baseline gap-2 rounded-control border border-border-subtle bg-surface px-3 py-1.5">
+      <dt className="text-sm text-text-secondary">{label}</dt>
+      <dd className="text-base font-semibold tabular-nums text-text-primary">{value}</dd>
     </div>
   );
 }

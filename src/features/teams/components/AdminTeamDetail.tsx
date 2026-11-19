@@ -4,14 +4,24 @@ import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
-import { Card } from "../../../components/ui/Card";
-import { EmptyState } from "../../../components/ui/EmptyState";
+import { Icon } from "../../../components/ui/Icon";
+import { Plus } from "lucide-react";
+import { AdminSurveyList, surveyLink, type SurveyRowActionState } from "./AdminSurveyList";
 import { AdminTeamDetailSkeleton } from "./TeamAdminSkeletons";
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { ADMIN_SCOPE_EYEBROW } from "../../../components/ui/copy";
 import { TextField } from "../../../components/ui/TextField";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import { TeamVisibilitySettings } from "./TeamVisibilitySettings";
+import { AdminTeamTabPanel, AdminTeamTabs } from "./AdminTeamTabs";
+import { AdminTeamOverview, type AdminTeamOverviewCounts } from "./AdminTeamOverview";
+import { TeamMembersPanel, type MemberActionState } from "./TeamMembersPanel";
+import {
+  TeamInvitationsPanel,
+  type InviteFormState,
+  type RequestActionState,
+  type RowActionState,
+} from "./TeamInvitationsPanel";
 import { MemberRoleAssignments } from "../../role-profiles/components/MemberRoleAssignments";
 import { roleAssignmentCopy } from "../../role-profiles/copy";
 import {
@@ -259,21 +269,6 @@ type ViewState =
   | { phase: "signed_out" }
   | { phase: "loaded"; token: string; generation: number; result: TeamDetailResult };
 
-type InviteState =
-  | { status: "idle" }
-  | { status: "pending" }
-  | { status: "error"; message: string };
-
-type RowActionState =
-  | { status: "idle" }
-  | { status: "pending" }
-  | { status: "error"; message: string };
-
-/** A member row's action state — `kind` says which of the row's two mutations is in flight, while either one blocks the other. */
-type MemberActionState =
-  | { status: "idle" }
-  | { status: "pending"; kind: "remove" | "role" }
-  | { status: "error"; message: string };
 
 /** The member-ref preparation action's own state (one team-wide action, not per row). */
 type PrepareMemberRefsState =
@@ -284,22 +279,6 @@ type PrepareMemberRefsState =
 
 type SurveyCreateState =
   | { status: "idle" }
-  | { status: "pending" }
-  | { status: "error"; message: string };
-
-/**
- * Per-survey action state. Only one lifecycle-driven action is ever
- * offered for a given row at a time (scheduled → open only; open → close
- * only; closed & not archived → remove only) — unlike the access-request
- * approve/reject pair, no two actions ever compete for the same row, so a
- * plain per-survey state (mirroring `RowActionState`) is enough, with one
- * extra phase (`confirming_removal`) for the destructive remove action's
- * explicit confirmation step (docs/archive/features/managed-surveys/SPEC.md —
- * BR-37, `docs/archive/UI-UX-2026-11-11.md` → "Admin UX").
- */
-type SurveyRowActionState =
-  | { status: "idle" }
-  | { status: "confirming_removal" }
   | { status: "pending" }
   | { status: "error"; message: string };
 
@@ -319,11 +298,6 @@ type SurveyLinkCopyState = { surveyId: string; status: "success" | "failure" };
  * is pending so only the clicked button shows a pending label; the other
  * is merely disabled, never mislabeled as busy.
  */
-type RequestActionState =
-  | { status: "idle" }
-  | { status: "pending"; action: "approve" | "reject" }
-  | { status: "error"; message: string };
-
 function inviteErrorMessage(
   error:
     | "unauthenticated"
@@ -370,17 +344,6 @@ function skillStageErrorMessage(
   return teamSkillTrackingCopy.tracked.error.generic;
 }
 
-function surveyLifecycleLabel(entry: AdminSurveyEntry): string {
-  return surveysCopy.admin.lifecycleLabels[entry.lifecycle];
-}
-
-function surveyAccessModeLabel(accessMode: SurveyAccessMode): string {
-  return surveysCopy.admin.accessModeLabels[accessMode];
-}
-
-function surveyLink(surveyId: string): string {
-  return `/survey/${encodeURIComponent(surveyId)}`;
-}
 
 /**
  * Admin-only `/admin/teams/[teamId]` detail page
@@ -396,7 +359,7 @@ function surveyLink(surveyId: string): string {
  */
 export function AdminTeamDetail({ teamId }: { teamId: string }) {
   const [state, setState] = useState<ViewState>({ phase: "loading" });
-  const [inviteState, setInviteState] = useState<InviteState>({ status: "idle" });
+  const [inviteState, setInviteState] = useState<InviteFormState>({ status: "idle" });
   const [email, setEmail] = useState("");
   const [memberActions, setMemberActions] = useState<Record<string, MemberActionState>>({});
   const [invitationActions, setInvitationActions] = useState<Record<string, RowActionState>>({});
@@ -491,9 +454,19 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
       return;
     }
 
-    setInviteState({ status: "idle" });
+    // `saved` is set only here, after the server confirmed the invitation.
+    setInviteState({ status: "saved" });
     setEmail("");
     await loadForGeneration(token, generation);
+  }
+
+  /** Opens the inline removal confirmation. Nothing is sent to the server until the admin confirms. */
+  function handleRequestRemoveMember(uid: string) {
+    setMemberActions((prev) => ({ ...prev, [uid]: { status: "confirming_removal" } }));
+  }
+
+  function handleCancelRemoveMember(uid: string) {
+    setMemberActions((prev) => ({ ...prev, [uid]: { status: "idle" } }));
   }
 
   async function handleRemoveMember(token: string, generation: number, uid: string) {
@@ -1002,8 +975,6 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
   }
 
   const { team, members, invitations, requests, surveys, challenges, skillCatalog } = result;
-  const activeSurveys = surveys.filter((entry) => !entry.archived);
-  const archivedSurveys = surveys.filter((entry) => entry.archived);
   const challengeListState: AdminChallengeListState =
     challenges.status === "loaded"
       ? { status: "loaded", challenges: challenges.challenges }
@@ -1011,6 +982,13 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
   const skillCatalogState: TeamSkillCatalogState =
     skillCatalog.status === "loaded" ? { status: "loaded", trees: skillCatalog.trees } : { status: "error" };
 
+  const overviewCounts: AdminTeamOverviewCounts = {
+    members: members.length,
+    invitations: invitations.length,
+    requests: requests.length,
+    surveys: surveys.length,
+    challenges: challenges.status === "loaded" ? challenges.challenges.length : null,
+  };
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -1018,499 +996,274 @@ export function AdminTeamDetail({ teamId }: { teamId: string }) {
         title={team.name}
         description={`${team.status === "active" ? adminCopy.teams.statusActive : adminCopy.teams.statusDisabled} · ${adminCopy.teams.teamIdLabel} ${team.teamId}`}
       />
-
-      <nav aria-label={adminCopy.detail.sectionIndexLabel} className="lg:sticky lg:top-4">
-        <ul className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
-          <li>
-            <a href="#admin-section-invite" className="font-medium text-text-primary underline">Gå til {adminCopy.detail.inviteSectionTitle}</a>
-          </li>
-          <li>
-            <a href="#admin-section-members" className="font-medium text-text-primary underline">Gå til {adminCopy.detail.membersSectionTitle}</a>
-          </li>
-          <li>
-            <a href="#admin-section-invitations" className="font-medium text-text-primary underline">Gå til {adminCopy.detail.invitationsSectionTitle}</a>
-          </li>
-          <li>
-            <a href="#admin-section-requests" className="font-medium text-text-primary underline">Gå til {adminCopy.detail.requestsSectionTitle}</a>
-          </li>
-          <li>
-            <a href="#admin-section-surveys" className="font-medium text-text-primary underline">Gå til {surveysCopy.admin.sectionTitle}</a>
-          </li>
-          <li>
-            <a href="#admin-section-challenges" className="font-medium text-text-primary underline">Gå til {challengesCopy.admin.sectionTitle}</a>
-          </li>
-          <li>
-            <a href="#admin-section-skills" className="font-medium text-text-primary underline">Gå til {teamSkillTrackingCopy.sectionTitle}</a>
-          </li>
-        </ul>
-      </nav>
-      <section id="admin-section-invite" className="flex flex-col gap-4">
-        <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
-          {adminCopy.detail.inviteSectionTitle}
-        </h2>
-        <form
-          onSubmit={(event) => handleInvite(event, token, generation)}
-          className="flex flex-col gap-3"
-        >
-          <TextField
-            id="admin-invite-email"
-            label={adminCopy.detail.emailLabel}
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            error={inviteState.status === "error" ? inviteState.message : undefined}
-          />
+      <AdminTeamTabs label={adminCopy.detail.tabsLabel}>
+      <AdminTeamTabPanel id="oversikt" label={adminCopy.detail.tabs.oversikt}>
+          <AdminTeamOverview counts={overviewCounts} />
+        <TeamVisibilitySettings key={`visibility:${generation}`} teamId={teamId} token={token} />
+      </AdminTeamTabPanel>
+      <AdminTeamTabPanel id="medlemmer" label={adminCopy.detail.tabs.medlemmer}>
+        <TeamMembersPanel
+          key={`members:${generation}`}
+          teamId={teamId}
+          teamDisabled={team.status === "disabled"}
+          members={members}
+          memberActions={memberActions}
+          onSetRole={(uid, role) => handleSetMemberRole(token, generation, uid, role)}
+          onRequestRemoval={handleRequestRemoveMember}
+          onCancelRemoval={handleCancelRemoveMember}
+          onConfirmRemoval={(uid) => handleRemoveMember(token, generation, uid)}
+          notices={
+            <>
+          {members.some((member) => !member.hasMemberRef) && (
+            <div className="flex flex-col gap-2">
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">{adminCopy.detail.prepareMemberRefsHint}</p>
+              <div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  pending={prepareState.status === "pending"}
+                  onClick={() => handlePrepareMemberRefs(token, generation)}
+                >
+                  {prepareState.status === "pending"
+                    ? adminCopy.detail.preparingMemberRefsButton
+                    : adminCopy.detail.prepareMemberRefsButton}
+                </Button>
+              </div>
+            </div>
+          )}
+          {prepareState.status === "error" && <Alert variant="error">{prepareState.message}</Alert>}
+          {prepareState.status === "success" && (
+            <Alert variant="success">
+              {prepareState.truncated
+                ? `${adminCopy.detail.prepareMemberRefsSuccess} ${adminCopy.detail.prepareMemberRefsTruncated}`
+                : adminCopy.detail.prepareMemberRefsSuccess}
+            </Alert>
+          )}
+            </>
+          }
+        />
+      </AdminTeamTabPanel>
+      <AdminTeamTabPanel id="roller" label={adminCopy.detail.tabs.roller}>
+        {/* Formal organizational role per member (role-profiles SPEC, "Formal role assignment"). Admin-only, one role per user. */}
+        <section id="admin-section-roles" aria-labelledby="admin-section-roles-heading" className="flex flex-col gap-4">
           <div>
-            <Button type="submit" className="shrink-0" pending={inviteState.status === "pending"}>
-              {inviteState.status === "pending" ? adminCopy.detail.invitingButton : adminCopy.detail.inviteButton}
+            <h2 id="admin-section-roles-heading" className="text-lg font-semibold text-text-primary">
+              {roleAssignmentCopy.sectionTitle}
+            </h2>
+            <p className="mt-1 text-sm text-text-secondary">{roleAssignmentCopy.sectionDescription}</p>
+            <p className="mt-1 text-sm text-text-muted">{roleAssignmentCopy.accessNote}</p>
+          </div>
+          {/* Keyed by account generation, so a switch discards open editors and any search text. */}
+          <MemberRoleAssignments key={`roles:${generation}`} token={token} members={members} />
+        </section>
+      </AdminTeamTabPanel>
+      <AdminTeamTabPanel id="invitasjoner" label={adminCopy.detail.tabs.invitasjoner}>
+        <TeamInvitationsPanel
+          email={email}
+          onEmailChange={setEmail}
+          inviteState={inviteState}
+          onInvite={(event) => handleInvite(event, token, generation)}
+          invitations={invitations}
+          invitationActions={invitationActions}
+          onCancelInvitation={(invitationEmail) => handleCancelInvitation(token, generation, invitationEmail)}
+          requests={requests}
+          requestActions={requestActions}
+          onResolveRequest={(uid, status) => handleResolveRequest(token, generation, uid, status)}
+        />
+      </AdminTeamTabPanel>
+      <AdminTeamTabPanel id="undersokelser" label={adminCopy.detail.tabs.undersokelser}>
+        <section id="admin-section-surveys" className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold text-text-primary">{surveysCopy.admin.sectionTitle}</h2>
+              <p className="mt-1 text-sm text-text-secondary">{surveysCopy.admin.sectionDescription}</p>
+            </div>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              className="inline-flex shrink-0 items-center gap-2"
+              aria-expanded={surveyFormOpen}
+              aria-controls="admin-survey-create-form"
+              onClick={() => setSurveyFormOpen((prev) => !prev)}
+            >
+              <Icon icon={Plus} size="inline" />
+              {surveysCopy.admin.create.toggleButton}
             </Button>
           </div>
-        </form>
-      </section>
 
-      <TeamVisibilitySettings key={`visibility:${generation}`} teamId={teamId} token={token} />
+          {surveyFormOpen && (
+            <form
+              id="admin-survey-create-form"
+              onSubmit={(event) => handleCreateSurvey(event, token, generation)}
+              className="flex flex-col gap-3"
+              aria-label={surveysCopy.admin.create.sectionTitle}
+            >
+              <fieldset className="flex flex-col gap-2">
+                <legend className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                  {surveysCopy.admin.create.accessModeLegend}
+                </legend>
+                <label className="flex items-start gap-2 text-sm text-zinc-900 dark:text-zinc-50">
+                  <input
+                    type="radio"
+                    name="survey-access-mode"
+                    value="public"
+                    checked={surveyAccessMode === "public"}
+                    onChange={() => setSurveyAccessMode("public")}
+                    className="mt-1"
+                  />
+                  <span>
+                    {surveysCopy.admin.accessModeLabels.public}
+                    <span className="block text-zinc-600 dark:text-zinc-400">
+                      {surveysCopy.admin.create.accessModePublicHint}
+                    </span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-sm text-zinc-900 dark:text-zinc-50">
+                  <input
+                    type="radio"
+                    name="survey-access-mode"
+                    value="authenticated"
+                    checked={surveyAccessMode === "authenticated"}
+                    onChange={() => setSurveyAccessMode("authenticated")}
+                    className="mt-1"
+                  />
+                  <span>
+                    {surveysCopy.admin.accessModeLabels.authenticated}
+                    <span className="block text-zinc-600 dark:text-zinc-400">
+                      {surveysCopy.admin.create.accessModeAuthenticatedHint}
+                    </span>
+                  </span>
+                </label>
+              </fieldset>
 
-      <section id="admin-section-members" className="flex flex-col gap-3">
-        <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
-          {adminCopy.detail.membersSectionTitle}
-        </h2>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          {team.status === "disabled" ? adminCopy.detail.leadDisabledTeamNote : adminCopy.detail.leadRoleHint}
-        </p>
-        {members.some((member) => !member.hasMemberRef) && (
-          <div className="flex flex-col gap-2">
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">{adminCopy.detail.prepareMemberRefsHint}</p>
-            <div>
-              <Button
-                type="button"
-                variant="secondary"
-                pending={prepareState.status === "pending"}
-                onClick={() => handlePrepareMemberRefs(token, generation)}
-              >
-                {prepareState.status === "pending"
-                  ? adminCopy.detail.preparingMemberRefsButton
-                  : adminCopy.detail.prepareMemberRefsButton}
-              </Button>
-            </div>
+              <TextField
+                id="admin-survey-title"
+                label={surveysCopy.admin.create.titleLabel}
+                type="text"
+                value={surveyTitle}
+                onChange={(event) => setSurveyTitle(event.target.value)}
+                aria-invalid={surveyCreateState.status === "error" || undefined}
+                aria-describedby={surveyCreateState.status === "error" ? "admin-survey-create-error" : undefined}
+              />
+
+              <TextField
+                id="admin-survey-minimum-responses"
+                label={surveysCopy.admin.create.minimumResponsesLabel}
+                type="number"
+                min={MINIMUM_RESPONSES_MIN}
+                max={MINIMUM_RESPONSES_MAX}
+                step={1}
+                value={surveyMinimumResponses}
+                onChange={(event) => setSurveyMinimumResponses(event.target.value)}
+                description={surveysCopy.admin.create.minimumResponsesHint}
+                className="w-24"
+                aria-invalid={surveyCreateState.status === "error" || undefined}
+                aria-describedby={
+                  surveyCreateState.status === "error"
+                    ? "admin-survey-minimum-responses-description admin-survey-create-error"
+                    : "admin-survey-minimum-responses-description"
+                }
+              />
+
+              <div className="flex flex-wrap gap-4">
+                <TextField
+                  id="admin-survey-start-at"
+                  label={surveysCopy.admin.create.startAtLabel}
+                  type="datetime-local"
+                  value={surveyStartAt}
+                  onChange={(event) => setSurveyStartAt(event.target.value)}
+                  aria-invalid={surveyCreateState.status === "error" || undefined}
+                  aria-describedby={surveyCreateState.status === "error" ? "admin-survey-create-error" : undefined}
+                />
+                <TextField
+                  id="admin-survey-end-at"
+                  label={surveysCopy.admin.create.endAtLabel}
+                  type="datetime-local"
+                  value={surveyEndAt}
+                  onChange={(event) => setSurveyEndAt(event.target.value)}
+                  aria-invalid={surveyCreateState.status === "error" || undefined}
+                  aria-describedby={surveyCreateState.status === "error" ? "admin-survey-create-error" : undefined}
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  type="submit"
+                  disabled={surveyAccessMode === null}
+                  pending={surveyCreateState.status === "pending"}
+                >
+                  {surveyCreateState.status === "pending"
+                    ? surveysCopy.admin.create.submitting
+                    : surveysCopy.admin.create.submit}
+                </Button>
+                <Button type="button" variant="secondary" onClick={handleCancelCreateSurvey}>
+                  {surveysCopy.admin.create.cancelButton}
+                </Button>
+              </div>
+              {surveyCreateState.status === "error" && (
+                <Alert variant="error" id="admin-survey-create-error" className="text-sm">
+                  {surveyCreateState.message}
+                </Alert>
+              )}
+            </form>
+          )}
+
+          <AdminSurveyList
+            key={`surveys:${generation}`}
+            entries={surveys}
+            actions={surveyActions}
+            copyStateFor={(surveyId) =>
+              surveyLinkCopyState?.surveyId === surveyId ? surveyLinkCopyState.status : "idle"
+            }
+            onOpen={(surveyId) => handleOpenSurvey(token, generation, surveyId)}
+            onClose={(surveyId) => handleCloseSurvey(token, generation, surveyId)}
+            onRequestRemove={handleRequestRemoveSurvey}
+            onCancelRemove={handleCancelRemoveSurvey}
+            onConfirmRemove={(surveyId) => handleConfirmRemoveSurvey(token, generation, surveyId)}
+            onCopyLink={handleCopySurveyLink}
+          />
+        </section>
+      </AdminTeamTabPanel>
+      <AdminTeamTabPanel id="utfordringer" label={adminCopy.detail.tabs.utfordringer}>
+        <section id="admin-section-challenges" className="flex flex-col gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-text-primary">{challengesCopy.admin.sectionTitle}</h2>
+            <p className="mt-1 text-sm text-text-secondary">{challengesCopy.admin.sectionDescription}</p>
           </div>
-        )}
-        {prepareState.status === "error" && <Alert variant="error">{prepareState.message}</Alert>}
-        {prepareState.status === "success" && (
-          <Alert variant="success">
-            {prepareState.truncated
-              ? `${adminCopy.detail.prepareMemberRefsSuccess} ${adminCopy.detail.prepareMemberRefsTruncated}`
-              : adminCopy.detail.prepareMemberRefsSuccess}
-          </Alert>
-        )}
-        {members.length === 0 ? (
-          <EmptyState>{adminCopy.detail.noMembers}</EmptyState>
-        ) : (
-          <ul className="flex flex-col gap-3">
-            {members.map((member) => {
-              const action = memberActions[member.uid] ?? { status: "idle" as const };
-              return (
-                <Card
-                  as="li"
-                  key={member.uid}
-                  variant="bordered"
-                  padding="sm"
-                  className="flex items-center justify-between gap-4"
-                >
-                  <div className="min-w-0">
-                    <p className="break-words font-medium text-zinc-900 dark:text-zinc-50">
-                      {member.displayName ?? adminCopy.detail.unnamedMember}
-                    </p>
-                    <p className="break-words text-sm text-zinc-600 dark:text-zinc-400">
-                      {member.email ?? member.uid}
-                    </p>
-                    {member.role === "teamadmin" && (
-                      <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                        {team.status === "disabled"
-                          ? adminCopy.detail.leadMarkerDormant
-                          : adminCopy.detail.leadMarker}
-                      </p>
-                    )}
-                    {action.status === "error" && (
-                      <Alert variant="error" className="mt-1 text-sm">
-                        {action.message}
-                      </Alert>
-                    )}
-                  </div>
-                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      pending={action.status === "pending"}
-                      disabled={member.role !== "teamadmin" && team.status === "disabled"}
-                      onClick={() =>
-                        handleSetMemberRole(token, generation, member.uid, member.role === "teamadmin" ? "member" : "teamadmin")
-                      }
-                    >
-                      {action.status === "pending" && action.kind === "role"
-                        ? adminCopy.detail.savingRoleButton
-                        : member.role === "teamadmin"
-                          ? adminCopy.detail.makeMemberButton
-                          : adminCopy.detail.makeLeadButton}
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      pending={action.status === "pending"}
-                      onClick={() => handleRemoveMember(token, generation, member.uid)}
-                    >
-                      {action.status === "pending" && action.kind === "remove"
-                        ? adminCopy.detail.removingButton
-                        : adminCopy.detail.removeButton}
-                    </Button>
-                  </div>
-                </Card>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-
-      {/* Formal organizational role per member (role-profiles SPEC, "Formal role assignment"). Admin-only, one role per user. */}
-      <section id="admin-section-roles" aria-labelledby="admin-section-roles-heading" className="flex flex-col gap-3">
-        <h2 id="admin-section-roles-heading" className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
-          {roleAssignmentCopy.sectionTitle}
-        </h2>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">{roleAssignmentCopy.sectionDescription}</p>
-        <MemberRoleAssignments token={token} members={members} />
-      </section>
-
-      <section id="admin-section-invitations" className="flex flex-col gap-3">
-        <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
-          {adminCopy.detail.invitationsSectionTitle}
-        </h2>
-        {invitations.length === 0 ? (
-          <EmptyState>{adminCopy.detail.noInvitations}</EmptyState>
-        ) : (
-          <ul className="flex flex-col gap-3">
-            {invitations.map((invitation) => {
-              const action = invitationActions[invitation.email] ?? { status: "idle" as const };
-              return (
-                <Card
-                  as="li"
-                  key={invitation.email}
-                  variant="bordered"
-                  padding="sm"
-                  className="flex items-center justify-between gap-4"
-                >
-                  <div className="min-w-0">
-                    <p className="break-words font-medium text-zinc-900 dark:text-zinc-50">{invitation.email}</p>
-                    {action.status === "error" && (
-                      <Alert variant="error" className="mt-1 text-sm">
-                        {action.message}
-                      </Alert>
-                    )}
-                  </div>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="shrink-0"
-                    pending={action.status === "pending"}
-                    onClick={() => handleCancelInvitation(token, generation, invitation.email)}
-                  >
-                    {action.status === "pending"
-                      ? adminCopy.detail.cancelingButton
-                      : adminCopy.detail.cancelInvitationButton}
-                  </Button>
-                </Card>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-
-      <section id="admin-section-requests" className="flex flex-col gap-3">
-        <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
-          {adminCopy.detail.requestsSectionTitle}
-        </h2>
-        {requests.length === 0 ? (
-          <EmptyState>{adminCopy.detail.noRequests}</EmptyState>
-        ) : (
-          <ul className="flex flex-col gap-3">
-            {requests.map((request) => {
-              const action = requestActions[request.uid] ?? { status: "idle" as const };
-              const isPending = action.status === "pending";
-              // Only the clicked button ever shows a pending label — the
-              // other is disabled (the shared guard) but never mislabeled
-              // as the one in flight.
-              const isApprovePending = action.status === "pending" && action.action === "approve";
-              const isRejectPending = action.status === "pending" && action.action === "reject";
-              return (
-                <Card
-                  as="li"
-                  key={request.uid}
-                  variant="bordered"
-                  padding="sm"
-                  className="flex items-center justify-between gap-4"
-                >
-                  <div className="min-w-0">
-                    <p className="break-words font-medium text-zinc-900 dark:text-zinc-50">
-                      {request.email ?? request.uid}
-                    </p>
-                    {action.status === "error" && (
-                      <Alert variant="error" className="mt-1 text-sm">
-                        {action.message}
-                      </Alert>
-                    )}
-                  </div>
-                  <div className="flex shrink-0 flex-wrap justify-end gap-2">
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      disabled={isPending}
-                      pending={isRejectPending}
-                      onClick={() => handleResolveRequest(token, generation, request.uid, "rejected")}
-                    >
-                      {isRejectPending ? adminCopy.detail.rejectingButton : adminCopy.detail.rejectButton}
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      disabled={isPending}
-                      pending={isApprovePending}
-                      onClick={() => handleResolveRequest(token, generation, request.uid, "approved")}
-                    >
-                      {isApprovePending ? adminCopy.detail.approvingButton : adminCopy.detail.approveButton}
-                    </Button>
-                  </div>
-                </Card>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-
-      <section id="admin-section-surveys" className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
-            {surveysCopy.admin.sectionTitle}
-          </h2>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className="shrink-0"
-            aria-expanded={surveyFormOpen}
-            aria-controls="admin-survey-create-form"
-            onClick={() => setSurveyFormOpen((prev) => !prev)}
-          >
-            {surveysCopy.admin.create.toggleButton}
-          </Button>
-        </div>
-
-        {surveyFormOpen && (
-          <form
-            id="admin-survey-create-form"
-            onSubmit={(event) => handleCreateSurvey(event, token, generation)}
-            className="flex flex-col gap-3"
-            aria-label={surveysCopy.admin.create.sectionTitle}
-          >
-            <fieldset className="flex flex-col gap-2">
-              <legend className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
-                {surveysCopy.admin.create.accessModeLegend}
-              </legend>
-              <label className="flex items-start gap-2 text-sm text-zinc-900 dark:text-zinc-50">
-                <input
-                  type="radio"
-                  name="survey-access-mode"
-                  value="public"
-                  checked={surveyAccessMode === "public"}
-                  onChange={() => setSurveyAccessMode("public")}
-                  className="mt-1"
-                />
-                <span>
-                  {surveysCopy.admin.accessModeLabels.public}
-                  <span className="block text-zinc-600 dark:text-zinc-400">
-                    {surveysCopy.admin.create.accessModePublicHint}
-                  </span>
-                </span>
-              </label>
-              <label className="flex items-start gap-2 text-sm text-zinc-900 dark:text-zinc-50">
-                <input
-                  type="radio"
-                  name="survey-access-mode"
-                  value="authenticated"
-                  checked={surveyAccessMode === "authenticated"}
-                  onChange={() => setSurveyAccessMode("authenticated")}
-                  className="mt-1"
-                />
-                <span>
-                  {surveysCopy.admin.accessModeLabels.authenticated}
-                  <span className="block text-zinc-600 dark:text-zinc-400">
-                    {surveysCopy.admin.create.accessModeAuthenticatedHint}
-                  </span>
-                </span>
-              </label>
-            </fieldset>
-
-            <TextField
-              id="admin-survey-title"
-              label={surveysCopy.admin.create.titleLabel}
-              type="text"
-              value={surveyTitle}
-              onChange={(event) => setSurveyTitle(event.target.value)}
-              aria-invalid={surveyCreateState.status === "error" || undefined}
-              aria-describedby={surveyCreateState.status === "error" ? "admin-survey-create-error" : undefined}
-            />
-
-            <TextField
-              id="admin-survey-minimum-responses"
-              label={surveysCopy.admin.create.minimumResponsesLabel}
-              type="number"
-              min={MINIMUM_RESPONSES_MIN}
-              max={MINIMUM_RESPONSES_MAX}
-              step={1}
-              value={surveyMinimumResponses}
-              onChange={(event) => setSurveyMinimumResponses(event.target.value)}
-              description={surveysCopy.admin.create.minimumResponsesHint}
-              className="w-24"
-              aria-invalid={surveyCreateState.status === "error" || undefined}
-              aria-describedby={
-                surveyCreateState.status === "error"
-                  ? "admin-survey-minimum-responses-description admin-survey-create-error"
-                  : "admin-survey-minimum-responses-description"
-              }
-            />
-
-            <div className="flex flex-wrap gap-4">
-              <TextField
-                id="admin-survey-start-at"
-                label={surveysCopy.admin.create.startAtLabel}
-                type="datetime-local"
-                value={surveyStartAt}
-                onChange={(event) => setSurveyStartAt(event.target.value)}
-                aria-invalid={surveyCreateState.status === "error" || undefined}
-                aria-describedby={surveyCreateState.status === "error" ? "admin-survey-create-error" : undefined}
-              />
-              <TextField
-                id="admin-survey-end-at"
-                label={surveysCopy.admin.create.endAtLabel}
-                type="datetime-local"
-                value={surveyEndAt}
-                onChange={(event) => setSurveyEndAt(event.target.value)}
-                aria-invalid={surveyCreateState.status === "error" || undefined}
-                aria-describedby={surveyCreateState.status === "error" ? "admin-survey-create-error" : undefined}
-              />
-            </div>
-
-            <div className="flex gap-2">
-              <Button
-                type="submit"
-                disabled={surveyAccessMode === null}
-                pending={surveyCreateState.status === "pending"}
-              >
-                {surveyCreateState.status === "pending"
-                  ? surveysCopy.admin.create.submitting
-                  : surveysCopy.admin.create.submit}
-              </Button>
-              <Button type="button" variant="secondary" onClick={handleCancelCreateSurvey}>
-                {surveysCopy.admin.create.cancelButton}
-              </Button>
-            </div>
-            {surveyCreateState.status === "error" && (
-              <Alert variant="error" id="admin-survey-create-error" className="text-sm">
-                {surveyCreateState.message}
-              </Alert>
-            )}
-          </form>
-        )}
-
-        {surveys.length === 0 ? (
-          <EmptyState>{surveysCopy.admin.empty}</EmptyState>
-        ) : (
-          <>
-            <div className="flex flex-col gap-3">
-              <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
-                {surveysCopy.admin.activeListTitle}
-              </h3>
-              {activeSurveys.length === 0 ? (
-                <EmptyState>{surveysCopy.admin.empty}</EmptyState>
-              ) : (
-                <ul className="flex flex-col gap-3">
-                  {activeSurveys.map((entry) => (
-                    <SurveyRow
-                      key={entry.surveyId}
-                      entry={entry}
-                      action={surveyActions[entry.surveyId] ?? { status: "idle" as const }}
-                      copyState={
-                        surveyLinkCopyState?.surveyId === entry.surveyId ? surveyLinkCopyState.status : "idle"
-                      }
-                      onOpen={() => handleOpenSurvey(token, generation, entry.surveyId)}
-                      onClose={() => handleCloseSurvey(token, generation, entry.surveyId)}
-                      onRequestRemove={() => handleRequestRemoveSurvey(entry.surveyId)}
-                      onCancelRemove={() => handleCancelRemoveSurvey(entry.surveyId)}
-                      onConfirmRemove={() => handleConfirmRemoveSurvey(token, generation, entry.surveyId)}
-                      onCopyLink={() => handleCopySurveyLink(entry.surveyId)}
-                    />
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div className="flex flex-col gap-3">
-              <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
-                {surveysCopy.admin.archivedListTitle}
-              </h3>
-              {archivedSurveys.length === 0 ? (
-                <EmptyState>{surveysCopy.admin.noArchived}</EmptyState>
-              ) : (
-                <ul className="flex flex-col gap-3">
-                  {archivedSurveys.map((entry) => (
-                    <SurveyRow
-                      key={entry.surveyId}
-                      entry={entry}
-                      action={surveyActions[entry.surveyId] ?? { status: "idle" as const }}
-                      copyState={
-                        surveyLinkCopyState?.surveyId === entry.surveyId ? surveyLinkCopyState.status : "idle"
-                      }
-                      onOpen={() => handleOpenSurvey(token, generation, entry.surveyId)}
-                      onClose={() => handleCloseSurvey(token, generation, entry.surveyId)}
-                      onRequestRemove={() => handleRequestRemoveSurvey(entry.surveyId)}
-                      onCancelRemove={() => handleCancelRemoveSurvey(entry.surveyId)}
-                      onConfirmRemove={() => handleConfirmRemoveSurvey(token, generation, entry.surveyId)}
-                      onCopyLink={() => handleCopySurveyLink(entry.surveyId)}
-                    />
-                  ))}
-                </ul>
-              )}
-            </div>
-          </>
-        )}
-      </section>
-
-      <section id="admin-section-challenges" className="flex flex-col gap-4">
-        <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
-          {challengesCopy.admin.sectionTitle}
-        </h2>
-        <AdminChallengeList
-          state={challengeListState}
-          actions={challengeActions}
-          onResolve={(challengeId) => handleResolveChallenge(token, generation, challengeId)}
-          onArchive={(challengeId) => handleArchiveChallenge(token, generation, challengeId)}
-          onRequestDelete={handleRequestDeleteChallenge}
-          onCancelDelete={handleCancelDeleteChallenge}
-          onConfirmDelete={(challengeId) => handleConfirmDeleteChallenge(token, generation, challengeId)}
-        />
-      </section>
-
-      <section id="admin-section-skills" className="flex flex-col gap-4">
-        <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
-          {teamSkillTrackingCopy.sectionTitle}
-        </h2>
-        <TeamSkillTrackingSection
-          catalogState={skillCatalogState}
-          tracking={skillTracking}
-          actions={skillActions}
-          teamDisabled={team.status === "disabled"}
-          onStart={(treeId) => handleStartSkillTracking(token, generation, treeId)}
-          onSetStage={(treeId, nodeId) => handleSetSkillStage(token, generation, treeId, nodeId)}
-          onStop={(treeId) => handleStopSkillTracking(token, generation, treeId)}
-        />
-      </section>
+          {/* Keyed by account generation, so a switch discards the previous account's search and filter. */}
+          <AdminChallengeList
+            key={`challenges:${generation}`}
+            state={challengeListState}
+            actions={challengeActions}
+            onResolve={(challengeId) => handleResolveChallenge(token, generation, challengeId)}
+            onArchive={(challengeId) => handleArchiveChallenge(token, generation, challengeId)}
+            onRequestDelete={handleRequestDeleteChallenge}
+            onCancelDelete={handleCancelDeleteChallenge}
+            onConfirmDelete={(challengeId) => handleConfirmDeleteChallenge(token, generation, challengeId)}
+          />
+        </section>
+      </AdminTeamTabPanel>
+      <AdminTeamTabPanel id="kompetanse" label={adminCopy.detail.tabs.kompetanse}>
+        <section id="admin-section-skills" className="flex flex-col gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-text-primary">{teamSkillTrackingCopy.sectionTitle}</h2>
+            <p className="mt-1 text-sm text-text-secondary">{teamSkillTrackingCopy.sectionDescription}</p>
+          </div>
+          {/* Keyed by account generation, so a switch discards the previous account's tracking view and search text. */}
+          <TeamSkillTrackingSection
+            key={`skills:${generation}`}
+            catalogState={skillCatalogState}
+            tracking={skillTracking}
+            actions={skillActions}
+            teamDisabled={team.status === "disabled"}
+            onStart={(treeId) => handleStartSkillTracking(token, generation, treeId)}
+            onSetStage={(treeId, nodeId) => handleSetSkillStage(token, generation, treeId, nodeId)}
+            onStop={(treeId) => handleStopSkillTracking(token, generation, treeId)}
+          />
+        </section>
+      </AdminTeamTabPanel>
+      </AdminTeamTabs>
     </div>
   );
 }
@@ -1523,138 +1276,5 @@ function SignInPrompt() {
       </Link>{" "}
       {adminCopy.detail.signInPrompt}
     </p>
-  );
-}
-
-interface SurveyRowProps {
-  entry: AdminSurveyEntry;
-  action: SurveyRowActionState;
-  copyState: "idle" | "success" | "failure";
-  onOpen: () => void;
-  onClose: () => void;
-  onRequestRemove: () => void;
-  onCancelRemove: () => void;
-  onConfirmRemove: () => void;
-  onCopyLink: () => void;
-}
-
-/**
- * One survey row for the admin survey-management section. Renders exactly
- * what `AdminTeamDetail`'s data (sourced from `listTeamSurveys`/
- * `createSurvey`/`openSurvey`/`closeSurvey`/`deleteOrArchiveSurvey`)
- * provides — it never computes lifecycle, access-mode eligibility, or any
- * authorization decision itself (`.claude/rules/security.md`).
- */
-function SurveyRow({
-  entry,
-  action,
-  copyState,
-  onOpen,
-  onClose,
-  onRequestRemove,
-  onCancelRemove,
-  onConfirmRemove,
-  onCopyLink,
-}: SurveyRowProps) {
-  const isPending = action.status === "pending";
-  const isConfirmingRemoval = action.status === "confirming_removal";
-  const displayName = entry.title ?? surveysCopy.admin.fallbackTitle;
-
-  return (
-    <Card as="li" variant="bordered" padding="sm" className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="break-words font-medium text-zinc-900 dark:text-zinc-50">{displayName}</p>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            {surveyLifecycleLabel(entry)}
-            {entry.archived ? ` · ${surveysCopy.admin.archivedLabel}` : ""} ·{" "}
-            {surveyAccessModeLabel(entry.accessMode)} ·{" "}
-            {surveysCopy.admin.minimumResponsesSummary(entry.minimumResponses)}
-          </p>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            {surveysCopy.admin.linkLabel}{" "}
-            <Link href={surveyLink(entry.surveyId)} className="underline">
-              {surveyLink(entry.surveyId)}
-            </Link>
-          </p>
-          {action.status === "error" && (
-            <Alert variant="error" className="mt-1 text-sm">
-              {action.message}
-            </Alert>
-          )}
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            aria-label={`${surveysCopy.admin.copyLinkButton} – ${displayName}`}
-            onClick={onCopyLink}
-          >
-            {surveysCopy.admin.copyLinkButton}
-          </Button>
-          {copyState === "success" && (
-            <span role="status" className="text-sm text-zinc-600 dark:text-zinc-400">
-              {surveysCopy.admin.linkCopied}
-            </span>
-          )}
-          {copyState === "failure" && (
-            <Alert variant="error" className="text-sm">
-              {surveysCopy.admin.linkCopyError}
-            </Alert>
-          )}
-          {entry.lifecycle === "scheduled" && !entry.archived && (
-            <Button
-              variant="secondary"
-              size="sm"
-              pending={isPending}
-              aria-label={`${isPending ? surveysCopy.admin.openingButton : surveysCopy.admin.openButton} – ${displayName}`}
-              onClick={onOpen}
-            >
-              {isPending ? surveysCopy.admin.openingButton : surveysCopy.admin.openButton}
-            </Button>
-          )}
-          {entry.lifecycle === "open" && (
-            <Button
-              variant="secondary"
-              size="sm"
-              pending={isPending}
-              aria-label={`${isPending ? surveysCopy.admin.closingButton : surveysCopy.admin.closeButton} – ${displayName}`}
-              onClick={onClose}
-            >
-              {isPending ? surveysCopy.admin.closingButton : surveysCopy.admin.closeButton}
-            </Button>
-          )}
-          {entry.lifecycle === "closed" && !entry.archived && !isConfirmingRemoval && (
-            <Button
-              variant="destructive"
-              size="sm"
-              pending={isPending}
-              aria-label={`${isPending ? surveysCopy.admin.removingButton : surveysCopy.admin.removeButton} – ${displayName}`}
-              onClick={onRequestRemove}
-            >
-              {isPending ? surveysCopy.admin.removingButton : surveysCopy.admin.removeButton}
-            </Button>
-          )}
-        </div>
-      </div>
-      {isConfirmingRemoval && (
-        <div className="flex flex-col gap-2 rounded border border-red-300 p-3 dark:border-red-900">
-          <p className="text-sm text-zinc-900 dark:text-zinc-50">{surveysCopy.admin.removeConfirmPrompt}</p>
-          <div className="flex gap-2">
-            <Button
-              variant="destructive"
-              size="sm"
-              aria-label={`${surveysCopy.admin.removeConfirmButton} – ${displayName}`}
-              onClick={onConfirmRemove}
-            >
-              {surveysCopy.admin.removeConfirmButton}
-            </Button>
-            <Button variant="secondary" size="sm" onClick={onCancelRemove}>
-              {surveysCopy.admin.removeCancelButton}
-            </Button>
-          </div>
-        </div>
-      )}
-    </Card>
   );
 }

@@ -90,7 +90,7 @@ checked again in the server operation (superadmin or `teamadmin`).
 
 | Route | File | Purpose |
 | --- | --- | --- |
-| `/admin/teams` | `app/(app)/admin/teams/page.tsx` | Team list and creation |
+| `/admin/teams` | `app/(app)/admin/teams/page.tsx` | Team list and creation. Header "Team" with a compact count strip (active, disabled, total), a create toggle at the right, client-side search by team name and an all/active/disabled filter over the loaded list. Cards show the landscape artwork, the name, the status and the Team-ID (secondary), with "Administrer team" as the primary link and activate/deactivate as the secondary action. Two compact links to Kompetanseområder and Roller sit above the list |
 | `/admin/teams/[teamId]` | `app/(app)/admin/teams/[teamId]/page.tsx` | Team administration: members, invitations, access requests, surveys, challenges, skills |
 | `/admin/roles` | `app/(app)/admin/roles/page.tsx` | Organizational role definitions and assignments |
 | `/admin/skills` | `app/(app)/admin/skills/page.tsx` | Skill tree catalog (`skillTrees`). Not in the sidebar; linked from `/admin/teams` |

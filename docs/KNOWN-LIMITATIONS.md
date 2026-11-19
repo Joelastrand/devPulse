@@ -181,6 +181,41 @@ the flag. The flag is not a security control.
   `TASKS.md`). That workflow is unchanged, but no feature currently has a live SPEC or TASKS file.
 - **Admin-initiated account deletion is not supported.** Account erasure is self-only (AE-SI-1, BR-22). No superadmin endpoint or UI deletes another account; this is deferred and needs an explicit decision that amends AE-SI-1 and BR-22 (see `docs/SECURITY.md`, §10). Superadmin user management offers listing, search, details, disable and re-enable only.
 
+### 5.1 Team administration UI redesign: verification deferred
+
+The team administration UI redesign (phase 1.1 navigation refinement, phase 2 team listing and Members tab, phase 3 Roles and
+Invitations tabs, phase 4 Surveys and Challenges tabs, phase 5 Kompetanse tab) is implemented in the working tree but
+**not verified**.
+
+Phase 5 behaviour to confirm: a tracked competency area shows its current stage and a progress bar by default. The stage
+timeline, the stage selector and "Stopp sporing" are behind "Vis detaljer". Progress is the position in the defined stage
+sequence and is never shown as a competence percentage. The final stage is the last node in that sequence. The stage
+selector still saves immediately on selection, as before, with no save button. Start and stop tracking still have no
+confirmation. The tracking state is seeded from the team's persisted progress on load (`fetchTeamSkills`), so a reload shows
+the stored stage. If that read fails, every area falls back to untracked, as the parent already did before this redesign.
+
+Phase 4 behaviour to confirm: survey "Slett/arkiver" is still one combined operation. The server deletes a closed survey with
+no responses and archives one with responses, so the wording stays accurate and nothing is split. It sits in a
+"Flere handlinger" menu with its existing inline confirmation. Survey summary and filter categories are read from the
+existing lifecycle and archive fields and are mutually exclusive. Challenge search and filters run over the loaded list.
+The default challenge view is "Åpne", and long texts collapse with "Vis mer". Resolve is the primary action for an open
+challenge. Archive and delete are in the menu, and delete keeps its inline confirmation. The team's surveys and challenges
+are loaded as one list with no pagination signal, so search covers all data this page has loaded. No unit, integration, emulator, type-check, lint, build or browser check was run
+for these changes, by explicit decision to postpone verification until all redesign phases are complete. Behaviour,
+accessibility, responsive layout and dark-theme styling are therefore unconfirmed. Existing unit tests for these components
+(`AdminTeams.test.tsx`, `AdminTeamTabs.test.tsx`, `AdminTeamDetail*.test.*`) may still assert the replaced copy or classes and
+need updating during the final verification phase.
+
+Behaviour changes in the Members tab that the final verification must confirm: member removal now requires an inline
+confirmation (it had none); a member without a display name shows "Medlem uten navn" and no longer shows the raw user ID
+as a fallback e-mail; and member actions sit in a disclosure ("Flere handlinger") instead of two always-visible buttons.
+
+Phase 3 behaviour changes to confirm: an organizational role is edited in an inline editor that opens beneath its row (one
+open at a time, Escape closes it); the invite form shows "Invitasjonen er sendt." only after the server confirms; access
+requests without an e-mail show "E-postadresse ikke tilgjengelig" instead of the raw user ID. Organizational role removal
+still has no confirmation, as before. Authorization for role assignment, including the self-assignment rule for an active
+global superadmin, is enforced by the unchanged server routes, and the UI does not hide or add any permission.
+
 ## Phase 2D.7 open items (2026-11-17)
 
 - **Production UI and API visibility of the demo team is unverified.** The read-only Firestore checks cover the assessment category only. No authorized production browser or API session was used. See `docs/DEMO-DATA-MAINTENANCE.md`, "Phase 2D.7".

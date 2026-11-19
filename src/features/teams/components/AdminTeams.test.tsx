@@ -153,7 +153,10 @@ describe("AdminTeams", () => {
     const activeBadge = screen.getAllByText("Aktivt")[0];
     expect(activeBadge.tagName).toBe("SPAN");
     expect(fetchAdminTeamsMock).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("2 aktive · 1 deaktiverte")).toBeTruthy();
+    // Counts are shown as labelled stats, each derived from the loaded list (Aktive team 2, Deaktiverte team 1, Totalt 3).
+    expect(screen.getByText("Aktive team").nextElementSibling?.textContent).toBe("2");
+    expect(screen.getByText("Deaktiverte team").nextElementSibling?.textContent).toBe("1");
+    expect(screen.getByText("Totalt").nextElementSibling?.textContent).toBe("3");
   });
 
   it("labels each team's opaque Firestore ID clearly instead of showing it bare", async () => {

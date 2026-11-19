@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { AdminSkillTreeEntry } from "../client/skill-trees-gateway";
 import {
@@ -168,8 +168,18 @@ describe("TeamSkillTrackingSection", () => {
     );
 
     expect(screen.queryByRole("button", { name: /start sporing – containere/i })).toBeNull();
+    expandTree("Containere");
     expect(screen.getByRole("combobox", { name: /sett stadium – containere/i })).toBeTruthy();
   });
+
+  /**
+   * A tracked area keeps its timeline, stage selector and stop action behind "Vis detaljer – <area>". This opens that
+   * disclosure synchronously. It does nothing when the area is not tracked and so has no disclosure.
+   */
+  function expandTree(areaName: string) {
+    const toggle = screen.queryByRole("button", { name: new RegExp(`^vis detaljer – ${areaName}$`, "i") });
+    if (toggle) fireEvent.click(toggle);
+  }
 
   function renderTracked(currentNodeId: string | null, tracking?: Record<string, TeamSkillTrackingState>) {
     const props = {
@@ -182,6 +192,7 @@ describe("TeamSkillTrackingSection", () => {
       onStop: vi.fn(),
     };
     const result = render(<TeamSkillTrackingSection {...props} />);
+    expandTree("Containere");
     return { ...result, props };
   }
 
@@ -210,8 +221,8 @@ describe("TeamSkillTrackingSection", () => {
     const items = within(pathList("Containere")).getAllByRole("listitem");
     expect(items.some((li) => li.hasAttribute("aria-current"))).toBe(false);
     expect(screen.getByText(/teamets nåværende steg/i).textContent).toMatch(/ikke startet/i);
-    // The Select's disabled placeholder option is the only other "Ikke startet".
-    expect(screen.getAllByText(/ikke startet/i)).toHaveLength(2);
+    // Three "Ikke startet" texts: the area's own label, the path's summary, and the Select's disabled placeholder option.
+    expect(screen.getAllByText(/ikke startet/i)).toHaveLength(3);
     const select = screen.getByRole("combobox", { name: /sett stadium – containere/i }) as HTMLSelectElement;
     expect(select.value).toBe("");
   });
@@ -259,7 +270,8 @@ describe("TeamSkillTrackingSection", () => {
     expect(within(list).queryAllByRole("combobox")).toHaveLength(0);
     expect(list.querySelectorAll("[tabindex], button, a, select, input").length).toBe(0);
     expect(screen.getAllByRole("combobox")).toHaveLength(1);
-    expect(screen.getAllByRole("button")).toHaveLength(2); // stop (Containere) + start (Observability)
+    // "Skjul detaljer", stop (Containere) and start (Observability) are the only buttons.
+    expect(screen.getAllByRole("button")).toHaveLength(3);
   });
 
   it("does not call onSetStage when a path stage is clicked", async () => {
@@ -295,6 +307,7 @@ describe("TeamSkillTrackingSection", () => {
       />,
     );
 
+    expandTree("Containere");
     const select = screen.getByRole("combobox", { name: /sett stadium – containere/i });
     expect(within(select).getAllByRole("option").map((o) => (o as HTMLOptionElement).value)).toEqual([
       "node-0",
@@ -321,6 +334,7 @@ describe("TeamSkillTrackingSection", () => {
       />,
     );
 
+    expandTree("Containere");
     expect(pathList("Containere")).toBeTruthy();
     expect(screen.getByRole("combobox", { name: /sett stadium – containere/i }).hasAttribute("disabled")).toBe(false);
   });
@@ -338,6 +352,7 @@ describe("TeamSkillTrackingSection", () => {
       />,
     );
 
+    expandTree("Containere");
     // The row-disambiguating aria-label ("Sett stadium – Containere") is the
     // accessible name, but the shared Select primitive also renders a real,
     // visible <label> with the plain field label text, associated via
@@ -361,6 +376,7 @@ describe("TeamSkillTrackingSection", () => {
       />,
     );
 
+    expandTree("Containere");
     const select = screen.getByRole("combobox", { name: /sett stadium – containere/i });
     const options = within(select).getAllByRole("option").map((option) => (option as HTMLOptionElement).value);
     expect(options).toEqual(["node-0", "node-1", "node-2"]);
@@ -382,6 +398,7 @@ describe("TeamSkillTrackingSection", () => {
       />,
     );
 
+    expandTree("Containere");
     const select = screen.getByRole("combobox", { name: /sett stadium – containere/i });
     await user.selectOptions(select, "node-0");
 
@@ -405,6 +422,7 @@ describe("TeamSkillTrackingSection", () => {
       />,
     );
 
+    expandTree("Containere");
     const select = screen.getByRole("combobox", { name: /sett stadium – containere/i });
     expect(select.hasAttribute("disabled")).toBe(false);
     await user.selectOptions(select, "node-1");
@@ -432,6 +450,7 @@ describe("TeamSkillTrackingSection", () => {
       />,
     );
 
+    expandTree("Containere");
     await user.click(screen.getByRole("button", { name: /stopp sporing – containere/i }));
 
     expect(onStop).toHaveBeenCalledWith("tree-1");

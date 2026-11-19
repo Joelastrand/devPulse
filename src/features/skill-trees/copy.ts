@@ -65,14 +65,26 @@ export const adminSkillsCopy = {
  */
 export const teamSkillTrackingCopy = {
   sectionTitle: "Kompetanseområder",
+  sectionDescription: "Følg teamets utvikling og administrer kompetanseområder.",
   loading: "Laster kompetanseområder…",
   error: "Noe gikk galt under lasting av kompetanseområder. Prøv igjen senere.",
   empty: "Ingen kompetanseområder er opprettet ennå.",
+  summary: {
+    tracked: "Sporte områder",
+    untracked: "Ikke sporet",
+    atFinalStage: "På siste stadium",
+  },
   tracked: {
-    sectionTitle: "Sporede kompetanseområder",
-    empty: "Teamet sporer ingen kompetanseområder ennå.",
+    sectionTitle: "Sporte kompetanseområder",
+    empty: "Ingen kompetanseområder spores ennå.",
     notStarted: "Ikke startet",
+    /** Visible text equivalent of the progress bar. Stage numbers are 1-based. */
+    stageOf: (position: number, total: number) => `Stadium ${position} av ${total}`,
+    finalStage: "Siste stadium",
+    showDetails: "Vis detaljer",
+    hideDetails: "Skjul detaljer",
     stageSelectLabel: "Sett stadium",
+    stageSaving: "Lagrer stadium…",
     stopButton: "Stopp sporing",
     stoppingButton: "Stopper…",
     error: {
@@ -83,7 +95,11 @@ export const teamSkillTrackingCopy = {
   },
   untracked: {
     sectionTitle: "Start sporing",
-    empty: "Alle kompetanseområder spores allerede av dette teamet.",
+    description: "Velg kompetanseområder teamet vil følge.",
+    empty: "Ingen flere kompetanseområder å starte sporing for.",
+    searchLabel: "Søk etter kompetanseområde",
+    searchReset: "Nullstill søk",
+    noSearchMatches: "Ingen kompetanseområder samsvarer med søket.",
     startButton: "Start sporing",
     startingButton: "Starter…",
     disabledHint: "Teamet er deaktivert. Sporing kan først startes når teamet er aktivt igjen.",

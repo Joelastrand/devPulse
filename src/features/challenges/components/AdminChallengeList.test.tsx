@@ -28,6 +28,41 @@ const ARCHIVED_CHALLENGE: AdminChallengeView = {
 
 function noop() {}
 
+type UserEvent = ReturnType<typeof userEvent.setup>;
+
+/** Row actions other than "Marker som løst" live in "Flere handlinger – <text>". The text is shortened to 40 characters. */
+function menuTrigger(text: string): HTMLElement {
+  const trimmed = text.trim();
+  const short = trimmed.length > 40 ? `${trimmed.slice(0, 40).trimEnd()}…` : trimmed;
+  return screen.getByRole("button", { name: `Flere handlinger – ${short}` });
+}
+
+async function openMenu(user: UserEvent, text: string) {
+  await user.click(menuTrigger(text));
+}
+
+function renderList(props: {
+  challenges: AdminChallengeView[];
+  actions?: Record<string, AdminChallengeRowActionState>;
+  onResolve?: (id: string) => void;
+  onArchive?: (id: string) => void;
+  onRequestDelete?: (id: string) => void;
+  onCancelDelete?: (id: string) => void;
+  onConfirmDelete?: (id: string) => void;
+}) {
+  return render(
+    <AdminChallengeList
+      state={{ status: "loaded", challenges: props.challenges }}
+      actions={props.actions ?? {}}
+      onResolve={props.onResolve ?? noop}
+      onArchive={props.onArchive ?? noop}
+      onRequestDelete={props.onRequestDelete ?? noop}
+      onCancelDelete={props.onCancelDelete ?? noop}
+      onConfirmDelete={props.onConfirmDelete ?? noop}
+    />,
+  );
+}
+
 describe("AdminChallengeList", () => {
   afterEach(() => {
     cleanup();
@@ -66,167 +101,96 @@ describe("AdminChallengeList", () => {
   });
 
   it("shows an empty state when there are no challenges at all", () => {
-    render(
-      <AdminChallengeList
-        state={{ status: "loaded", challenges: [] }}
-        actions={{}}
-        onResolve={noop}
-        onArchive={noop}
-        onRequestDelete={noop}
-        onCancelDelete={noop}
-        onConfirmDelete={noop}
-      />,
-    );
+    renderList({ challenges: [] });
 
     expect(screen.getByText(/ingen utfordringer/i)).toBeTruthy();
   });
 
-  it("groups open/resolved challenges as active and archived challenges separately — archived remains visible", () => {
-    render(
-      <AdminChallengeList
-        state={{ status: "loaded", challenges: [OPEN_CHALLENGE, RESOLVED_CHALLENGE, ARCHIVED_CHALLENGE] }}
-        actions={{}}
-        onResolve={noop}
-        onArchive={noop}
-        onRequestDelete={noop}
-        onCancelDelete={noop}
-        onConfirmDelete={noop}
-      />,
-    );
+  it("shows open challenges by default and reveals resolved and archived ones through the status filter", async () => {
+    const user = userEvent.setup();
+    renderList({ challenges: [OPEN_CHALLENGE, RESOLVED_CHALLENGE, ARCHIVED_CHALLENGE] });
 
-    const active = screen.getByText(/^aktive$/i).closest("div") as HTMLElement;
-    const archived = screen.getByText(/^arkiverte$/i).closest("div") as HTMLElement;
+    expect(screen.getByText(OPEN_CHALLENGE.text)).toBeTruthy();
+    expect(screen.queryByText(RESOLVED_CHALLENGE.text)).toBeNull();
+    expect(screen.queryByText(ARCHIVED_CHALLENGE.text)).toBeNull();
 
-    expect(within(active).getByText(OPEN_CHALLENGE.text)).toBeTruthy();
-    expect(within(active).getByText(RESOLVED_CHALLENGE.text)).toBeTruthy();
-    expect(within(archived).getByText(ARCHIVED_CHALLENGE.text)).toBeTruthy();
-    expect(within(active).queryByText(ARCHIVED_CHALLENGE.text)).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Alle" }));
+    expect(screen.getByText(RESOLVED_CHALLENGE.text)).toBeTruthy();
+    expect(screen.getByText(ARCHIVED_CHALLENGE.text)).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Arkiverte" }));
+    expect(screen.queryByText(OPEN_CHALLENGE.text)).toBeNull();
+    expect(screen.getByText(ARCHIVED_CHALLENGE.text)).toBeTruthy();
   });
 
   it("renders each challenge's status label via the shared Badge primitive, not a bare paragraph (BR-10)", () => {
-    render(
-      <AdminChallengeList
-        state={{ status: "loaded", challenges: [OPEN_CHALLENGE] }}
-        actions={{}}
-        onResolve={noop}
-        onArchive={noop}
-        onRequestDelete={noop}
-        onCancelDelete={noop}
-        onConfirmDelete={noop}
-      />,
-    );
+    renderList({ challenges: [OPEN_CHALLENGE] });
 
     const label = screen.getByText(/^åpen$/i);
     expect(label.tagName).toBe("SPAN");
   });
 
-  it("shows a no-archived empty state when only active challenges exist", () => {
-    render(
-      <AdminChallengeList
-        state={{ status: "loaded", challenges: [OPEN_CHALLENGE] }}
-        actions={{}}
-        onResolve={noop}
-        onArchive={noop}
-        onRequestDelete={noop}
-        onCancelDelete={noop}
-        onConfirmDelete={noop}
-      />,
-    );
+  it("shows a no-archived empty state when the archived filter has no matches", async () => {
+    const user = userEvent.setup();
+    renderList({ challenges: [OPEN_CHALLENGE] });
+
+    await user.click(screen.getByRole("button", { name: "Arkiverte" }));
 
     expect(screen.getByText(/ingen arkiverte utfordringer/i)).toBeTruthy();
   });
 
-  it("renders Marker som løst, Arkiver, and Slett for an open challenge", () => {
-    render(
-      <AdminChallengeList
-        state={{ status: "loaded", challenges: [OPEN_CHALLENGE] }}
-        actions={{}}
-        onResolve={noop}
-        onArchive={noop}
-        onRequestDelete={noop}
-        onCancelDelete={noop}
-        onConfirmDelete={noop}
-      />,
-    );
+  it("renders Marker som løst as the primary action, with Arkiver and Slett in the row menu, for an open challenge", async () => {
+    const user = userEvent.setup();
+    renderList({ challenges: [OPEN_CHALLENGE] });
 
     expect(screen.getByRole("button", { name: /marker som løst/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /^arkiver –/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /^slett –/i })).toBeTruthy();
+    await openMenu(user, OPEN_CHALLENGE.text);
+    expect(screen.getByRole("button", { name: "Arkiver" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Slett" })).toBeTruthy();
   });
 
-  it("renders only Arkiver and Slett for a resolved challenge — no resolve action", () => {
-    render(
-      <AdminChallengeList
-        state={{ status: "loaded", challenges: [RESOLVED_CHALLENGE] }}
-        actions={{}}
-        onResolve={noop}
-        onArchive={noop}
-        onRequestDelete={noop}
-        onCancelDelete={noop}
-        onConfirmDelete={noop}
-      />,
-    );
+  it("renders only Arkiver and Slett for a resolved challenge — no resolve action", async () => {
+    const user = userEvent.setup();
+    renderList({ challenges: [RESOLVED_CHALLENGE] });
+
+    await user.click(screen.getByRole("button", { name: "Alle" }));
 
     expect(screen.queryByRole("button", { name: /marker som løst/i })).toBeNull();
-    expect(screen.getByRole("button", { name: /^arkiver –/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /^slett –/i })).toBeTruthy();
+    await openMenu(user, RESOLVED_CHALLENGE.text);
+    expect(screen.getByRole("button", { name: "Arkiver" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Slett" })).toBeTruthy();
   });
 
-  it("renders only Slett for an archived challenge — no resolve or archive, and no reopen/unarchive action of any kind", () => {
-    render(
-      <AdminChallengeList
-        state={{ status: "loaded", challenges: [ARCHIVED_CHALLENGE] }}
-        actions={{}}
-        onResolve={noop}
-        onArchive={noop}
-        onRequestDelete={noop}
-        onCancelDelete={noop}
-        onConfirmDelete={noop}
-      />,
-    );
+  it("renders only Slett for an archived challenge — no resolve or archive, and no reopen/unarchive action of any kind", async () => {
+    const user = userEvent.setup();
+    renderList({ challenges: [ARCHIVED_CHALLENGE] });
+
+    await user.click(screen.getByRole("button", { name: "Arkiverte" }));
 
     expect(screen.queryByRole("button", { name: /marker som løst/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /^arkiver –/i })).toBeNull();
-    expect(screen.getByRole("button", { name: /^slett –/i })).toBeTruthy();
+    await openMenu(user, ARCHIVED_CHALLENGE.text);
+    expect(screen.queryByRole("button", { name: "Arkiver" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Slett" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /gjenåpne|reopen|un-?arkiver|un-?resolve/i })).toBeNull();
   });
 
   it("calls onResolve with the challengeId when Marker som løst is clicked", async () => {
     const user = userEvent.setup();
     const onResolve = vi.fn();
-    render(
-      <AdminChallengeList
-        state={{ status: "loaded", challenges: [OPEN_CHALLENGE] }}
-        actions={{}}
-        onResolve={onResolve}
-        onArchive={noop}
-        onRequestDelete={noop}
-        onCancelDelete={noop}
-        onConfirmDelete={noop}
-      />,
-    );
+    renderList({ challenges: [OPEN_CHALLENGE], onResolve });
 
     await user.click(screen.getByRole("button", { name: /marker som løst/i }));
 
     expect(onResolve).toHaveBeenCalledWith("c1");
   });
 
-  it("calls onArchive with the challengeId when Arkiver is clicked", async () => {
+  it("calls onArchive with the challengeId when Arkiver is chosen from the row menu", async () => {
     const user = userEvent.setup();
     const onArchive = vi.fn();
-    render(
-      <AdminChallengeList
-        state={{ status: "loaded", challenges: [OPEN_CHALLENGE] }}
-        actions={{}}
-        onResolve={noop}
-        onArchive={onArchive}
-        onRequestDelete={noop}
-        onCancelDelete={noop}
-        onConfirmDelete={noop}
-      />,
-    );
+    renderList({ challenges: [OPEN_CHALLENGE], onArchive });
 
-    await user.click(screen.getByRole("button", { name: /^arkiver –/i }));
+    await openMenu(user, OPEN_CHALLENGE.text);
+    await user.click(screen.getByRole("button", { name: "Arkiver" }));
 
     expect(onArchive).toHaveBeenCalledWith("c1");
   });
@@ -237,19 +201,15 @@ describe("AdminChallengeList", () => {
     const onConfirmDelete = vi.fn();
     const onCancelDelete = vi.fn();
 
-    const { rerender } = render(
-      <AdminChallengeList
-        state={{ status: "loaded", challenges: [OPEN_CHALLENGE] }}
-        actions={{}}
-        onResolve={noop}
-        onArchive={noop}
-        onRequestDelete={onRequestDelete}
-        onCancelDelete={onCancelDelete}
-        onConfirmDelete={onConfirmDelete}
-      />,
-    );
+    const { rerender } = renderList({
+      challenges: [OPEN_CHALLENGE],
+      onRequestDelete,
+      onCancelDelete,
+      onConfirmDelete,
+    });
 
-    await user.click(screen.getByRole("button", { name: /^slett –/i }));
+    await openMenu(user, OPEN_CHALLENGE.text);
+    await user.click(screen.getByRole("button", { name: "Slett" }));
     expect(onRequestDelete).toHaveBeenCalledWith("c1");
     expect(onConfirmDelete).not.toHaveBeenCalled();
 
@@ -276,17 +236,11 @@ describe("AdminChallengeList", () => {
     const user = userEvent.setup();
     const onConfirmDelete = vi.fn();
 
-    render(
-      <AdminChallengeList
-        state={{ status: "loaded", challenges: [OPEN_CHALLENGE] }}
-        actions={{ c1: { status: "confirming_deletion" } }}
-        onResolve={noop}
-        onArchive={noop}
-        onRequestDelete={noop}
-        onCancelDelete={noop}
-        onConfirmDelete={onConfirmDelete}
-      />,
-    );
+    renderList({
+      challenges: [OPEN_CHALLENGE],
+      actions: { c1: { status: "confirming_deletion" } },
+      onConfirmDelete,
+    });
 
     await user.click(screen.getByRole("button", { name: /bekreft sletting/i }));
     expect(onConfirmDelete).toHaveBeenCalledWith("c1");
@@ -296,92 +250,54 @@ describe("AdminChallengeList", () => {
     const actions: Record<string, AdminChallengeRowActionState> = {
       c1: { status: "pending", action: "resolve" },
     };
-    render(
-      <AdminChallengeList
-        state={{ status: "loaded", challenges: [OPEN_CHALLENGE] }}
-        actions={actions}
-        onResolve={noop}
-        onArchive={noop}
-        onRequestDelete={noop}
-        onCancelDelete={noop}
-        onConfirmDelete={noop}
-      />,
-    );
+    renderList({ challenges: [OPEN_CHALLENGE], actions });
 
     const resolveButton = screen.getByRole("button", { name: /markerer/i });
-    const archiveButton = screen.getByRole("button", { name: /^arkiver –/i });
-    const deleteButton = screen.getByRole("button", { name: /^slett –/i });
+    const menu = menuTrigger(OPEN_CHALLENGE.text);
     expect(resolveButton.hasAttribute("disabled")).toBe(true);
-    expect(archiveButton.hasAttribute("disabled")).toBe(true);
-    expect(deleteButton.hasAttribute("disabled")).toBe(true);
+    expect(menu.hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("status").textContent).toMatch(/markerer/i);
   });
 
   it("shows a row-local error state without affecting other rows", () => {
     const actions: Record<string, AdminChallengeRowActionState> = {
       c1: { status: "error", message: "Kunne ikke markere utfordringen som løst. Prøv igjen." },
     };
-    render(
-      <AdminChallengeList
-        state={{ status: "loaded", challenges: [OPEN_CHALLENGE, RESOLVED_CHALLENGE] }}
-        actions={actions}
-        onResolve={noop}
-        onArchive={noop}
-        onRequestDelete={noop}
-        onCancelDelete={noop}
-        onConfirmDelete={noop}
-      />,
-    );
+    renderList({ challenges: [OPEN_CHALLENGE, RESOLVED_CHALLENGE], actions });
 
     const alerts = screen.getAllByRole("alert");
     expect(alerts).toHaveLength(1);
     expect(alerts[0].textContent).toMatch(/løst/i);
   });
 
-  it("keeps one row's pending state independent of another row's idle state", () => {
+  it("keeps one row's pending state independent of another row's idle state", async () => {
+    const user = userEvent.setup();
     const actions: Record<string, AdminChallengeRowActionState> = {
       c1: { status: "pending", action: "archive" },
     };
-    render(
-      <AdminChallengeList
-        state={{ status: "loaded", challenges: [OPEN_CHALLENGE, RESOLVED_CHALLENGE] }}
-        actions={actions}
-        onResolve={noop}
-        onArchive={noop}
-        onRequestDelete={noop}
-        onCancelDelete={noop}
-        onConfirmDelete={noop}
-      />,
-    );
+    renderList({ challenges: [OPEN_CHALLENGE, RESOLVED_CHALLENGE], actions });
+
+    await user.click(screen.getByRole("button", { name: "Alle" }));
 
     const resolvedRow = screen.getByText(RESOLVED_CHALLENGE.text).closest("li") as HTMLElement;
-    const resolvedArchiveButton = within(resolvedRow).getByRole("button", { name: /^arkiver –/i });
-    expect(resolvedArchiveButton.hasAttribute("disabled")).toBe(false);
+    const resolvedMenu = within(resolvedRow).getByRole("button", { name: /^flere handlinger – /i });
+    expect(resolvedMenu.hasAttribute("disabled")).toBe(false);
   });
 
-  it("disambiguates same-label action buttons across rows with an accessible name naming each row's own challenge", async () => {
+  it("disambiguates same-label row menus with an accessible name naming each row's own challenge", async () => {
     const user = userEvent.setup();
     const onArchive = vi.fn();
     const secondOpen: AdminChallengeView = { ...OPEN_CHALLENGE, challengeId: "c5", text: "Second open challenge" };
 
-    render(
-      <AdminChallengeList
-        state={{ status: "loaded", challenges: [OPEN_CHALLENGE, secondOpen] }}
-        actions={{}}
-        onResolve={noop}
-        onArchive={onArchive}
-        onRequestDelete={noop}
-        onCancelDelete={noop}
-        onConfirmDelete={noop}
-      />,
-    );
+    renderList({ challenges: [OPEN_CHALLENGE, secondOpen], onArchive });
 
-    // Two rows each render an "Arkiver" button — their accessible names must
-    // differ so a screen-reader user can tell which row a button acts on.
-    const firstArchive = screen.getByRole("button", { name: `Arkiver – ${OPEN_CHALLENGE.text}` });
-    const secondArchive = screen.getByRole("button", { name: `Arkiver – ${secondOpen.text}` });
-    expect(firstArchive).not.toBe(secondArchive);
+    // Each row's menu trigger names its own challenge, so a screen-reader user can tell which row an action acts on.
+    const firstMenu = menuTrigger(OPEN_CHALLENGE.text);
+    const secondMenu = menuTrigger(secondOpen.text);
+    expect(firstMenu).not.toBe(secondMenu);
 
-    await user.click(secondArchive);
+    await user.click(secondMenu);
+    await user.click(screen.getByRole("button", { name: "Arkiver" }));
     expect(onArchive).toHaveBeenCalledWith("c5");
   });
 
@@ -393,22 +309,27 @@ describe("AdminChallengeList", () => {
       submittedAt: "2026-01-01",
     };
 
-    render(
-      <AdminChallengeList
-        state={{ status: "loaded", challenges: [longChallenge] }}
-        actions={{}}
-        onResolve={noop}
-        onArchive={noop}
-        onRequestDelete={noop}
-        onCancelDelete={noop}
-        onConfirmDelete={noop}
-      />,
-    );
+    renderList({ challenges: [longChallenge] });
 
-    const deleteButton = screen.getByRole("button", { name: /^slett –/i });
-    const accessibleName = deleteButton.getAttribute("aria-label") ?? "";
+    const menu = screen.getByRole("button", { name: /^flere handlinger – /i });
+    const accessibleName = menu.getAttribute("aria-label") ?? "";
     expect(accessibleName.length).toBeLessThan(longChallenge.text.length);
     expect(accessibleName).not.toContain(longChallenge.text);
+  });
+
+  it("collapses a long challenge text behind an accessible Vis mer toggle, and shows the full text once expanded", async () => {
+    const user = userEvent.setup();
+    const longText = "Lang beskrivelse. ".repeat(30).trim();
+    renderList({ challenges: [{ challengeId: "c7", text: longText, status: "open", submittedAt: "2026-01-01" }] });
+
+    expect(screen.queryByText(longText)).toBeNull();
+    const toggle = screen.getByRole("button", { name: "Vis mer" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+
+    await user.click(toggle);
+
+    expect(screen.getByText(longText)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Vis mindre" }).getAttribute("aria-expanded")).toBe("true");
   });
 
   it("never renders an identity-shaped value (uid/email/resolvedBy/archivedBy) anywhere in its output", () => {
@@ -418,17 +339,7 @@ describe("AdminChallengeList", () => {
       status: "open",
       submittedAt: "2026-01-01",
     };
-    const { container } = render(
-      <AdminChallengeList
-        state={{ status: "loaded", challenges: [canary] }}
-        actions={{}}
-        onResolve={noop}
-        onArchive={noop}
-        onRequestDelete={noop}
-        onCancelDelete={noop}
-        onConfirmDelete={noop}
-      />,
-    );
+    const { container } = renderList({ challenges: [canary] });
 
     expect(container.textContent).not.toMatch(/uid/i);
     expect(container.textContent).not.toMatch(/[\w.-]+@[\w.-]+\.\w+/);
@@ -438,17 +349,7 @@ describe("AdminChallengeList", () => {
   });
 
   it("never renders a 'submitted by'/'user'/'member'/'author' label implying the admin can identify the submitter", () => {
-    const { container } = render(
-      <AdminChallengeList
-        state={{ status: "loaded", challenges: [OPEN_CHALLENGE] }}
-        actions={{}}
-        onResolve={noop}
-        onArchive={noop}
-        onRequestDelete={noop}
-        onCancelDelete={noop}
-        onConfirmDelete={noop}
-      />,
-    );
+    const { container } = renderList({ challenges: [OPEN_CHALLENGE] });
 
     expect(container.textContent).not.toMatch(/meldt inn av|forfatter|medlem:/i);
   });
