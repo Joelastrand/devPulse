@@ -14,10 +14,10 @@ describe("/teams page", () => {
     cleanup();
   });
 
-  it("renders the Team heading and the directory", () => {
+  it("renders the 'Mine team' heading and the directory", () => {
     render(<TeamsPage />);
 
-    expect(screen.getByRole("heading", { level: 1, name: "Team" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1, name: "Mine team" })).toBeTruthy();
     expect(screen.getByTestId("teams-overview")).toBeTruthy();
   });
 

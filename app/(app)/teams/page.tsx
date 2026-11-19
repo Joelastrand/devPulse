@@ -11,7 +11,7 @@ export default function TeamsPage() {
         description={teamsCopy.overview.pageDescription}
       />
       <div className="mt-6">
-        <TeamsOverview />
+        <TeamsOverview layout="page" />
       </div>
     </PageShell>
   );

@@ -51,7 +51,7 @@ function flushMicrotasks() {
 const SIGNED_OUT_LINK_NAMES = [/hjem/i, /logg inn/i, /opprett konto/i];
 const SIGNED_IN_LINK_NAMES = [
   /hjem/i,
-  /^team$/i,
+  /^mine team$/i,
   /^ferdigheter$/i,
   /^mål$/i,
   /^samtaler$/i,
@@ -165,12 +165,12 @@ describe("AppShell", () => {
     await screen.findByRole("link", { name: /^roller$/i });
     expect(navLinkNames()).toEqual([
       "Hjem",
-      "Team",
+      "Mine team",
       "Ferdigheter",
       "Mål",
       "Samtaler",
       "Mine oppgaver",
-      "Team",
+      "Administrer team",
       "Roller",
       "Superadministratorer",
       "Min profil",
@@ -252,7 +252,7 @@ describe("AppShell", () => {
     render(<AppShell />);
 
     expect((await screen.findByRole("link", { name: /^min profil$/i })).getAttribute("aria-current")).toBe("page");
-    expect(screen.getByRole("link", { name: /^team$/i }).getAttribute("aria-current")).toBeNull();
+    expect(screen.getByRole("link", { name: /^mine team$/i }).getAttribute("aria-current")).toBeNull();
     usePathnameMock.mockReturnValue("/");
   });
 

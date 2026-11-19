@@ -3,11 +3,6 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
-import { Badge } from "../../../components/ui/Badge";
-import { Button } from "../../../components/ui/Button";
-import { Card } from "../../../components/ui/Card";
-import { Icon } from "../../../components/ui/Icon";
-import { ChevronRight } from "lucide-react";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { TeamsGridSkeleton } from "./TeamAdminSkeletons";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
@@ -19,7 +14,8 @@ import {
   type TeamsOverviewFetchResult,
 } from "../client/teams-overview-gateway";
 import { requestAccessErrorMessage } from "./request-access-messages";
-import { TeamIdentity } from "./TeamIdentity";
+import { TeamCard, type TeamCardRequestState } from "./TeamCard";
+import { TeamsPageContent } from "./TeamsPageContent";
 
 type ViewState =
   | { phase: "loading" }
@@ -31,8 +27,12 @@ type RequestActionState =
   | { status: "pending" }
   | { status: "error"; message: string };
 
-const RELATIONSHIP_LABELS: Record<TeamOverviewEntry["relationship"], string> =
-  teamsCopy.relationshipLabels;
+function toCardRequestState(action: RequestActionState): TeamCardRequestState {
+  return {
+    pending: action.status === "pending",
+    errorMessage: action.status === "error" ? action.message : undefined,
+  };
+}
 
 const PARENT_SUPPLIED_RESULT: TeamsOverviewFetchResult = { status: "ok", teams: [] };
 
@@ -64,9 +64,12 @@ const PARENT_SUPPLIED_RESULT: TeamsOverviewFetchResult = { status: "ok", teams: 
 export function TeamsOverview({
   initialTeams,
   onTeamsChanged,
+  layout = "list",
 }: {
   initialTeams?: TeamOverviewEntry[];
   onTeamsChanged?: () => void;
+  /** `list` is the compact card grid used on the home page; `page` is the full Team page (summary, search, groups). */
+  layout?: "list" | "page";
 } = {}) {
   const [state, setState] = useState<ViewState>({ phase: "loading" });
   const [actionStates, setActionStates] = useState<Record<string, RequestActionState>>({});
@@ -168,64 +171,30 @@ export function TeamsOverview({
     return <EmptyState>{teamsCopy.overview.empty}</EmptyState>;
   }
 
+  const requestStates: Record<string, TeamCardRequestState> = Object.fromEntries(
+    Object.entries(actionStates).map(([teamId, action]) => [teamId, toCardRequestState(action)]),
+  );
+
+  if (layout === "page") {
+    return (
+      <TeamsPageContent
+        teams={teams}
+        requestStates={requestStates}
+        onRequestAccess={(teamId) => handleRequestAccess(token, teamId, generation)}
+      />
+    );
+  }
+
   return (
     <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-      {teams.map((team) => {
-        const action = actionStates[team.teamId] ?? { status: "idle" as const };
-        // Access comes from `canOpen` (membership, or the existing superadmin rule). The badge shows the team role only.
-        const canRequestAccess =
-          !team.canOpen && (team.relationship === "none" || team.relationship === "request_rejected");
-        const canOpen = team.canOpen;
-
-        return (
-          <Card
-            as="li"
-            key={team.teamId}
-            variant="bordered"
-            padding="sm"
-            className="flex flex-col overflow-hidden"
-          >
-            <TeamIdentity teamId={team.teamId} />
-            <div className="flex flex-1 flex-col gap-4 p-4">
-              <div className="flex min-w-0 flex-col gap-2">
-                {canOpen ? (
-                  <Link
-                    href={`/teams/${encodeURIComponent(team.teamId)}`}
-                    className="break-words text-panel-title font-semibold text-text-primary underline-offset-4 hover:underline"
-                  >
-                    {team.name}
-                  </Link>
-                ) : (
-                  <p className="break-words text-panel-title font-semibold text-text-primary">{team.name}</p>
-                )}
-                <p>
-                  <Badge>{RELATIONSHIP_LABELS[team.relationship]}</Badge>
-                </p>
-              </div>
-              {action.status === "error" && (
-                <Alert variant="error" className="text-sm">
-                  {action.message}
-                </Alert>
-              )}
-              <div className="mt-auto flex items-center justify-between gap-3">
-                {canRequestAccess ? (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    pending={action.status === "pending"}
-                    onClick={() => handleRequestAccess(token, team.teamId, generation)}
-                  >
-                    {action.status === "pending" ? teamsCopy.requestingAccess : teamsCopy.requestAccess}
-                  </Button>
-                ) : (
-                  <span />
-                )}
-                {canOpen && <Icon icon={ChevronRight} className="text-primary" />}
-              </div>
-            </div>
-          </Card>
-        );
-      })}
+      {teams.map((team) => (
+        <TeamCard
+          key={team.teamId}
+          team={team}
+          requestState={requestStates[team.teamId]}
+          onRequestAccess={() => handleRequestAccess(token, team.teamId, generation)}
+        />
+      ))}
     </ul>
   );
 }

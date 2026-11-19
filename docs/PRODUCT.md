@@ -40,7 +40,7 @@ Users:
 
 ### Teams
 
-- **Team list** (`/teams`): active teams the person can see. Non-members can request access; a team administrator
+- **Team list** (`/teams`, "Mine team"): the person's own teams first, then other active teams they can see under "Andre team". Non-members can request access; a team administrator
   approves or rejects.
 - **Team overview** (`/teams/[teamId]`): member roster (names only), current survey, results link and team activity.
 - **Teamkompetanse** (`/teams/[teamId]/competence`): the one team competence page.

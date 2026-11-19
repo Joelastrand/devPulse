@@ -26,12 +26,12 @@ Built in `navGroupsFor()` in `AppShell.tsx`:
 | Group | Label | Route | Visible to |
 | --- | --- | --- | --- |
 | workspace | Hjem | `/` | Signed in |
-| workspace | Team | `/teams` | Signed in |
+| workspace | Mine team | `/teams` | Signed in |
 | personal ("Min utvikling") | Ferdigheter | `/me/skills` | Signed in |
 | personal | Mål | `/me/goals` | Signed in |
 | personal | Samtaler | `/me/conversations` | Signed in |
 | personal | Mine oppgaver | `/tasks` | Signed in. Owner-only personal Kanban board ([`PERSONAL-TASKS.md`](PERSONAL-TASKS.md)) |
-| administration ("Administrasjon") | Team | `/admin/teams` | Superadmins only |
+| administration ("Administrasjon") | Administrer team | `/admin/teams` | Superadmins only |
 | administration | Roller | `/admin/roles` | Superadmins only |
 | administration | Superadministratorer | `/admin/superadmins` | Superadmins only |
 | account ("Konto") | Min profil | `/me/profile` | Signed in |
@@ -53,7 +53,7 @@ Signed-out navigation shows Hjem, Logg inn and Opprett konto (`PublicHeader`). S
 
 ### Team pages
 
-`/teams` (`app/(app)/teams/page.tsx`) lists teams the person can see, with a request-access action for non-members.
+`/teams` (`app/(app)/teams/page.tsx`, heading "Mine team") lists teams the person can see, with a request-access action for non-members. It renders `TeamsOverview` with `layout="page"`: a count strip (Mine team = genuine memberships, Teamadmin = team-admin memberships; no member totals), a client-side name search when there are two or more teams, the caller's teams under "Mine team" and other visible active teams under "Andre team". Each card is a single clickable link to the team (stretched link, "Åpne team") with a relationship badge; cards without access show request-access instead. Cards use the existing landscape artwork and `bg-surface`/`border-border-subtle`/`text-text-*` tokens, so light and dark themes follow the global token set. The home page reuses the same card through `TeamsOverview`'s default `list` layout.
 `/teams/[teamId]` is the team overview. Its tab bar (`TeamRouteNav`) shows seven tabs, in this order. On narrow screens the row scrolls horizontally:
 
 | Tab label | Route | File |

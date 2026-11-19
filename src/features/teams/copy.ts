@@ -12,13 +12,27 @@
  */
 export const teamsCopy = {
   overview: {
-    pageTitle: "Team",
-    pageDescription: "Alle aktive team og din egen relasjon til dem.",
+    pageTitle: "Mine team",
+    pageDescription: "Teamene du er medlem av, og andre aktive team du kan se.",
     loading: "Laster oversikt over team…",
     signInPrompt: "for å se oversikten over team.",
     signInLink: "Logg inn",
     error: "Noe gikk galt under lasting av team. Prøv igjen senere.",
     empty: "Ingen team er tilgjengelige ennå.",
+    /** Section headings on the Team page (`layout="page"`). "Andre team" appears only when such teams are visible. */
+    mineSectionTitle: "Mine team",
+    otherSectionTitle: "Andre team",
+    notMemberOfAny: "Du er ikke medlem av noen team ennå.",
+    /** Count strip above the cards. Both values count teams, never people. */
+    summaryMine: "Mine team",
+    summaryTeamAdmin: "Teamadmin",
+    search: {
+      label: "Søk etter team",
+      noResults: "Ingen team samsvarer med søket.",
+      reset: "Nullstill søk",
+    },
+    /** Visible affordance on a card the caller can open. The card's link keeps only the team name as its accessible name. */
+    openTeam: "Åpne team",
   },
   detail: {
     loading: "Laster team…",
