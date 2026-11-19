@@ -16,8 +16,9 @@ person. Source of truth: `src/features/personal-tasks/`, `app/api/me/tasks/`, `a
 - **Moving tasks:** drag-and-drop (`@dnd-kit/core` 6.3.1, `@dnd-kit/sortable` 10.0.0, `@dnd-kit/utilities` 3.2.2) moves a task between
   columns and reorders within a column. Each card has a grip button (the only drag source, so scrolling and clicking the title are unaffected).
   Keyboard: focus the grip, Space/Enter to pick up, arrows to move, Space/Enter to drop, Escape to cancel (Norwegian announcements).
-  The status select on every card is still available and lists the other three statuses. Dragging is off while a search or filter is
-  active and while another move is unconfirmed (the page says so).
+  Every card has a **Flere valg** button (44px target) that expands in place with **Åpne** and one **Flytt til …** action per other
+  status. It replaces the earlier always-visible full-width status select. Dragging is off while a search or filter is active and
+  while another move is unconfirmed (the page says so; the menu still works).
 - **Completion:** entering Fullført sets `completedAt` from the server clock. Leaving Fullført clears it, so the task returns to the
   active board. Reopening from history moves the task to Backlog.
 - **Completed-task visibility** (preference `completedVisibility`): `last7` (default, "Siste 7 dager") shows a completed task on the
@@ -27,8 +28,15 @@ person. Source of truth: `src/features/personal-tasks/`, `app/api/me/tasks/`, `a
   editor, with confirmation). Search filters only the loaded history pages (see §12).
 - **Search and filters:** a search field matches title and description (case-insensitive). Filters: priority, and "Bare forfalte"
   (due before today and not completed). A reset action clears them. Search and filters never change stored order.
-- **Overdue:** a due date before today on an active task shows "Forfalt" on the card.
-- **Mobile:** below `md`, one column is shown at a time, chosen with four buttons. All actions are reachable without dragging.
+- **Overdue:** a due date before today on an active task shows "Forfalt" on the card. Completed tasks are never overdue.
+- **Card layout:** grip, title (opens the editor) and the overflow menu on the first row. A metadata row appears only when there is
+  something to show: priority, due date, a description icon and a notes icon. Note text is never shown on the card.
+- **Column layout:** each header has a status dot (neutral for Backlog, primary for Pågår, warning for Blokkert, success for Fullført),
+  the name and a count pill. Empty columns show a dashed placeholder; over an empty column while dragging it reads "Slipp her".
+- **Toolbar:** row 1 has the Tavle/Historikk switch and **Ny oppgave**; row 2 has search, priority, "Bare forfalte", reset and, on the
+  board only, **Tavleinnstillinger**. The completed-task preference (Siste 7 dager, Alle, Skjul fullførte) lives in that settings panel.
+  Filters stay inline, not in a popover.
+- **Mobile: below `md`, one column is shown at a time, chosen with four buttons. All actions are reachable without dragging.
 - **Limits:** at most 500 tasks per person (creation is refused at the limit; nothing is dropped or truncated).
 
 ## 2. Storage
@@ -140,6 +148,17 @@ Not run in this work: emulator tests and browser tests (see §11).
 `docs/ROUTES.md` (route, sidebar, API group), `docs/DATA-MODEL.md` (collections and erasure rows), `docs/SECURITY.md` (personal data),
 `docs/DEMO-DATA-MAINTENANCE.md` (seed procedure and preview), `docs/KNOWN-LIMITATIONS.md`.
 
+## 10a. Visual redesign (UI only)
+
+- **Changed:** `TaskCard.tsx` (compact card, overflow menu, metadata row), `TaskDisclosure.tsx` (new: in-place disclosure used by the
+  card menu and board settings), `TaskColumn.tsx` (header dot and count pill, empty state), `TasksPage.tsx` (two-row toolbar),
+  `copy.ts`, and `TasksPage.test.tsx` (move tests use the menu; card-menu and notes-indicator tests added).
+- **Unchanged:** data model, API, encryption, authorization, ordering, dnd-kit sensors, erasure, history semantics.
+- **Accessibility:** the menu is a disclosure (a button with `aria-expanded` and a labelled group), not an ARIA menu. Escape closes it
+  and returns focus to the trigger. It opens on click or Enter only, never on hover.
+- **Not done:** the title still comes from the route's `PageHeader`, with **Ny oppgave** in row 1 below it rather than beside the title;
+  filters were not moved into a popover; history styling was not changed; the redesign has not been browser- or screenshot-verified.
+
 ## 11. Verification status
 
 - **Full suite:** `pnpm test:full` exit 0 on the final tree: 695 files passed, 11,220 tests passed, 4 expected-fail, 76 skipped. Typecheck and lint ran inside the tier (lint: warnings only, no errors).
@@ -153,6 +172,7 @@ Not run in this work: emulator tests and browser tests (see §11).
 
 ## 12. Known limitations
 
+- **Redesign not browser-verified:** no screenshots were captured or inspected for §10a (320–1920 px, light and dark).
 - **Drag-and-drop is partly verified.** Pure drop resolution and placement are unit-tested (`domain/task-move.test.ts`). Pointer and
   keyboard drags in a real browser and touch on a device are **not** verified (see §11). The status select is the fallback.
 - **Erasure tripwire:** `src/features/account-erasure/server/inventory.test.ts` flags the dnd-kit API names `setNodeRef` and

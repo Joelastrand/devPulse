@@ -41,7 +41,9 @@ export const tasksCopy = {
   reopenButton: "Gjenåpne",
   reopenPending: "Gjenåpner …",
 
-  visibilityLabel: "Vis fullførte oppgaver på tavlen",
+  boardSettingsButton: "Tavleinnstillinger",
+  boardSettingsPanel: "Tavleinnstillinger",
+  visibilityLabel: "Vis fullførte oppgaver",
   visibilityOptions: {
     last7: "Siste 7 dager",
     all: "Alle",
@@ -56,8 +58,9 @@ export const tasksCopy = {
   } satisfies Record<TaskStatus, string>,
   statusOrder: ["backlog", "doing", "blocked", "done"] as const satisfies readonly TaskStatus[],
   moveTo: (status: string) => `Flytt til ${status}`,
-  moveSelectLabel: (title: string) => `Flytt «${title}»`,
-  moveChoose: "Flytt til …",
+  moveMenuButton: (title: string) => `Flere valg for «${title}»`,
+  moveMenuPanel: (title: string) => `Valg for «${title}»`,
+  openTask: "Åpne",
   movePending: "Flytter …",
 
   dragHandleLabel: (title: string) => `Dra «${title}»`,
@@ -70,8 +73,8 @@ export const tasksCopy = {
   dragAnnounceCancelled: "Flyttingen er avbrutt. Oppgaven er ikke flyttet.",
   dragDropHere: "Slipp her",
   dragDisabledByFilter:
-    "Dra og slipp er av mens søk eller filter er aktive. Bruk statusvalget på kortet, eller nullstill søket for å dra.",
-  dragDisabledByPending: "Vent til flyttingen er lagret før du drar en ny oppgave. Statusvalget virker fortsatt.",
+    "Dra og slipp er av mens søk eller filter er aktive. Bruk «Flere valg» på kortet for å flytte den, eller nullstill søket for å dra.",
+  dragDisabledByPending: "Vent til flyttingen er lagret før du drar en ny oppgave. Menyen «Flere valg» på kortet virker fortsatt.",
 
   priorityLabels: {
     low: "Lav",

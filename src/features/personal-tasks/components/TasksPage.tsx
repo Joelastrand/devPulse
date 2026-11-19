@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { SlidersHorizontal } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
@@ -35,6 +36,7 @@ import { previewMove, type BoardColumns, type MoveTarget } from "../domain/task-
 import { formatTimestamp, todayIsoDate } from "./format-date";
 import { TaskBoard } from "./TaskBoard";
 import type { CreateOutcome } from "./TaskColumn";
+import { TaskDisclosure } from "./TaskDisclosure";
 import { TaskEditor, type TaskEditorResult } from "./TaskEditor";
 
 type View = "board" | "history";
@@ -489,13 +491,36 @@ export function TasksPage() {
   const isEmptyBoard = displayTasks.length === 0;
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <Button type="button" size="md" onClick={() => setEditor({ mode: "create", status: "backlog" })}>
+    <div className="flex flex-col gap-3">
+      {/* Row 1: view switch and the primary action. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div role="group" aria-label="Visning" className="inline-flex gap-1 rounded-lg bg-surface-subtle p-1">
+          <Button type="button" variant={view === "board" ? "primary" : "tertiary"} size="sm" aria-pressed={view === "board"} onClick={() => setView("board")}>
+            {copy.boardTab}
+          </Button>
+          <Button
+            type="button"
+            variant={view === "history" ? "primary" : "tertiary"}
+            size="sm"
+            aria-pressed={view === "history"}
+            onClick={() => {
+              setView("history");
+              const auth = currentAuth();
+              if (auth && !history.loaded) void loadHistory(auth.token, auth.generation, { reset: true });
+            }}
+          >
+            {copy.historyTab}
+          </Button>
+        </div>
+
+        <Button type="button" size="sm" onClick={() => setEditor({ mode: "create", status: "backlog" })}>
           {copy.newTask}
         </Button>
+      </div>
 
-        <div className="flex min-w-[12rem] flex-1 flex-col gap-1">
+      {/* Row 2: search, filters and (board only) the board settings. Wraps on narrow screens. */}
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="w-full min-w-0 sm:w-72">
           <TextField
             id="tasks-search"
             type="search"
@@ -506,7 +531,7 @@ export function TasksPage() {
           />
         </div>
 
-        <div className="w-44">
+        <div className="w-40">
           <Select id="tasks-priority" label={copy.priorityFilterLabel} value={priorityFilter} onChange={(event) => setPriorityFilter(event.currentTarget.value as TaskPriority | "")}>
             <option value="">{copy.priorityFilterAll}</option>
             {TASK_PRIORITIES.map((priority) => (
@@ -527,43 +552,36 @@ export function TasksPage() {
             {copy.clearSearch}
           </Button>
         )}
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div role="group" aria-label="Visning" className="flex gap-2">
-          <Button type="button" variant={view === "board" ? "primary" : "secondary"} size="sm" aria-pressed={view === "board"} onClick={() => setView("board")}>
-            {copy.boardTab}
-          </Button>
-          <Button
-            type="button"
-            variant={view === "history" ? "primary" : "secondary"}
-            size="sm"
-            aria-pressed={view === "history"}
-            onClick={() => {
-              setView("history");
-              const auth = currentAuth();
-              if (auth && !history.loaded) void loadHistory(auth.token, auth.generation, { reset: true });
-            }}
-          >
-            {copy.historyTab}
-          </Button>
-        </div>
 
         {view === "board" && (
-          <div className="w-64">
-            <Select
-              id="tasks-visibility"
-              label={copy.visibilityLabel}
-              value={board.completedVisibility}
-              onChange={(event) => void changeVisibility(event.currentTarget.value as CompletedVisibility)}
-            >
-              {COMPLETED_VISIBILITIES.map((value) => (
-                <option key={value} value={value}>
-                  {copy.visibilityOptions[value]}
-                </option>
-              ))}
-            </Select>
-          </div>
+          <TaskDisclosure
+            className="ml-auto w-full sm:w-auto"
+            label={copy.boardSettingsButton}
+            panelLabel={copy.boardSettingsPanel}
+            triggerClassName="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-border-strong px-3 text-sm font-medium text-text-primary hover:bg-surface-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:w-auto"
+            panelClassName="mt-2 w-full rounded-lg border border-border-subtle bg-surface p-3 sm:w-72"
+            triggerContent={
+              <>
+                <SlidersHorizontal aria-hidden="true" className="size-4" />
+                {copy.boardSettingsButton}
+              </>
+            }
+          >
+            {() => (
+              <Select
+                id="tasks-visibility"
+                label={copy.visibilityLabel}
+                value={board.completedVisibility}
+                onChange={(event) => void changeVisibility(event.currentTarget.value as CompletedVisibility)}
+              >
+                {COMPLETED_VISIBILITIES.map((value) => (
+                  <option key={value} value={value}>
+                    {copy.visibilityOptions[value]}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </TaskDisclosure>
         )}
       </div>
 

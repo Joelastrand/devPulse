@@ -245,28 +245,42 @@ describe("creating tasks", () => {
   });
 });
 
+/** Opens the card's overflow menu and picks a destination, the keyboard and touch route that replaces dragging. */
+async function moveViaMenu(user: ReturnType<typeof userEvent.setup>, title: string, destination: string) {
+  await user.click(screen.getByRole("button", { name: `Flere valg for «${title}»` }));
+  await user.click(screen.getByRole("button", { name: `Flytt til ${destination}` }));
+}
+
 describe("moving tasks without dragging", () => {
-  it("moves a task to Blokkert through the status select and shows it there after the server confirms", async () => {
+  it("moves a task to Blokkert through the card menu and shows it there after the server confirms", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     server.seed("token-a", { title: "Vent på svar" }, "backlog");
     await renderSignedIn();
-    const select = screen.getByLabelText("Flytt «Vent på svar»");
-    await user.selectOptions(select, "blocked");
+    await moveViaMenu(user, "Vent på svar", "Blokkert");
     const blocked = screen.getByRole("heading", { name: "Blokkert" }).closest("section") as HTMLElement;
     await waitFor(() => expect(within(blocked).getByRole("button", { name: "Vent på svar" })).toBeTruthy());
     expect(server.calls.find((c) => c.method === "PATCH")?.body).toEqual({ status: "blocked" });
   });
 
   it("does not offer the current status as a destination", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     server.seed("token-a", { title: "Allerede her" }, "backlog");
     await renderSignedIn();
-    const select = screen.getByLabelText("Flytt «Allerede her»") as HTMLSelectElement;
-    const values = [...select.options].map((option) => option.value);
-    expect(values).not.toContain("backlog");
-    expect(values).toEqual(expect.arrayContaining(["doing", "blocked", "done"]));
+    await user.click(screen.getByRole("button", { name: "Flere valg for «Allerede her»" }));
+    const names = screen.getAllByRole("button", { name: /^Flytt til / }).map((button) => button.textContent);
+    expect(names).not.toContain("Flytt til Backlog");
+    expect(names).toEqual(expect.arrayContaining(["Flytt til Pågår", "Flytt til Blokkert", "Flytt til Fullført"]));
+  });
+
+  it("has no always-visible status select on the card", async () => {
+    server.seed("token-a", { title: "Ingen velger" }, "backlog");
+    await renderSignedIn();
+    expect(screen.queryByRole("combobox", { name: /Flytt/ })).toBeNull();
+    expect(document.querySelector("select[id^='move-']")).toBeNull();
   });
 
   it("shows the move as failed and leaves the task where it was when the server rejects it", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     server.seed("token-a", { title: "Står fast" }, "backlog");
     await renderSignedIn();
     vi.stubGlobal(
@@ -276,10 +290,49 @@ describe("moving tasks without dragging", () => {
         return server.handler(input, init);
       }),
     );
-    fireEvent.change(screen.getByLabelText("Flytt «Står fast»"), { target: { value: "done" } });
+    await moveViaMenu(user, "Står fast", "Fullført");
     expect((await screen.findByRole("alert")).textContent).toContain("Oppgaven finnes ikke lenger");
     const backlog = screen.getByRole("heading", { name: "Backlog" }).closest("section") as HTMLElement;
     expect(within(backlog).getByRole("button", { name: "Står fast" })).toBeTruthy();
+  });
+});
+
+describe("card menu and metadata", () => {
+  it("opening the card menu does not open the editor", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    server.seed("token-a", { title: "Menyen åpnes" }, "backlog");
+    await renderSignedIn();
+    await user.click(screen.getByRole("button", { name: "Flere valg for «Menyen åpnes»" }));
+    expect(screen.getByRole("button", { name: "Flere valg for «Menyen åpnes»" }).getAttribute("aria-expanded")).toBe("true");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("Escape closes the open card menu and returns focus to its trigger", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    server.seed("token-a", { title: "Escape lukker" }, "backlog");
+    await renderSignedIn();
+    const trigger = screen.getByRole("button", { name: "Flere valg for «Escape lukker»" });
+    await user.click(trigger);
+    await user.keyboard("{Escape}");
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("the menu's Åpne action opens the editor for that task", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    server.seed("token-a", { title: "Åpne via meny" }, "backlog");
+    await renderSignedIn();
+    await user.click(screen.getByRole("button", { name: "Flere valg for «Åpne via meny»" }));
+    await user.click(screen.getByRole("button", { name: "Åpne" }));
+    expect(await screen.findByRole("dialog")).toBeTruthy();
+  });
+
+  it("shows a notes indicator for a task with private notes, without showing the note text", async () => {
+    server.seed("token-a", { title: "Har notater", notes: "Hemmelig notat" }, "backlog");
+    await renderSignedIn();
+    const card = screen.getByRole("button", { name: "Har notater" }).closest("article") as HTMLElement;
+    expect(within(card).getByText("Har notater", { selector: "span" })).toBeTruthy();
+    expect(screen.queryByText("Hemmelig notat")).toBeNull();
   });
 });
 

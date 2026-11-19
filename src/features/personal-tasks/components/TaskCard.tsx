@@ -3,11 +3,12 @@
 import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical } from "lucide-react";
+import { AlignLeft, EllipsisVertical, GripVertical, StickyNote } from "lucide-react";
 import type { CSSProperties, ReactNode, Ref } from "react";
 import { tasksCopy as copy } from "../copy";
-import type { TaskDto, TaskStatus } from "../domain/task";
+import type { TaskDto } from "../domain/task";
 import type { MoveTarget } from "../domain/task-move";
+import { TaskDisclosure } from "./TaskDisclosure";
 import { formatDate } from "./format-date";
 
 interface TaskCardProps {
@@ -25,11 +26,13 @@ interface TaskCardProps {
 }
 
 /**
- * One compact task on the board. The title opens the editor. The grip is the only drag source (mouse, touch and
- * keyboard), so scrolling a column never starts a drag. The status select is the alternative to dragging.
+ * One compact task on the board: grip, title and an overflow menu on the first row, and metadata chips only when there
+ * is something to show. The title opens the editor. The grip is the only drag source (mouse, touch and keyboard). The
+ * overflow menu holds "Åpne" and the moves to the other statuses, so a move never depends on dragging.
  */
 export function TaskCard({ task, overdue, pending, onOpen, onMove, grip, dragging = false, cardNode, style }: TaskCardProps) {
   const destinations = copy.statusOrder.filter((status) => status !== task.status);
+  const hasMeta = task.priority !== null || task.dueDate !== null || task.notes !== null || task.description !== null || pending;
 
   return (
     <article
@@ -37,66 +40,93 @@ export function TaskCard({ task, overdue, pending, onOpen, onMove, grip, draggin
       style={style}
       aria-busy={pending || undefined}
       data-dragging={dragging || undefined}
-      className={`flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3 shadow-sm transition-opacity ${
+      className={`flex flex-col gap-1 rounded-lg border border-border-subtle bg-surface p-2 shadow-sm transition-colors duration-micro hover:border-border-strong ${
         dragging ? "opacity-40" : ""
       }`}
     >
-      <div className="flex items-start gap-2">
+      <div className="flex items-start gap-1">
         {grip}
         <button
           type="button"
           onClick={() => onOpen(task)}
-          className="min-w-0 flex-1 break-words rounded pt-1 text-left text-sm font-medium text-text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          className="min-w-0 flex-1 break-words rounded py-2.5 text-left text-sm font-medium leading-snug text-text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         >
           {task.title}
         </button>
-      </div>
-
-      <ul className="flex flex-wrap items-center gap-1.5 text-help text-text-secondary" aria-label="Egenskaper">
-        {task.priority !== null && (
-          <li className="rounded border border-border-subtle px-1.5 py-0.5">
-            {copy.priorityLabels[task.priority]}
-          </li>
-        )}
-        {task.dueDate !== null && (
-          <li
-            className={
-              overdue
-                ? "rounded border border-danger-text px-1.5 py-0.5 font-medium text-danger-text"
-                : "rounded border border-border-subtle px-1.5 py-0.5"
-            }
-          >
-            {overdue ? `${copy.dueDateOverdue}: ` : ""}
-            {copy.dueLabel(formatDate(task.dueDate))}
-          </li>
-        )}
-        {task.description !== null && <li className="px-1 py-0.5">{copy.hasDescription}</li>}
-        {task.notes !== null && <li className="px-1 py-0.5">{copy.hasNotes}</li>}
-      </ul>
-
-      <div className="flex items-center gap-2">
-        <label htmlFor={`move-${task.id}`} className="sr-only">
-          {copy.moveSelectLabel(task.title)}
-        </label>
-        <select
-          id={`move-${task.id}`}
-          defaultValue=""
-          disabled={pending}
-          onChange={(event) => {
-            const value = event.currentTarget.value;
-            event.currentTarget.value = "";
-            if (value !== "") onMove(task, { status: value as TaskStatus, beforeTaskId: null });
-          }}
-          className="min-h-9 w-full rounded border border-border-strong bg-surface px-2 text-help text-text-primary disabled:opacity-60"
+        <TaskDisclosure
+          label={copy.moveMenuButton(task.title)}
+          panelLabel={copy.moveMenuPanel(task.title)}
+          triggerContent={<EllipsisVertical aria-hidden="true" className="size-4" />}
+          panelClassName="flex flex-col gap-1 border-t border-border-subtle pt-2"
+          className="shrink-0"
         >
-          <option value="">{pending ? copy.movePending : copy.moveChoose}</option>
-          {destinations.map((status) => (
-            <option key={status} value={status}>
-              {copy.moveTo(copy.statusLabels[status])}
-            </option>
-          ))}
-        </select>
+          {(close) => (
+            <div className="flex flex-col gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  close(false);
+                  onOpen(task);
+                }}
+                className="min-h-11 rounded px-2 text-left text-help text-text-primary hover:bg-surface-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              >
+                {copy.openTask}
+              </button>
+              {destinations.map((status) => (
+                <button
+                  key={status}
+                  type="button"
+                  disabled={pending}
+                  onClick={() => {
+                    close(false);
+                    onMove(task, { status, beforeTaskId: null });
+                  }}
+                  className="min-h-11 rounded px-2 text-left text-help text-text-primary hover:bg-surface-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-60"
+                >
+                  {copy.moveTo(copy.statusLabels[status])}
+                </button>
+              ))}
+            </div>
+          )}
+        </TaskDisclosure>
       </div>
+
+      {hasMeta && (
+        <ul className="flex flex-wrap items-center gap-1.5 pl-9 text-help text-text-secondary">
+          {task.priority !== null && (
+            <li className="rounded border border-border-subtle px-1.5 py-0.5">{copy.priorityLabels[task.priority]}</li>
+          )}
+          {task.dueDate !== null && (
+            <li
+              className={
+                overdue
+                  ? "rounded bg-danger-subtle px-1.5 py-0.5 font-medium text-danger-text"
+                  : "rounded border border-border-subtle px-1.5 py-0.5"
+              }
+            >
+              {overdue ? `${copy.dueDateOverdue}: ` : ""}
+              {copy.dueLabel(formatDate(task.dueDate))}
+            </li>
+          )}
+          {task.description !== null && (
+            <li className="flex items-center gap-1">
+              <AlignLeft aria-hidden="true" className="size-3.5" />
+              <span className="sr-only">{copy.hasDescription}</span>
+            </li>
+          )}
+          {task.notes !== null && (
+            <li className="flex items-center gap-1">
+              <StickyNote aria-hidden="true" className="size-3.5" />
+              <span className="sr-only">{copy.hasNotes}</span>
+            </li>
+          )}
+          {pending && (
+            <li className="text-text-secondary">
+              {copy.movePending}
+            </li>
+          )}
+        </ul>
+      )}
     </article>
   );
 }
@@ -122,7 +152,7 @@ function DragGrip({ title, enabled, attributes, listeners, gripNode }: DragGripP
       {...(enabled ? listeners : {})}
       disabled={!enabled}
       aria-label={enabled ? copy.dragHandleLabel(title) : copy.dragDisabledHandleLabel(title)}
-      className="-ml-2 -mt-2 flex size-11 shrink-0 cursor-grab touch-none items-center justify-center rounded text-text-secondary hover:bg-surface-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-40 active:cursor-grabbing"
+      className="-ml-1 flex size-11 shrink-0 cursor-grab touch-none items-center justify-center rounded text-text-secondary hover:bg-surface-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-40 active:cursor-grabbing"
     >
       <GripVertical aria-hidden="true" className="size-4" />
     </button>

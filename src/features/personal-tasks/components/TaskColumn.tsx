@@ -12,6 +12,14 @@ import { SortableTaskCard } from "./TaskCard";
 
 export type CreateOutcome = { ok: true } | { ok: false; message: string };
 
+/** Restrained status indicator. Colour is never the only cue: the column name is always shown next to it. */
+const STATUS_DOT: Record<TaskStatus, string> = {
+  backlog: "bg-text-muted",
+  doing: "bg-primary",
+  blocked: "bg-warning-text",
+  done: "bg-success-text",
+};
+
 interface TaskColumnProps {
   status: TaskStatus;
   tasks: readonly TaskDto[];
@@ -105,16 +113,27 @@ export function TaskColumn({
       }`}
     >
       <header className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-t-xl bg-surface-subtle px-3 pb-2 pt-3">
-        <h2 id={headingId} className="text-sm font-semibold text-text-primary">
-          {copy.statusLabels[status]}
-        </h2>
-        <span className="text-help text-text-secondary">{copy.columnCount(tasks.length)}</span>
+        <div className="flex min-w-0 items-center gap-2">
+          <span aria-hidden="true" className={`size-2.5 shrink-0 rounded-full ${STATUS_DOT[status]}`} />
+          <h2 id={headingId} className="truncate text-sm font-semibold text-text-primary">
+            {copy.statusLabels[status]}
+          </h2>
+        </div>
+        <span className="min-w-6 shrink-0 rounded-full bg-surface px-2 py-0.5 text-center text-help font-medium tabular-nums text-text-secondary">
+          {copy.columnCount(tasks.length)}
+        </span>
       </header>
 
       <SortableContext items={tasks.map((task) => task.id)} strategy={verticalListSortingStrategy}>
-        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 pb-2">
+        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 pb-2 [scrollbar-width:thin] [scrollbar-color:var(--border-strong)_transparent]">
           {tasks.length === 0 && !adding && (
-            <p className="py-4 text-center text-help text-text-secondary">{dropActive ? copy.dragDropHere : copy.columnEmpty}</p>
+            <p
+              className={`rounded-lg border border-dashed px-3 py-6 text-center text-help text-text-secondary ${
+                dropActive ? "border-primary bg-primary-subtle text-text-primary" : "border-border-strong"
+              }`}
+            >
+              {dropActive ? copy.dragDropHere : copy.columnEmpty}
+            </p>
           )}
           {tasks.map((task) => (
             <SortableTaskCard
