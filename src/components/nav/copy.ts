@@ -15,6 +15,7 @@ export const navCopy = {
   personalNavLabel: "Personlig utvikling",
   personalSkills: "Ferdigheter",
   personalGoals: "Mål",
+  personalTasks: "Mine oppgaver",
   personalConversations: "Samtaler",
   account: "Konto",
   adminTeams: "Team",

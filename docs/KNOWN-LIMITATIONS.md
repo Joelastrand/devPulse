@@ -186,3 +186,19 @@ the flag. The flag is not a security control.
 - **Production UI and API visibility of the demo team is unverified.** The read-only Firestore checks cover the assessment category only. No authorized production browser or API session was used. See `docs/DEMO-DATA-MAINTENANCE.md`, "Phase 2D.7".
 - **Account-switch invalidation is covered at the gateway level.** The early `account_changing` signal is tested in `auth-client.identity.test.ts`. A component-level suite for the full ten-scenario list is not written yet.
 - **Emulator tests for the demo-data update tool were not run in this phase.**
+
+## Personal tasks (Mine oppgaver)
+
+Full list in [`PERSONAL-TASKS.md`](PERSONAL-TASKS.md) §12. Summary:
+
+- Drag-and-drop (dnd-kit) is implemented. Reordering is off while a search or filter is active, and while another move is unconfirmed;
+  the status select remains available in those states. Touch dragging on a real device was not verified (only the emulator browser run).
+- Cross-column drag shows the target column highlight, not a live reflow of the cards in the target column while dragging.
+- The screen-reader announcement texts (pick-up, over, drop, cancel) are defined and wired, but their live-region text was not captured in
+  the browser run; only the instructions and the cancel behaviour were verified.
+- History search covers only the loaded pages (the board is bounded, so history is paged in memory).
+- No optimistic concurrency token: field edits are last-write-wins per task. Positions are transactional.
+- Browser verification ran against the local Firebase emulators on an isolated copy, not the deployed application. It is not production evidence.
+- The demo seed was written once to `devpulse-nve` with approval (see [`DEMO-DATA-MAINTENANCE.md`](DEMO-DATA-MAINTENANCE.md)). Those
+  records are visible in the deployed app only after the `/tasks` route is deployed.
+- Dependency: the three `@dnd-kit` packages are approved for this feature only; any other drag library needs a new approval.

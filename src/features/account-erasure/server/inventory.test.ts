@@ -7,6 +7,7 @@ import {
   ALLOWED_UNREGISTERED_NAMES,
   APPROVED_DYNAMIC_FIELD_PATHS,
   APPROVED_DYNAMIC_KEYS,
+  APPROVED_UI_REFERENCES,
 } from "./inventory-allow-list";
 import { checkInventoryCoverage, type SourceFile } from "./inventory-guard";
 import {
@@ -64,13 +65,15 @@ function guardOver(files: SourceFile[]) {
     allowedCollections: ALLOWED_UNREGISTERED_COLLECTIONS,
     approvedDynamicKeys: APPROVED_DYNAMIC_KEYS,
     approvedDynamicFieldPaths: APPROVED_DYNAMIC_FIELD_PATHS,
+    approvedUiReferences: APPROVED_UI_REFERENCES,
   });
 }
 
 /** The SPEC row ids (SPEC "Erasure inventory"). Every one must appear exactly once in the registry. */
 const SPEC_ROW_IDS = [
   // I-20 (Phase 2F.1): personal Systemoversikt favorites, a subtree delete under userDevelopment/{uid}.
-  ...Array.from({ length: 20 }, (_, i) => `I-${i + 1}`),
+  // I-21, I-22: personal Kanban tasks and their board preference (subtree deletes under userDevelopment/{uid}).
+  ...Array.from({ length: 22 }, (_, i) => `I-${i + 1}`),
   ...Array.from({ length: 19 }, (_, i) => `A-${i + 1}`),
   ...Array.from({ length: 6 }, (_, i) => `P-${i + 1}`),
   ...Array.from({ length: 4 }, (_, i) => `E-${i + 1}`),
@@ -214,6 +217,73 @@ describe("erasure inventory change-detection tripwire over the repository (DEMOT
  */
 const inApprovedTransaction = (members: string) =>
   `export function getDefaultSkillProfileStore() { return { async runTransaction(uid, work) { return db.runTransaction(async (tx) => work({ ${members} })); } }; }`;
+
+describe("erasure inventory tripwire: approved dnd-kit DOM references (file-scoped)", () => {
+  const cardPath = "src/features/personal-tasks/components/TaskCard.tsx";
+  const columnPath = "src/features/personal-tasks/components/TaskColumn.tsx";
+  const cardText = [
+    "const { attributes, listeners, setNodeRef, setActivatorNodeRef } = useSortable({ id: task.id });",
+    "return <article ref={setNodeRef}><button ref={setActivatorNodeRef} {...attributes} {...listeners} /></article>;",
+  ].join("\n");
+  const unapprovedText = "const { setNodeRef } = useSortable({ id: task.id });\nreturn <div ref={setNodeRef} />;";
+
+  function runOn(files: SourceFile[], approved: readonly { path: string; name: string; reason: string }[]) {
+    return checkInventoryCoverage({
+      files,
+      registeredFields: registeredFields(),
+      registeredCollectionSegments: registeredCollectionSegments(),
+      allowedFields: {},
+      allowedCollections: {},
+      approvedUiReferences: approved,
+    });
+  }
+
+  it("passes the approved dnd-kit identifiers in the approved Kanban file", () => {
+    const approved = APPROVED_UI_REFERENCES.filter((reference) => reference.path === cardPath);
+    const report = runOn([{ path: cardPath, text: cardText }], approved);
+    expect(report.violations).toEqual([]);
+  });
+
+  it("passes the approved column identifier in the approved column file", () => {
+    const approved = APPROVED_UI_REFERENCES.filter((reference) => reference.path === columnPath);
+    const report = runOn([{ path: columnPath, text: unapprovedText }], approved);
+    expect(report.violations).toEqual([]);
+  });
+
+  it("still flags the same identifiers in an unrelated file (the exception is not name-wide)", () => {
+    const report = runOn([{ path: "src/features/teams/components/TeamList.tsx", text: cardText }], APPROVED_UI_REFERENCES);
+    expect(report.violations.filter((v) => v.kind === "unregistered-field")).toEqual([
+      { kind: "unregistered-field", name: "setNodeRef", path: "src/features/teams/components/TeamList.tsx" },
+      { kind: "unregistered-field", name: "setActivatorNodeRef", path: "src/features/teams/components/TeamList.tsx" },
+    ]);
+  });
+
+  it("flags a real uid-bearing identifier in an approved Kanban file", () => {
+    // `unregisteredOwnerUid` is deliberately not in the registry; registered names are not the point of this test.
+    const text = `${cardText}\nconst payload = { unregisteredOwnerUid: task.id };`;
+    const approved = APPROVED_UI_REFERENCES.filter((reference) => reference.path === cardPath);
+    const report = runOn([{ path: cardPath, text }], approved);
+    expect(report.violations.filter((v) => v.kind === "unregistered-field").map((v) => v.name)).toEqual([
+      "unregisteredOwnerUid",
+    ]);
+  });
+
+  it("does not let an approval for one identifier cover another in the same file", () => {
+    const onlyColumn = APPROVED_UI_REFERENCES.filter((reference) => reference.path === columnPath);
+    const report = runOn([{ path: cardPath, text: cardText }], onlyColumn);
+    expect(report.violations.filter((v) => v.kind === "unregistered-field").map((v) => v.name)).toEqual([
+      "setNodeRef",
+      "setActivatorNodeRef",
+    ]);
+  });
+
+  it("reports an approval whose file no longer uses the identifier as stale", () => {
+    const report = runOn([{ path: columnPath, text: "const x = 1;" }], [
+      { path: columnPath, name: "setNodeRef", reason: "test" },
+    ]);
+    expect(report.violations).toEqual([{ kind: "stale-allow-list", name: "setNodeRef", path: columnPath }]);
+  });
+});
 
 describe("erasure inventory tripwire (synthetic input)", () => {
   const registered = registeredFields();

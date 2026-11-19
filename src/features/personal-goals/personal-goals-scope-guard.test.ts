@@ -92,6 +92,11 @@ const APPROVED_COLLECTION_REFERENCES = [
   // through the authenticated favorites route. It is not a personal-goals access path and grants no goal access.
   "src/features/team-systems/server/system-favorites.ts",
   "src/features/team-systems/server/system-favorites.test.ts",
+  // Personal Kanban tasks (Mine oppgaver): the single owner-only persistence file for `userDevelopment/{uid}/personalTasks` and
+  // `taskSettings`. It reads and writes only the caller's own task documents, through the fenced transaction and the v2 codec,
+  // and is reached only through the authenticated /api/me/tasks routes and the demo seed. It grants no goal store, goal route,
+  // goal DTO or collectionGroup access.
+  "src/features/personal-tasks/server/task-store.ts",
 ];
 /**
  * Account erasure (erasure-only persistence metadata, file-exact): the inventory registry is the one place that names the

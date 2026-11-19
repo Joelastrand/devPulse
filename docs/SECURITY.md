@@ -170,6 +170,8 @@ Source of truth: `src/features/team-skills/domain/skill-coverage-policy.ts` and 
 
 - **Personal goals** (`userDevelopment/{uid}/goals/{goalId}`) are owner-only through the Admin SDK. No uid-parameterised
   reader exists. Team roles and superadmin status do not widen access (invariants 37–54).
+- **Personal tasks** (`userDevelopment/{uid}/personalTasks`, `taskSettings`): owner-only through the verified uid on `/api/me/tasks`. Task content is sealed with the v2 envelope and a per-record AAD. No team role, membership or superadmin status grants access. Erasure rows I-21 and I-22. See [`PERSONAL-TASKS.md`](PERSONAL-TASKS.md) §3. Drag-and-drop adds no endpoint and no client-supplied owner: the move is the same authorised `PATCH`, and the server validates the destination and position inside the transaction.
+- **Erasure tripwire exception (dnd-kit):** `setNodeRef` and `setActivatorNodeRef` are DOM element reference setters returned by dnd-kit. They are approved by exact file and identifier only (`APPROVED_UI_REFERENCES` in `inventory-allow-list.ts`: the Kanban card and column components). They are not person identifiers. The same names anywhere else, and any UID-like name in those files, still fail the guard. An entry that no longer matches is reported as stale.
 - **Development conversations** (invariants 55–72): readable only by the owner, or by a participant after an explicit
   accept. Access ends on the next request after decline, leave, removal or completion freeze.
 - **Personal role workspace** (PR-SI-1…5): owner-only responsibilities and achievements. A static import guard

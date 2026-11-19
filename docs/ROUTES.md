@@ -30,6 +30,7 @@ Built in `navGroupsFor()` in `AppShell.tsx`:
 | personal ("Min utvikling") | Ferdigheter | `/me/skills` | Signed in |
 | personal | Mål | `/me/goals` | Signed in |
 | personal | Samtaler | `/me/conversations` | Signed in |
+| personal | Mine oppgaver | `/tasks` | Signed in. Owner-only personal Kanban board ([`PERSONAL-TASKS.md`](PERSONAL-TASKS.md)) |
 | administration ("Administrasjon") | Team | `/admin/teams` | Superadmins only |
 | administration | Roller | `/admin/roles` | Superadmins only |
 | administration | Superadministratorer | `/admin/superadmins` | Superadmins only |
@@ -46,6 +47,7 @@ Signed-out navigation shows Hjem, Logg inn and Opprett konto (`PublicHeader`). S
 | `/me/goals` | `app/(app)/me/goals/page.tsx` | Personal development goals (owner-only) |
 | `/me/conversations` | `app/(app)/me/conversations/page.tsx` | Development conversations list |
 | `/me/conversations/[conversationId]` | `app/(app)/me/conversations/[conversationId]/page.tsx` | One conversation (owner or accepted participant) |
+| `/tasks` | `app/(app)/tasks/page.tsx` | Personal Kanban board: Backlog, Pågår, Blokkert, Fullført; drag-and-drop (grip handle, keyboard, status select fallback); history; preferences. Owner only, client data via `/api/me/tasks`. Drag uses the existing `PATCH` (`status` + `beforeTaskId`); no new route |
 | `/me/profile` | `app/(app)/me/profile/page.tsx` | Display name |
 | `/me/erasure` | `app/(app)/me/erasure/page.tsx` | Start account erasure (requires recent sign-in) |
 
@@ -102,6 +104,7 @@ feature server operation. Authorization lives in that operation.
 | Group | Routes | Caller |
 | --- | --- | --- |
 | Session | `GET /api/me` (`isAdmin` only), `GET/PUT /api/me/profile` | Signed in |
+| Personal tasks | `/api/me/tasks` (GET board, POST create), `/api/me/tasks/[taskId]` (PATCH, DELETE), `/api/me/tasks/history` (GET), `/api/me/tasks/preferences` (PUT) | Owner only (verified token uid). See [`PERSONAL-TASKS.md`](PERSONAL-TASKS.md) §4 |
 | Personal | `/api/me/skills`, `/api/me/skills/[treeId]`, `/api/me/goals`, `/api/me/goals/[goalId]`, `/api/me/responsibilities`, `/api/me/responsibilities/[recordId]`, `/api/me/achievements`, `/api/me/achievements/[recordId]`, `/api/me/role-assignment` | Owner only |
 | Conversations | `/api/me/conversations`, `/api/me/conversations/[conversationId]`, `.../participation`, `.../participation/accept`, `.../participant-notes`, `.../evidence-sources`, `.../selectable-members`, `/api/me/conversations/create-options` | Owner, or accepted participant where noted |
 | Erasure | `POST /api/me/erasure` | Signed in, recent sign-in required |

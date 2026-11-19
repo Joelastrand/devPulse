@@ -82,6 +82,20 @@ export function createPersonalDataPort(): PersonalDataErasurePort {
     async deleteSystemFavorite(uid, systemId) {
       await owned(uid).collection("systemFavorites").doc(systemId).delete();
     },
+    // I-21, I-22 (personal Kanban tasks): path-only, no decryption. Deleting an absent document succeeds.
+    async personalTaskIds(uid, limit) {
+      const snapshot = await owned(uid).collection("personalTasks").select().limit(limit).get();
+      return snapshot.docs.map((doc) => doc.id);
+    },
+    async deletePersonalTask(uid, taskId) {
+      await owned(uid).collection("personalTasks").doc(taskId).delete();
+    },
+    async taskSettingsExists(uid) {
+      return (await owned(uid).collection("taskSettings").doc("board").get()).exists;
+    },
+    async deleteTaskSettings(uid) {
+      await owned(uid).collection("taskSettings").doc("board").delete();
+    },
     // I-19 (team-owned skills): one document per (person, team skill), located by its stored `uid` field.
     async teamSkillAssessmentIds(uid, limit) {
       assertUidSegment(uid);

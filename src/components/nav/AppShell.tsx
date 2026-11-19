@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Building2,GraduationCap, House, Menu, MessagesSquare, ShieldCheck, Target, UserCog, Users } from "lucide-react";
+import { Building2, Columns3, GraduationCap, House, Menu, MessagesSquare, ShieldCheck, Target, UserCog, Users } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { signOut } from "../../features/auth/client/auth-client";
@@ -211,6 +211,7 @@ function navGroupsFor(state: HeaderState, teamName: string | null): NavGroup[] {
           { href: "/me/skills", label: navCopy.personalSkills, icon: GraduationCap },
           { href: "/me/goals", label: navCopy.personalGoals, icon: Target },
           { href: "/me/conversations", label: navCopy.personalConversations, icon: MessagesSquare },
+          { href: "/tasks", label: navCopy.personalTasks, icon: Columns3 },
         ],
       },
     ];

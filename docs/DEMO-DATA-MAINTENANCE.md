@@ -140,3 +140,44 @@ Other demo categories (team metadata, projects, systems, roadmap, surveys, compe
 
 - Production browser verification: **not run.** No authorized presenter session was available to this run, and signing in as a fictional account is prohibited. Nothing from the UI was verified.
 - Emulator verification of the update tool: the emulator tests (`rating-update.emulator.test.ts`) were not run in this phase. Use `pnpm test:emulator` for this before any future write change.
+
+## Personal task demo seed (presenter account, 2026-11-18)
+
+Status: **live write performed once, with the explicit approval of 2026-11-18 (Phase 3B).** The fresh preflight matched the approved
+plan exactly, the gated write created the 24 records, and a read-only re-run showed 24 skips. **No further production write is
+authorised.** A future run would need a new approval and a fresh preflight. Result is recorded below.
+
+- Dataset: 24 fictional personal tasks (`src/features/personal-tasks/demo/demo-dataset.ts`): Backlog 10, Pågår 6, Blokkert 3, Fullført 5.
+  Three completed within seven days of the reference date, two older (history). One overdue active task. Ids `kanban-demo-01`…`24`.
+- Project: `devpulse-nve`. Owner: presenter uid `koEwzQcj5Uc0hnjTgZBLithgkYB3`. Any other value is refused before any Firebase call.
+- Preflight (read-only), run on 2026-11-18: ordinary tasks of the owner 0; planned 24; create 24, skip 0, conflict 0; history 2;
+  `planDigest` `bde06402be2198ef`; result ok.
+
+Preview command (read-only):
+
+```
+pnpm seed:personal-tasks-demo -- --mode preflight --project devpulse-nve --owner koEwzQcj5Uc0hnjTgZBLithgkYB3
+```
+
+Write command (**run once**, see the result below; not to be re-run without a new approval):
+
+```
+pnpm seed:personal-tasks-demo -- --mode write --project devpulse-nve --owner koEwzQcj5Uc0hnjTgZBLithgkYB3 --confirm <planDigest>
+```
+
+Write rules: refused without `--confirm` before any read; the digest must match the plan rebuilt inside the transaction; any conflict
+refuses the whole run; only missing records are created, with the approved codec and the erasure fence; a second run creates nothing.
+Re-running after a partial failure: run a preflight first and compare the counts. The seed never updates, deletes, touches Firebase Auth,
+memberships or consent, and never touches the presenter's ordinary tasks.
+
+### Live write result (Phase 3B, executed)
+
+- Project `devpulse-nve`, presenter uid `koEwzQcj5Uc0hnjTgZBLithgkYB3`. Ordinary personal tasks of the presenter: 0 (not read or changed).
+- Fresh preflight before the write: planned 24; create 24, skip 0, conflict 0; status counts backlog 10, doing 6, blocked 3, done 5; history 2.
+  Digest `bde06402be2198ef`, which matched the approved value exactly.
+- Write: `--mode write --confirm bde06402be2198ef`. Result: **24 records created**, post-write verification passed, 0 rejected.
+- Read-only re-run after the write: create 0, **skip 24**, conflict 0, ordinary tasks 0. The digest now reads `632cd699280ed69b`. This is
+  expected: the digest covers the planned actions, which are all `skip` now. No other record was read as changed, and nothing was deleted.
+- Decrypted task content was not printed. The seed made no Firebase Auth, membership, consent, team or rules change.
+- Production visibility: the records exist in Firestore. They appear in the deployed application only after the `/tasks` route and API are
+  deployed and tested through an authorised session. That deployment has **not** happened (no deployment was authorised).

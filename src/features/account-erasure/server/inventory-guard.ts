@@ -62,6 +62,19 @@ export interface GuardInput {
   readonly approvedDynamicKeys?: readonly ApprovedDynamicKey[];
   /** Exact, structural exceptions for a dynamic FieldPath delete in a transaction update (see ApprovedDynamicFieldPath). */
   readonly approvedDynamicFieldPaths?: readonly ApprovedDynamicFieldPath[];
+  /** Exact file + identifier exceptions for a non-personal UI API name (see ApprovedUiReference). Optional; defaults to none. */
+  readonly approvedUiReferences?: readonly ApprovedUiReference[];
+}
+
+/**
+ * One approved non-personal identifier in one exact file. It exempts `name` (as a key, shorthand, declaration or member)
+ * only in `path`. It is not a name-wide allow-list: the same name in any other file is still a violation, and an entry whose
+ * file no longer uses the name is reported as stale. `reason` says why the identifier is not a person identifier.
+ */
+export interface ApprovedUiReference {
+  readonly path: string;
+  readonly name: string;
+  readonly reason: string;
 }
 
 /**
@@ -151,7 +164,17 @@ export function checkInventoryCoverage(input: GuardInput): GuardReport {
   const seenFieldNames = new Set<string>();
   const seenMemberNames = new Set<string>();
   const allowedMemberAccess = input.allowedMemberAccess ?? {};
+  const uiReferences = input.approvedUiReferences ?? [];
+  const usedUiReferences = new Set<string>();
   const shared = sharedFieldConstants(input.files);
+
+  /** True only for the exact file and identifier listed; records the use so an unused entry can be reported as stale. */
+  function uiReferenceApproved(path: string, name: string): boolean {
+    const match = uiReferences.find((reference) => reference.path === path && reference.name === name);
+    if (match === undefined) return false;
+    usedUiReferences.add(`${match.path}\u0000${match.name}`);
+    return true;
+  }
 
   for (const file of input.files) {
     const facts = scanSource(file.path, file.text, input.approvedDynamicKeys ?? [], input.approvedDynamicFieldPaths ?? [], shared);
@@ -160,7 +183,7 @@ export function checkInventoryCoverage(input: GuardInput): GuardReport {
       seenFieldNames.add(name);
       if (!UID_BEARING_NAME.test(name)) continue;
       uidBearingFieldsSeen.add(name);
-      if (!input.registeredFields.has(name) && !(name in input.allowedFields)) {
+      if (!input.registeredFields.has(name) && !(name in input.allowedFields) && !uiReferenceApproved(file.path, name)) {
         violations.push({ kind: "unregistered-field", name, path: file.path });
       }
     }
@@ -169,7 +192,12 @@ export function checkInventoryCoverage(input: GuardInput): GuardReport {
       seenMemberNames.add(name);
       if (!UID_BEARING_NAME.test(name)) continue;
       uidBearingFieldsSeen.add(name);
-      if (!input.registeredFields.has(name) && !(name in input.allowedFields) && !(name in allowedMemberAccess)) {
+      if (
+        !input.registeredFields.has(name) &&
+        !(name in input.allowedFields) &&
+        !(name in allowedMemberAccess) &&
+        !uiReferenceApproved(file.path, name)
+      ) {
         violations.push({ kind: "unregistered-field", name, path: file.path });
       }
     }
@@ -194,6 +222,11 @@ export function checkInventoryCoverage(input: GuardInput): GuardReport {
   }
   for (const name of Object.keys(input.allowedCollections)) {
     if (!collectionSegmentsSeen.has(name)) violations.push({ kind: "stale-allow-list", name });
+  }
+  for (const reference of uiReferences) {
+    if (!usedUiReferences.has(`${reference.path}\u0000${reference.name}`)) {
+      violations.push({ kind: "stale-allow-list", name: reference.name, path: reference.path });
+    }
   }
 
   return { violations, collectionSegmentsSeen, uidBearingFieldsSeen };

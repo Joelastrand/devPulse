@@ -28,6 +28,7 @@ const EXPECTED_URLS = [
   "/results",
   "/sign-in",
   "/sign-up",
+  "/tasks",
   "/survey/[surveyId]",
   "/teams",
   "/teams/[teamId]",

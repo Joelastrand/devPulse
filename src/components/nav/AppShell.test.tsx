@@ -55,6 +55,7 @@ const SIGNED_IN_LINK_NAMES = [
   /^ferdigheter$/i,
   /^mål$/i,
   /^samtaler$/i,
+  /^mine oppgaver$/i,
   /^min profil$/i,
   /^slett kontoen din$/i,
 ];
@@ -168,6 +169,7 @@ describe("AppShell", () => {
       "Ferdigheter",
       "Mål",
       "Samtaler",
+      "Mine oppgaver",
       "Team",
       "Roller",
       "Superadministratorer",
@@ -254,7 +256,7 @@ describe("AppShell", () => {
     usePathnameMock.mockReturnValue("/");
   });
 
-  it("lists Ferdigheter, Mål and Samtaler as the only personal entries, each with its own route", async () => {
+  it("lists Ferdigheter, Mål, Samtaler and Mine oppgaver as the personal entries, each with its own route", async () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchOwnAdminStatusMock.mockResolvedValue({ ok: true, isAdmin: false });
 
@@ -263,6 +265,7 @@ describe("AppShell", () => {
     expect((await screen.findByRole("link", { name: /^ferdigheter$/i })).getAttribute("href")).toBe("/me/skills");
     expect(screen.getByRole("link", { name: /^mål$/i }).getAttribute("href")).toBe("/me/goals");
     expect(screen.getByRole("link", { name: /^samtaler$/i }).getAttribute("href")).toBe("/me/conversations");
+    expect(screen.getByRole("link", { name: /^mine oppgaver$/i }).getAttribute("href")).toBe("/tasks");
     expect(screen.queryByRole("link", { name: /min utvikling/i })).toBeNull();
     cleanup();
 

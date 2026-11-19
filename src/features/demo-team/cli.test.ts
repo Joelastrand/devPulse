@@ -64,7 +64,11 @@ describe("package script", () => {
     const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as Record<string, Record<string, string>>;
     // lucide-react is the single icon dependency approved by the Product
     // Experience SPEC (Iconography, TASK-004). The seed CLI itself adds none.
+    // The three @dnd-kit packages are the drag-and-drop set approved for Mine oppgaver (Phase 3B). Nothing else is added.
     expect(Object.keys(pkg.dependencies).sort()).toEqual([
+      "@dnd-kit/core",
+      "@dnd-kit/sortable",
+      "@dnd-kit/utilities",
       "firebase",
       "firebase-admin",
       "lucide-react",

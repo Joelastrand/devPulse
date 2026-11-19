@@ -1,4 +1,4 @@
-import type { ApprovedContext, ApprovedDynamicFieldPath, ApprovedDynamicKey } from "./inventory-guard";
+import type { ApprovedContext, ApprovedDynamicFieldPath, ApprovedDynamicKey, ApprovedUiReference } from "./inventory-guard";
 
 /**
  * Names the guard accepts without a registry row (TASK-006). Every entry needs a reason. The guard test also fails
@@ -38,6 +38,30 @@ export const ALLOWED_UNREGISTERED_NAMES: Readonly<Record<string, string>> = {
  * teams dependencies are named neutrally (TASK-006 rename), so no member-read exemption is needed.
  */
 export const ALLOWED_MEMBER_ACCESS_NAMES: Readonly<Record<string, string>> = {};
+
+/**
+ * Exact file + identifier exceptions for the dnd-kit sortable/droppable API. `setNodeRef` and `setActivatorNodeRef` are
+ * DOM element reference setters returned by `useSortable` and `useDroppable`: they attach a card or column element to the
+ * drag library. They identify a rendered node, not a person, and they are never persisted or sent to the server. The
+ * entries name only the Kanban files that call the API, so the same identifier anywhere else is still a violation.
+ */
+export const APPROVED_UI_REFERENCES: readonly ApprovedUiReference[] = [
+  {
+    path: "src/features/personal-tasks/components/TaskCard.tsx",
+    name: "setNodeRef",
+    reason: "dnd-kit useSortable DOM ref setter for a task card element (not a person identifier)",
+  },
+  {
+    path: "src/features/personal-tasks/components/TaskCard.tsx",
+    name: "setActivatorNodeRef",
+    reason: "dnd-kit useSortable DOM ref setter for the grip button element (not a person identifier)",
+  },
+  {
+    path: "src/features/personal-tasks/components/TaskColumn.tsx",
+    name: "setNodeRef",
+    reason: "dnd-kit useDroppable DOM ref setter for a board column element (not a person identifier)",
+  },
+];
 
 /** Collection names that are not person-owned and need no registry row (none at TASK-006). */
 export const ALLOWED_UNREGISTERED_COLLECTIONS: Readonly<Record<string, string>> = {

@@ -36,6 +36,12 @@ export interface PersonalDataErasurePort {
   /** I-20: the uid's personal system favorite document ids (one per system id), at most `limit`. Path-only, no decryption. */
   systemFavoriteIds(uid: string, limit: number): Promise<string[]>;
   deleteSystemFavorite(uid: string, systemId: string): Promise<void>;
+  /** I-21: the uid's personal Kanban task document ids (the owner's personal task subtree), at most `limit`. Path-only. */
+  personalTaskIds(uid: string, limit: number): Promise<string[]>;
+  deletePersonalTask(uid: string, taskId: string): Promise<void>;
+  /** I-22: whether the uid's task board preference document exists (the owner's task settings subtree). */
+  taskSettingsExists(uid: string): Promise<boolean>;
+  deleteTaskSettings(uid: string): Promise<void>;
 }
 
 export interface PersonalDataStepDeps {
@@ -106,6 +112,21 @@ export async function runPersonalDataBatch(deps: PersonalDataStepDeps, uid: stri
     for (const systemId of favorites) {
       await port.deleteSystemFavorite(uid, systemId);
     }
+    return "more";
+  }
+
+  // I-21 (personal Kanban tasks): path-only deletion; the encrypted content is never opened here.
+  const tasks = await port.personalTaskIds(uid, maxWrites);
+  if (tasks.length > 0) {
+    for (const taskId of tasks) {
+      await port.deletePersonalTask(uid, taskId);
+    }
+    return "more";
+  }
+
+  // I-22 (personal Kanban tasks): the single board preference document.
+  if (await port.taskSettingsExists(uid)) {
+    await port.deleteTaskSettings(uid);
     return "more";
   }
 

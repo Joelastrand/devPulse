@@ -151,6 +151,10 @@ const PERSON_OWNED: readonly InventoryRow[] = [
   // I-20 (Phase 2F.1): a person's personal Systemoversikt favorites, one document per favorited system id. The document holds
   // only an encrypted envelope (the team id, bound to the path) and a timestamp. No system data is copied into it.
   { id: "I-20", collection: "userDevelopment/{uid}/systemFavorites", locator: "subtree", class: "DELETE", fields: [] },
+  // I-21 (personal Kanban tasks): one document per task. Business content is sealed; lifecycle timestamps stay plaintext.
+  { id: "I-21", collection: "userDevelopment/{uid}/personalTasks", locator: "subtree", class: "DELETE", fields: [] },
+  // I-22 (personal Kanban tasks): the owner's board preference document (one envelope).
+  { id: "I-22", collection: "userDevelopment/{uid}/taskSettings", locator: "subtree", class: "DELETE", fields: [] },
 ];
 
 /** A-rows: actor and audit identities on preserved records (D5). Each field is set to null or to the erased marker. */

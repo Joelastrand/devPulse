@@ -62,6 +62,11 @@ const COUNTERS: ReadonlyMap<string, Counter> = new Map<string, Counter>([
   // I-20: personal system favorites.
   ["userDevelopment/{uid}/systemFavorites|subtree|", async (db, b) =>
     (await db.collection("userDevelopment").doc(b.uid).collection("systemFavorites").get()).size],
+  // I-21, I-22: personal Kanban tasks and the board preference.
+  ["userDevelopment/{uid}/personalTasks|subtree|", async (db, b) =>
+    (await db.collection("userDevelopment").doc(b.uid).collection("personalTasks").get()).size],
+  ["userDevelopment/{uid}/taskSettings|subtree|", async (db, b) =>
+    (await db.collection("userDevelopment").doc(b.uid).collection("taskSettings").get()).size],
   ["userDevelopment/{uid}/conversations|subtree|", async (db, b) =>
     (await db.collection("userDevelopment").doc(b.uid).collection("conversations").get()).size],
   ["userDevelopment/{uid}/conversationParticipations|subtree|", async (db, b) =>

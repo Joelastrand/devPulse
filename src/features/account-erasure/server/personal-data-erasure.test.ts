@@ -19,6 +19,9 @@ type Seed = {
   achievements?: Record<string, string[]>;
   teamAssessments?: Record<string, string[]>;
   systemFavorites?: Record<string, string[]>;
+  personalTasks?: Record<string, string[]>;
+  /** uids that hold a task board preference document (`taskSettings/board`). */
+  taskSettings?: string[];
 };
 
 function fakeData(seed: Seed = {}) {
@@ -34,6 +37,8 @@ function fakeData(seed: Seed = {}) {
   const systemFavorites = new Map<string, Set<string>>(
     Object.entries(seed.systemFavorites ?? {}).map(([uid, ids]) => [uid, new Set(ids)]),
   );
+  const personalTasks = new Map<string, Set<string>>(Object.entries(seed.personalTasks ?? {}).map(([uid, ids]) => [uid, new Set(ids)]));
+  const taskSettings = new Set(seed.taskSettings ?? []);
   const log: string[] = [];
 
   const port: PersonalDataErasurePort = {
@@ -93,9 +98,23 @@ function fakeData(seed: Seed = {}) {
       log.push(`systemFavorite:${uid}:${systemId}`);
       systemFavorites.get(uid)?.delete(systemId);
     },
+    async personalTaskIds(uid, limit) {
+      return [...(personalTasks.get(uid) ?? [])].slice(0, limit);
+    },
+    async deletePersonalTask(uid, taskId) {
+      log.push(`personalTask:${uid}:${taskId}`);
+      personalTasks.get(uid)?.delete(taskId);
+    },
+    async taskSettingsExists(uid) {
+      return taskSettings.has(uid);
+    },
+    async deleteTaskSettings(uid) {
+      log.push(`taskSettings:${uid}`);
+      taskSettings.delete(uid);
+    },
   };
 
-  return { port, skill, profiles, roleAssignments, goals, responsibilities, achievements, teamAssessments, systemFavorites, log };
+  return { port, skill, profiles, roleAssignments, goals, responsibilities, achievements, teamAssessments, systemFavorites, personalTasks, taskSettings, log };
 }
 
 async function runToDone(port: PersonalDataErasurePort, uid: string, maxWrites = 100): Promise<number> {
@@ -216,6 +235,20 @@ describe("personal data erasure step (TASK-022)", () => {
 
     expect(store.systemFavorites.get(UID)?.size).toBe(0);
     expect(store.systemFavorites.get(OTHER)).toEqual(new Set(["keep-s"]));
+  });
+
+  it("removes every personal Kanban task (I-21) and the board preference (I-22), paged, and keeps other people's", async () => {
+    const store = fakeData({
+      personalTasks: { [UID]: ["t1", "t2", "t3"], [OTHER]: ["keep-t"] },
+      taskSettings: [UID, OTHER],
+    });
+
+    await runToDone(store.port, UID, 2);
+
+    expect(store.personalTasks.get(UID)?.size).toBe(0);
+    expect(store.taskSettings.has(UID)).toBe(false);
+    expect(store.personalTasks.get(OTHER)).toEqual(new Set(["keep-t"]));
+    expect(store.taskSettings.has(OTHER)).toBe(true);
   });
 
   it("the personal records step needs no encryption key: it only deletes by path", async () => {
