@@ -123,14 +123,124 @@ describe("assignRoleToUser (admin assign and change)", () => {
     expect(assignments.writes).toEqual([]);
   });
 
-  it("refuses an administrator who assigns a role to themselves, and writes nothing", async () => {
+  it("lets an administrator assign an organizational role to their own uid", async () => {
     const roles = createFakeRoleStore();
     const roleId = await seedRole(roles);
     const assignments = createFakeAssignmentStore();
 
     const result = await assignRoleToUser("token", ADMIN_UID, { roleId }, deps({ roles, assignments }));
 
-    expect(result).toEqual({ ok: false, error: "self_assignment" });
+    expect(result).toEqual({ ok: true, assignment: { roleId }, created: true });
+    expect(assignments.docs.get(ADMIN_UID)).toEqual({ roleId, createdAt: NOW, createdBy: ADMIN_UID });
+  });
+
+  it("lets an administrator change their own organizational role, keeping the original creation record", async () => {
+    const roles = createFakeRoleStore();
+    const first = await seedRole(roles);
+    const second = await seedRole(roles, { name: "Overingeniør" });
+    const assignments = createFakeAssignmentStore({ [ADMIN_UID]: { roleId: first, createdAt: T0, createdBy: "admin-0" } });
+
+    const result = await assignRoleToUser("token", ADMIN_UID, { roleId: second }, deps({ roles, assignments }));
+
+    expect(result).toEqual({ ok: true, assignment: { roleId: second }, created: false });
+    expect(assignments.docs.get(ADMIN_UID)).toMatchObject({ roleId: second, createdAt: T0, createdBy: "admin-0", updatedAt: NOW, updatedBy: ADMIN_UID });
+  });
+
+  it("lets a registry superadmin assign their own role regardless of the e-mail address", async () => {
+    const roles = createFakeRoleStore();
+    const roleId = await seedRole(roles);
+    const assignments = createFakeAssignmentStore();
+    const OWNER_UID = "owner-1";
+
+    const result = await assignRoleToUser("token", OWNER_UID, { roleId }, deps({
+      roles,
+      assignments,
+      verifyToken: verifierFor({ uid: OWNER_UID, email: "owner@example.com", emailVerified: true }),
+      isSuperadmin: async (uid: string) => uid === OWNER_UID,
+    }));
+
+    expect(result).toEqual({ ok: true, assignment: { roleId }, created: true });
+  });
+
+  it("refuses an ordinary signed-in person who targets their own uid, and writes nothing", async () => {
+    const roles = createFakeRoleStore();
+    const roleId = await seedRole(roles);
+    const assignments = createFakeAssignmentStore();
+
+    const result = await assignRoleToUser("token", MEMBER_UID, { roleId }, deps({
+      roles,
+      assignments,
+      verifyToken: verifierFor({ uid: MEMBER_UID, email: "m@nve.no", emailVerified: true }),
+    }));
+
+    expect(result).toEqual({ ok: false, error: "forbidden" });
+    expect(assignments.writes).toEqual([]);
+  });
+
+  it("refuses a team administrator who is not a registry superadmin, even for their own uid", async () => {
+    const roles = createFakeRoleStore();
+    const roleId = await seedRole(roles);
+    const assignments = createFakeAssignmentStore();
+    const TEAM_ADMIN_UID = "team-admin-1";
+
+    const result = await assignRoleToUser("token", TEAM_ADMIN_UID, { roleId }, deps({
+      roles,
+      assignments,
+      verifyToken: verifierFor({ uid: TEAM_ADMIN_UID, email: "t@nve.no", emailVerified: true }),
+    }));
+
+    expect(result).toEqual({ ok: false, error: "forbidden" });
+    expect(assignments.writes).toEqual([]);
+  });
+
+  it("refuses a disabled administrator's self-assignment and writes nothing", async () => {
+    const roles = createFakeRoleStore();
+    const roleId = await seedRole(roles);
+    const assignments = createFakeAssignmentStore();
+
+    const result = await assignRoleToUser("token", ADMIN_UID, { roleId }, deps({
+      roles,
+      assignments,
+      verifyToken: verifierFor({ uid: ADMIN_UID, email: "admin@nve.no", emailVerified: true, disabled: true }),
+    }));
+
+    expect(result).toEqual({ ok: false, error: "unauthenticated" });
+    expect(assignments.writes).toEqual([]);
+  });
+
+  it("refuses an administrator's self-assignment whose e-mail is not verified, and writes nothing", async () => {
+    const roles = createFakeRoleStore();
+    const roleId = await seedRole(roles);
+    const assignments = createFakeAssignmentStore();
+
+    const result = await assignRoleToUser("token", ADMIN_UID, { roleId }, deps({
+      roles,
+      assignments,
+      verifyToken: verifierFor({ uid: ADMIN_UID, email: "admin@nve.no", emailVerified: false }),
+    }));
+
+    expect(result.ok).toBe(false);
+    expect(assignments.writes).toEqual([]);
+  });
+
+  it("refuses an administrator's self-assignment with an invalid role id, and writes nothing", async () => {
+    const assignments = createFakeAssignmentStore();
+
+    expect(await assignRoleToUser("token", ADMIN_UID, { roleId: "bad/id" }, deps({ assignments }))).toEqual({
+      ok: false,
+      error: "invalid_input",
+    });
+    expect(assignments.writes).toEqual([]);
+  });
+
+  it("refuses an administrator who adds application-permission fields to their own assignment body, and writes nothing", async () => {
+    const roles = createFakeRoleStore();
+    const roleId = await seedRole(roles);
+    const assignments = createFakeAssignmentStore();
+
+    const result = await assignRoleToUser("token", ADMIN_UID, { roleId, isSuperadmin: true, permissions: ["admin"] }, deps({ roles, assignments }));
+
+    expect(result).toEqual({ ok: false, error: "invalid_input" });
     expect(assignments.writes).toEqual([]);
   });
 
@@ -247,11 +357,28 @@ describe("removeRoleAssignment (admin remove)", () => {
     expect(assignments.docs.has(MEMBER_UID)).toBe(true);
   });
 
-  it("refuses an administrator removing their own assignment", async () => {
-    const assignments = createFakeAssignmentStore({ [ADMIN_UID]: { roleId: "r", createdAt: T0, createdBy: ADMIN_UID } });
+  it("lets an administrator remove their own organizational role", async () => {
+    const roles = createFakeRoleStore();
+    const roleId = await seedRole(roles);
+    const assignments = createFakeAssignmentStore({ [ADMIN_UID]: { roleId, createdAt: T0, createdBy: ADMIN_UID } });
 
-    expect(await removeRoleAssignment("token", ADMIN_UID, deps({ assignments }))).toEqual({ ok: false, error: "self_assignment" });
-    expect(assignments.docs.has(ADMIN_UID)).toBe(true);
+    expect(await removeRoleAssignment("token", ADMIN_UID, deps({ roles, assignments }))).toEqual({ ok: true, removed: true });
+    expect(assignments.docs.has(ADMIN_UID)).toBe(false);
+  });
+
+  it("refuses an ordinary signed-in person removing their own assignment, and removes nothing", async () => {
+    const roles = createFakeRoleStore();
+    const roleId = await seedRole(roles);
+    const assignments = createFakeAssignmentStore({ [MEMBER_UID]: { roleId, createdAt: T0, createdBy: ADMIN_UID } });
+
+    const result = await removeRoleAssignment("token", MEMBER_UID, deps({
+      roles,
+      assignments,
+      verifyToken: verifierFor({ uid: MEMBER_UID, email: "m@nve.no", emailVerified: true }),
+    }));
+
+    expect(result).toEqual({ ok: false, error: "forbidden" });
+    expect(assignments.docs.has(MEMBER_UID)).toBe(true);
   });
 });
 

@@ -21,8 +21,9 @@ import { getDefaultRoleAssignmentStore, type RoleAssignmentWriteStore } from "./
  * organizational information only. Nothing here grants application permission, and no authorization path reads it.
  *
  * Rules enforced here, in order, before any write:
- * - Only an app administrator (`requireAppAdmin`, the superadmin registry) may assign, change, remove or look up.
- * - A user cannot assign or remove their own role (`self_assignment`).
+ * - Only an app administrator (`requireAppAdmin`, the superadmin registry) may assign, change, remove or look up. The
+ *   gate is the same for every target, including the administrator's own uid: an administrator may manage their own
+ *   organizational role. This is the only self-targeted operation; the gate grants nothing else.
  * - The role must exist, be a readable role document, and not be archived (`role_archived`). An archived role never
  *   receives a new assignment.
  */
@@ -41,7 +42,6 @@ export type AssignRoleResult =
         | AuthRefusal
         | "forbidden"
         | "invalid_input"
-        | "self_assignment"
         | "role_not_found"
         | "role_archived"
         | "erasure_in_progress"
@@ -50,7 +50,7 @@ export type AssignRoleResult =
 
 export type RemoveRoleAssignmentResult =
   | { ok: true; removed: boolean }
-  | { ok: false; error: AuthRefusal | "forbidden" | "invalid_input" | "self_assignment" | "erasure_in_progress" | "persistence_failed" };
+  | { ok: false; error: AuthRefusal | "forbidden" | "invalid_input" | "erasure_in_progress" | "persistence_failed" };
 
 export type LookupRoleAssignmentsResult =
   | { ok: true; assignments: Array<{ uid: string; roleId: string | null }> }
@@ -83,7 +83,6 @@ export async function assignRoleToUser(
   const admin = await requireAppAdmin(idToken, { verifyToken: deps.verifyToken, isSuperadmin: deps.isSuperadmin, readFence: deps.readFence });
   if (!admin.ok) return { ok: false, error: admin.error };
   if (!isAddressableUid(targetUid)) return { ok: false, error: "invalid_input" };
-  if (targetUid === admin.identity.uid) return { ok: false, error: "self_assignment" };
 
   const validated = validateRoleAssignmentDraft(input);
   if (!validated.ok) return { ok: false, error: "invalid_input" };
@@ -110,7 +109,6 @@ export async function removeRoleAssignment(
   const admin = await requireAppAdmin(idToken, { verifyToken: deps.verifyToken, isSuperadmin: deps.isSuperadmin, readFence: deps.readFence });
   if (!admin.ok) return { ok: false, error: admin.error };
   if (!isAddressableUid(targetUid)) return { ok: false, error: "invalid_input" };
-  if (targetUid === admin.identity.uid) return { ok: false, error: "self_assignment" };
 
   try {
     const assignments = deps.assignments ?? getDefaultRoleAssignmentStore();

@@ -13,7 +13,8 @@ const json = (body: unknown, status: number) => NextResponse.json(body, { status
 
 /**
  * Admin-only formal role assignment for one user (`roleAssignments/{uid}`). `uid` comes only from the route; the body is
- * `{ roleId }`. `PUT` assigns or changes (one role per user); `DELETE` removes. Both refuse a self-target with `403`.
+ * `{ roleId }`. `PUT` assigns or changes (one role per user); `DELETE` removes. An administrator may target their own uid;
+ * the superadmin gate in the operation is the only authorization check.
  */
 export async function PUT(request: Request, { params }: { params: Promise<{ uid: string }> }) {
   const { uid } = await params;
@@ -44,7 +45,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ u
 
 function statusForAssignError(error: Extract<AssignRoleResult, { ok: false }>["error"]): number {
   if (isAuthRefusal(error)) return authRefusalStatus(error);
-  if (error === "forbidden" || error === "self_assignment") return 403;
+  if (error === "forbidden") return 403;
   if (error === "invalid_input") return 400;
   if (error === "role_not_found") return 404;
   if (error === "role_archived") return 409;
@@ -53,7 +54,7 @@ function statusForAssignError(error: Extract<AssignRoleResult, { ok: false }>["e
 
 function statusForRemoveError(error: Extract<RemoveRoleAssignmentResult, { ok: false }>["error"]): number {
   if (isAuthRefusal(error)) return authRefusalStatus(error);
-  if (error === "forbidden" || error === "self_assignment") return 403;
+  if (error === "forbidden") return 403;
   if (error === "invalid_input") return 400;
   return 500;
 }

@@ -273,4 +273,7 @@ final product decision for the current application scope. It is not a fixed defe
 
 - Ordinary access: a verified e-mail whose domain is exactly `nve.no`. Superadmin access: an active registry UID, whatever the address.
   Team access and team-admin rights stay separate (§2). Formal organizational roles grant nothing.
+- An app administrator (active registry superadmin, verified on every call) may assign, change or remove their own formal
+  organizational role through `/api/admin/users/[uid]/role-assignment`. The self-target is allowed only for this operation,
+  and the operation's server-side admin gate is unchanged. Team-admin status and `teamadmin` grant no role-management right.
 - The organization record (`organizations/nve`) is descriptive and authorizes nothing. See `DATA-MODEL.md` §12.

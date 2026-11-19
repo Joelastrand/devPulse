@@ -115,3 +115,17 @@ pnpm exec playwright test -c browser/email-verification.config.ts
 - Next refuses a second `next dev` in the same directory while one holds `.next/dev/lock`. Stop the other server first. Do not
   stop a server you did not start without asking.
 - `browser/playwright.config.ts` (the owner-account harness) signs in to the configured project. Do not point it at a live project.
+
+## Favicon and browser-tab icon
+
+The tab icon comes from the App Router file conventions in `app/`: `favicon.ico` (16, 32 and 48 px), `icon.png` (32 px) and
+`apple-icon.png` (180 px, flattened onto the navy background). No `<link>` tags or metadata icon config are declared by hand.
+`app/favicon-assets.test.ts` checks the sizes. The source artwork is `public/favicon-devpulse.png` (1261 × 1247 RGBA, with
+transparent margins). The 16 px `favicon.ico` entry is a small-size derivative with wider bar gaps and a heavier check. The 32
+and 48 px entries and the other PNGs are Lanczos downscales of the artwork cropped to its 730 × 730 bounding square.
+
+- `icon.png` and `apple-icon.png` get a content-hashed URL (`/icon.png?<hash>`), so a changed image is requested again.
+  `/favicon.ico` has no hash, so browsers that cache it may keep the old icon.
+- To see a changed icon locally: open `http://localhost:3000/favicon.ico` directly with a hard reload (Ctrl+F5), or clear the
+  site data for `localhost` in DevTools (Application → Clear storage). Chrome keeps the tab icon cached per origin, so a
+  restart of the browser may also be needed.

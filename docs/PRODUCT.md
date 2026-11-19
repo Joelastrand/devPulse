@@ -77,7 +77,7 @@ Users:
 ### Administration (superadmin)
 
 - `/admin/teams`: create and manage teams, members, invitations, access requests, survey administration and challenges.
-- `/admin/roles`: organizational role definitions and assignments. An assignment grants no application permission.
+- `/admin/roles`: organizational role definitions and assignments. An assignment grants no application permission. An administrator may assign, change or remove their own organizational role, the same as for any other person.
 - `/admin/skills`: the skill-tree catalog (org-wide progressions) and an overview of team progress. Not in the sidebar.
 - `/admin/superadmins`: grant and revoke superadmin status. The last active superadmin cannot be revoked.
 

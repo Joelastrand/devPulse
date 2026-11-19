@@ -16,8 +16,12 @@ describe("role copy", () => {
   });
 
   it("maps assignment errors, and falls back to the neutral failure text", () => {
-    expect(roleAssignmentErrorMessage("self_assignment")).toBe(roleAssignmentCopy.errors.self_assignment);
+    expect(roleAssignmentErrorMessage("role_archived")).toBe(roleAssignmentCopy.errors.role_archived);
     expect(roleAssignmentErrorMessage("something_new")).toBe(roleAssignmentCopy.errors.persistence_failed);
+  });
+
+  it("shows no self-assignment refusal text, since the server no longer refuses an administrator's own role", () => {
+    expect(JSON.stringify(roleAssignmentCopy)).not.toContain("din egen rolle");
   });
 
   it("states that the description is required", () => {
