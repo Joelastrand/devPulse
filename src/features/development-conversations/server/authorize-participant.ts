@@ -1,19 +1,16 @@
 import "server-only";
-import { isNonEmptyString } from "../domain/stored-shape";
 import { classifyStoredShape } from "../domain/stored-owner-conversation";
 import { parseStoredParticipationIndex } from "../domain/stored-participation-index";
 import { assertUidSegment } from "./conversation-store-types";
-import { bindingMatches } from "./member-ref-binding";
-import type { GenuineMembershipResult } from "./team-eligibility";
+import type { BoundParticipantResult } from "./shared-team-binding";
 
 /**
- * The single participant access decision for content (SPEC BR-21, D2-SI-2, D2-SI-14; TASK-017). It is pure: it reads
- * nothing and performs no I/O. The caller fetches the raw index, the raw owner document and the TASK-006 membership
- * result, then asks this function whether the verified caller may read content.
+ * The single participant access decision for content (SPEC BR-21, D2-SI-2, D2-SI-14; TASK-017, A2.1). It is pure: it reads
+ * nothing and performs no I/O. The caller fetches the raw index and the raw owner document, then asks this function whether
+ * the verified caller may read content. The caller also runs `authorizeBoundParticipant`, which carries the shared-team and
+ * membership-instance checks (BR-21 (d) and (e)).
  *
- * `membership` is `readGenuineActiveMembership` for the owner document's team. It already encodes BR-21 (d), the active
- * team, and (e), a genuine current membership. A `read_failed` result is handled by the caller as an operational failure
- * before this decision is reached, so it is never allowed and never reaches here as an allow.
+ * A conversation has no team (A2.1). The shared team comes only from `binding`, never from the owner document.
  *
  * Denial carries no reason, so every failing condition is indistinguishable to the caller (BR-21, D2-SI-15).
  */
@@ -25,13 +22,11 @@ export interface ParticipantAccessMaterial {
   index: unknown;
   /** The raw owner document at the index's owner path, or `undefined` when absent. Read as plain fields only. */
   owner: unknown;
-  /** The TASK-006 result for the caller in the owner document's team. Role and admin status are never read. */
-  membership: GenuineMembershipResult;
+  /** The shared-team binding check for the caller, from `authorizeBoundParticipant`. */
+  binding: BoundParticipantResult;
 }
 
-export type ParticipantAccessDecision =
-  | { allowed: true; ownerUid: string; teamId: string }
-  | { allowed: false };
+export type ParticipantAccessDecision = { allowed: true; ownerUid: string; teamId: string } | { allowed: false };
 
 const DENIED: ParticipantAccessDecision = { allowed: false };
 
@@ -58,18 +53,13 @@ export function authorizeParticipant(material: ParticipantAccessMaterial): Parti
   // (b) The owner document must parse as valid plain shape. Its content is not decrypted here.
   const shape = classifyStoredShape(material.owner);
   if (shape.kind !== "valid") return DENIED;
-  const record = shape.record;
+  const participant = shape.record.participant;
 
-  // (c) It must name this caller as an accepted participant. A participant exists only with a linked team (BR-2, BR-3).
-  const participant = record.participant;
+  // (c) It must name this caller as an accepted participant. Pending invitations are not content access (BR-21).
   if (participant === null || participant.uid !== material.callerUid || participant.state !== "accepted") return DENIED;
-  if (record.teamId === null || !isNonEmptyString(record.teamId)) return DENIED;
 
-  // (d) and (e): the active team and a current genuine membership, both inside the TASK-006 result.
-  if (!material.membership.ok) return DENIED;
+  // (d) and (e): a shared active team and the bound membership instance, both inside the binding result.
+  if (!material.binding.ok) return DENIED;
 
-  // (e) The bound memberRef must still equal the current membership's memberRef (BR-21(e), CL-23). Rejoin is a mismatch.
-  if (!bindingMatches(participant.memberRef, material.membership)) return DENIED;
-
-  return { allowed: true, ownerUid, teamId: record.teamId };
+  return { allowed: true, ownerUid, teamId: material.binding.teamId };
 }

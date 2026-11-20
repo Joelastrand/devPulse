@@ -27,6 +27,7 @@ export const competencePlanCopy = {
   cardStatusHeading: "Status",
   progressBarLabel: "Fremdrift i planen (fullførte steg)",
   details: "Detaljer og tiltak",
+  detailsSummary: (count: number) => (count === 1 ? "1 plan" : `${count} planer`),
   showDetails: "Vis steg",
   hideDetails: "Skjul steg",
   edit: "Rediger plan",

@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 
 const observeIdTokenMock = vi.fn();
 const signOutMock = vi.fn();
@@ -126,7 +125,7 @@ describe("AppShell", () => {
     ).toBe(false);
   });
 
-  it("shows exactly the signed-in, non-admin link set and no sign-out control in the sidebar (BR-17)", async () => {
+  it("shows exactly the signed-in, non-admin link set and no non-link control in the sidebar (BR-17)", async () => {
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchOwnAdminStatusMock.mockResolvedValue({ ok: true, isAdmin: false });
 
@@ -138,7 +137,7 @@ describe("AppShell", () => {
     }
     expect(navLinkNames()).toHaveLength(SIGNED_IN_LINK_NAMES.length);
     expect(screen.queryByRole("button", { name: /logg ut/i })).toBeNull();
-    expect(screen.getByRole("button", { name: /min konto/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /min konto/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /^roller$/i })).toBeNull();
   });
 
@@ -225,23 +224,24 @@ describe("AppShell", () => {
     expect(screen.queryByRole("link", { name: /min profil/i })).toBeNull();
   });
 
-  it("never exposes the account menu or its /me/profile link before a signed-in auth event", async () => {
+  it("never exposes the profile link before a signed-in auth event", async () => {
     observeIdTokenMock.mockImplementation(() => () => {});
     render(<AppShell />);
-    expect(screen.queryByRole("button", { name: /min konto/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /logg ut/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /min profil/i })).toBeNull();
     cleanup();
 
     observeIdTokenMock.mockImplementation(subscribingWith(null));
     render(<AppShell />);
-    expect(screen.queryByRole("button", { name: /min konto/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /logg ut/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /min profil/i })).toBeNull();
     cleanup();
 
     observeIdTokenMock.mockImplementation(subscribingWith("a-token"));
     fetchOwnAdminStatusMock.mockResolvedValue({ ok: false });
     render(<AppShell />);
-    expect(await screen.findByRole("button", { name: /min konto/i })).toBeTruthy();
+    expect(await screen.findByRole("link", { name: /min profil/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /logg ut/i })).toBeNull();
   });
 
   it("marks 'Min profil' as the current page on /me/profile without touching other links", async () => {
@@ -336,7 +336,7 @@ describe("AppShell", () => {
 
     render(<AppShell />);
 
-    await screen.findByRole("button", { name: /min konto/i });
+    await screen.findByRole("link", { name: /min profil/i });
     expect(screen.queryByRole("link", { name: /^roller$/i })).toBeNull();
   });
 
@@ -354,30 +354,16 @@ describe("AppShell", () => {
     expect(fetchOwnAdminStatusMock).toHaveBeenCalledWith("a-token");
   });
 
-  it("signs out via the Firebase client SDK when Logg ut is activated, and returns to the signed-out set without a reload", async () => {
-    const user = userEvent.setup();
+  it("has no top account bar, and the sidebar Konto group holds the profile link without a sign-out action", async () => {
     const observer = capturingObserver();
-    signOutMock.mockImplementation(async () => {
-      observer.emit(null);
-      return { ok: true };
-    });
     fetchOwnAdminStatusMock.mockResolvedValue({ ok: true, isAdmin: false });
-
     render(<AppShell />);
     observer.emit("a-token");
+
     await waitFor(() => expect(fetchOwnAdminStatusMock).toHaveBeenCalled());
-
-    await user.click(await screen.findByRole("button", { name: /min konto/i }));
-    expect(await screen.findAllByRole("button", { name: /logg ut/i })).toHaveLength(1);
-    const signOutButton = screen.getByRole("button", { name: /logg ut/i });
-    await user.click(signOutButton);
-
-    expect(signOutMock).toHaveBeenCalled();
-    await waitFor(() => {
-      for (const name of SIGNED_OUT_LINK_NAMES) {
-        expect(screen.getByRole("link", { name })).toBeTruthy();
-      }
-    });
+    expect(screen.queryByRole("button", { name: /min konto/i })).toBeNull();
+    const konto = screen.getByText("Konto").closest("div") as HTMLElement;
+    expect(within(konto).getByRole("link", { name: "Min profil" }).getAttribute("href")).toBe("/me/profile");
     expect(screen.queryByRole("button", { name: /logg ut/i })).toBeNull();
   });
 

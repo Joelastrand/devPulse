@@ -111,16 +111,15 @@ for (const c of CONVERSATIONS) {
   }
   creates.push(c.id);
 }
-console.log(`Mode: ${WRITE ? "WRITE" : "dry-run"} | create=${creates.length} skip=${skips.length} (owner-only, team=null, no participant)`);
+console.log(`Mode: ${WRITE ? "WRITE" : "dry-run"} | create=${creates.length} skip=${skips.length} (owner-only, no participant)`);
 
 if (WRITE) {
   for (const c of CONVERSATIONS.filter((x) => creates.includes(x.id))) {
     const encoded = encodeContent(c.content, conversationContext(OWNER_UID, c.id));
     if (!encoded.ok) throw new Error(`Aborted: content codec unavailable (${encoded.error})`);
     const data = {
-      teamId: null,
       participantUid: null,
-      participantMemberRef: null,
+      participantBindings: null,
       participantState: null,
       participantInvitedAt: null,
       participantAcceptedAt: null,

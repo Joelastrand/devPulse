@@ -7,9 +7,8 @@ import { productionOwnedGoalReader } from "./read-owned-goal-snapshots";
 import { productionOwnedEvidenceReader } from "./owned-evidence-seam";
 import type { SetSharedEvidenceDeps } from "./set-shared-evidence";
 import type { SelectableEvidenceDeps } from "./list-selectable-evidence";
-import { createFirestoreSelectableMembersReader, type SelectableMembersDeps } from "./read-selectable-members";
 import type { SetSharedGoalsDeps } from "./set-shared-goals";
-import { createFirestoreTeamEligibilityReader } from "./team-eligibility";
+import { createFirestoreSharedTeamReader } from "./shared-team-binding";
 
 /**
  * Production dependencies for the owner routes (TASK-023). The route files import only this module and the operations,
@@ -19,7 +18,7 @@ import { createFirestoreTeamEligibilityReader } from "./team-eligibility";
 /** Deps for the owner list and detail reads (TASK-011), with the production BR-21 resolver (TASK-023). */
 export function productionOwnerReadDeps(): OwnerReadDeps {
   const store = getDefaultConversationStore();
-  const teamReader = createFirestoreTeamEligibilityReader();
+  const teamReader = createFirestoreSharedTeamReader();
   return {
     store,
     codec: { probeKey, decryptForClassification },
@@ -28,14 +27,6 @@ export function productionOwnerReadDeps(): OwnerReadDeps {
   };
 }
 
-/** Deps for the owner selector read (SPEC Amendment 2026-10-19). The owner predicate lives in the operation, not here. */
-export function productionSelectableMembersDeps(): SelectableMembersDeps {
-  return {
-    store: getDefaultConversationStore(),
-    codec: { probeKey, decryptForClassification },
-    reader: createFirestoreSelectableMembersReader(),
-  };
-}
 
 /** Deps for the owner goal-snapshot set write (TASK-013). The D1 read comes from the snapshot seam only. */
 export function productionSetSharedGoalsDeps(): SetSharedGoalsDeps {

@@ -6,11 +6,12 @@ import type { SharedGoalSnapshot } from "../domain/shared-goal-snapshot";
 import type { RawConversationData } from "./conversation-store-types";
 import { createFakeContentCodec, type FakeContentCodec } from "./fake-content-codec";
 import { createFakeConversationStore, type FakeConversationStore } from "./fake-conversation-store";
-import { createFakeTeamEligibilityReader } from "./fake-team-eligibility";
+import { createFakeSharedTeamReader } from "./fake-team-eligibility";
 import {
   OTHER_OWNER_UID,
   OWNER_UID,
   PARTICIPANT_UID,
+  TEAM_ID,
   rosterTeam,
   seedOwnerConversation,
 } from "./owner-read-test-support";
@@ -68,8 +69,8 @@ function setup(options: { members?: string[]; names?: Record<string, string>; tr
   const deps: ReadOwnerConversationDeps = {
     store,
     codec,
-    teamReader: createFakeTeamEligibilityReader(rosterTeam(options.members ?? [OWNER_UID, PARTICIPANT_UID])),
-    resolveParticipantState: async () => true,
+    teamReader: createFakeSharedTeamReader(rosterTeam(options.members ?? [OWNER_UID, PARTICIPANT_UID])),
+    resolveParticipantState: async () => ({ holds: true, teamId: TEAM_ID }),
     getNames: names.getNames,
     areaNameReader: catalog.reader,
   };
@@ -109,7 +110,6 @@ describe("readOwnerConversation: owner detail (BR-35, BR-42)", () => {
       title: "Synthetic title",
       status: "open",
       plannedFor: "2026-11-01",
-      teamId: "team-alpha",
       participant: { state: "accepted", displayName: "Synthetic Colleague" },
       ownerNotes: "Synthetic owner note",
       participantNotes: "Synthetic participant note",
@@ -197,7 +197,7 @@ describe("readOwnerConversation: owner detail (BR-35, BR-42)", () => {
 
     const result = await readOwnerConversation(OWNER_UID, CONVERSATION_ID, {
       ...deps,
-      resolveParticipantState: async () => false,
+      resolveParticipantState: async () => ({ holds: false }),
     });
 
     expect(result.ok && result.conversation.participant).toEqual({ state: "unavailable", displayName: null });
@@ -213,7 +213,7 @@ describe("readOwnerConversation: owner detail (BR-35, BR-42)", () => {
 
     const result = await readOwnerConversation(OWNER_UID, CONVERSATION_ID, {
       ...deps,
-      resolveParticipantState: async () => false,
+      resolveParticipantState: async () => ({ holds: false }),
     });
 
     expect(result.ok && result.conversation).toMatchObject({
@@ -243,7 +243,7 @@ describe("readOwnerConversation: owner detail (BR-35, BR-42)", () => {
     await seedOwnerConversation(store, codec, { conversationId: CONVERSATION_ID, participant: { uid: PARTICIPANT_UID, state: "accepted" } });
     const failingRead = {
       ...deps,
-      teamReader: createFakeTeamEligibilityReader({ ...rosterTeam([OWNER_UID, PARTICIPANT_UID]), failMembershipRead: true }),
+      teamReader: createFakeSharedTeamReader({ ...rosterTeam([OWNER_UID, PARTICIPANT_UID]), failMembershipRead: true }),
     };
 
     expect(await readOwnerConversation(OWNER_UID, CONVERSATION_ID, failingRead)).toEqual({ ok: false, error: "persistence_failed" });

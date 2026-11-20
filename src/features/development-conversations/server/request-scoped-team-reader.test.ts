@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { createFakeTeamEligibilityReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
+import { createFakeSharedTeamReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
 import { requestScopedTeamReader } from "./request-scoped-team-reader";
 import { rosterTeam, TEAM_ID } from "./owner-read-test-support";
 import { PARTICIPANT_UID } from "./owner-read-test-support";
 
 /** Counts raw calls to the base reader, keyed by the arguments, so a test can prove a read was shared or repeated. */
 function countingReader(state: FakeTeamEligibilityState) {
-  const base = createFakeTeamEligibilityReader(state);
+  const base = createFakeSharedTeamReader(state);
   const statusCalls: string[] = [];
   const membershipCalls: string[] = [];
   return {
@@ -21,6 +21,8 @@ function countingReader(state: FakeTeamEligibilityState) {
         membershipCalls.push(`${uid}|${teamId}`);
         return base.getMembership(uid, teamId);
       },
+      listOwnMemberships: async () => [],
+      findMembershipsByRef: (memberRef: string, limit: number) => base.findMembershipsByRef(memberRef, limit),
     },
   };
 }
@@ -65,7 +67,7 @@ describe("requestScopedTeamReader (TASK-023 owner-list memo)", () => {
   });
 
   it("shares a rejected read as the same operational failure for every caller in the request", async () => {
-    const memo = requestScopedTeamReader(createFakeTeamEligibilityReader({ ...rosterTeam([PARTICIPANT_UID]), failTeamRead: true }));
+    const memo = requestScopedTeamReader(createFakeSharedTeamReader({ ...rosterTeam([PARTICIPANT_UID]), failTeamRead: true }));
 
     await expect(memo.getTeamStatus(TEAM_ID)).rejects.toThrow("simulated team read failure");
     await expect(memo.getTeamStatus(TEAM_ID)).rejects.toThrow("simulated team read failure");

@@ -10,8 +10,8 @@ import { completeConversation } from "./server/complete-conversation";
 import { deleteConversation } from "./server/delete-conversation";
 import { createFakeContentCodec, type FakeContentCodec } from "./server/fake-content-codec";
 import { createFakeConversationStore, type FakeConversationStore } from "./server/fake-conversation-store";
-import { createFakeTeamEligibilityReader, type FakeTeamEligibilityState } from "./server/fake-team-eligibility";
-import type { ParticipantRefReader } from "./server/member-ref-binding";
+import { createFakeSharedTeamReader, type FakeTeamEligibilityState } from "./server/fake-team-eligibility";
+import type { SharedTeamReader } from "./server/shared-team-binding";
 import { NOW, OWNER_UID, PARTICIPANT_MEMBER_REF, PARTICIPANT_UID, TEAM_ID, seedOwnerConversation } from "./server/owner-read-test-support";
 import { createProductionParticipantStateResolver } from "./server/owner-participant-state";
 import { readConversationForCaller, type ReadConversationForCallerDeps } from "./server/read-conversation-for-caller";
@@ -42,7 +42,7 @@ const MEMBER_UID = "member-1";
 const ADMIN_UID = "admin-1";
 const isAdminUid = async (uid: string): Promise<boolean> => uid === ADMIN_UID;
 const OUTSIDER_UID = "outsider-1";
-const OWNER_MEMBER_REF = "zyxwvtsrqpnmkjhgfedcba9876";
+const OWNER_MEMBER_REF = "2468ace7bdfhjkmnpqrstvwxyz";
 const LEAD_REF = "2345678abcdefghjkmnpqrstvw";
 const LEAD_ADMIN_REF = "abcdefghjkmnpqrstvwxyz0123";
 const MEMBER_REF = "9876543210zyxwvtsrqponmlkj";
@@ -208,7 +208,7 @@ interface World {
   store: FakeConversationStore;
   codec: FakeContentCodec;
   teamState: FakeTeamEligibilityState;
-  refReader: ParticipantRefReader;
+  refReader: SharedTeamReader;
   readDeps: ReadConversationForCallerDeps;
 }
 
@@ -229,9 +229,8 @@ async function world(row: RowId, options: { sharedGoals?: SharedGoalSnapshot[] }
   // same live state as the read seam. Tests that change a membership change it in this one object.
   const store = createFakeConversationStore({ teams: teamState });
   const codec = createFakeContentCodec();
-  const teamReader = createFakeTeamEligibilityReader(teamState);
+  const teamReader = createFakeSharedTeamReader(teamState);
   const getNames = async (uids: readonly string[]) => new Map(uids.filter((uid) => uid === OWNER_UID).map((uid) => [uid, "Synthetic owner"]));
-  const teamNameReader = { getTeamName: async () => "Synthetic team" as unknown };
 
   await seedOwnerConversation(store, codec, {
     conversationId: CONVERSATION_ID,
@@ -245,12 +244,7 @@ async function world(row: RowId, options: { sharedGoals?: SharedGoalSnapshot[] }
     });
   }
 
-  const refReader: ParticipantRefReader = {
-    ...teamReader,
-    async listMemberships(_teamId, limit) {
-      return Object.values(teamState.memberships).slice(0, limit);
-    },
-  };
+  const refReader: SharedTeamReader = teamReader;
   const readDeps: ReadConversationForCallerDeps = {
     store,
     owner: {
@@ -261,8 +255,8 @@ async function world(row: RowId, options: { sharedGoals?: SharedGoalSnapshot[] }
       areaNameReader,
       getNames,
     },
-    participant: { store, codec, teamReader, teamNameReader, areaNameReader, getNames },
-    pending: { store, teamReader, teamNameReader, getNames },
+    participant: { store, codec, teamReader, areaNameReader, getNames },
+    pending: { store, teamReader, getNames },
   };
   return { store, codec, teamState, refReader, readDeps };
 }

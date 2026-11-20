@@ -11,6 +11,7 @@ const deleteConversationMock = vi.fn();
 
 vi.mock("../../auth/client/auth-client", () => ({ observeIdToken: observeIdTokenMock }));
 vi.mock("../client/conversations-gateway", () => ({
+  fetchInvitableColleagues: async () => ({ status: "ok", response: { colleagues: [], truncated: false } }),
   fetchConversationList: fetchConversationListMock,
   deleteConversation: deleteConversationMock,
   fetchCreateOptions: vi.fn(async () => ({ status: "error", error: "unavailable" })),
@@ -45,7 +46,6 @@ function participation(overrides: Partial<ParticipationSummaryWire> = {}): Parti
     conversationId: "part-1",
     state: "accepted",
     title: "Veiledning i kodegjennomgang",
-    teamName: "Plattform",
     invitedAt: "2026-10-02T10:00:00.000Z",
     ...overrides,
   };
@@ -78,7 +78,7 @@ function completed(overrides: Partial<OwnerSummaryWire> = {}): OwnedListItem {
 }
 
 function pendingInvitation(): ParticipationSummaryWire {
-  return { conversationId: "inv-1", state: "pending", title: null, teamName: "Plattform", invitedAt: "2026-10-03T10:00:00.000Z" };
+  return { conversationId: "inv-1", state: "pending", title: null, invitedAt: "2026-10-03T10:00:00.000Z" };
 }
 
 describe("Samtaler grouped by state (TASK-033)", () => {

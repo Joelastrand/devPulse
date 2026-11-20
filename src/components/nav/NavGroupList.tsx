@@ -21,11 +21,6 @@ export interface NavGroup {
   items: NavItem[];
 }
 
-export interface NavSignOut {
-  pending: boolean;
-  onSignOut: () => void;
-}
-
 const LINK_CLASSNAME =
   "relative flex items-center gap-2 rounded-control px-3 py-2 text-label font-medium transition-colors duration-micro ease-standard";
 // Navigation sits on the dark sidebar surface in both the desktop sidebar and the drawer.
@@ -64,8 +59,7 @@ export function activeNavHref(groups: readonly NavGroup[], pathname: string | nu
 /**
  * The grouped navigation list shared by the desktop sidebar and the mobile
  * drawer (docs/archive/features/product-experience/SPEC.md — Application shell). The
- * caller supplies the `<nav>` landmark. Sign-out is not part of the list: it lives
- * only in the top-bar account menu (BR-17, D-4).
+ * caller supplies the `<nav>` landmark. Sign-out is not in the navigation; it lives on Min profil.
  */
 export function NavGroupList({
   groups,

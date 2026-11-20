@@ -2,7 +2,6 @@ import "server-only";
 import { isConversationId } from "../domain/conversation-id";
 import type { ConversationStatus } from "../domain/conversation-status";
 import type { SharedEvidenceSnapshot } from "../domain/shared-evidence-snapshot";
-import { isNonEmptyString } from "../domain/stored-shape";
 import { classifyStoredShape } from "../domain/stored-owner-conversation";
 import { resolveAreaNames, type SkillTreeNameReader } from "./area-names";
 import { authorizeParticipant, participantOwnerUid } from "./authorize-participant";
@@ -10,24 +9,22 @@ import type { ConversationStore } from "./conversation-store-types";
 import { classifyOwnerDocument, type OwnerReadCodec } from "./owner-read";
 import { resolveRosterNames, type RosterNameDeps } from "./participant-presentation";
 import type { OwnerSharedGoalDto } from "./read-owner-conversation";
-import type { TeamNameReader } from "./read-pending-invitation";
-import { readGenuineActiveMembership, type TeamEligibilityReader } from "./team-eligibility";
+import { authorizeBoundParticipant, type SharedTeamReader } from "./shared-team-binding";
 
 /**
- * Accepted participant detail (SPEC BR-21, BR-22, BR-43, BR-45, BR-53, CL-18, D2-SI-6, D2-SI-14; TASK-017). The only
+ * Accepted participant detail (SPEC BR-21, BR-22, BR-43, BR-45, BR-53, CL-18, D2-SI-6, D2-SI-14; TASK-017, A2.1). The only
  * participant content read. Every denial, whatever its cause, is `conversation_not_found`. A read, key or membership
  * failure is `persistence_failed`, and it is never reported as a denial.
  *
- * Order: index, owner plain shape, the caller's TASK-006 membership, then the single authorization decision. Content is
- * decrypted only after that decision allows it, and the key is probed on this request (BR-53). The team name is read
- * only after the caller's active membership is confirmed, as in the pending view (TASK-015).
+ * Order: index, owner plain shape, the shared-team binding (`authorizeBoundParticipant`), then the single authorization
+ * decision. Content is decrypted only after that decision allows it, and the key is probed on this request (BR-53). A
+ * conversation has no team, so the response carries no team name.
  */
 
 export interface ReadParticipantConversationDeps {
   store: ConversationStore;
   codec: OwnerReadCodec;
-  teamReader: TeamEligibilityReader;
-  teamNameReader: TeamNameReader;
+  teamReader: SharedTeamReader;
   /** The SkillTree catalog reader for area names. Production uses the default reader. */
   areaNameReader?: SkillTreeNameReader;
   /** Production uses the roster-rule default; tests inject a fake. */
@@ -40,7 +37,6 @@ export interface ParticipantConversationDto {
   title: string;
   status: ConversationStatus;
   plannedFor: string | null;
-  teamName: string;
   ownerDisplayName: string | null;
   ownerNotes: string;
   nextSteps: string[];
@@ -80,19 +76,15 @@ export async function readParticipantConversation(
     const rawOwner = await deps.store.getOwner(ownerUid, conversationId);
     if (rawOwner === undefined) return NOT_FOUND;
     const shape = classifyStoredShape(rawOwner);
-    if (shape.kind !== "valid" || shape.record.teamId === null) return NOT_FOUND;
+    if (shape.kind !== "valid" || shape.record.participant === null) return NOT_FOUND;
 
-    // BR-21 (d) and (e): the team's status and the caller's current genuine membership. A failed read is operational.
-    const membership = await readGenuineActiveMembership(callerUid, shape.record.teamId, deps.teamReader);
-    if (!membership.ok && membership.error === "read_failed") return FAILED;
+    // BR-21 (d) and (e): a shared active team and the bound membership instance. A failed read is operational.
+    const binding = await authorizeBoundParticipant(ownerUid, callerUid, shape.record.participant.bindings, deps.teamReader);
+    if (!binding.ok && binding.error === "read_failed") return FAILED;
 
     // BR-21 (a) to (e): the single decision. Every denial is the same not-found result.
-    const decision = authorizeParticipant({ callerUid, index: rawIndex, owner: rawOwner, membership });
+    const decision = authorizeParticipant({ callerUid, index: rawIndex, owner: rawOwner, binding });
     if (!decision.allowed) return NOT_FOUND;
-
-    // BR-41, BR-43: the team name is team data, so a missing or malformed name is an operational failure.
-    const teamName = await deps.teamNameReader.getTeamName(decision.teamId);
-    if (!isNonEmptyString(teamName)) return FAILED;
 
     // BR-53: the key is probed on this request, then the payload is decrypted and validated. A key failure throws out
     // of the classifier and is caught below as persistence_failed. Malformed or unauthenticated content is not found.
@@ -106,7 +98,7 @@ export async function readParticipantConversation(
     const areas = await resolveAreaNames(treeIds, deps.areaNameReader);
     if (!areas.ok) return FAILED;
 
-    // BR-41 roster rule: the owner's name only when both parties hold an active membership of the team.
+    // BR-41 roster rule: the owner's name only when both parties hold an active membership of the shared team.
     const request = { viewerUid: callerUid, teamId: decision.teamId, subjectUid: decision.ownerUid };
     const names = await resolveRosterNames([request], { teamReader: deps.teamReader, getNames: deps.getNames });
     if (!names.ok) return FAILED;
@@ -118,7 +110,6 @@ export async function readParticipantConversation(
         title: record.content.title,
         status: record.status,
         plannedFor: record.plannedFor,
-        teamName,
         ownerDisplayName: names.displayNameOf(request),
         ownerNotes: record.content.ownerNotes,
         nextSteps: record.content.nextSteps,

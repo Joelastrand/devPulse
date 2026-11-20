@@ -13,6 +13,7 @@ const deleteConversationMock = vi.fn();
 
 vi.mock("../../auth/client/auth-client", () => ({ observeIdToken: observeIdTokenMock }));
 vi.mock("../client/conversations-gateway", () => ({
+  fetchInvitableColleagues: async () => ({ status: "ok", response: { colleagues: [], truncated: false } }),
   fetchConversationList: fetchConversationListMock,
   deleteConversation: deleteConversationMock,
   // The selected conversation is rendered by ConversationDetail on wide screens; it is not under test here.
@@ -48,7 +49,6 @@ function participation(overrides: Partial<ParticipationSummaryWire> = {}): Parti
     conversationId: "part-1",
     state: "accepted",
     title: "Veiledning i kodegjennomgang",
-    teamName: "Plattform",
     invitedAt: "2026-10-02T10:00:00.000Z",
     ...overrides,
   };
@@ -130,7 +130,7 @@ describe("ConversationsPage states", () => {
     const open = within(screen.getByRole("region", { name: conversationsCopy.ownedHeading })).getAllByRole("listitem");
     expect(open).toHaveLength(1);
     expect(open[0]?.textContent).toContain("Første samtale");
-    expect(open[0]?.textContent).toContain(conversationsCopy.participantStateLabel.accepted);
+    expect(open[0]?.textContent).toContain(conversationsCopy.participantIndicatorShared("Kari"));
     expect(open[0]?.textContent).toContain("Kari");
     const done = within(screen.getByRole("region", { name: conversationsCopy.completedHeading })).getAllByRole("listitem");
     expect(done).toHaveLength(1);
@@ -143,14 +143,14 @@ describe("ConversationsPage states", () => {
     await renderReady(
       list({
         participating: {
-          items: [participation({ conversationId: "pend-1", state: "pending", title: "Skjult tittel", teamName: "Plattform" })],
+          items: [participation({ conversationId: "pend-1", state: "pending", title: "Skjult tittel" })],
           truncated: false,
         },
       }),
     );
     const section = screen.getByRole("region", { name: conversationsCopy.invitationsHeading });
     expect(within(section).getByText(conversationsCopy.pendingBadge)).toBeTruthy();
-    const link = within(section).getByRole("link", { name: conversationsCopy.openPendingName("Plattform") });
+    const link = within(section).getByRole("link", { name: conversationsCopy.pendingRowTitle });
     expect(link.getAttribute("href")).toBe("/me/conversations/pend-1");
     expect(section.textContent).not.toContain("Skjult tittel");
     expect(section.textContent).not.toContain(conversationsCopy.titleUnavailable);
@@ -183,7 +183,6 @@ describe("ConversationsPage states", () => {
     await renderReady(list({ participating: { items: [participation()], truncated: false } }));
     const section = screen.getByRole("region", { name: conversationsCopy.participatingHeading });
     expect(within(section).getByText("Veiledning i kodegjennomgang")).toBeTruthy();
-    expect(section.textContent).toContain("Plattform");
   });
 
   it("populated: a section with no items shows its own neutral line", async () => {
@@ -374,7 +373,7 @@ describe("ConversationsPage composition (visual-redesign TASK-012)", () => {
     expect(screen.queryByText("Ferdig samtale")).toBeNull();
   });
 
-  it("shows counterpart initials beside the name, without image elements", async () => {
+  it("shows the colleague name as text, with no avatar image element", async () => {
     const { container } = await renderReady(
       list({
         owned: {
@@ -385,7 +384,7 @@ describe("ConversationsPage composition (visual-redesign TASK-012)", () => {
     ).then(() => ({ container: document.body }));
     await screen.findByText("Med Kari");
 
-    expect(screen.getByText("KN").getAttribute("aria-hidden")).toBe("true");
+    expect(screen.getByText(/Kari Nordmann/)).toBeTruthy();
     expect(container.querySelector("img")).toBeNull();
   });
 
@@ -433,6 +432,149 @@ describe("conversations heading structure (visual-redesign TASK-019)", () => {
     await renderReady(
       list({ owned: { items: [summary({ conversationId: "conv-1", title: "Samtale" })], truncated: false } }),
     );
-    expectHeadingStructure(document.body, { ownsPageTitle: false });
+    expectHeadingStructure(document.body, { ownsPageTitle: true });
+  });
+});
+
+describe("list rows: the participant indicator matches each authorized state", () => {
+  it("no participant: 'Ingen deltaker', with the open status badge", async () => {
+    await renderReady(list({ owned: { items: [summary({ conversationId: "conv-np", title: "Privat forberedelse" })], truncated: false } }));
+    expect(screen.getByText(conversationsCopy.participantIndicatorNone)).toBeTruthy();
+    expect(screen.getByText(conversationsCopy.statusLabel.open)).toBeTruthy();
+  });
+
+  it("pending invitation: 'Invitert: <name>', so it is never described as shared", async () => {
+    await renderReady(
+      list({
+        owned: {
+          items: [summary({ conversationId: "conv-pend", title: "Under invitasjon", participant: { state: "pending", displayName: "Ola Synthetic" } })],
+          truncated: false,
+        },
+      }),
+    );
+    expect(screen.getByText("Invitert: Ola Synthetic")).toBeTruthy();
+    expect(screen.queryByText(/Delt med:/)).toBeNull();
+  });
+
+  it("accepted participant: 'Delt med: <name>'", async () => {
+    await renderReady(
+      list({
+        owned: {
+          items: [summary({ conversationId: "conv-acc", title: "Delt samtale", participant: { state: "accepted", displayName: "Kari Synthetic" } })],
+          truncated: false,
+        },
+      }),
+    );
+    expect(screen.getByText("Delt med: Kari Synthetic")).toBeTruthy();
+  });
+
+  it("revoked access: 'Har ikke lenger tilgang: <name>', and the owner's own title stays visible", async () => {
+    await renderReady(
+      list({
+        owned: {
+          items: [summary({ conversationId: "conv-rev", title: "Tidligere deltaker", participant: { state: "unavailable", displayName: "Per Synthetic" } })],
+          truncated: false,
+        },
+      }),
+    );
+    expect(screen.getByText("Har ikke lenger tilgang: Per Synthetic")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Tidligere deltaker" })).toBeTruthy();
+  });
+
+  it("completed owned conversation: the completed badge and its participant indicator together", async () => {
+    await renderReady(
+      list({
+        owned: {
+          items: [summary({ conversationId: "conv-done", title: "Avsluttet", status: "completed", participant: { state: "accepted", displayName: "Kari Synthetic" } })],
+          truncated: false,
+        },
+      }),
+    );
+    expect(screen.getByText(conversationsCopy.statusLabel.completed)).toBeTruthy();
+    expect(screen.getByText("Delt med: Kari Synthetic")).toBeTruthy();
+  });
+
+  it("participation (accepted): the title and 'Med: en kollega', with no owner name the list does not carry", async () => {
+    await renderReady(
+      list({
+        participating: { items: [participation({ conversationId: "part-1", state: "accepted", title: "Min deltakelse" })], truncated: false },
+      }),
+    );
+    expect(screen.getByRole("link", { name: "Min deltakelse" })).toBeTruthy();
+    expect(screen.getByText(conversationsCopy.participantIndicatorWithOwnerUnnamed)).toBeTruthy();
+  });
+});
+
+describe("list search: title and colleague name, composed with the status filters", () => {
+  const owned = [
+    summary({ conversationId: "s-a", title: "Kompetanse og mål", participant: { state: "accepted", displayName: "Kari Synthetic" } }),
+    summary({ conversationId: "s-b", title: "Retrospektiv", status: "completed", participant: { state: "accepted", displayName: "Ola Synthetic" } }),
+    summary({ conversationId: "s-c", title: "Forberedelse" }),
+  ];
+
+  async function search(value: string) {
+    fireEvent.change(screen.getByRole("searchbox", { name: conversationsCopy.searchLabel }), { target: { value } });
+  }
+
+  function visibleTitles(): string[] {
+    return screen.queryAllByRole("link").map((link) => link.textContent ?? "").filter((text) => owned.some((item) => item.kind === "summary" && item.conversation.title === text));
+  }
+
+  it("matches the colleague's authorized display name, case-insensitively, and reports the count", async () => {
+    await renderReady(list({ owned: { items: owned, truncated: false } }));
+    await search("  kARI ");
+    expect(visibleTitles()).toEqual(["Kompetanse og mål"]);
+    expect(screen.getByText(conversationsCopy.resultCountSearch(1, 3))).toBeTruthy();
+  });
+
+  it("matches the conversation title", async () => {
+    await renderReady(list({ owned: { items: owned, truncated: false } }));
+    await search("retro");
+    expect(visibleTitles()).toEqual(["Retrospektiv"]);
+  });
+
+  it("combines with a status filter: a name that matches only a completed conversation is hidden under 'Åpne'", async () => {
+    await renderReady(list({ owned: { items: owned, truncated: false } }));
+    await search("Ola");
+    expect(visibleTitles()).toEqual(["Retrospektiv"]);
+    fireEvent.click(screen.getByRole("button", { name: conversationsCopy.filters.open }));
+    expect(screen.getByText(conversationsCopy.searchEmpty)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: conversationsCopy.filters.completed }));
+    expect(visibleTitles()).toEqual(["Retrospektiv"]);
+  });
+
+  it("keeps the query when the filter changes, and the reset button clears it and restores the full count", async () => {
+    await renderReady(list({ owned: { items: owned, truncated: false } }));
+    await search("Kari");
+    fireEvent.click(screen.getByRole("button", { name: conversationsCopy.filters.mine }));
+    expect((screen.getByRole("searchbox", { name: conversationsCopy.searchLabel }) as HTMLInputElement).value).toBe("Kari");
+    fireEvent.click(screen.getByRole("button", { name: conversationsCopy.resetSearch }));
+    expect((screen.getByRole("searchbox", { name: conversationsCopy.searchLabel }) as HTMLInputElement).value).toBe("");
+    expect(screen.getByText(conversationsCopy.resultCountAll(3))).toBeTruthy();
+  });
+
+  it("a search with no match says so, with a way out, and is not the first-time empty state", async () => {
+    await renderReady(list({ owned: { items: owned, truncated: false } }));
+    await search("finnes ikke");
+    expect(screen.getByText(conversationsCopy.searchEmpty)).toBeTruthy();
+    expect(screen.queryByText(conversationsCopy.empty)).toBeNull();
+  });
+
+  it("says that a search covers only the loaded list when the list is truncated", async () => {
+    await renderReady(list({ owned: { items: owned, truncated: true } }));
+    await search("Kari");
+    expect(screen.getByText(/Søket gjelder bare samtalene som er lastet\./)).toBeTruthy();
+  });
+
+  it("never matches a pending invitation's protected title", async () => {
+    await renderReady(
+      list({
+        owned: { items: owned, truncated: false },
+        participating: { items: [participation({ conversationId: "pend-x", state: "pending", title: "Hemmelig tittel" })], truncated: false },
+      }),
+    );
+    await search("Hemmelig");
+    expect(screen.getByText(conversationsCopy.searchEmpty)).toBeTruthy();
+    expect(screen.queryByText("Hemmelig tittel")).toBeNull();
   });
 });

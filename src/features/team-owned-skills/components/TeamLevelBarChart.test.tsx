@@ -73,9 +73,9 @@ describe("TeamLevelBarChart", () => {
 
   it("labels the chart with a Norwegian description and the level scale", () => {
     render(<TeamLevelBarChart rows={[row("sk1", "Testing", 3)]} />);
-    expect(screen.getByRole("heading", { name: "Nivå per område" })).toBeTruthy();
-    expect(screen.getByRole("img", { name: "Teamets nivå per kompetanseområde, sortert etter navn" })).toBeTruthy();
-    expect(screen.getByText(/Tallet ved hver søyle er nivået/)).toBeTruthy();
+    // The heading and description belong to the page's collapsible section; the chart is named by its image label.
+    expect(screen.getByRole("img", { name: "Teamets nivå per kompetanseområde" })).toBeTruthy();
+    expect(screen.queryByText(/Tallet ved hver søyle er nivået/)).toBeNull();
   });
 
   it("renders nothing when no area has a calculated level", () => {

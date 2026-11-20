@@ -26,9 +26,8 @@ const INDEX_PATH = "userDevelopment/participant-1/conversationParticipations/con
 
 function ownerDoc(): OwnerDocumentWrite {
   return {
-    teamId: "team-a",
     participantUid: "participant-1",
-    participantMemberRef: "synthetic-member-ref",
+    participantBindings: { "team-alpha": { ownerMemberRef: "2468ace7bdfhjkmnpqrstvwxyz", participantMemberRef: "0123456789abcdefghjkmnpqrs" } },
     participantState: "pending",
     participantInvitedAt: T1,
     participantAcceptedAt: null,
@@ -70,7 +69,7 @@ describe("Admin conversation store", () => {
   });
 
   describe("write shape", () => {
-    it("persists exactly the seventeen canonical keys, the dates as Timestamps, and the envelope as given", async () => {
+    it("persists exactly the sixteen canonical keys (A2.1: no teamId), the dates as Timestamps, and the envelope as given", async () => {
       await getDefaultConversationStore().runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.createOwner("owner-1", "conv-1", ownerDoc()));
       const stored = double.documents.get(OWNER_PATH) ?? {};
       expect(Object.keys(stored).sort()).toEqual(
@@ -85,12 +84,11 @@ describe("Admin conversation store", () => {
           "keyVersion",
           "participantAcceptedAt",
           "participantInvitedAt",
-          "participantMemberRef",
+          "participantBindings",
           "participantState",
           "participantUid",
           "plannedFor",
           "status",
-          "teamId",
           "updatedAt",
         ].sort(),
       );
@@ -115,7 +113,7 @@ describe("Admin conversation store", () => {
       const stored = double.documents.get(OWNER_PATH) ?? {};
       expect(stored.updatedAt).toBeInstanceOf(Timestamp);
       expect(stored.plannedFor).toBeNull();
-      expect(stored.teamId).toBe("team-a");
+      expect(stored).not.toHaveProperty("teamId");
     });
   });
 

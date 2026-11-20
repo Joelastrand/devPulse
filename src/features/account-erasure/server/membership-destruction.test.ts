@@ -14,9 +14,9 @@ import {
 
 vi.mock("./participant-bindings-erasure", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./participant-bindings-erasure")>();
-  return { ...actual, eraseParticipantBinding: vi.fn(async () => ({ ok: true, outcome: "cleaned" })) };
+  return { ...actual, removeTeamBinding: vi.fn(async () => ({ ok: true, outcome: "cleaned" })) };
 });
-import { eraseParticipantBinding } from "./participant-bindings-erasure";
+import { removeTeamBinding } from "./participant-bindings-erasure";
 
 const MEMBERSHIP = "uid-m__team-1";
 const UID = "uid-m";
@@ -40,6 +40,8 @@ function harness(init: {
   /** A-15 project participation records: id → team and member reference. */
   participations?: Array<[string, { teamId: string; memberRef: string }]>;
   bindings?: BoundConversation[];
+  /** Conversations the person is a participant in, whose entry names no membership of this memberRef (skipped, not counted). */
+  nonMatching?: BoundConversation[];
   /** uids whose erasure record exists (the fence refuses them). */
   erasingUids?: string[];
   /** Simulates an unreadable fence record: the read itself fails. */
@@ -53,6 +55,7 @@ function harness(init: {
   };
   const roadmap = new Map(init.roadmap ?? []);
   const bindings = [...(init.bindings ?? [])];
+  const nonMatching = [...(init.nonMatching ?? [])];
   const memberships = new Map<string, Record<string, unknown>>();
   if (init.membership !== undefined) memberships.set(MEMBERSHIP, init.membership);
   const participations = new Map(init.participations ?? []);
@@ -78,7 +81,7 @@ function harness(init: {
       const item = roadmap.get(itemId);
       if (item !== undefined) roadmap.set(itemId, { ...item, ownerRef: null });
     },
-    async boundConversationCount(memberRef, limit) {
+    async boundConversationCount(_uid, _teamId, memberRef, limit) {
       log.push(`tx.boundConversationCount:${memberRef}`);
       return Math.min(bindings.length, limit);
     },
@@ -114,9 +117,9 @@ function harness(init: {
     async readMembership(id) {
       return memberships.get(id) as never;
     },
-    async boundConversations(memberRef, limit) {
-      log.push(`boundConversations:${memberRef}`);
-      return bindings.slice(0, limit);
+    async boundConversations(uid, limit) {
+      log.push(`boundConversations:${uid}`);
+      return [...bindings, ...nonMatching].slice(0, limit);
     },
     async runFinalTransaction(work) {
       log.push("final:begin");
@@ -129,7 +132,7 @@ function harness(init: {
 }
 
 beforeEach(() => {
-  vi.mocked(eraseParticipantBinding).mockClear();
+  vi.mocked(removeTeamBinding).mockClear();
 });
 
 describe("ordinary removal: roadmap owner references", () => {
@@ -223,33 +226,31 @@ describe("ordinary removal: participant bindings", () => {
     });
 
     // A successful cleanup removes the binding from the bound set, as the real cleanup does.
-    vi.mocked(eraseParticipantBinding).mockImplementationOnce(async (_deps, binding) => {
+    vi.mocked(removeTeamBinding).mockImplementationOnce(async (_deps, binding) => {
       h.bindings.splice(h.bindings.findIndex((b) => b.conversationId === binding.conversationId), 1);
       return { ok: true, outcome: "cleaned" } as never;
     });
 
     await destroyMembershipInstance({ port: h.port, bindings: deps }, TARGET, 100);
 
-    expect(eraseParticipantBinding).toHaveBeenCalledWith(deps, { ownerUid: "owner-1", conversationId: "c-1" }, UID);
+    expect(removeTeamBinding).toHaveBeenCalledWith(deps, { ownerUid: "owner-1", conversationId: "c-1" }, TEAM, REF);
     expect(h.memberships.has(MEMBERSHIP)).toBe(false);
   });
 
-  it("fails at once with binding_inconsistent when a binding names the memberRef but is not owned by this uid (no retry loop)", async () => {
-    vi.mocked(eraseParticipantBinding).mockResolvedValueOnce({ ok: true, outcome: "skipped" } as never);
+  it("skips a participation whose entry names no membership of this memberRef, and still deletes the membership (A2.1 revised)", async () => {
+    vi.mocked(removeTeamBinding).mockResolvedValueOnce({ ok: true, outcome: "skipped" } as never);
     const h = harness({
       membership: { uid: UID, teamId: TEAM, memberRef: REF },
-      bindings: [{ ownerUid: "owner-1", conversationId: "c-1" }],
+      nonMatching: [{ ownerUid: "owner-2", conversationId: "c-other" }],
     });
 
-    await expect(destroyMembershipInstance({ port: h.port, bindings: deps }, TARGET, 100)).rejects.toMatchObject({
-      reason: "binding_inconsistent",
-    });
-    expect(h.memberships.has(MEMBERSHIP)).toBe(true);
-    expect(eraseParticipantBinding).toHaveBeenCalledTimes(1);
+    await expect(destroyMembershipInstance({ port: h.port, bindings: deps }, TARGET, 100)).resolves.toBe("done");
+    expect(removeTeamBinding).toHaveBeenCalledTimes(1);
+    expect(h.memberships.has(MEMBERSHIP)).toBe(false);
   });
 
   it("does not delete the membership while a binding cleanup has failed, and surfaces the failure", async () => {
-    vi.mocked(eraseParticipantBinding).mockResolvedValueOnce({ ok: false, error: "payload_unreadable" } as never);
+    vi.mocked(removeTeamBinding).mockResolvedValueOnce({ ok: false, error: "payload_unreadable" } as never);
     const h = harness({
       membership: { uid: UID, teamId: TEAM, memberRef: REF },
       bindings: [{ ownerUid: "owner-1", conversationId: "c-1" }],
@@ -339,7 +340,7 @@ describe("ordinary removal: idempotence and failure modes", () => {
 
 describe("ordinary removal: target-person erasure fence (BR-4(b), decision 2026-11-02)", () => {
   it("a removed member under erasure is refused, and no membership, roadmap or binding is changed", async () => {
-    vi.mocked(eraseParticipantBinding).mockClear();
+    vi.mocked(removeTeamBinding).mockClear();
     const h = harness({
       membership: { uid: UID, teamId: TEAM, memberRef: REF },
       roadmap: [["item-a", { ownerRef: REF, teamId: TEAM, treeId: "tree-1" }]],
@@ -353,7 +354,7 @@ describe("ordinary removal: target-person erasure fence (BR-4(b), decision 2026-
 
     expect(h.memberships.has(MEMBERSHIP)).toBe(true);
     expect(h.roadmap.get("item-a")).toEqual({ ownerRef: REF, teamId: TEAM, treeId: "tree-1" });
-    expect(eraseParticipantBinding).not.toHaveBeenCalled();
+    expect(removeTeamBinding).not.toHaveBeenCalled();
     expect(h.log.some((entry) => entry.startsWith("tx.clear") || entry.startsWith("tx.delete"))).toBe(false);
   });
 
@@ -397,7 +398,7 @@ describe("ordinary removal: target-person erasure fence (BR-4(b), decision 2026-
 
     expect(h.memberships.has(MEMBERSHIP)).toBe(true);
     expect(h.roadmap.get("item-a")).toEqual({ ownerRef: REF, teamId: TEAM, treeId: "tree-1" });
-    expect(eraseParticipantBinding).not.toHaveBeenCalled();
+    expect(removeTeamBinding).not.toHaveBeenCalled();
   });
 
   it("a membership whose stored uid differs from the target is malformed, and nothing is cleared", async () => {

@@ -9,10 +9,10 @@ import type { ConversationTransaction, RawConversationData } from "./conversatio
 import { deleteConversation } from "./delete-conversation";
 import { createFakeContentCodec, type FakeContentCodec } from "./fake-content-codec";
 import { createFakeConversationStore, type FakeConversationStore } from "./fake-conversation-store";
-import { createFakeTeamEligibilityReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
+import { createFakeSharedTeamReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
 import { inviteParticipant, type InviteParticipantDeps } from "./invite-participant";
-import type { ParticipantRefReader } from "./member-ref-binding";
-import { NOW, OWNER_UID, PARTICIPANT_MEMBER_REF, PARTICIPANT_UID, TEAM_ID, seedOwnerConversation } from "./owner-read-test-support";
+import type { SharedTeamReader } from "./shared-team-binding";
+import { NOW, OWNER_MEMBER_REF, OWNER_UID, PARTICIPANT_MEMBER_REF, PARTICIPANT_UID, TEAM_ID, seedOwnerConversation } from "./owner-read-test-support";
 import type { OwnedGoalReader } from "./read-owned-goal-snapshots";
 import { acceptInvitation, leaveParticipation, type RespondToParticipationDeps } from "./respond-to-participation";
 import { setSharedGoals, type SetSharedGoalsDeps } from "./set-shared-goals";
@@ -41,7 +41,7 @@ const CTX = conversationContext(OWNER_UID, CONVERSATION_ID);
 const CANDIDATE_UID = "candidate-2";
 const CANDIDATE_REF = "zyxwvtsrqpnmkjhgfedcba9876";
 const REJOINED_REF = "abcdefghjkmnpqrstvwxyz0123";
-const OWNER_REF = "0123456789abcdefghjkmnpqrs";
+const OWNER_REF = OWNER_MEMBER_REF;
 const GOAL_ID = "goal-race-1";
 const TITLE = "Synthetic title";
 const OWNER_NOTE = "Synthetic owner note";
@@ -84,7 +84,7 @@ interface World {
   store: FakeConversationStore;
   codec: FakeContentCodec;
   teams: FakeTeamEligibilityState;
-  refReader: ParticipantRefReader;
+  refReader: SharedTeamReader;
   goalReader: OwnedGoalReader;
   goalReads: string[];
 }
@@ -111,12 +111,7 @@ function world(): World {
       return ownerUid === OWNER_UID && goalId === GOAL_ID ? structuredClone(GOAL) : undefined;
     },
   };
-  const refReader: ParticipantRefReader = {
-    ...createFakeTeamEligibilityReader(teams),
-    async listMemberships(_teamId, limit) {
-      return Object.values(teams.memberships).slice(0, limit);
-    },
-  };
+  const refReader: SharedTeamReader = createFakeSharedTeamReader(teams);
   return { store: createFakeConversationStore({ teams }), codec, teams, refReader, goalReader, goalReads };
 }
 
@@ -204,6 +199,10 @@ function counting(store: FakeConversationStore): { store: FakeConversationStore;
             getMembership: (uid, teamId) => {
               reads.membership += 1;
               return tx.teamEligibility.getMembership(uid, teamId);
+            },
+            findMembershipsByRef: (memberRef, limit) => {
+              reads.membership += 1;
+              return tx.teamEligibility.findMembershipsByRef(memberRef, limit);
             },
           },
           getParticipation: (callerUid, conversationId) => {
@@ -474,7 +473,7 @@ describe("BR-50 (2): revoke vs participant write (BR-16, BR-20)", () => {
     expect(counted.attempts).toHaveLength(2);
     const after = await rawOwner(w);
     // The owner document keeps the old binding: nothing repairs or re-binds it, so access stays denied (BR-21 (e)).
-    expect(after.participantMemberRef).toBe(PARTICIPANT_MEMBER_REF);
+    expect(Object.values(after?.participantBindings ?? {}).map((b) => b.participantMemberRef)).toEqual([PARTICIPANT_MEMBER_REF]);
     expect(after.participantState).toBe("accepted");
     expect(contentOf(w.codec, after).participantNotes).toBe("Before");
     expect(await writeNotes(w, w.store, "After rejoin")).toEqual(NOT_FOUND);
@@ -513,7 +512,7 @@ describe("BR-50 (3): accept vs owner removal, replacement and rejoin (BR-15, BR-
     expect(counted.attempts).toHaveLength(2);
     const after = await rawOwner(w);
     expect(after.participantUid).toBe(CANDIDATE_UID);
-    expect(after.participantMemberRef).toBe(CANDIDATE_REF);
+    expect(Object.values(after?.participantBindings ?? {}).map((b) => b.participantMemberRef)).toEqual([CANDIDATE_REF]);
     expect(after.participantState).toBe("pending");
     expect(after.participantAcceptedAt).toBeNull();
     expect(after.participantInvitedAt).toEqual(T_COMPETE);
@@ -574,7 +573,7 @@ describe("BR-50 (3): accept vs owner removal, replacement and rejoin (BR-15, BR-
     const after = await rawOwner(w);
     expect(after.participantState).toBe("pending");
     expect(after.participantAcceptedAt).toBeNull();
-    expect(after.participantMemberRef).toBe(PARTICIPANT_MEMBER_REF);
+    expect(Object.values(after?.participantBindings ?? {}).map((b) => b.participantMemberRef)).toEqual([PARTICIPANT_MEMBER_REF]);
   });
 });
 
@@ -732,7 +731,7 @@ describe("BR-50 (6) and BR-13: invitation vs delete and completion", () => {
     expect(after.status).toBe("completed");
     expect(after.participantUid).toBeNull();
     expect(after.participantState).toBeNull();
-    expect(after.participantMemberRef).toBeNull();
+    expect(after.participantBindings).toBeNull();
     expect(await w.store.getParticipation(CANDIDATE_UID, CONVERSATION_ID)).toBeUndefined();
   });
 });
@@ -895,7 +894,8 @@ describe("BR-48: each attempt re-reads its authoritative inputs", () => {
 
     expect(await accept(w, counted.store)).toEqual(OK);
 
-    const reads = { index: 1, owner: 1, team: 1, membership: 1 };
+    // A2.1: each recorded team reads both memberships, each with its team status read.
+    const reads = { index: 1, owner: 1, team: 2, membership: 2 };
     expect(counted.attempts).toEqual([reads, reads]);
   });
 
@@ -907,7 +907,8 @@ describe("BR-48: each attempt re-reads its authoritative inputs", () => {
 
     expect(await writeNotes(w, counted.store, "Late note")).toEqual(OK);
 
-    const reads = { index: 1, owner: 1, team: 1, membership: 1 };
+    // A2.1: each recorded team reads both memberships, each with its team status read.
+    const reads = { index: 1, owner: 1, team: 2, membership: 2 };
     expect(counted.attempts).toEqual([reads, reads]);
   });
 

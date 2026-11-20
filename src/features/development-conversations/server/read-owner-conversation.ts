@@ -39,7 +39,6 @@ export interface OwnerConversationDto {
   title: string;
   status: ConversationStatus;
   plannedFor: string | null;
-  teamId: string | null;
   participant: OwnerParticipantDto;
   ownerNotes: string;
   nextSteps: string[];
@@ -85,8 +84,8 @@ export async function readOwnerConversation(
 
     // One request memo of the raw team and membership reads, shared by the resolver and the roster (TASK-023).
     const reads = requestScopedTeamReader(deps.teamReader);
-    const state = await participantStateOf(ownerUid, conversationId, record, deps.resolveParticipantState, reads);
-    const request = rosterRequestFor(ownerUid, record);
+    const { state, sharedTeamId } = await participantStateOf(ownerUid, conversationId, record, deps.resolveParticipantState, reads);
+    const request = rosterRequestFor(ownerUid, record, sharedTeamId);
     const names = await resolveRosterNames(request === null ? [] : [request], {
       teamReader: reads,
       getNames: deps.getNames,
@@ -100,7 +99,6 @@ export async function readOwnerConversation(
         title: record.content.title,
         status: record.status,
         plannedFor: record.plannedFor,
-        teamId: record.teamId,
         participant: { state, displayName: request === null ? null : names.displayNameOf(request) },
         ownerNotes: record.content.ownerNotes,
         nextSteps: record.content.nextSteps,

@@ -66,6 +66,9 @@ interface SourceFile {
 const APPROVED_COLLECTION_REFERENCES: readonly string[] = [
   `${D2_SERVER_DIR}conversation-store-types.ts`,
   `${D2_SERVER_DIR}conversation-store.test.ts`,
+  // A2.1 emulator rules test (file-exact, client-denial checks only): it writes one synthetic owner document through the Admin
+  // SDK and asserts that the client SDK is denied on the owner subtree, the participation index and team memberships. Test code.
+  "src/lib/firebase/private-records-client-rules.emulator.test.ts",
   // Account erasure (erasure-only persistence metadata, file-exact): the inventory registry names the `conversations`
   // collection and its `participantUid` field (I-8 discovery, AE-IDX-1), and its test pins those rows. Not a D2 store.
   "src/features/account-erasure/server/inventory.ts",
@@ -173,6 +176,7 @@ const INTERNAL_ONLY_KEYS = [
   "iv",
   "authTag",
   "participantUid",
+  "participantBindings",
   "participantMemberRef",
   "ownerUid", // the owner uid is never public; the pending DTO carries only the owner display identity (BR-42)
   "keyUnavailable", // internal key-failure metadata (BR-53)
@@ -189,9 +193,8 @@ const SENSITIVE_LOG_IDENTIFIERS = ["title", "notes", "body", "memberRef", "uid",
 
 /** Dimension 8: the expected sets are written out here on purpose. The guard pins them independently of the exports. */
 const EXPECTED_STORED_OWNER_PLAIN_KEYS = [
-  "teamId",
   "participantUid",
-  "participantMemberRef",
+  "participantBindings",
   "participantState",
   "participantInvitedAt",
   "participantAcceptedAt",
@@ -214,7 +217,7 @@ const EXPECTED_SHARED_GOAL_SNAPSHOT_KEYS = ["goalTitle", "treeId", "targetDate",
 const EXPECTED_RESPONSIBILITY_SNAPSHOT_KEYS = ["kind", "title", "description", "status", "relationToRole", "period", "capturedAt"];
 const EXPECTED_ACHIEVEMENT_SNAPSHOT_KEYS = ["kind", "title", "description", "outcome", "period", "relationToRole", "capturedAt"];
 const EXPECTED_DTO_KEYS: Record<string, string[]> = {
-  PENDING_DTO_KEYS: ["conversationId", "state", "teamName", "invitedAt", "ownerDisplayName"],
+  PENDING_DTO_KEYS: ["conversationId", "state", "invitedAt", "ownerDisplayName"],
   OWNER_PARTICIPANT_KEYS: ["state", "displayName"],
   SHARED_GOAL_DTO_KEYS: ["goalTitle", "areaName", "targetDate", "status", "capturedAt"],
   OWNER_DTO_KEYS: [
@@ -222,7 +225,6 @@ const EXPECTED_DTO_KEYS: Record<string, string[]> = {
     "title",
     "status",
     "plannedFor",
-    "teamId",
     "participant",
     "ownerNotes",
     "nextSteps",
@@ -240,7 +242,6 @@ const EXPECTED_DTO_KEYS: Record<string, string[]> = {
     "title",
     "status",
     "plannedFor",
-    "teamName",
     "ownerDisplayName",
     "ownerNotes",
     "nextSteps",
@@ -261,7 +262,7 @@ const EXPECTED_DTO_KEYS: Record<string, string[]> = {
     "createdAt",
     "updatedAt",
   ],
-  PARTICIPANT_SUMMARY_KEYS: ["conversationId", "state", "title", "teamName", "invitedAt"],
+  PARTICIPANT_SUMMARY_KEYS: ["conversationId", "state", "title", "invitedAt"],
   RECOVERY_ITEM_KEYS: ["conversationId"],
 };
 
@@ -1212,14 +1213,7 @@ const GENERIC_ASSIGNABLE_MODULE = "src/features/teams/server/list-assignable-mem
 const GENERIC_ASSIGNABLE_PATH = /\/assignable-members\b/;
 const SELECTOR_OPERATION_FILE = `${D2_SERVER_DIR}read-selectable-members.ts`;
 const SELECTOR_ROUTE_FILE = "app/api/me/conversations/[conversationId]/selectable-members/route.ts";
-const OWNER_PREDICATE_MODULE = `${D2_SERVER_DIR}team-eligibility`;
 
-/** The real-tree file at `path`. A missing file fails the test that asks for it. */
-function fileAt(files: SourceFile[], path: string): SourceFile {
-  const found = files.find((f) => f.path === path);
-  if (!found) throw new Error(`expected a real D2 file at ${path}`);
-  return found;
-}
 
 /** D2 production code that reaches the generic team endpoint, by importing its operation or by naming its path (no fallback). */
 function genericEndpointViolations(files: SourceFile[]): string[] {
@@ -1230,9 +1224,9 @@ function genericEndpointViolations(files: SourceFile[]): string[] {
 }
 
 describe("D2 scope guard — selector read boundaries (SPEC Amendment 2026-10-19, TASK-029 I-1)", () => {
-  it("the real tree has the owner selector operation and route, and the operation uses the D2 owner predicate", () => {
-    expect(realFiles.some((f) => f.path === SELECTOR_ROUTE_FILE)).toBe(true);
-    expect(specifiers(fileAt(realFiles, SELECTOR_OPERATION_FILE)).resolved.map(moduleKey)).toContain(OWNER_PREDICATE_MODULE);
+  it("the team-scoped selector route and operation are removed (A2.1), so no D2 file can reach them", () => {
+    expect(realFiles.some((f) => f.path === SELECTOR_ROUTE_FILE)).toBe(false);
+    expect(realFiles.some((f) => f.path === SELECTOR_OPERATION_FILE)).toBe(false);
   });
 
   it("no D2 production file reaches the generic team endpoint, by import or by path, on the real tree", () => {
@@ -1311,9 +1305,6 @@ const PINNED_COLLECTION_ARGUMENTS: Record<string, readonly string[]> = {
   [`${D2_SERVER_DIR}area-names.ts`]: ["SKILL_TREES_COLLECTION"],
   // TASK-038 (2026-11-02): the invitee/replacement membership touch (I-7 coordination) names the teams membership collection.
   [`${D2_SERVER_DIR}conversation-store.ts`]: ["USER_DEVELOPMENT_COLLECTION", "OWNER_CONVERSATIONS_SUBCOLLECTION", "PARTICIPATION_INDEX_SUBCOLLECTION", "MEMBERSHIPS_COLLECTION"],
-  [`${D2_SERVER_DIR}member-ref-binding.ts`]: ["MEMBERSHIPS_COLLECTION"],
-  [`${D2_SERVER_DIR}read-pending-invitation.ts`]: ['"teams"'],
-  [`${D2_SERVER_DIR}read-selectable-members.ts`]: ["MEMBERSHIPS_COLLECTION"],
   [`${D2_SERVER_DIR}team-eligibility.ts`]: ["MEMBERSHIPS_COLLECTION", "TEAMS_COLLECTION"],
 };
 

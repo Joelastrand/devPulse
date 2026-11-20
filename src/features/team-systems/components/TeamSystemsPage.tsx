@@ -14,9 +14,12 @@ import { useSystemFavorites, type SystemFavoritesState } from "../client/use-sys
 import { systemsCopy } from "../copy";
 import {
   DEFAULT_SYSTEM_FILTER,
+  SYSTEM_SORTS,
   filterSystems,
+  sortSystems,
   summarizeSystems,
   type SystemFilter,
+  type SystemSort,
   type SystemSummaryInput,
 } from "../domain/team-system-summary";
 import {
@@ -32,7 +35,11 @@ import type { TeamSystemView } from "../server/list-team-systems";
 import { SystemFilters } from "./SystemFilters";
 import { SystemEditorPanel } from "./SystemEditorPanel";
 import { KnowledgeRiskPanel, QualityPanel, SystemSummaryCards } from "./SystemInsights";
+import { useDisclosurePreferences, type DisclosurePreferences } from "../../../components/ui/use-disclosure-preferences";
+import { useAccountUid } from "../../auth/client/use-account-uid";
 import { SystemList } from "./SystemList";
+import { SystemOverview } from "./SystemOverview";
+import { Select } from "../../../components/ui/Select";
 
 const NO_FAVORITES: ReadonlySet<string> = new Set();
 
@@ -106,6 +113,14 @@ function toSummaryInput(system: TeamSystemView): SystemSummaryInput {
 function SystemsContent({ token, teamId }: { token: string; teamId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  // Local view preferences for the explanatory panels. Knowledge risk shows counts, so it starts open; quality is explanatory, so it starts collapsed.
+  const uid = useAccountUid();
+  // `detailTable` selects the detailed table instead of the overview. It is a per-user, per-team view preference.
+  const systemsDisclosure = useDisclosurePreferences("systemoversikt", teamId, uid, {
+    knowledgeRisk: true,
+    quality: false,
+    detailTable: false,
+  });
   const [list, setList] = useState<ListState>({ phase: "loading" });
   const [reloadKey, setReloadKey] = useState(0);
   // The browsing state (search, filters, favorites-only, rows shown) lives in the URL, so returning from a detail page or
@@ -156,6 +171,9 @@ function SystemsContent({ token, teamId }: { token: string; teamId: string }) {
       truncated={list.truncated}
       listState={listState}
       onListStateChange={commitListState}
+      detailView={systemsDisclosure.isOpen("detailTable")}
+      onDetailViewChange={(detail) => systemsDisclosure.setOpen("detailTable", detail)}
+      systemsDisclosure={systemsDisclosure}
       favorites={favorites}
       form={form}
       onOpenForm={(next) => {
@@ -180,6 +198,11 @@ interface LoadedSystemsProps {
   truncated: boolean;
   listState: SystemListState;
   onListStateChange: (next: SystemListState) => void;
+  /** True for the detailed table, false for the overview. */
+  detailView: boolean;
+  onDetailViewChange: (detail: boolean) => void;
+  /** The page's scoped section preferences; the explanatory panels read their open state from it. */
+  systemsDisclosure: DisclosurePreferences;
   favorites: SystemFavoritesState;
   form: FormState;
   onOpenForm: (next: FormState) => void;
@@ -195,25 +218,32 @@ function LoadedSystems({
   truncated,
   listState,
   onListStateChange,
+  detailView,
+  onDetailViewChange,
+  systemsDisclosure,
   favorites,
   form,
   onOpenForm,
   saved,
   onSaved,
 }: LoadedSystemsProps) {
-  const { filter, pageSize } = listState;
+  const { filter, pageSize, sort } = listState;
   const favoriteIds = favorites.load.status === "ready" ? favorites.load.ids : NO_FAVORITES;
   const summary = useMemo(() => summarizeSystems(systems.map(toSummaryInput)), [systems]);
-  const visible = useMemo(() => filterSystems(systems, filter, favoriteIds), [systems, filter, favoriteIds]);
+  // Filter first, then sort the matches. Both overview and table read this one array, so they always agree.
+  const visible = useMemo(() => sortSystems(filterSystems(systems, filter, favoriteIds), sort), [systems, filter, favoriteIds, sort]);
   // Progressive disclosure: only the first page of matches is rendered. A filter change starts again from the first page, so
   // the count and the "Vis flere" control always describe the current matches. The page size is part of the URL state.
   const shownSystems = visible.slice(0, pageSize);
   const returnQuery = serializeSystemListQuery(listState);
   function changeFilter(next: SystemFilter) {
-    onListStateChange({ filter: next, pageSize: SYSTEM_PAGE_SIZE_STEP });
+    onListStateChange({ filter: next, pageSize: SYSTEM_PAGE_SIZE_STEP, sort });
+  }
+  function changeSort(next: SystemSort) {
+    onListStateChange({ filter, pageSize: SYSTEM_PAGE_SIZE_STEP, sort: next });
   }
   function showMore() {
-    onListStateChange({ filter, pageSize: Math.min(pageSize + SYSTEM_PAGE_SIZE_STEP, SYSTEM_PAGE_SIZE_MAX) });
+    onListStateChange({ filter, pageSize: Math.min(pageSize + SYSTEM_PAGE_SIZE_STEP, SYSTEM_PAGE_SIZE_MAX), sort });
   }
   const hasAnySystem = systems.length > 0;
   const hasAssessment = systems.some((system) => ASSESSMENT_ATTRIBUTES.some((a) => system.assessments[a].value !== "ikke_vurdert"));
@@ -250,6 +280,32 @@ function LoadedSystems({
           <div className="flex flex-col gap-3">
             <SystemFilters filter={filter} onChange={changeFilter} />
           </div>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div role="group" aria-label={systemsCopy.view.label} className="inline-flex rounded-control border border-border-strong p-0.5">
+              {(["overview", "detail"] as const).map((value) => {
+                const pressed = value === "detail" ? detailView : !detailView;
+                return (
+                  <Button
+                    key={value}
+                    type="button"
+                    variant={pressed ? "primary" : "tertiary"}
+                    size="sm"
+                    aria-pressed={pressed}
+                    onClick={() => onDetailViewChange(value === "detail")}
+                  >
+                    {systemsCopy.view[value]}
+                  </Button>
+                );
+              })}
+            </div>
+            <Select id="system-sort" label={systemsCopy.sort.label} value={sort} onChange={(event) => changeSort(event.target.value as SystemSort)}>
+              {SYSTEM_SORTS.map((option) => (
+                <option key={option} value={option}>
+                  {systemsCopy.sort[option]}
+                </option>
+              ))}
+            </Select>
+          </div>
           {!hasAssessment && <p className="text-help text-text-muted">{systemsCopy.empty.noAssessmentsBody}</p>}
           {visible.length === 0 ? (
             <EmptyState>
@@ -266,15 +322,27 @@ function LoadedSystems({
               <p className="text-help text-text-muted" aria-live="polite">
                 {systemsCopy.list.showing(shownSystems.length, visible.length)}
               </p>
-              <SystemList
-                teamId={teamId}
-                systems={shownSystems}
-                returnQuery={returnQuery}
-                favoriteIds={favoriteIds}
-                favoritesReady={favorites.load.status === "ready"}
-                pendingFavoriteIds={favorites.pendingIds}
-                onToggleFavorite={(system, favorite) => void favorites.toggle(system.systemId, favorite)}
-              />
+              {detailView ? (
+                <SystemList
+                  teamId={teamId}
+                  systems={shownSystems}
+                  returnQuery={returnQuery}
+                  favoriteIds={favoriteIds}
+                  favoritesReady={favorites.load.status === "ready"}
+                  pendingFavoriteIds={favorites.pendingIds}
+                  onToggleFavorite={(system, favorite) => void favorites.toggle(system.systemId, favorite)}
+                />
+              ) : (
+                <SystemOverview
+                  teamId={teamId}
+                  systems={shownSystems}
+                  returnQuery={returnQuery}
+                  favoriteIds={favoriteIds}
+                  favoritesReady={favorites.load.status === "ready"}
+                  pendingFavoriteIds={favorites.pendingIds}
+                  onToggleFavorite={(system, favorite) => void favorites.toggle(system.systemId, favorite)}
+                />
+              )}
               {shownSystems.length < visible.length && (
                 <div className="flex justify-center">
                   <Button type="button" variant="secondary" onClick={showMore}>
@@ -293,8 +361,12 @@ function LoadedSystems({
       )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <KnowledgeRiskPanel summary={summary} />
-        <QualityPanel />
+        <KnowledgeRiskPanel
+          summary={summary}
+          open={systemsDisclosure.isOpen("knowledgeRisk")}
+          onOpenChange={(open) => systemsDisclosure.setOpen("knowledgeRisk", open)}
+        />
+        <QualityPanel open={systemsDisclosure.isOpen("quality")} onOpenChange={(open) => systemsDisclosure.setOpen("quality", open)} />
       </div>
     </div>
   );

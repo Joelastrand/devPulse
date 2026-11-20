@@ -1,0 +1,10 @@
+
+ RUN  v5.0.0 C:/Projekt/devpulse
+
+Not implemented: navigation to another Document
+
+ Test Files  1 passed (1)
+      Tests  41 passed (41)
+   Start at  12:20:09
+   Duration  5.39s (environment 41%, tests 39%, import 13%, transform 6%)
+

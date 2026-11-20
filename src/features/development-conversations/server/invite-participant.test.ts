@@ -3,9 +3,9 @@ import { PARTICIPATION_LIMIT } from "../domain/conversation-constants";
 import type { RawConversationData } from "./conversation-store-types";
 import { createFakeContentCodec, type FakeContentCodec } from "./fake-content-codec";
 import { createFakeConversationStore, type FakeConversationStore } from "./fake-conversation-store";
-import { createFakeTeamEligibilityReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
+import { createFakeSharedTeamReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
 import { inviteParticipant, type InviteParticipantDeps } from "./invite-participant";
-import type { ParticipantRefReader } from "./member-ref-binding";
+import type { SharedTeamReader } from "./shared-team-binding";
 import { NOW, OTHER_OWNER_UID, OWNER_UID, TEAM_ID, seedOwnerConversation } from "./owner-read-test-support";
 import { conversationContext } from "../domain/stored-owner-conversation";
 
@@ -35,7 +35,7 @@ const DEFAULT_MEMBERS: SyntheticMember[] = [
   { uid: CANDIDATE_UID, memberRef: CANDIDATE_REF },
 ];
 
-type RefReader = ParticipantRefReader & { listCalls: number };
+type RefReader = SharedTeamReader & { listCalls: number };
 
 interface Setup {
   store: FakeConversationStore;
@@ -46,18 +46,18 @@ interface Setup {
 }
 
 /**
- * Test-local ref reader: the TASK-006 point reads plus the bounded membership list, over the same synthetic documents.
- * `onList` runs after the resolution has read its data and before the invitation transaction, to inject a race.
+ * Test-local shared-team reader (A2.1): the team and membership point reads, plus the membership-by-reference lookup, over
+ * the same synthetic documents. `onList` runs after the lookup has read its data and before the invitation transaction, to
+ * inject a race.
  */
-function refReaderFor(state: FakeTeamEligibilityState, members: SyntheticMember[], onList?: () => Promise<void>): RefReader {
-  const point = createFakeTeamEligibilityReader(state);
+function refReaderFor(state: FakeTeamEligibilityState, _members: SyntheticMember[], onList?: () => Promise<void>): RefReader {
+  const shared = createFakeSharedTeamReader(state);
   const reader: RefReader = {
-    ...point,
+    ...shared,
     listCalls: 0,
-    async listMemberships(_teamId: string, limit: number) {
+    async findMembershipsByRef(memberRef: string, limit: number) {
       reader.listCalls += 1;
-      if (state.failMembershipRead) throw new Error("simulated list failure");
-      const result = members.slice(0, limit).map(membership);
+      const result = await shared.findMembershipsByRef(memberRef, limit);
       if (onList !== undefined) await onList();
       return result;
     },
@@ -67,12 +67,13 @@ function refReaderFor(state: FakeTeamEligibilityState, members: SyntheticMember[
 
 function setup(options: { members?: SyntheticMember[]; onList?: () => Promise<void> } = {}): Setup {
   const members = options.members ?? DEFAULT_MEMBERS;
-  const store = createFakeConversationStore();
   const codec = createFakeContentCodec();
+  // The same fixture object backs the store's transaction reads and the operation's reads, as in production (BR-48).
   const state: FakeTeamEligibilityState = {
     teamStatus: { [TEAM_ID]: "active" },
     memberships: Object.fromEntries(members.map((member) => [`${member.uid}__${TEAM_ID}`, membership(member)])),
   };
+  const store = createFakeConversationStore({ teams: state });
   const reader = refReaderFor(state, members, options.onList);
   const deps: InviteParticipantDeps = { store, codec, refReader: reader, clock: () => new Date(NOW.getTime()) };
   return { store, codec, state, reader, deps };
@@ -100,7 +101,7 @@ describe("inviteParticipant: successful invitation (BR-10, BR-11)", () => {
 
     const raw = await rawOwner(store);
     expect(raw.participantUid).toBe(CANDIDATE_UID);
-    expect(raw.participantMemberRef).toBe(CANDIDATE_REF);
+    expect(Object.values(raw?.participantBindings ?? {}).map((b) => b.participantMemberRef)).toEqual([CANDIDATE_REF]);
     expect(raw.participantState).toBe("pending");
     expect(raw.participantInvitedAt).toEqual(NOW);
     expect(raw.participantAcceptedAt).toBeNull();
@@ -136,7 +137,7 @@ describe("inviteParticipant: successful invitation (BR-10, BR-11)", () => {
     expect(after.iv).toBe(before.iv);
     expect(after.authTag).toBe(before.authTag);
     expect(after.keyCheck).toBe(before.keyCheck);
-    for (const key of ["teamId", "plannedFor", "status", "completedAt", "createdAt"] as const) {
+    for (const key of ["plannedFor", "status", "completedAt", "createdAt"] as const) {
       expect(after[key], key).toEqual(before[key]);
     }
     expect(after.updatedAt).toEqual(LATER);
@@ -242,14 +243,30 @@ describe("inviteParticipant: uniform invalid_participant (BR-8, BR-9, BR-32, D2-
     expect(await rawOwner(store)).toEqual(before);
   });
 
-  it("refuses a conversation without a teamId, with no membership read and zero writes", async () => {
-    const { store, codec, deps, reader } = setup();
-    await seedOwnerConversation(store, codec, { conversationId: CONVERSATION_ID, teamId: null });
+  it("refuses a colleague who shares no active team with the owner, with zero writes (A2.1)", async () => {
+    const { store, codec, state, deps } = setup();
+    await seedOwnerConversation(store, codec, { conversationId: CONVERSATION_ID });
+    // The candidate is a member only of a team the owner does not belong to.
+    delete state.memberships[`${CANDIDATE_UID}__${TEAM_ID}`];
+    state.teamStatus["team-other"] = "active";
+    state.memberships[`${CANDIDATE_UID}__team-other`] = { uid: CANDIDATE_UID, teamId: "team-other", createdAt: new Date(0), memberRef: CANDIDATE_REF };
     const before = await rawOwner(store);
 
     expect(await inviteParticipant(OWNER_UID, CONVERSATION_ID, CANDIDATE_REF, deps)).toEqual({ ok: false, error: "invalid_participant" });
-    expect(reader.listCalls).toBe(0);
+    expect(await store.getParticipation(CANDIDATE_UID, CONVERSATION_ID)).toBeUndefined();
     expect(await rawOwner(store)).toEqual(before);
+  });
+
+  it("accepts a colleague who shares one of several teams with the owner (A2.1)", async () => {
+    const { store, codec, state, deps } = setup();
+    await seedOwnerConversation(store, codec, { conversationId: CONVERSATION_ID });
+    delete state.memberships[`${CANDIDATE_UID}__${TEAM_ID}`];
+    state.teamStatus["team-other"] = "active";
+    state.memberships[`${CANDIDATE_UID}__team-other`] = { uid: CANDIDATE_UID, teamId: "team-other", createdAt: new Date(0), memberRef: CANDIDATE_REF };
+    state.memberships[`${OWNER_UID}__team-other`] = { uid: OWNER_UID, teamId: "team-other", createdAt: new Date(0), memberRef: OWNER_REF };
+
+    expect(await inviteParticipant(OWNER_UID, CONVERSATION_ID, CANDIDATE_REF, deps)).toEqual({ ok: true });
+    expect((await rawOwner(store)).participantUid).toBe(CANDIDATE_UID);
   });
 
   it("refuses when the candidate's index is already at the participation cap, with zero writes", async () => {
@@ -480,28 +497,29 @@ describe("inviteParticipant: state changes between resolution and commit", () =>
     expect((await rawOwner(local.store)).ciphertext).toBe(before.ciphertext);
   });
 
-  it("refuses when the conversation's teamId changes after resolution, and does not reveal the new team", async () => {
-    const local: Setup = setup({
-      onList: async () => {
-        const raw = await local.store.getOwner(OWNER_UID, CONVERSATION_ID);
-        if (raw !== undefined) local.store.seedRawOwner(OWNER_UID, CONVERSATION_ID, { ...raw, teamId: "team-other" });
-      },
-    });
-    await seedOwnerConversation(local.store, local.codec, { conversationId: CONVERSATION_ID });
-
-    const result = await inviteParticipant(OWNER_UID, CONVERSATION_ID, CANDIDATE_REF, local.deps);
-    expect(result).toEqual({ ok: false, error: "invalid_participant" });
-    expect(JSON.stringify(result)).not.toContain("team-other");
-    expect(await local.store.getParticipation(CANDIDATE_UID, CONVERSATION_ID)).toBeUndefined();
-    expect((await rawOwner(local.store)).participantUid).toBeNull();
-  });
-
-  it("commits the pending invitation when the candidate is removed after resolution (no commit-time membership re-read; BR-21 governs access)", async () => {
-    // The removal lands after the full resolution (owner and candidate reads) and before the transaction. The count is
-    // the last step before the transaction, so it is the hook point.
+  it("refuses when the owner loses the shared team after resolution, at transactional revalidation, with zero writes (BR-48)", async () => {
     const { store, codec, state, deps } = setup();
     await seedOwnerConversation(store, codec, { conversationId: CONVERSATION_ID });
-    const removingCount: FakeConversationStore = {
+    const removingOwner: FakeConversationStore = {
+      ...store,
+      countParticipation: async (uid) => {
+        delete state.memberships[`${OWNER_UID}__${TEAM_ID}`];
+        return store.countParticipation(uid);
+      },
+    };
+
+    expect(await inviteParticipant(OWNER_UID, CONVERSATION_ID, CANDIDATE_REF, { ...deps, store: removingOwner })).toEqual({
+      ok: false,
+      error: "invalid_participant",
+    });
+    expect(await store.getParticipation(CANDIDATE_UID, CONVERSATION_ID)).toBeUndefined();
+    expect((await rawOwner(store)).participantUid).toBeNull();
+  });
+
+  it("refuses when the candidate's membership is removed after resolution, at transactional revalidation (BR-48)", async () => {
+    const { store, codec, state, deps } = setup();
+    await seedOwnerConversation(store, codec, { conversationId: CONVERSATION_ID });
+    const removingCandidate: FakeConversationStore = {
       ...store,
       countParticipation: async (uid) => {
         delete state.memberships[`${CANDIDATE_UID}__${TEAM_ID}`];
@@ -509,9 +527,14 @@ describe("inviteParticipant: state changes between resolution and commit", () =>
       },
     };
 
-    expect(await inviteParticipant(OWNER_UID, CONVERSATION_ID, CANDIDATE_REF, { ...deps, store: removingCount })).toEqual({ ok: true });
-    expect((await rawOwner(store)).participantUid).toBe(CANDIDATE_UID);
+    expect(await inviteParticipant(OWNER_UID, CONVERSATION_ID, CANDIDATE_REF, { ...deps, store: removingCandidate })).toEqual({
+      ok: false,
+      error: "invalid_participant",
+    });
+    expect((await rawOwner(store)).participantUid).toBeNull();
+    expect(await store.getParticipation(CANDIDATE_UID, CONVERSATION_ID)).toBeUndefined();
   });
+
 });
 
 describe("inviteParticipant: the invitee is fenced in the same transaction (TASK-038, I-7)", () => {

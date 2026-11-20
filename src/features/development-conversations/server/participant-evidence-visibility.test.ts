@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { SharedEvidenceSnapshot } from "../domain/shared-evidence-snapshot";
 import { createFakeContentCodec, type FakeContentCodec } from "./fake-content-codec";
 import { createFakeConversationStore, type FakeConversationStore } from "./fake-conversation-store";
-import { createFakeTeamEligibilityReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
+import { createFakeSharedTeamReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
 import { NOW, OWNER_UID, PARTICIPANT_UID, TEAM_ID, rosterTeam, seedOwnerConversation } from "./owner-read-test-support";
 import { readParticipantConversation, type ReadParticipantConversationDeps } from "./read-participant-conversation";
 import { conversationContext } from "../domain/stored-owner-conversation";
@@ -14,7 +14,6 @@ import { conversationContext } from "../domain/stored-owner-conversation";
 
 const CONVERSATION_ID = "conv-1";
 const CTX = conversationContext(OWNER_UID, CONVERSATION_ID);
-const TEAM_NAME = "Synthetic team";
 const CAPTURED_AT = new Date("2026-10-10T08:00:00.000Z");
 
 const EVIDENCE: SharedEvidenceSnapshot = {
@@ -41,8 +40,7 @@ function setup(): Setup {
   const deps: ReadParticipantConversationDeps = {
     store,
     codec,
-    teamReader: createFakeTeamEligibilityReader(state),
-    teamNameReader: { getTeamName: async () => TEAM_NAME },
+    teamReader: createFakeSharedTeamReader(state),
     areaNameReader: { getSkillTree: async () => undefined },
     getNames: async (uids) => new Map(uids.filter((uid) => uid === OWNER_UID).map((uid) => [uid, "Synthetic owner"])),
   };

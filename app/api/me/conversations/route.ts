@@ -20,7 +20,7 @@ import { authRefusalStatus } from "../../../../src/features/auth/server/auth-ref
 const NO_STORE = { "Cache-Control": "no-store" };
 
 /** BR-2: the only keys a create body may carry. Owner, uid and participant selectors are refused as unknown. */
-const CREATE_KEYS: ReadonlySet<string> = new Set(["title", "plannedFor", "teamId"]);
+const CREATE_KEYS: ReadonlySet<string> = new Set(["title", "plannedFor"]);
 
 /**
  * Owner list and create (SPEC BR-1, BR-2, BR-33, BR-34, BR-40, BR-44; TASK-023). Thin: the only subject is the uid of the
@@ -65,7 +65,6 @@ export async function POST(request: Request) {
   const result = await createConversation(subject, {
     title: body.body.title,
     plannedFor: body.body.plannedFor,
-    teamId: body.body.teamId,
   });
   if (!result.ok) return fail(result.error, conversationResponseStatus(result.error));
   return json({ conversationId: result.conversationId }, 201);

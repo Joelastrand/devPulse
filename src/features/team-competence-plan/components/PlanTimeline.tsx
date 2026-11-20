@@ -76,7 +76,11 @@ export function PlanTimeline({
                   <span aria-hidden="true" className={"flex size-8 shrink-0 items-center justify-center rounded-field " + tone.subtle}>
                     <Icon icon={visual.icon} size="inline" className={tone.text} />
                   </span>
-                  <span className="truncate">{name}</span>
+                  <span className="flex min-w-0 flex-col gap-0.5">
+                    {/* Names wrap instead of truncating; the progress count repeats the bar's text for the row. */}
+                    <span className="break-words">{name}</span>
+                    <span className="text-xs font-normal text-text-secondary">{competencePlanCopy.progress(progress.completed, progress.total)}</span>
+                  </span>
                 </div>
 
                 <div

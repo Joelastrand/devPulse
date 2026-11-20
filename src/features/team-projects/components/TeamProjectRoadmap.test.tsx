@@ -8,6 +8,10 @@ const fetchAssignableMembers = vi.fn();
 const writeTeamProject = vi.fn();
 const writeProjectParticipation = vi.fn();
 
+// The view preferences are scoped by UID. A fixed test UID keeps them active, and the storage is cleared between tests.
+vi.mock("../../auth/client/use-account-uid", () => ({ useAccountUid: () => "test-uid" }));
+beforeEach(() => window.localStorage.clear());
+
 vi.mock("../client/team-projects-gateway", () => ({
   fetchTeamProjects: (...args: unknown[]) => fetchTeamProjects(...args),
   fetchProjectParticipations: (...args: unknown[]) => fetchProjectParticipations(...args),
@@ -114,8 +118,11 @@ function barFor(title: string): HTMLElement {
 
 async function renderRoadmap() {
   render(<TeamProjectRoadmap teamId="team-1" />);
-  await screen.findByRole("button", { name: "6 måneder" });
   await waitFor(() => expect(screen.queryByText("Laster prosjektplan …")).toBeNull());
+  // Participation is a collapsed section by default. These tests read its timeline, so the section is opened as a user
+  // would open it.
+  const participation = screen.queryByRole("button", { name: "Teammedlemmers prosjektdeltakelse" });
+  if (participation?.getAttribute("aria-expanded") === "false") fireEvent.click(participation);
 }
 
 describe("TeamProjectRoadmap", () => {
@@ -214,16 +221,16 @@ describe("TeamProjectRoadmap", () => {
     await renderRoadmap();
     fireEvent.click(screen.getByRole("button", { name: "3 måneder" }));
 
-    const bar = barFor("Observerbarhet");
-    expect(within(bar).getByText(/Observerbarhet: 15\. des 2026 til 28\. feb 2027, fortsetter etter valgt periode/)).toBeTruthy();
+    // The bar's accessible name carries the project, its exact dates and the clipping note.
+    expect(screen.getByRole("img", { name: /Observerbarhet: 15\. des 2026 til 28\. feb 2027, fortsetter etter valgt periode/ })).toBeTruthy();
+    expect(barFor("Observerbarhet")).toBeTruthy();
   });
 
   it("hides create, edit and archive controls from members (read-only)", async () => {
     await renderRoadmap();
 
     expect(screen.queryByRole("button", { name: "Nytt prosjekt" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Rediger: Demo – Leveranse" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Arkiver: Demo – Leveranse" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Flere handlinger: Demo – Leveranse" })).toBeNull();
     expect(screen.getByText("Bare teamledere kan opprette og endre prosjekter.")).toBeTruthy();
   });
 
@@ -232,8 +239,10 @@ describe("TeamProjectRoadmap", () => {
     await renderRoadmap();
 
     expect(screen.getByRole("button", { name: "Nytt prosjekt" })).toBeTruthy();
-    expect(leadButton("Rediger: Demo – Leveranse")).toBeTruthy();
-    expect(leadButton("Arkiver: Demo – Leveranse")).toBeTruthy();
+    // Edit and archive sit behind one per-project trigger; the menu shows both actions.
+    fireEvent.click(leadButton("Flere handlinger: Demo – Leveranse"));
+    expect(screen.getByRole("button", { name: "Rediger prosjekt" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Arkiver prosjekt" })).toBeTruthy();
   });
 
   it("rejects an empty project title on the client before any write", async () => {
@@ -272,7 +281,7 @@ describe("TeamProjectRoadmap", () => {
     fetchTeamProjects.mockResolvedValue(okProjects(true));
     writeTeamProject.mockResolvedValue({ status: "forbidden" });
     await renderRoadmap();
-    fireEvent.click(leadButton("Rediger: Demo – Leveranse"));
+    chooseProjectAction("Demo – Leveranse", "Rediger prosjekt");
     fireEvent.click(screen.getByRole("button", { name: "Lagre prosjekt" }));
 
     await waitFor(() => expect(screen.getByText("Bare teamledere kan endre prosjekter.")).toBeTruthy());
@@ -283,7 +292,7 @@ describe("TeamProjectRoadmap", () => {
     fetchTeamProjects.mockResolvedValue(okProjects(true));
     writeTeamProject.mockResolvedValue({ status: "ok", project: { ...ACTIVE_DEMO, archived: true } });
     await renderRoadmap();
-    fireEvent.click(leadButton("Arkiver: Demo – Leveranse"));
+    chooseProjectAction("Demo – Leveranse", "Arkiver prosjekt");
 
     await waitFor(() => expect(writeTeamProject).toHaveBeenCalledWith("token-1", "team-1", "archive", "p-1", null));
     await waitFor(() => expect(fetchTeamProjects).toHaveBeenCalledTimes(2));
@@ -296,7 +305,7 @@ describe("TeamProjectRoadmap", () => {
     // The reload that follows the save never settles here. Previously loaded project data must not stay visible while
     // access is being re-checked: only the loading placeholder shows.
     fetchTeamProjects.mockReturnValueOnce(new Promise(() => undefined));
-    fireEvent.click(leadButton("Arkiver: Demo – Leveranse"));
+    chooseProjectAction("Demo – Leveranse", "Arkiver prosjekt");
 
     await waitFor(() => expect(fetchTeamProjects).toHaveBeenCalledTimes(2));
     expect(screen.getByText("Laster prosjektplan …")).toBeTruthy();
@@ -308,19 +317,18 @@ describe("TeamProjectRoadmap", () => {
     let resolveWrite: (value: unknown) => void = () => undefined;
     writeTeamProject.mockReturnValueOnce(new Promise((resolve) => (resolveWrite = resolve)));
     const { rerender } = render(<TeamProjectRoadmap teamId="team-1" />);
-    await screen.findByRole("button", { name: "6 måneder" });
     await waitFor(() => expect(screen.queryByText("Laster prosjektplan …")).toBeNull());
-    fireEvent.click(leadButton("Arkiver: Demo – Leveranse"));
+    await waitFor(() => expect(screen.queryByText("Laster prosjektplan …")).toBeNull());
+    chooseProjectAction("Demo – Leveranse", "Arkiver prosjekt");
 
     rerender(<TeamProjectRoadmap teamId="team-2" />);
-    await screen.findByRole("button", { name: "6 måneder" });
     await waitFor(() => expect(screen.queryByText("Laster prosjektplan …")).toBeNull());
     resolveWrite({ status: "write_failed" });
     await waitFor(() => expect(writeTeamProject).toHaveBeenCalledTimes(1));
 
     // The failure belongs to the previous team: no alert on this page, and the archive control is usable again.
     expect(screen.queryByRole("alert")).toBeNull();
-    expect((leadButton("Arkiver: Demo – Leveranse") as HTMLButtonElement).disabled).toBe(false);
+    expect((leadButton("Flere handlinger: Demo – Leveranse") as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("restores an archived project from the archived list", async () => {
@@ -558,6 +566,12 @@ describe("TeamProjectRoadmap", () => {
  * Desktop and narrow-screen renderings both contain the lead actions; CSS hides the narrow copy in browsers, but jsdom
  * has no stylesheet. The first match is the desktop control (document order), which is the one under test.
  */
+/** Opens a project's `Flere handlinger` menu and chooses one of its actions (Rediger prosjekt or Arkiver prosjekt). */
+function chooseProjectAction(title: string, action: "Rediger prosjekt" | "Arkiver prosjekt"): void {
+  fireEvent.click(leadButton(`Flere handlinger: ${title}`));
+  fireEvent.click(screen.getByRole("button", { name: action }));
+}
+
 function leadButton(name: string): HTMLElement {
   const matches = screen.getAllByRole("button", { name });
   const first = matches[0];

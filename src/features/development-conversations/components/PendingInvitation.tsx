@@ -48,20 +48,17 @@ export function PendingInvitation({ invitation, notice, onAccept, onDecline }: P
         {notice && <Alert variant="info">{notice}</Alert>}
       </div>
 
-      <h2 id="pending-heading" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+      <h1 id="pending-heading" className="text-page-title font-semibold text-text-primary">
         {conversationsCopy.pendingHeading}
-      </h2>
+      </h1>
 
-      <div className="flex flex-col gap-1 text-zinc-900 dark:text-zinc-50">
+      <div className="flex flex-col gap-1 text-text-primary">
         <p>{conversationsCopy.pendingOwnerLine(ownerName)}</p>
-        <p className="text-sm text-zinc-700 dark:text-zinc-300">
-          {conversationsCopy.teamLabel}: {invitation.teamName}
-        </p>
-        {invited && <p className="text-sm text-zinc-700 dark:text-zinc-300">{conversationsCopy.pendingInvitedLine(invited)}</p>}
+        {invited && <p className="text-sm text-text-secondary">{conversationsCopy.pendingInvitedLine(invited)}</p>}
       </div>
 
-      <p className="text-zinc-700 dark:text-zinc-300">{conversationsCopy.pendingNoContent}</p>
-      <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-zinc-700 dark:text-zinc-300">
+      <p className="text-text-secondary">{conversationsCopy.pendingNoContent}</p>
+      <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-text-secondary">
         {conversationsCopy.pendingCopy.map((line) => (
           <li key={line}>{line}</li>
         ))}

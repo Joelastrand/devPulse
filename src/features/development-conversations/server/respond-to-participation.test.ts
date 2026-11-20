@@ -143,7 +143,7 @@ function codecWithDecryptOutcome(base: FakeContentCodec, outcome: DecryptOutcome
 /** Canonical no-participant state: every participant field is null (TASK-002). */
 const CLEARED = {
   participantUid: null,
-  participantMemberRef: null,
+  participantBindings: null,
   participantState: null,
   participantInvitedAt: null,
   participantAcceptedAt: null,
@@ -201,7 +201,7 @@ describe("acceptInvitation: BR-15 re-checks in the transaction", () => {
     // Plain fields only: the payload, the bound uid and memberRef, and the invitation time are unchanged.
     expect(after?.ciphertext).toBe(before?.ciphertext);
     expect(after?.participantUid).toBe(PARTICIPANT_UID);
-    expect(after?.participantMemberRef).toBe(PARTICIPANT_MEMBER_REF);
+    expect(Object.values(after?.participantBindings ?? {}).map((b) => b.participantMemberRef)).toEqual([PARTICIPANT_MEMBER_REF]);
     expect(after?.participantInvitedAt).toEqual(before?.participantInvitedAt);
   });
 
@@ -719,6 +719,10 @@ function countAcceptReads(store: FakeConversationStore): { store: FakeConversati
               counts.membership += 1;
               return tx.teamEligibility.getMembership(uid, teamId);
             },
+            findMembershipsByRef: (memberRef, limit) => {
+              counts.membership += 1;
+              return tx.teamEligibility.findMembershipsByRef(memberRef, limit);
+            },
           },
         });
       }),
@@ -733,7 +737,7 @@ describe("acceptInvitation: BR-48 transaction-backed eligibility and retry (TASK
     const counted = countAcceptReads(store);
 
     expect(await acceptInvitation(PARTICIPANT_UID, CONVERSATION_ID, { ...deps, store: counted.store })).toEqual({ ok: true });
-    expect(counted.counts).toEqual({ attempts: 1, team: 1, membership: 1 });
+    expect(counted.counts).toEqual({ attempts: 1, team: 2, membership: 2 });
   });
 
   it("retry: membership removed after the first attempt → denied, and the participant is not accepted", async () => {
@@ -795,7 +799,7 @@ describe("acceptInvitation: BR-48 transaction-backed eligibility and retry (TASK
     const counted = countAcceptReads(store);
 
     expect(await acceptInvitation(PARTICIPANT_UID, CONVERSATION_ID, { ...deps, store: counted.store })).toEqual({ ok: true });
-    expect(counted.counts).toEqual({ attempts: 3, team: 3, membership: 3 });
+    expect(counted.counts).toEqual({ attempts: 3, team: 6, membership: 6 });
     expect((await rawOwner(store))?.participantState).toBe("accepted");
   });
 

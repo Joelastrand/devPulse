@@ -1,9 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
-import { Card } from "../../../components/ui/Card";
+import { CollapsibleSection } from "../../../components/ui/CollapsibleSection";
 import { SelectorOptionsSkeleton } from "./ConversationSkeletons";
 import { fetchOwnGoals, type OwnGoalWire, type SharedGoalWire } from "../client/conversations-gateway";
 import { conversationsCopy } from "../copy";
@@ -33,6 +34,8 @@ export function GoalSnapshotSelector({ conversationId, token, completed, sharedG
   const { pending, feedback, feedbackRef, write } = useOwnerWrite({ token, conversationId, onUnauthenticated, onChanged });
   const [options, setOptions] = useState<GoalOptions>({ phase: "loading" });
   const [selected, setSelected] = useState<string[]>([]);
+  /** The person opened the picker. A load failure also opens it, so the error is never hidden in a collapsed section. */
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   useEffect(() => {
     if (completed) return;
@@ -63,20 +66,20 @@ export function GoalSnapshotSelector({ conversationId, token, completed, sharedG
 
   return (
     <section aria-labelledby="shared-goals-heading" className="flex flex-col gap-4">
-      <h2 id="shared-goals-heading" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+      <h2 id="shared-goals-heading" className="text-lg font-semibold text-text-primary">
         {conversationsCopy.sharedGoalsSection}
       </h2>
-      <p className="text-sm text-zinc-700 dark:text-zinc-300">{conversationsCopy.sharedGoalsVisibility}</p>
+      <p className="text-sm text-text-secondary">{conversationsCopy.sharedGoalsVisibility}</p>
 
       {sharedGoals.length === 0 ? (
-        <p className="text-zinc-600 dark:text-zinc-400">{conversationsCopy.noSharedGoals}</p>
+        <p className="text-text-muted">{conversationsCopy.noSharedGoals}</p>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className="flex flex-col divide-y divide-border-subtle overflow-hidden rounded-surface border border-border-subtle bg-surface">
           {sharedGoals.map((goal, index) => (
-            <Card as="li" key={index} padding="sm" className="flex flex-col gap-1">
-              <p className="min-w-0 break-words font-medium text-zinc-900 dark:text-zinc-50">{goal.goalTitle}</p>
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">{goal.areaName ?? conversationsCopy.areaUnavailable}</p>
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            <li key={index} className="flex min-w-0 flex-col gap-0.5 px-4 py-3">
+              <p className="min-w-0 break-words font-medium text-text-primary">{goal.goalTitle}</p>
+              <p className="text-sm text-text-muted">{goal.areaName ?? conversationsCopy.areaUnavailable}</p>
+              <p className="text-sm text-text-muted">
                 {conversationsCopy.goalStatusLabel[goal.status]}
                 {goal.targetDate !== null && (
                   <>
@@ -85,7 +88,7 @@ export function GoalSnapshotSelector({ conversationId, token, completed, sharedG
                   </>
                 )}
               </p>
-            </Card>
+            </li>
           ))}
         </ul>
       )}
@@ -107,14 +110,30 @@ export function GoalSnapshotSelector({ conversationId, token, completed, sharedG
           </div>
         )
       ) : (
+        <CollapsibleSection
+          id="goal-picker"
+          title={conversationsCopy.selectorHeading}
+          description={conversationsCopy.goalSource}
+          actions={
+            <Link href="/me/goals" className="inline-flex min-h-11 items-center text-sm font-medium text-text-primary underline underline-offset-2">
+              {conversationsCopy.goalSourceLink}
+            </Link>
+          }
+          headingLevel={3}
+          open={pickerOpen || options.phase === "unavailable"}
+          onOpenChange={setPickerOpen}
+          lockOpen={selected.length > 0}
+          summary={conversationsCopy.selectedCount(selected.length)}
+        >
         <div className="flex flex-col gap-3">
-          <h3 className="font-medium text-zinc-900 dark:text-zinc-50">{conversationsCopy.selectorHeading}</h3>
-          <p className="text-sm text-zinc-700 dark:text-zinc-300">{conversationsCopy.selectorCopy}</p>
+
 
           {options.phase === "loading" && <SelectorOptionsSkeleton label={conversationsCopy.selectorLoading} />}
           {options.phase === "unavailable" && <Alert variant="error">{conversationsCopy.selectorError}</Alert>}
           {options.phase === "ready" && options.goals.length === 0 && (
-            <p className="text-zinc-600 dark:text-zinc-400">{conversationsCopy.selectorEmpty}</p>
+            <p className="text-text-muted">
+              {conversationsCopy.noGoalsToShare} <Link href="/me/goals" className="underline underline-offset-2">{conversationsCopy.createGoalLink}</Link>
+            </p>
           )}
           {options.phase === "ready" && options.goals.length > 0 && (
             <fieldset className="flex flex-col gap-2">
@@ -123,7 +142,7 @@ export function GoalSnapshotSelector({ conversationId, token, completed, sharedG
                 const checked = selected.includes(goal.id);
                 const atLimit = !checked && selected.length >= SHARED_GOALS_MAX;
                 return (
-                  <label key={goal.id} className="flex items-start gap-2 text-sm text-zinc-900 dark:text-zinc-50">
+                  <label key={goal.id} className="flex items-start gap-2 text-sm text-text-primary">
                     <input
                       type="checkbox"
                       checked={checked}
@@ -133,7 +152,7 @@ export function GoalSnapshotSelector({ conversationId, token, completed, sharedG
                     />
                     <span className="min-w-0 break-words">
                       {goal.title}{" "}
-                      <span className="text-zinc-600 dark:text-zinc-400">({conversationsCopy.goalStatusLabel[goal.status]})</span>
+                      <span className="text-text-muted">({conversationsCopy.goalStatusLabel[goal.status]})</span>
                     </span>
                   </label>
                 );
@@ -141,10 +160,9 @@ export function GoalSnapshotSelector({ conversationId, token, completed, sharedG
             </fieldset>
           )}
           {options.phase === "ready" && options.truncated && <Alert variant="info">{conversationsCopy.selectorTruncated}</Alert>}
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">{conversationsCopy.selectorLimit}</p>
+          <p className="text-sm text-text-muted">{conversationsCopy.selectorLimit}</p>
 
           {/* An empty selection is never saved: that would clear every current snapshot. Clearing has its own action. */}
-          {selected.length === 0 && options.phase === "ready" && <p className="text-sm text-zinc-600 dark:text-zinc-400">{conversationsCopy.selectorNeedsGoal}</p>}
           <div className="flex flex-wrap gap-3">
             <Button
               type="button"
@@ -156,8 +174,8 @@ export function GoalSnapshotSelector({ conversationId, token, completed, sharedG
             </Button>
           </div>
           {sharedGoals.length > 0 && (
-            <div className="flex flex-col gap-2 border-t border-zinc-200 pt-4 dark:border-zinc-800">
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">{conversationsCopy.clearGoalsCopy}</p>
+            <div className="flex flex-col gap-2 border-t border-border-subtle pt-4">
+              <p className="text-sm text-text-muted">{conversationsCopy.clearGoalsCopy}</p>
               <div>
                 <Button
                   type="button"
@@ -172,6 +190,7 @@ export function GoalSnapshotSelector({ conversationId, token, completed, sharedG
           )}
           <WriteFeedbackRegion feedback={feedback} regionRef={feedbackRef} />
         </div>
+        </CollapsibleSection>
       )}
     </section>
   );

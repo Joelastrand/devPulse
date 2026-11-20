@@ -4,7 +4,7 @@ import { READ_WINDOW } from "../domain/conversation-constants";
 import type { ConversationStore, RawConversationData } from "./conversation-store-types";
 import { createFakeContentCodec, type FakeContentCodec } from "./fake-content-codec";
 import { createFakeConversationStore, type FakeConversationStore } from "./fake-conversation-store";
-import { type FakeTeamEligibilityState } from "./fake-team-eligibility";
+import { createFakeSharedTeamReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
 import { readParticipations, type ReadParticipationsDeps } from "./read-participations";
 import {
   NOW,
@@ -17,7 +17,6 @@ import {
 } from "./owner-read-test-support";
 
 // Synthetic fixtures only (invariant 15). No real person, team or wellbeing data.
-const TEAM_NAME = "Synthetic team";
 const OTHER_PARTICIPANT_UID = "participant-2";
 const OTHER_MEMBER_REF = "abcdefghjkmnpqrstvwxyz0123";
 const MEMBERSHIP_KEY = `${PARTICIPANT_UID}__${TEAM_ID}`;
@@ -27,24 +26,22 @@ interface Counts {
   probe: number;
   teamStatus: number;
   membership: number;
-  teamName: number;
 }
 
 interface Setup {
   store: FakeConversationStore;
   codec: FakeContentCodec;
   state: FakeTeamEligibilityState;
-  teamNames: Record<string, unknown>;
   counts: Counts;
   deps: ReadParticipationsDeps;
 }
 
-/** The caller's team and membership fixture, the synthetic codec, and counting wrappers around every read. */
+/** The shared-team fixture, the synthetic codec, and counting wrappers around every read (A2.1). */
 function setup(state: FakeTeamEligibilityState = rosterTeam([OWNER_UID, PARTICIPANT_UID])): Setup {
   const store = createFakeConversationStore({ teams: state });
   const codec = createFakeContentCodec();
-  const teamNames: Record<string, unknown> = { [TEAM_ID]: TEAM_NAME };
-  const counts: Counts = { owner: 0, probe: 0, teamStatus: 0, membership: 0, teamName: 0 };
+  const shared = createFakeSharedTeamReader(state);
+  const counts: Counts = { owner: 0, probe: 0, teamStatus: 0, membership: 0 };
   const deps: ReadParticipationsDeps = {
     store: countingStore(store, counts),
     codec: {
@@ -57,23 +54,20 @@ function setup(state: FakeTeamEligibilityState = rosterTeam([OWNER_UID, PARTICIP
     teamReader: {
       getTeamStatus: async (teamId) => {
         counts.teamStatus += 1;
-        if (state.failTeamRead) throw new Error("simulated team read failure");
-        return state.teamStatus[teamId];
+        return shared.getTeamStatus(teamId);
       },
       getMembership: async (uid, teamId) => {
         counts.membership += 1;
-        if (state.failMembershipRead) throw new Error("simulated membership read failure");
-        return state.memberships[`${uid}__${teamId}`];
+        return shared.getMembership(uid, teamId);
       },
-    },
-    teamNameReader: {
-      getTeamName: async (teamId) => {
-        counts.teamName += 1;
-        return teamNames[teamId];
+      listOwnMemberships: async () => [],
+      findMembershipsByRef: async (memberRef, limit) => {
+        counts.membership += 1;
+        return shared.findMembershipsByRef(memberRef, limit);
       },
     },
   };
-  return { store, codec, state, teamNames, counts, deps };
+  return { store, codec, state, counts, deps };
 }
 
 /** Counts owner point reads, so a test can prove the window bound. */
@@ -128,8 +122,8 @@ describe("readParticipations: shown entries and summary shape (BR-34, BR-44)", (
     expect(await readParticipations(PARTICIPANT_UID, setupValue.deps)).toEqual({
       ok: true,
       participations: [
-        { conversationId: "conv-pending", state: "pending", title: null, teamName: TEAM_NAME, invitedAt: new Date("2026-10-11T08:00:00.000Z") },
-        { conversationId: "conv-accepted", state: "accepted", title: "Synthetic accepted", teamName: TEAM_NAME, invitedAt: new Date("2026-10-10T08:00:00.000Z") },
+        { conversationId: "conv-pending", state: "pending", title: null, invitedAt: new Date("2026-10-11T08:00:00.000Z") },
+        { conversationId: "conv-accepted", state: "accepted", title: "Synthetic accepted", invitedAt: new Date("2026-10-10T08:00:00.000Z") },
       ],
       truncated: false,
     });
@@ -159,7 +153,7 @@ describe("readParticipations: shown entries and summary shape (BR-34, BR-44)", (
 
     expect(await readParticipations(PARTICIPANT_UID, setupValue.deps)).toEqual({
       ok: true,
-      participations: [{ conversationId: "conv-done", state: "accepted", title: "Synthetic done", teamName: TEAM_NAME, invitedAt: NOW }],
+      participations: [{ conversationId: "conv-done", state: "accepted", title: "Synthetic done", invitedAt: NOW }],
       truncated: false,
     });
   });
@@ -257,7 +251,7 @@ describe("readParticipations: omission, never placeholder (BR-21, BR-34, BR-14)"
 
     expect(await readParticipations(PARTICIPANT_UID, setupValue.deps)).toEqual({
       ok: true,
-      participations: [{ conversationId: "conv-good", state: "accepted", title: "Synthetic good", teamName: TEAM_NAME, invitedAt: new Date("2026-10-12T08:00:00.000Z") }],
+      participations: [{ conversationId: "conv-good", state: "accepted", title: "Synthetic good", invitedAt: new Date("2026-10-12T08:00:00.000Z") }],
       truncated: false,
     });
   });
@@ -270,7 +264,7 @@ describe("readParticipations: omission, never placeholder (BR-21, BR-34, BR-14)"
 
     expect(await readParticipations(PARTICIPANT_UID, setupValue.deps)).toEqual({
       ok: true,
-      participations: [{ conversationId: "conv-good", state: "accepted", title: "Synthetic good", teamName: TEAM_NAME, invitedAt: new Date("2026-10-12T08:00:00.000Z") }],
+      participations: [{ conversationId: "conv-good", state: "accepted", title: "Synthetic good", invitedAt: new Date("2026-10-12T08:00:00.000Z") }],
       truncated: false,
     });
   });
@@ -354,7 +348,7 @@ describe("readParticipations: key handling (BR-53)", () => {
 });
 
 describe("readParticipations: shared reads per request (BR-36)", () => {
-  it("reads each team status, membership and team name once for entries in the same team", async () => {
+  it("reads each team status and each membership once for entries in the same shared team (BR-36)", async () => {
     const setupValue = setup();
     await seedParticipation(setupValue, "conv-a", { state: "accepted" });
     await seedParticipation(setupValue, "conv-b", { state: "accepted" });
@@ -363,7 +357,8 @@ describe("readParticipations: shared reads per request (BR-36)", () => {
     const result = await readParticipations(PARTICIPANT_UID, setupValue.deps);
 
     expect(result).toMatchObject({ ok: true });
-    expect(setupValue.counts).toMatchObject({ owner: 3, teamStatus: 1, membership: 1, teamName: 1 });
+    // Each team status and each membership is read once for the request: the owner and the participant per team.
+    expect(setupValue.counts).toMatchObject({ owner: 3, teamStatus: 1, membership: 2 });
   });
 });
 
@@ -380,14 +375,6 @@ describe("readParticipations: operational failures (BR-47, BR-53)", () => {
     const setupValue = setup();
     await seedParticipation(setupValue, "conv-pending", { state: "pending" });
     setupValue.state.failMembershipRead = true;
-
-    expect(await readParticipations(PARTICIPANT_UID, setupValue.deps)).toEqual({ ok: false, error: "persistence_failed" });
-  });
-
-  it("a missing team name → persistence_failed for the whole list", async () => {
-    const setupValue = setup();
-    await seedParticipation(setupValue, "conv-accepted", { state: "accepted" });
-    delete setupValue.teamNames[TEAM_ID];
 
     expect(await readParticipations(PARTICIPANT_UID, setupValue.deps)).toEqual({ ok: false, error: "persistence_failed" });
   });

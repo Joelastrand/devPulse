@@ -177,6 +177,8 @@ export const builderCopy = {
     loadFailed: "Undersøkelsene kunne ikke lastes.",
     forbidden: "Du har ikke tilgang til resultatene for dette teamet.",
     show: "Vis resultater",
+    /** Collapsed-header summary: how many closed surveys have their own questions. */
+    summary: (count: number) => (count === 1 ? "1 undersøkelse med egne spørsmål" : `${count} undersøkelser med egne spørsmål`),
     hide: "Skjul resultater",
   },
   status: {

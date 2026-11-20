@@ -5,7 +5,10 @@ import { catchError } from "next/error";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import { Alert } from "../../../components/ui/Alert";
 import { buttonClassName } from "../../../components/ui/Button";
+import { CollapsibleSection } from "../../../components/ui/CollapsibleSection";
 import { ChartLoadError, ChartPlaceholder } from "../../../components/ui/LazyChart";
+import { useDisclosurePreferences } from "../../../components/ui/use-disclosure-preferences";
+import { useAccountUid } from "../../auth/client/use-account-uid";
 import { TeamCompetenceSkeleton } from "./TeamCompetenceSkeleton";
 import { SELF_ASSESSED_LEVEL_COPY } from "../../skill-profiles/copy";
 import { KOMPETANSEPROFIL_COPY } from "../radar-copy";
@@ -29,19 +32,14 @@ function RadarPlaceholder() {
   return (
     <section className="flex flex-col gap-4">
       <h2 className="text-lg font-semibold text-text-primary">{KOMPETANSEPROFIL_COPY.title}</h2>
-      <ChartPlaceholder className="mx-auto h-[280px] w-full max-w-[420px] min-w-[260px]" />
+      <ChartPlaceholder className="mx-auto h-[300px] w-full max-w-[520px] min-w-[260px] md:h-[400px]" />
     </section>
   );
 }
 
+/** Reserves the chart's height while it loads. The heading belongs to the level section, so the placeholder has none. */
 function LevelBarPlaceholder({ rowCount }: { readonly rowCount: number }) {
-  return (
-    <section className="flex flex-col gap-3">
-      <h3 className="text-lg font-semibold text-text-primary">{teamCompetenceCopy.levelChart.title}</h3>
-      <p className="text-sm text-text-secondary">{teamCompetenceCopy.levelChart.description}</p>
-      <ChartPlaceholder className="w-full" style={{ height: levelBarChartHeight(rowCount) }} />
-    </section>
-  );
+  return <ChartPlaceholder className="w-full" style={{ height: levelBarChartHeight(rowCount) }} />;
 }
 import { RADAR_MAX_AXES, type RadarAxisInput } from "../domain/radar-model";
 import { resolveRadarSelection, toggleRadarSelection } from "../domain/radar-selection";
@@ -58,6 +56,8 @@ import {
 import { teamCompetenceCopy } from "../workspace-copy";
 import { TeamManualLevelEditor } from "./TeamManualLevelEditor";
 import { TeamSkillsAdmin } from "./TeamSkillsAdmin";
+import { Select } from "../../../components/ui/Select";
+import { levelExtremes, sortLevelRows, type LevelOrder } from "../domain/level-order";
 
 type Mode = "automatic" | "collaborative";
 
@@ -73,6 +73,15 @@ interface Loaded {
 interface RadarControls {
   readonly selection: readonly string[] | null;
   readonly onChange: (next: string[]) => void;
+}
+
+/** What both profile modes share: the area choice, and the disclosure and chart/table view of the level section. */
+interface ProfileView {
+  readonly radar: RadarControls;
+  readonly levelsOpen: boolean;
+  readonly onLevelsOpenChange: (open: boolean) => void;
+  readonly tableView: boolean;
+  readonly onTableViewChange: (table: boolean) => void;
 }
 
 const copy = teamCompetenceCopy;
@@ -93,6 +102,11 @@ export function TeamCompetenceWorkspace({ teamId }: { readonly teamId: string })
   const [mode, setMode] = useState<Mode>("automatic");
   const [reloadKey, setReloadKey] = useState(0);
   const [radarSelection, setRadarSelection] = useState<string[] | null>(null);
+  // Local view preference for the lead-only administration section. Its default is collapsed.
+  const uid = useAccountUid();
+  // Local view preferences, scoped to this user and team. `levels` is the chart section (open by default, since it is the
+  // main per-area view); `levelTable` selects the table view instead of the bar chart.
+  const disclosure = useDisclosurePreferences("teamkompetanse", teamId, uid, { admin: false, levels: true, levelTable: false });
 
   useAuthGatedResource(
     (token, generation, isCurrentGeneration) => {
@@ -148,6 +162,13 @@ export function TeamCompetenceWorkspace({ teamId }: { readonly teamId: string })
     setReloadKey((n) => n + 1);
   };
   const radar: RadarControls = { selection: radarSelection, onChange: setRadarSelection };
+  const profileView: ProfileView = {
+    radar,
+    levelsOpen: disclosure.isOpen("levels"),
+    onLevelsOpenChange: (open) => disclosure.setOpen("levels", open),
+    tableView: disclosure.isOpen("levelTable"),
+    onTableViewChange: (table) => disclosure.setOpen("levelTable", table),
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -176,9 +197,9 @@ export function TeamCompetenceWorkspace({ teamId }: { readonly teamId: string })
         <p className="text-sm font-medium text-text-primary">{copy.activeMode(copy.modes[mode])}</p>
         <p className="text-sm text-text-secondary">{copy.modeDescriptions[mode]}</p>
         {mode === "automatic" ? (
-          <AutomaticView skills={activeSkills} status={loaded.automatic} radar={radar} />
+          <AutomaticView skills={activeSkills} status={loaded.automatic} view={profileView} />
         ) : (
-          <CollaborativeView skills={activeSkills} status={loaded.manual} radar={radar} />
+          <CollaborativeView skills={activeSkills} status={loaded.manual} view={profileView} />
         )}
       </section>
 
@@ -197,13 +218,16 @@ export function TeamCompetenceWorkspace({ teamId }: { readonly teamId: string })
       ) : null}
 
       {loaded.catalog.canEdit ? (
-        <details className="rounded-md border border-border p-3">
-          <summary className="cursor-pointer text-sm font-semibold text-text-primary">{copy.admin.heading}</summary>
-          <div className="mt-3 flex flex-col gap-2">
-            <p className="text-sm text-text-secondary">{copy.admin.description}</p>
-            <TeamSkillsAdmin teamId={teamId} />
-          </div>
-        </details>
+        <CollapsibleSection
+          id="teamkompetanse-admin"
+          headingLevel={3}
+          title={copy.admin.heading}
+          description={copy.admin.description}
+          open={disclosure.isOpen("admin")}
+          onOpenChange={(open) => disclosure.setOpen("admin", open)}
+        >
+          <TeamSkillsAdmin teamId={teamId} />
+        </CollapsibleSection>
       ) : null}
     </div>
   );
@@ -218,6 +242,8 @@ interface ProfileValue {
 
 interface ListRow {
   readonly key: string;
+  /** The calculated level, or `null` when none is available. Missing levels are never sorted as zero. */
+  readonly level: number | null;
   readonly name: string;
   readonly text: string;
   readonly note: string | null;
@@ -231,11 +257,11 @@ interface ListRow {
 function AutomaticView({
   skills,
   status,
-  radar,
+  view,
 }: {
   readonly skills: readonly TeamSkillView[];
   readonly status: TeamOwnedSkillAggregateStatus;
-  readonly radar: RadarControls;
+  readonly view: ProfileView;
 }) {
   if (status.status !== "ok") {
     return <Alert variant="info">{status.status === "incomplete" ? copy.errors.incomplete : copy.errors.read_failed}</Alert>;
@@ -254,10 +280,11 @@ function AutomaticView({
       {status.includesSimulated ? <Alert variant="info">{copy.simulatedNotice}</Alert> : null}
       <ProfilePanels
         values={values}
-        radar={radar}
+        view={view}
         list={levels.map(({ skill, level }) => ({
           key: skill.skillId,
           name: skill.name,
+          level,
           text: level === null ? copy.insufficient : copy.agreedLevel(level, SELF_ASSESSED_LEVEL_COPY[level].name),
           note: null,
           outdated: false,
@@ -271,11 +298,11 @@ function AutomaticView({
 function CollaborativeView({
   skills,
   status,
-  radar,
+  view,
 }: {
   readonly skills: readonly TeamSkillView[];
   readonly status: TeamManualAssessmentsStatus;
-  readonly radar: RadarControls;
+  readonly view: ProfileView;
 }) {
   if (status.status !== "ok") return <Alert variant="info">{copy.errors.read_failed}</Alert>;
   if (skills.length === 0) return <p className="text-sm text-text-secondary">{copy.empty}</p>;
@@ -287,12 +314,13 @@ function CollaborativeView({
   return (
     <ProfilePanels
       values={values}
-      radar={radar}
+      view={view}
       list={skills.map((skill) => {
         const row = byId.get(skill.skillId);
         return {
           key: skill.skillId,
           name: skill.name,
+          level: row?.level ?? null,
           text: row === undefined ? copy.notAssessed : copy.agreedLevel(row.level, SELF_ASSESSED_LEVEL_COPY[row.level].name),
           note: row?.note ?? null,
           outdated: row?.outdated ?? false,
@@ -309,53 +337,145 @@ function CollaborativeView({
  */
 function ProfilePanels({
   values,
-  radar,
+  view,
   list,
 }: {
   readonly values: readonly ProfileValue[];
-  readonly radar: RadarControls;
+  readonly view: ProfileView;
   readonly list: readonly ListRow[];
 }) {
+  const [order, setOrder] = useState<LevelOrder>("name");
+  const [showAllBars, setShowAllBars] = useState(false);
   const eligibleIds = values.map((value) => value.skillId);
   const selectable = values.length > RADAR_MAX_AXES;
-  const drawnIds = selectable ? resolveRadarSelection(eligibleIds, radar.selection) : eligibleIds;
+  // The radar and the bar chart draw the same areas: the user's selection when there are more than the radar can show.
+  const drawnIds = selectable ? resolveRadarSelection(eligibleIds, view.radar.selection) : eligibleIds;
   const axes: RadarAxisInput[] = values
     .filter((value) => drawnIds.includes(value.skillId))
     .map((value) => ({ treeId: value.skillId, label: value.name, teamLevel: value.level, targetLevel: null }));
+  const barValues = selectable && !showAllBars ? values.filter((value) => drawnIds.includes(value.skillId)) : values;
+  const barRows: TeamLevelBarRow[] = barValues.map((value) => ({ skillId: value.skillId, name: value.name, level: value.level }));
+  // The table always lists every area, in the chosen order. Its ids come from the row keys, which are the skill ids.
+  const tableRows = sortLevelRows(
+    list.map((row) => ({ ...row, skillId: row.key })),
+    order,
+  );
+  const extremes = levelExtremes(values);
 
   return (
     <>
+      <ProfileSummary extremes={extremes} withData={values.length} total={list.length} />
       {selectable ? (
         <RadarAreaSelector
           options={values.map((value) => ({ skillId: value.skillId, name: value.name }))}
           selected={drawnIds}
-          onToggle={(skillId) => radar.onChange(toggleRadarSelection(drawnIds, skillId))}
-          onReset={() => radar.onChange(resolveRadarSelection(eligibleIds, null))}
+          onToggle={(skillId) => view.radar.onChange(toggleRadarSelection(drawnIds, skillId))}
+          onReset={() => view.radar.onChange(resolveRadarSelection(eligibleIds, null))}
         />
       ) : null}
       <RadarBoundary>
         <Suspense fallback={<RadarPlaceholder />}>
-          <KompetanseprofilRadar axes={axes} showTable={false} />
+          {/* The radar's own table is its text alternative: the same drawn areas, readable without the chart or any disclosure. */}
+          <KompetanseprofilRadar axes={axes} showTable />
         </Suspense>
       </RadarBoundary>
-      {values.length > 0 ? (
-        <LevelBarBoundary>
-          <Suspense fallback={<LevelBarPlaceholder rowCount={values.length} />}>
-            <TeamLevelBarChart
-              rows={values.map((value): TeamLevelBarRow => ({ skillId: value.skillId, name: value.name, level: value.level }))}
-            />
-          </Suspense>
-        </LevelBarBoundary>
-      ) : null}
-      <details className="group rounded-md border border-border">
-        <summary className="cursor-pointer px-3 py-2 text-sm font-semibold text-text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
-          {copy.fullTable.open}
-        </summary>
-        <div className="overflow-x-auto border-t border-border-subtle px-3 py-3">
-          <LevelList rows={list} />
+      <CollapsibleSection
+        id="teamkompetanse-levels"
+        headingLevel={3}
+        title={copy.levelChart.title}
+        description={copy.levelChart.description}
+        open={view.levelsOpen}
+        onOpenChange={view.onLevelsOpenChange}
+      >
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div role="group" aria-label={copy.levelChart.viewLabel} className="inline-flex rounded-control border border-border-strong p-0.5">
+              {(["chart", "table"] as const).map((value) => {
+                const pressed = value === "table" ? view.tableView : !view.tableView;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={pressed}
+                    onClick={() => view.onTableViewChange(value === "table")}
+                    className={buttonClassName({ variant: pressed ? "primary" : "tertiary", size: "sm" })}
+                  >
+                    {copy.levelChart.view[value]}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex flex-wrap items-end gap-3">
+              <Select id="teamkompetanse-level-sort" label={copy.levelChart.sortLabel} value={order} onChange={(event) => setOrder(event.target.value as LevelOrder)}>
+                <option value="name">{copy.levelChart.sort.name}</option>
+                <option value="level-desc">{copy.levelChart.sort.levelDesc}</option>
+                <option value="level-asc">{copy.levelChart.sort.levelAsc}</option>
+              </Select>
+              {selectable && !view.tableView ? (
+                <button type="button" onClick={() => setShowAllBars((current) => !current)} className={buttonClassName({ variant: "secondary", size: "sm" })}>
+                  {showAllBars ? copy.levelChart.showSelected : copy.levelChart.showAll(values.length)}
+                </button>
+              ) : null}
+            </div>
+          </div>
+          <p className="text-help text-text-secondary">{copy.levelChart.sortHint}</p>
+          {view.tableView ? (
+            <div className="overflow-x-auto">
+              <LevelList rows={tableRows} />
+            </div>
+          ) : (
+            <>
+              {selectable && !showAllBars ? (
+                <p className="text-help text-text-secondary">{copy.levelChart.chartLimited(barValues.length, values.length)}</p>
+              ) : null}
+              {barRows.length > 0 ? (
+                <LevelBarBoundary>
+                  <Suspense fallback={<LevelBarPlaceholder rowCount={barRows.length} />}>
+                    <TeamLevelBarChart rows={barRows} order={order} />
+                  </Suspense>
+                </LevelBarBoundary>
+              ) : null}
+            </>
+          )}
         </div>
-      </details>
+      </CollapsibleSection>
     </>
+  );
+}
+
+/**
+ * The compact summary above the charts. It uses only the calculated values already on screen: suppressed or missing areas
+ * are not counted, and a missing level is never treated as the lowest. Ties are stated, not hidden.
+ */
+function ProfileSummary({
+  extremes,
+  withData,
+  total,
+}: {
+  readonly extremes: ReturnType<typeof levelExtremes>;
+  readonly withData: number;
+  readonly total: number;
+}) {
+  return (
+    <section aria-label={copy.summary.label} className="flex flex-col gap-1 rounded-control bg-surface-subtle px-4 py-3 text-sm text-text-primary">
+      {withData === 0 || extremes === null ? (
+        <p>{copy.summary.noData}</p>
+      ) : (
+        <ul className="flex flex-wrap gap-x-6 gap-y-1">
+          <li>{copy.summary.withData(withData, total)}</li>
+          <li>
+            {copy.summary.highest(extremes.highest.name, extremes.highest.level)}
+            {extremes.highest.tied > 1 ? `, ${copy.summary.tied(extremes.highest.tied)}` : ""}
+          </li>
+          {withData >= 2 ? (
+            <li>
+              {copy.summary.lowest(extremes.lowest.name, extremes.lowest.level)}
+              {extremes.lowest.tied > 1 ? `, ${copy.summary.tied(extremes.lowest.tied)}` : ""}
+            </li>
+          ) : null}
+        </ul>
+      )}
+    </section>
   );
 }
 

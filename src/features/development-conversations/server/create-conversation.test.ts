@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { CONVERSATION_LIMIT } from "../domain/conversation-constants";
 import { OWNER_DOCUMENT_KEYS } from "./conversation-store-types";
-import { createConversation, type CreateConversationDeps } from "./create-conversation";
+import { createConversation, type CreateConversationDeps, type CreateConversationInput } from "./create-conversation";
 import { createFakeContentCodec } from "./fake-content-codec";
 import { createFakeConversationStore } from "./fake-conversation-store";
-import { createFakeTeamEligibilityReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
+import type { FakeTeamEligibilityState } from "./fake-team-eligibility";
 import { issueErasureOwnerCleanupCapability } from "./erasure-owner-cleanup-capability";
 import type { FakeConversationStore } from "./fake-conversation-store";
 import { randomBytes } from "node:crypto";
@@ -46,7 +46,7 @@ describeSeed("owner conversation — trusted create-only seed (feature-owned)", 
     await expectSeed(seedOwnerConversationCreateOnly(seedInput(store))).resolves.toBe("create");
     const stored = await store.runOwnerTransaction(SEED_OWNER, (tx) => tx.getOwner(SEED_OWNER, SEED_ID));
     expectSeed(stored).toBeDefined();
-    expectSeed(stored).toMatchObject({ status: "open", teamId: null, participantUid: null, plannedFor: "2026-04-01" });
+    expectSeed(stored).toMatchObject({ status: "open", participantUid: null, plannedFor: "2026-04-01" });
     const participation = await store.runTransaction((tx) => tx.getParticipation(SEED_OWNER, SEED_ID));
     expectSeed(participation).toBeUndefined();
   });
@@ -124,14 +124,13 @@ function setup(options: { teams?: FakeTeamEligibilityState; store?: FakeConversa
   const deps: CreateConversationDeps = {
     store,
     codec,
-    teamReader: createFakeTeamEligibilityReader(options.teams ?? teamState()),
     clock: () => new Date(NOW.getTime()),
   };
   return { store, codec, deps };
 }
 
-describe("createConversation: team link (BR-2, BR-3, BR-9)", () => {
-  it("creates an open conversation without a team", async () => {
+describe("createConversation: no team (A2.1)", () => {
+  it("creates an open conversation without a team, with no team read", async () => {
     const { store, deps } = setup();
 
     const result = await createConversation(OWNER_UID, { title: TITLE }, deps);
@@ -140,65 +139,13 @@ describe("createConversation: team link (BR-2, BR-3, BR-9)", () => {
     expect(await store.countOwner(OWNER_UID)).toBe(1);
   });
 
-  it("creates the conversation when the owner has an active membership of the team", async () => {
-    const { deps } = setup();
+  it("ignores a supplied teamId: it is never read, validated or stored", async () => {
+    const { store, deps } = setup({ teams: teamState({ failTeamRead: true }) });
 
-    const result = await createConversation(OWNER_UID, { title: TITLE, teamId: TEAM_ID }, deps);
+    const result = await createConversation(OWNER_UID, { title: TITLE, teamId: "team/alpha" } as unknown as CreateConversationInput, deps);
 
-    expect(result.ok).toBe(true);
-  });
-
-  it("rejects a team the owner is not a member of, as invalid_input on teamId", async () => {
-    const { store, deps } = setup({ teams: teamState({ memberships: {} }) });
-
-    const result = await createConversation(OWNER_UID, { title: TITLE, teamId: TEAM_ID }, deps);
-
-    expect(result).toEqual({ ok: false, error: "invalid_input", field: "teamId" });
-    expect(await store.countOwner(OWNER_UID)).toBe(0);
-  });
-
-  it("rejects a non-member owner regardless of any admin status, since the seam never reads one", async () => {
-    const { deps } = setup({
-      teams: teamState({ memberships: { [`${OTHER_UID}__${TEAM_ID}`]: membershipDoc(OTHER_UID, TEAM_ID, { role: "admin" }) } }),
-    });
-
-    const result = await createConversation(OWNER_UID, { title: TITLE, teamId: TEAM_ID }, deps);
-
-    expect(result).toEqual({ ok: false, error: "invalid_input", field: "teamId" });
-  });
-
-  it("accepts a lead only as an ordinary active member, with no role-based bypass", async () => {
-    const { deps } = setup({
-      teams: teamState({ memberships: { [`${OWNER_UID}__${TEAM_ID}`]: membershipDoc(OWNER_UID, TEAM_ID, { role: "lead" }) } }),
-    });
-
-    const result = await createConversation(OWNER_UID, { title: TITLE, teamId: TEAM_ID }, deps);
-
-    expect(result.ok).toBe(true);
-  });
-
-  it("rejects a disabled team as invalid_input on teamId", async () => {
-    const { deps } = setup();
-
-    const result = await createConversation(OWNER_UID, { title: TITLE, teamId: DISABLED_TEAM_ID }, deps);
-
-    expect(result).toEqual({ ok: false, error: "invalid_input", field: "teamId" });
-  });
-
-  it("maps a team read failure to persistence_failed, never to invalid_input", async () => {
-    const { deps } = setup({ teams: teamState({ failTeamRead: true }) });
-
-    const result = await createConversation(OWNER_UID, { title: TITLE, teamId: TEAM_ID }, deps);
-
-    expect(result).toEqual({ ok: false, error: "persistence_failed" });
-  });
-
-  it("rejects a team id that is not a single path segment, before any read", async () => {
-    const { deps } = setup();
-
-    const result = await createConversation(OWNER_UID, { title: TITLE, teamId: "team/alpha" }, deps);
-
-    expect(result).toEqual({ ok: false, error: "invalid_input", field: "teamId" });
+    expect(result).toEqual({ ok: true, conversationId: "conv-1" });
+    expect(await store.getOwner(OWNER_UID, "conv-1")).not.toHaveProperty("teamId");
   });
 });
 
@@ -225,9 +172,8 @@ describe("createConversation: input and caps (BR-37, BR-39)", () => {
     for (let i = 0; i < CONVERSATION_LIMIT; i += 1) {
       await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => {
         tx.createOwner(OWNER_UID, `seed-${i}`, {
-          teamId: null,
           participantUid: null,
-          participantMemberRef: null,
+          participantBindings: null,
           participantState: null,
           participantInvitedAt: null,
           participantAcceptedAt: null,
@@ -286,7 +232,7 @@ describe("createConversation: stored shape (BR-51, BR-52)", () => {
 
     const result = await createConversation(
       OWNER_UID,
-      { title: TITLE, plannedFor: "2026-11-01", teamId: TEAM_ID },
+      { title: TITLE, plannedFor: "2026-11-01" },
       deps,
     );
     expect(result.ok).toBe(true);
@@ -296,7 +242,6 @@ describe("createConversation: stored shape (BR-51, BR-52)", () => {
     expect(Object.keys(stored ?? {}).sort()).toEqual([...OWNER_DOCUMENT_KEYS].sort());
     expect(stored).toMatchObject({
       status: "open",
-      teamId: TEAM_ID,
       plannedFor: "2026-11-01",
       participantUid: null,
       participantState: null,

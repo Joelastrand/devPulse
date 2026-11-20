@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import type { SurveyResultSummary } from "../client/team-results-gateway";
 
@@ -146,10 +146,20 @@ describe("TrendChart", () => {
     expect(container.firstChild).toBeNull();
   });
 
+  it("states in text how many surveys have a visible result, and offers a route to the table values", () => {
+    const onShowTable = vi.fn();
+    render(<TrendChart results={MIXED_RESULTS} onShowTable={onShowTable} />);
+
+    // The text alternative is outside the hidden chart, so it is available without the table being open.
+    expect(screen.getByText(/Utviklingen viser \d+ av \d+ undersøkelser med synlige resultater\./)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Vis alle verdier i tabellen" }));
+    expect(onShowTable).toHaveBeenCalledTimes(1);
+  });
+
   it("renders a visible heading and description that are not hidden from assistive technology", () => {
     render(<TrendChart results={MIXED_RESULTS} />);
 
-    const heading = screen.getByRole("heading", { name: /trendvisualisering/i });
+    const heading = screen.getByRole("heading", { name: /utvikling over tid/i });
     expect(heading.closest("[aria-hidden]")).toBeNull();
     expect(screen.getByText(/brudd i linjen/i)).toBeTruthy();
   });

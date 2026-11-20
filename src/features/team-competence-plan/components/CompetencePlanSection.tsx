@@ -1,13 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Alert } from "../../../components/ui/Alert";
 import { Badge } from "../../../components/ui/Badge";
+import { CollapsibleSection } from "../../../components/ui/CollapsibleSection";
 import { Icon } from "../../../components/ui/Icon";
 import { Button } from "../../../components/ui/Button";
 import { EmptyState } from "../../../components/ui/EmptyState";
+import { useDisclosurePreferences } from "../../../components/ui/use-disclosure-preferences";
+import { useAccountUid } from "../../auth/client/use-account-uid";
 import { CompetencePlanSkeleton } from "./CompetencePlanSkeleton";
 import { SELF_ASSESSED_LEVEL_COPY } from "../../skill-profiles/copy";
 import { PLAN_CARD_STATUS_LABEL, PRIORITY_LABEL, competencePlanCopy } from "../copy";
@@ -42,6 +45,22 @@ export function CompetencePlanSection({ teamId }: CompetencePlanSectionProps) {
   const [pending, setPending] = useState<{ planId: string; milestoneId: string } | null>(null);
   const [saveResult, setSaveResult] = useState<{ planId: string; outcome: "saved" | "failed" } | null>(null);
   const inFlight = useRef(false);
+  // The plan list is secondary detail, so it is a section-level disclosure. It defaults to open because the plans are
+  // the page's working content; the summary still shows when the user collapses it.
+  const uid = useAccountUid();
+  const disclosure = useDisclosurePreferences("kompetanseplan", teamId, uid, { details: true });
+  // While a plan editor is open, the list is locked open (see `lockOpen` below), so unsaved edits stay visible.
+  const detailsOpen = disclosure.isOpen("details");
+  // An overview link to a plan expands the list first, then scrolls once the card is rendered (never into a hidden card).
+  // The request is state (set by the link's click); the scroll runs in an effect and records that it handled the request, so
+  // reopening the list later never scrolls again to an old request.
+  const [scrollRequest, setScrollRequest] = useState<{ planId: string } | null>(null);
+  const handledRequest = useRef<{ planId: string } | null>(null);
+  useEffect(() => {
+    if (scrollRequest === null || !detailsOpen || handledRequest.current === scrollRequest) return;
+    handledRequest.current = scrollRequest;
+    document.getElementById(`plan-card-${scrollRequest.planId}`)?.scrollIntoView?.({ block: "start", behavior: "smooth" });
+  }, [scrollRequest, detailsOpen]);
 
   if (data.phase === "loading") {
     return <CompetencePlanSkeleton label={competencePlanCopy.loading} />;
@@ -81,35 +100,55 @@ export function CompetencePlanSection({ teamId }: CompetencePlanSectionProps) {
 
   function openPlan(planId: string) {
     setOpenPlanId(planId);
-    const card = document.getElementById(`plan-card-${planId}`);
-    card?.scrollIntoView?.({ block: "start", behavior: "smooth" });
+    disclosure.setOpen("details", true);
+    setScrollRequest({ planId });
   }
 
   return (
-    <section aria-labelledby="competence-plan-heading" className="flex flex-col gap-8">
-      <div className="flex flex-col gap-2">
-        <h2 id="competence-plan-heading" className="text-lg font-semibold text-text-primary">
-          {competencePlanCopy.heading}
-        </h2>
-        <p className="text-sm text-text-secondary">{competencePlanCopy.intro}</p>
-        {data.canEdit ? null : <p className="text-sm text-text-secondary">{competencePlanCopy.readOnlyNotice}</p>}
-        <nav aria-label={competencePlanCopy.heading} className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
-          <span className="text-text-secondary">{competencePlanCopy.teamkompetanseLinkHint}</span>
-          <Link href={`${base}/competence`} className="font-medium text-primary underline underline-offset-2 hover:text-text-primary">
-            {competencePlanCopy.teamkompetanseLink}
-          </Link>
-          <Link href={`${base}/roadmap`} className="font-medium text-primary underline underline-offset-2 hover:text-text-primary">
-            {competencePlanCopy.roadmapLink}
-          </Link>
-        </nav>
+    <section aria-labelledby="competence-plan-heading" className="flex flex-col gap-6">
+      {/* Header: the page's one primary action sits beside the title, not at the foot of the page. */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-2">
+          <h2 id="competence-plan-heading" className="text-lg font-semibold text-text-primary">
+            {competencePlanCopy.heading}
+          </h2>
+          <p className="text-sm text-text-secondary">{competencePlanCopy.intro}</p>
+          {data.canEdit ? null : <p className="text-sm text-text-secondary">{competencePlanCopy.readOnlyNotice}</p>}
+          <nav aria-label={competencePlanCopy.heading} className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
+            <span className="text-text-secondary">{competencePlanCopy.teamkompetanseLinkHint}</span>
+            <Link href={`${base}/competence`} className="font-medium text-text-secondary underline underline-offset-2 hover:text-text-primary">
+              {competencePlanCopy.teamkompetanseLink}
+            </Link>
+            <Link href={`${base}/roadmap`} className="font-medium text-text-secondary underline underline-offset-2 hover:text-text-primary">
+              {competencePlanCopy.roadmapLink}
+            </Link>
+          </nav>
+        </div>
+        {data.canEdit && editing !== "new" ? (
+          <Button type="button" variant="primary" size="sm" className="shrink-0" onClick={() => setEditing("new")}>
+            {competencePlanCopy.newPlan}
+          </Button>
+        ) : null}
       </div>
+
+      {data.canEdit ? (
+        <NewPlan open={editing === "new"} onSave={(input) => create(input)} onCancel={() => setEditing(null)} onSaved={() => setEditing(null)} />
+      ) : null}
 
       {data.truncated ? <Alert variant="info">{competencePlanCopy.truncated}</Alert> : null}
 
       {data.plans.length > 0 ? <CompetencePlanOverview plans={data.plans} nameOf={titleOf} today={today} onOpenPlan={openPlan} /> : null}
 
+      <CollapsibleSection
+        id="kompetanseplan-details"
+        headingLevel={3}
+        title={competencePlanCopy.details}
+        summary={competencePlanCopy.detailsSummary(visiblePlans.length)}
+        open={detailsOpen}
+        onOpenChange={(open) => disclosure.setOpen("details", open)}
+        lockOpen={editing !== null && editing !== "new"}
+      >
       <div className="flex flex-col gap-3">
-        <h3 className="text-base font-semibold text-text-primary">{competencePlanCopy.details}</h3>
         {visiblePlans.length === 0 ? (
           <EmptyState>
             <span className="block font-medium text-text-primary">{competencePlanCopy.emptyTitle}</span>
@@ -122,7 +161,7 @@ export function CompetencePlanSection({ teamId }: CompetencePlanSectionProps) {
               const isEditing = editing === plan.planId;
               const planPending = pending?.planId === plan.planId ? pending.milestoneId : null;
               return (
-                <li key={plan.planId} id={`plan-card-${plan.planId}`} className="scroll-mt-6 rounded-surface border border-border-subtle bg-surface p-4">
+                <li key={plan.planId} id={`plan-card-${plan.planId}`} className="scroll-mt-24 rounded-surface border border-border-subtle bg-surface p-3 sm:p-4">
                   {isEditing ? (
                     <CompetencePlanEditor
                       idPrefix={`plan-${plan.planId}`}
@@ -158,16 +197,8 @@ export function CompetencePlanSection({ teamId }: CompetencePlanSectionProps) {
           </p>
         ) : null}
       </div>
+      </CollapsibleSection>
 
-      {data.canEdit ? (
-        <NewPlan
-          open={editing === "new"}
-          onOpen={() => setEditing("new")}
-          onSave={(input) => create(input)}
-          onCancel={() => setEditing(null)}
-          onSaved={() => setEditing(null)}
-        />
-      ) : null}
     </section>
   );
 }
@@ -220,7 +251,7 @@ function PlanCard({
           <p className="text-sm text-text-secondary">{competencePlanCopy.goalDescription(SELF_ASSESSED_LEVEL_COPY[plan.targetStage].name)}</p>
         </div>
         {canEdit ? (
-          <Button variant="secondary" size="sm" onClick={onEdit} aria-label={`${competencePlanCopy.edit}: ${title}`} className="shrink-0">
+          <Button variant="tertiary" size="sm" onClick={onEdit} aria-label={`${competencePlanCopy.edit}: ${title}`} className="shrink-0">
             {competencePlanCopy.edit}
           </Button>
         ) : null}
@@ -272,30 +303,21 @@ function PlanCard({
 }
 
 /** The single plan-creation entry point. It needs no competence area: the lead names the plan and fills its content. */
+/** The new-plan form. Opened by the header action, so it renders only while open. */
 function NewPlan({
   open,
-  onOpen,
   onSave,
   onCancel,
   onSaved,
 }: {
   open: boolean;
-  onOpen: () => void;
   onSave: (input: CompetencePlanInput) => Promise<CompetencePlanWriteResult>;
   onCancel: () => void;
   onSaved: () => void;
 }) {
-  if (!open) {
-    return (
-      <div>
-        <Button variant="secondary" onClick={onOpen}>
-          {competencePlanCopy.newPlan}
-        </Button>
-      </div>
-    );
-  }
+  if (!open) return null;
   return (
-    <div className="flex flex-col gap-4 rounded-field border border-border-subtle bg-surface p-4">
+    <div className="flex flex-col gap-4 rounded-surface border border-border-subtle bg-surface p-4 shadow-card">
       <h3 className="text-base font-semibold text-text-primary">{competencePlanCopy.newPlanHeading}</h3>
       <CompetencePlanEditor idPrefix="new-plan" initial={null} onSave={onSave} onCancel={onCancel} onSaved={onSaved} />
     </div>

@@ -85,12 +85,12 @@ export function CompleteConversationDialog({ conversationId, token, participantS
       role="group"
       aria-labelledby="complete-confirm-title"
       onSubmit={sendConfirmed}
-      className="flex flex-col gap-3 border-t border-zinc-200 pt-4 dark:border-zinc-800"
+      className="flex flex-col gap-3 border-t border-border-subtle pt-4"
     >
-      <p id="complete-confirm-title" ref={titleRef} tabIndex={-1} className="font-medium text-zinc-900 outline-none dark:text-zinc-50">
+      <p id="complete-confirm-title" ref={titleRef} tabIndex={-1} className="font-medium text-text-primary outline-none">
         {conversationsCopy.completeConfirmHeading}
       </p>
-      <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-zinc-900 dark:text-zinc-50">
+      <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-text-primary">
         <li>{conversationsCopy.completeReadOnly}</li>
         <li>{conversationsCopy.completeNoReopen}</li>
         <li>{conversationsCopy.completeRemovalStillAvailable}</li>

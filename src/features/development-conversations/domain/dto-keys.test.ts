@@ -24,7 +24,7 @@ const ALLOW_LISTS = {
 
 describe("DTO key allow-lists (BR-41…BR-44)", () => {
   it("pins the pending DTO to the approved keys", () => {
-    expect([...PENDING_DTO_KEYS]).toEqual(["conversationId", "state", "teamName", "invitedAt", "ownerDisplayName"]);
+    expect([...PENDING_DTO_KEYS]).toEqual(["conversationId", "state", "invitedAt", "ownerDisplayName"]);
   });
 
   it("pins the owner DTO to the approved keys", () => {
@@ -33,7 +33,6 @@ describe("DTO key allow-lists (BR-41…BR-44)", () => {
       "title",
       "status",
       "plannedFor",
-      "teamId",
       "participant",
       "ownerNotes",
       "nextSteps",
@@ -48,6 +47,7 @@ describe("DTO key allow-lists (BR-41…BR-44)", () => {
 
   it("pins the participant DTO without the team id and with the owner display name", () => {
     expect([...PARTICIPANT_DTO_KEYS]).not.toContain("teamId");
+    expect([...PARTICIPANT_DTO_KEYS]).not.toContain("teamName");
     expect([...PARTICIPANT_DTO_KEYS]).toContain("ownerDisplayName");
   });
 
@@ -67,7 +67,7 @@ describe("DTO key allow-lists (BR-41…BR-44)", () => {
       "createdAt",
       "updatedAt",
     ]);
-    expect([...PARTICIPANT_SUMMARY_KEYS]).toEqual(["conversationId", "state", "title", "teamName", "invitedAt"]);
+    expect([...PARTICIPANT_SUMMARY_KEYS]).toEqual(["conversationId", "state", "title", "invitedAt"]);
     expect([...RECOVERY_ITEM_KEYS]).toEqual(["conversationId"]);
   });
 

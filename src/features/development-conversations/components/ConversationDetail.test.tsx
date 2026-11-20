@@ -18,7 +18,6 @@ const fetchConversationMock = vi.fn();
 const updateConversationMock = vi.fn();
 const fetchOwnGoalsMock = vi.fn();
 const fetchEvidenceSourcesMock = vi.fn();
-const fetchSelectableMembersMock = vi.fn();
 const acceptInvitationMock = vi.fn();
 const endParticipationMock = vi.fn();
 const saveParticipantNotesMock = vi.fn();
@@ -28,12 +27,12 @@ const routerReplaceMock = vi.fn();
 vi.mock("../../auth/client/auth-client", () => ({ observeIdToken: observeIdTokenMock }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: routerReplaceMock }) }));
 vi.mock("../client/conversations-gateway", () => ({
+  fetchInvitableColleagues: async () => ({ status: "ok", response: { colleagues: [], truncated: false } }),
   fetchConversation: fetchConversationMock,
   updateConversation: updateConversationMock,
   deleteConversation: deleteConversationMock,
   fetchOwnGoals: fetchOwnGoalsMock,
   fetchEvidenceSources: fetchEvidenceSourcesMock,
-  fetchSelectableMembers: fetchSelectableMembersMock,
   acceptInvitation: acceptInvitationMock,
   endParticipation: endParticipationMock,
   saveParticipantNotes: saveParticipantNotesMock,
@@ -50,7 +49,6 @@ function owner(overrides: Partial<OwnerConversationWire> = {}): OwnerConversatio
     title: "Kommunikasjon i prosjekter",
     status: "open",
     plannedFor: "2026-11-02",
-    teamId: "team-secret-1",
     participant: { state: "none", displayName: null },
     ownerNotes: "Mine notater",
     nextSteps: ["Les kapittel to"],
@@ -85,11 +83,24 @@ function signedInWith(...reads: FetchConversationResult[]) {
   fetchConversationMock.mockResolvedValue(reads[reads.length - 1]);
 }
 
+/**
+ * The shared goal and responsibility selectors start collapsed (the design keeps the default view short). A test that
+ * exercises their controls opens them first, exactly as a person would.
+ */
+function openCollapsedPickers() {
+  for (const name of [conversationsCopy.selectorHeading, conversationsCopy.evidenceSelectorHeading, conversationsCopy.editNextSteps]) {
+    const toggle = screen.queryByRole("button", { name, expanded: false });
+    if (toggle) fireEvent.click(toggle);
+  }
+}
+
 async function renderOwner(conversation: OwnerConversationWire = owner(), goals: OwnGoalWire[] = []) {
   fetchOwnGoalsMock.mockResolvedValue({ status: "ok", response: { goals, truncated: false } });
   signedInWith(ownerView(conversation));
   render(<ConversationDetail conversationId={CONVERSATION_ID} />);
-  await screen.findByRole("heading", { level: 2, name: conversationsCopy.titleSection });
+  // Title and date sit in the "Samtaledetaljer" group, so their headings are level 3 under its level-2 heading.
+  await screen.findByRole("heading", { level: 3, name: conversationsCopy.titleSection });
+  openCollapsedPickers();
 }
 
 beforeEach(() => {
@@ -99,8 +110,6 @@ beforeEach(() => {
   fetchEvidenceSourcesMock.mockReset();
   fetchEvidenceSourcesMock.mockResolvedValue({ status: "ok", response: { items: [], truncated: false } });
   fetchOwnGoalsMock.mockResolvedValue({ status: "ok", response: { goals: [], truncated: false } });
-  fetchSelectableMembersMock.mockReset();
-  fetchSelectableMembersMock.mockResolvedValue({ status: "ok", response: { members: [], truncated: false } });
 });
 
 afterEach(() => {
@@ -144,7 +153,7 @@ describe("ConversationDetail: loading and load states", () => {
     expect(screen.queryByText(conversationsCopy.detailNotFound)).toBeNull();
     fetchOwnGoalsMock.mockResolvedValue({ status: "ok", response: { goals: [], truncated: false } });
     await userEvent.click(screen.getByRole("button", { name: conversationsCopy.retryButton }));
-    expect(await screen.findByRole("heading", { level: 2, name: conversationsCopy.titleSection })).toBeTruthy();
+    expect(await screen.findByRole("heading", { level: 3, name: conversationsCopy.titleSection })).toBeTruthy();
     expect(fetchConversationMock).toHaveBeenCalledTimes(2);
   });
 
@@ -160,11 +169,10 @@ describe("ConversationDetail: loading and load states", () => {
   it("the server's pending view renders the pending invitation, with no content from the owner", async () => {
     signedInWith({ status: "ok", view: { kind: "pending", invitation: pendingInvitation() } });
     render(<ConversationDetail conversationId={CONVERSATION_ID} />);
-    expect(await screen.findByRole("heading", { level: 2, name: conversationsCopy.pendingHeading })).toBeTruthy();
+    expect(await screen.findByRole("heading", { level: 1, name: conversationsCopy.pendingHeading })).toBeTruthy();
     expect(screen.queryByText("Veiledning hemmelig")).toBeNull();
-    expect(screen.queryByRole("heading", { level: 2, name: conversationsCopy.titleSection })).toBeNull();
+    expect(screen.queryByRole("heading", { level: 3, name: conversationsCopy.titleSection })).toBeNull();
     expect(fetchOwnGoalsMock).not.toHaveBeenCalled();
-    expect(fetchSelectableMembersMock).not.toHaveBeenCalled();
   });
 });
 
@@ -176,7 +184,6 @@ function participant(overrides: Partial<ParticipantConversationWire> = {}): Part
     title: "Veiledning hemmelig",
     status: "open",
     plannedFor: null,
-    teamName: "Plattform",
     ownerDisplayName: "Kari",
     ownerNotes: "Eierens notat",
     nextSteps: [],
@@ -198,7 +205,6 @@ function pendingInvitation(overrides: Partial<PendingInvitationWire> = {}): Pend
   return {
     conversationId: CONVERSATION_ID,
     state: "pending",
-    teamName: "Plattform",
     invitedAt: ISO_NOW,
     ownerDisplayName: "Kari",
     ...overrides,
@@ -380,7 +386,7 @@ describe("OwnerConversationEditor: sections and privacy copy", () => {
     expect(screen.getByText(conversationsCopy.detailPrivacy)).toBeTruthy();
     expect(screen.getByText(conversationsCopy.sharedGoalsVisibility)).toBeTruthy();
     // Title, date, notes and next steps are all shared after acceptance, so each one carries the visibility line.
-    expect(screen.getAllByText(conversationsCopy.visibleToParticipant)).toHaveLength(4);
+    expect(screen.getAllByText(conversationsCopy.sharedBadge)).toHaveLength(4);
     expect(screen.getByText("Deltakerens egne ord")).toBeTruthy();
     expect(screen.queryByRole("textbox", { name: /Deltakerens/ })).toBeNull();
   });
@@ -548,7 +554,7 @@ describe("GoalSnapshotSelector: owner goal choice (BR-24, BR-27)", () => {
     await renderOwner(owner(), [goal({ id: "g1", title: "Lær Rust" }), goal({ id: "g2", title: "Lær SQL", status: "completed" })]);
     expect(await screen.findByRole("checkbox", { name: /Lær Rust/ })).toBeTruthy();
     expect(screen.getByRole("checkbox", { name: /Lær SQL/ })).toBeTruthy();
-    expect(screen.getByText(conversationsCopy.selectorCopy)).toBeTruthy();
+    expect(screen.getByText(conversationsCopy.goalSource)).toBeTruthy();
     expect(fetchOwnGoalsMock).toHaveBeenCalledWith("a-token");
   });
 
@@ -605,7 +611,6 @@ describe("review: destructive and draft-safety behavior", () => {
     await screen.findByRole("checkbox", { name: /Lær Rust/ });
     const save = screen.getByRole("button", { name: conversationsCopy.saveGoals }) as HTMLButtonElement;
     expect(save.disabled).toBe(true);
-    expect(screen.getByText(conversationsCopy.selectorNeedsGoal)).toBeTruthy();
     await userEvent.click(save);
     expect(updateConversationMock).not.toHaveBeenCalled();
   });
@@ -652,55 +657,10 @@ describe("review: destructive and draft-safety behavior", () => {
   });
 
   it("a participant or pending view never triggers a read of the owner's D1 goals", async () => {
-    signedInWith({ status: "ok", view: { kind: "pending", invitation: { conversationId: CONVERSATION_ID, state: "pending", teamName: "Plattform", invitedAt: ISO, ownerDisplayName: null } } } as FetchConversationResult);
+    signedInWith({ status: "ok", view: { kind: "pending", invitation: { conversationId: CONVERSATION_ID, state: "pending", invitedAt: ISO, ownerDisplayName: null } } } as FetchConversationResult);
     render(<ConversationDetail conversationId={CONVERSATION_ID} />);
-    expect(await screen.findByRole("heading", { level: 2, name: conversationsCopy.pendingHeading })).toBeTruthy();
+    expect(await screen.findByRole("heading", { level: 1, name: conversationsCopy.pendingHeading })).toBeTruthy();
     expect(fetchOwnGoalsMock).not.toHaveBeenCalled();
-  });
-});
-
-describe("review: TASK-029 participant controls keep owner drafts (TASK-028 draft safety)", () => {
-  it("an unsaved title draft survives an invitation and the authoritative re-read that follows it", async () => {
-    fetchSelectableMembersMock.mockResolvedValue({
-      status: "ok",
-      response: { members: [{ memberRef: "ref-synthetic-kari", displayName: "Kari Testperson", ordinal: null, isSelf: false }], truncated: false },
-    });
-    updateConversationMock.mockResolvedValue(savedAck);
-    const invited = owner({ participant: { state: "pending", displayName: "Kari Testperson" } });
-    signedInWith(ownerView(owner()), ownerView(invited));
-    render(<ConversationDetail conversationId={CONVERSATION_ID} />);
-    await screen.findByRole("heading", { level: 2, name: conversationsCopy.titleSection });
-
-    const user = userEvent.setup();
-    const title = screen.getByRole("textbox", { name: conversationsCopy.titleSection });
-    await user.clear(title);
-    await user.type(title, "Utkast til tittel");
-    fireEvent.change(await screen.findByRole("combobox", { name: conversationsCopy.chooseColleague }), { target: { value: "0" } });
-    await user.click(screen.getByRole("button", { name: conversationsCopy.inviteButton }));
-    await user.click(screen.getByRole("button", { name: conversationsCopy.confirmInvite }));
-
-    expect(updateConversationMock).toHaveBeenCalledWith("a-token", CONVERSATION_ID, { participantMemberRef: "ref-synthetic-kari" });
-    expect(await screen.findByText(conversationsCopy.participantStateLabel.pending + ": Kari Testperson")).toBeTruthy();
-    expect((screen.getByRole("textbox", { name: conversationsCopy.titleSection }) as HTMLInputElement).value).toBe("Utkast til tittel");
-  });
-});
-
-describe("ConversationDetail: the selector is read only in the open owner view (SPEC Amendment 2026-10-19, TASK-029 I-1)", () => {
-  it("a completed owner view reads no selector", async () => {
-    await renderOwner(owner({ status: "completed", completedAt: ISO, teamId: "team-synthetic-1" }));
-    expect(fetchSelectableMembersMock).not.toHaveBeenCalled();
-  });
-
-  it("a pending view reads no selector", async () => {
-    signedInWith({ status: "ok", view: { kind: "pending", invitation: { conversationId: CONVERSATION_ID, state: "pending", teamName: "Plattform", invitedAt: ISO, ownerDisplayName: null } } } as FetchConversationResult);
-    render(<ConversationDetail conversationId={CONVERSATION_ID} />);
-    expect(await screen.findByRole("heading", { level: 2, name: conversationsCopy.pendingHeading })).toBeTruthy();
-    expect(fetchSelectableMembersMock).not.toHaveBeenCalled();
-  });
-
-  it("an open owner view with a team reads the selector by conversation id only", async () => {
-    await renderOwner(owner({ teamId: "team-synthetic-1" }));
-    await waitFor(() => expect(fetchSelectableMembersMock).toHaveBeenCalledWith("a-token", CONVERSATION_ID));
   });
 });
 
@@ -745,7 +705,7 @@ describe("ConversationDetail: owner lifecycle controls (SPEC BR-5, BR-28, BR-29,
     signedInWith(ownerView(owner({ status: "open" })), ownerView(owner({ status: "completed", completedAt: ISO })));
     fetchOwnGoalsMock.mockResolvedValue({ status: "ok", response: { goals: [], truncated: false } });
     render(<ConversationDetail conversationId={CONVERSATION_ID} />);
-    await screen.findByRole("heading", { level: 2, name: conversationsCopy.titleSection });
+    await screen.findByRole("heading", { level: 3, name: conversationsCopy.titleSection });
 
     fireEvent.click(screen.getByRole("button", { name: conversationsCopy.completeConversationButton }));
     fireEvent.submit(screen.getByRole("group", { name: conversationsCopy.completeConfirmHeading }));
@@ -801,7 +761,7 @@ describe("ConversationDetail participant view: no chat-like controls (visual-red
 describe("conversation detail heading structure (visual-redesign TASK-019)", () => {
   it("keeps a valid heading hierarchy for the owner detail with its section tabs", async () => {
     await renderOwner();
-    expectHeadingStructure(document.body, { ownsPageTitle: false });
+    expectHeadingStructure(document.body, { ownsPageTitle: true });
   });
 });
 
@@ -841,7 +801,7 @@ describe("ConversationDetail: role-neutral loading and account isolation (Phase 
     const emit = captureAuth();
     fetchConversationMock.mockResolvedValueOnce(ownerView(owner()));
     render(<ConversationDetail conversationId={CONVERSATION_ID} />);
-    await screen.findByRole("heading", { level: 2, name: conversationsCopy.titleSection });
+    await screen.findByRole("heading", { level: 3, name: conversationsCopy.titleSection });
 
     // B's token never resolves in this test: the page must not keep A's content while B is pending.
     fetchConversationMock.mockReturnValueOnce(new Promise(() => {}));
@@ -880,7 +840,7 @@ describe("ConversationDetail: role-neutral loading and account isolation (Phase 
     const emit = captureAuth();
     fetchConversationMock.mockResolvedValueOnce(ownerView(owner()));
     render(<ConversationDetail conversationId={CONVERSATION_ID} />);
-    await screen.findByRole("heading", { level: 2, name: conversationsCopy.titleSection });
+    await screen.findByRole("heading", { level: 3, name: conversationsCopy.titleSection });
 
     emit(null, null);
 

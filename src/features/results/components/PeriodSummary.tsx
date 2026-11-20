@@ -1,81 +1,30 @@
 import { Alert } from "../../../components/ui/Alert";
-import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import type { SurveyResultSummary } from "../client/team-results-gateway";
 import { resultsCopy } from "../copy";
-import { formatSurveyDate } from "../domain/format-survey-date";
 
 /**
- * Renders the team's latest closed survey's result
- * (docs/archive/features/managed-surveys/SPEC.md — "Results/history model",
- * TASK-012). `result` is `null` only when the team has no closed surveys
- * yet — a `scheduled`/`open` survey is never eligible here (BR-27), so this
- * component never needs to distinguish "no survey" from "current survey not
- * yet closed."
+ * The latest closed survey's context: its title and how many responses it has. The three dimension values are not repeated
+ * here; they are shown once, in the results summary strip directly below. A survey below its privacy threshold shows only
+ * the threshold message, never a value or a count (`resultsCopy.latestSurvey.insufficient`). `result` is `null` only when the
+ * team has no closed surveys yet (BR-27: a scheduled or open survey is never eligible here).
  */
 export function PeriodSummary({ result }: { result: SurveyResultSummary | null }) {
   return (
-    <Card
-      as="section"
-      variant="bordered"
-      padding="md"
-      aria-labelledby="latest-survey-heading"
-    >
-      <h2
-        id="latest-survey-heading"
-        className="text-lg font-semibold text-zinc-900 dark:text-zinc-50"
-      >
+    <section aria-labelledby="latest-survey-heading" className="flex flex-col gap-2">
+      <h2 id="latest-survey-heading" className="text-lg font-semibold text-text-primary">
         {resultsCopy.latestSurvey.heading}
       </h2>
-
       {result === null ? (
-        <EmptyState className="mt-4">{resultsCopy.latestSurvey.empty}</EmptyState>
+        <EmptyState>{resultsCopy.latestSurvey.empty}</EmptyState>
+      ) : result.status === "published" ? (
+        <div className="flex flex-col gap-1 text-sm text-text-secondary">
+          {result.title ? <p className="break-words font-medium text-text-primary">{result.title}</p> : null}
+          <p>{resultsCopy.latestSurvey.responses(result.count)}</p>
+        </div>
       ) : (
-        <>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            {result.title ? `${result.title} · ` : ""}
-            {formatSurveyDate(new Date(result.date))}
-          </p>
-
-          {result.status === "published" ? (
-            <>
-              <dl className="mt-4 grid grid-cols-3 gap-4">
-                <div>
-                  <dt className="text-sm text-zinc-500 dark:text-zinc-400">
-                    {resultsCopy.latestSurvey.dimensions.flow}
-                  </dt>
-                  <dd className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-                    {result.mean.flow.toFixed(1)}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-sm text-zinc-500 dark:text-zinc-400">
-                    {resultsCopy.latestSurvey.dimensions.stress}
-                  </dt>
-                  <dd className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-                    {result.mean.stress.toFixed(1)}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-sm text-zinc-500 dark:text-zinc-400">
-                    {resultsCopy.latestSurvey.dimensions.fun}
-                  </dt>
-                  <dd className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-                    {result.mean.fun.toFixed(1)}
-                  </dd>
-                </div>
-              </dl>
-              <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-                {resultsCopy.latestSurvey.responses(result.count)}
-              </p>
-            </>
-          ) : (
-            <Alert variant="info" className="mt-4">
-              {resultsCopy.latestSurvey.insufficient(result.minimumResponses)}
-            </Alert>
-          )}
-        </>
+        <Alert variant="info">{resultsCopy.latestSurvey.insufficient(result.minimumResponses)}</Alert>
       )}
-    </Card>
+    </section>
   );
 }

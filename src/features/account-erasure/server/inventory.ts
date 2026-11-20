@@ -3,7 +3,7 @@
  * SPEC is here exactly once. The verification sweep (TASK-012) and the allow-list guard derive from this module, so a
  * missing row means a missed sweep.
  *
- * Correction recorded by TASK-006: A-5 (`roadmapItems.ownerRef`), I-7 (`participantMemberRef`), and I-9 (`memberRef`)
+ * Correction recorded by TASK-006: A-5 (`roadmapItems.ownerRef`), I-7 (`participantBindings`), and I-9 (`memberRef`)
  * hold an opaque, team-scoped `memberRef`, never a uid. They are `memberRef` kinds and generate no uid equality query.
  *
  * The SPEC describes A-rows as "one field", but some rows list several fields (for example A-2 `createdBy`,
@@ -98,7 +98,7 @@ const PERSON_OWNED: readonly InventoryRow[] = [
     class: "DETACH",
     fields: [
       uid("participantUid"),
-      memberRef("participantMemberRef"),
+      memberRef("participantBindings"),
       plain("participantState"),
       plain("participantInvitedAt"),
       plain("participantAcceptedAt"),

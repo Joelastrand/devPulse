@@ -21,6 +21,11 @@ export interface ActionsMenuProps {
   title: string;
   items: readonly ActionMenuItem[];
   disabled?: boolean;
+  /**
+   * `overlay` floats the list over the content (the default). `inline` pushes the content down instead, for a trigger
+   * inside an overflow container (such as a scrolling timeline) where a floating panel would be clipped.
+   */
+  placement?: "overlay" | "inline";
 }
 
 /**
@@ -29,7 +34,7 @@ export interface ActionsMenuProps {
  * needs no arrow-key roving focus, and Tab reaches every entry. Selecting an entry closes the panel first, so a
  * confirmation that the entry opens is not hidden behind it.
  */
-export function ActionsMenu({ label, title, items, disabled = false }: ActionsMenuProps) {
+export function ActionsMenu({ label, title, items, disabled = false, placement = "overlay" }: ActionsMenuProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -75,7 +80,10 @@ export function ActionsMenu({ label, title, items, disabled = false }: ActionsMe
       {open && (
         <div
           id={panelId}
-          className="absolute right-0 z-10 mt-1 flex w-56 flex-col gap-0.5 rounded-surface border border-border-subtle bg-surface p-1 shadow-elevated"
+          className={cx(
+            "flex flex-col gap-0.5 rounded-surface border border-border-subtle bg-surface p-1",
+            placement === "overlay" ? "absolute right-0 z-10 mt-1 w-56 shadow-elevated" : "mt-1 w-full min-w-44",
+          )}
         >
           {items.map((item) => (
             <button

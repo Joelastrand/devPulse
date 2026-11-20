@@ -1,0 +1,159 @@
+
+> devpulse@0.1.0 build C:\Projekt\devpulse
+> next build
+
+▲ Next.js 16.3.4 (Turbopack)
+- Environments: .env.local
+✓ Running next.config.ts took 68ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 7.5s
+  Running TypeScript ...
+  Finished TypeScript in 20.6s ...
+  Collecting page data using 15 workers ...
+  Generating static pages using 15 workers (0/43) ...
+  Generating static pages using 15 workers (10/43) 
+  Generating static pages using 15 workers (21/43) 
+  Generating static pages using 15 workers (32/43) 
+✓ Generating static pages using 15 workers (43/43) in 704ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ○ /admin/roles
+├ ○ /admin/skills
+├ ○ /admin/superadmins
+├ ○ /admin/teams
+├ ƒ /admin/teams/[teamId]
+├ ƒ /api/admin/role-assignments/lookup
+├ ƒ /api/admin/roles
+├ ƒ /api/admin/roles/[roleId]
+├ ƒ /api/admin/roles/[roleId]/archive
+├ ƒ /api/admin/skills
+├ ƒ /api/admin/skills/[treeId]
+├ ƒ /api/admin/skills/overview
+├ ƒ /api/admin/superadmins
+├ ƒ /api/admin/superadmins/[uid]
+├ ƒ /api/admin/teams
+├ ƒ /api/admin/teams/[teamId]
+├ ƒ /api/admin/teams/[teamId]/access-requests
+├ ƒ /api/admin/teams/[teamId]/access-requests/[uid]
+├ ƒ /api/admin/teams/[teamId]/challenges
+├ ƒ /api/admin/teams/[teamId]/challenges/[challengeId]
+├ ƒ /api/admin/teams/[teamId]/challenges/[challengeId]/archive
+├ ƒ /api/admin/teams/[teamId]/challenges/[challengeId]/resolve
+├ ƒ /api/admin/teams/[teamId]/invitations
+├ ƒ /api/admin/teams/[teamId]/member-refs
+├ ƒ /api/admin/teams/[teamId]/members
+├ ƒ /api/admin/teams/[teamId]/members/[uid]
+├ ƒ /api/admin/teams/[teamId]/skills
+├ ƒ /api/admin/teams/[teamId]/skills/[treeId]
+├ ƒ /api/admin/teams/[teamId]/surveys
+├ ƒ /api/admin/teams/[teamId]/surveys/[surveyId]
+├ ƒ /api/admin/teams/[teamId]/surveys/[surveyId]/close
+├ ƒ /api/admin/teams/[teamId]/surveys/[surveyId]/draft
+├ ƒ /api/admin/teams/[teamId]/surveys/[surveyId]/duplicate
+├ ƒ /api/admin/teams/[teamId]/surveys/[surveyId]/open
+├ ƒ /api/admin/teams/seed-legacy
+├ ƒ /api/admin/users
+├ ƒ /api/admin/users/[uid]
+├ ƒ /api/admin/users/[uid]/role-assignment
+├ ƒ /api/me
+├ ƒ /api/me/achievements
+├ ƒ /api/me/achievements/[recordId]
+├ ƒ /api/me/conversations
+├ ƒ /api/me/conversations/[conversationId]
+├ ƒ /api/me/conversations/[conversationId]/evidence-sources
+├ ƒ /api/me/conversations/[conversationId]/participant-notes
+├ ƒ /api/me/conversations/[conversationId]/participation
+├ ƒ /api/me/conversations/[conversationId]/participation/accept
+├ ƒ /api/me/conversations/colleagues
+├ ƒ /api/me/erasure
+├ ƒ /api/me/goals
+├ ƒ /api/me/goals/[goalId]
+├ ƒ /api/me/profile
+├ ƒ /api/me/responsibilities
+├ ƒ /api/me/responsibilities/[recordId]
+├ ƒ /api/me/role-assignment
+├ ƒ /api/me/skills
+├ ƒ /api/me/skills/[treeId]
+├ ƒ /api/me/tasks
+├ ƒ /api/me/tasks/[taskId]
+├ ƒ /api/me/tasks/history
+├ ƒ /api/me/tasks/preferences
+├ ƒ /api/public/teams/[teamId]
+├ ƒ /api/roles
+├ ƒ /api/surveys/[surveyId]
+├ ƒ /api/surveys/[surveyId]/responses
+├ ƒ /api/teams
+├ ƒ /api/teams/[teamId]/access-requests
+├ ƒ /api/teams/[teamId]/assignable-members
+├ ƒ /api/teams/[teamId]/challenges
+├ ƒ /api/teams/[teamId]/competence-plans
+├ ƒ /api/teams/[teamId]/competence-plans/[planId]
+├ ƒ /api/teams/[teamId]/current-survey
+├ ƒ /api/teams/[teamId]/forum/threads
+├ ƒ /api/teams/[teamId]/forum/threads/[threadId]
+├ ƒ /api/teams/[teamId]/forum/threads/[threadId]/replies
+├ ƒ /api/teams/[teamId]/forum/threads/[threadId]/replies/[replyId]
+├ ƒ /api/teams/[teamId]/members
+├ ƒ /api/teams/[teamId]/projects
+├ ƒ /api/teams/[teamId]/projects/[projectId]
+├ ƒ /api/teams/[teamId]/projects/[projectId]/archive
+├ ƒ /api/teams/[teamId]/projects/[projectId]/participations
+├ ƒ /api/teams/[teamId]/projects/[projectId]/participations/[participationId]
+├ ƒ /api/teams/[teamId]/projects/[projectId]/restore
+├ ƒ /api/teams/[teamId]/results
+├ ƒ /api/teams/[teamId]/roadmap-items
+├ ƒ /api/teams/[teamId]/roadmap-items/[treeId]
+├ ƒ /api/teams/[teamId]/skill-contribution
+├ ƒ /api/teams/[teamId]/skill-coverage
+├ ƒ /api/teams/[teamId]/skill-needs
+├ ƒ /api/teams/[teamId]/skill-needs/[treeId]
+├ ƒ /api/teams/[teamId]/skills
+├ ƒ /api/teams/[teamId]/skills/[treeId]
+├ ƒ /api/teams/[teamId]/surveys
+├ ƒ /api/teams/[teamId]/surveys/[surveyId]/results
+├ ƒ /api/teams/[teamId]/system-favorites
+├ ƒ /api/teams/[teamId]/system-favorites/[systemId]
+├ ƒ /api/teams/[teamId]/systems
+├ ƒ /api/teams/[teamId]/systems/[systemId]
+├ ƒ /api/teams/[teamId]/team-skills
+├ ƒ /api/teams/[teamId]/team-skills/[skillId]
+├ ƒ /api/teams/[teamId]/team-skills/[skillId]/level
+├ ƒ /api/teams/[teamId]/team-skills/[skillId]/manual
+├ ƒ /api/teams/[teamId]/team-skills/aggregate
+├ ƒ /api/teams/[teamId]/team-skills/manual
+├ ƒ /api/teams/[teamId]/visibility
+├ ○ /apple-icon.png
+├ ○ /icon.png
+├ ○ /me/conversations
+├ ƒ /me/conversations/[conversationId]
+├ ○ /me/erasure
+├ ƒ /me/goals
+├ ○ /me/profile
+├ ƒ /me/skills
+├ ƒ /public/teams/[teamId]
+├ ○ /results
+├ ƒ /sign-in
+├ ○ /sign-up
+├ ƒ /survey/[surveyId]
+├ ○ /tasks
+├ ○ /teams
+├ ƒ /teams/[teamId]
+├ ƒ /teams/[teamId]/competence
+├ ƒ /teams/[teamId]/competence-plan
+├ ƒ /teams/[teamId]/forum/[threadId]
+├ ƒ /teams/[teamId]/results
+├ ƒ /teams/[teamId]/roadmap
+├ ƒ /teams/[teamId]/settings
+├ ƒ /teams/[teamId]/skills
+├ ƒ /teams/[teamId]/surveys
+├ ƒ /teams/[teamId]/systems
+└ ƒ /teams/[teamId]/systems/[systemId]
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

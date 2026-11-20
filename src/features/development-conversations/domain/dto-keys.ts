@@ -3,13 +3,12 @@
  * these lists; nothing is spread from a stored object. Keys are listed here so tests can pin them.
  *
  * Owner and participant DTOs never carry a uid, e-mail, membership id or `memberRef` (BR-42, BR-43, BR-46).
- * The owner's `teamId` is an opaque team identifier and is allowed.
+ * A conversation carries no team (A2.1), so no DTO exposes a team id or team name.
  */
 
 export const PENDING_DTO_KEYS = [
   "conversationId",
   "state",
-  "teamName",
   "invitedAt",
   "ownerDisplayName",
 ] as const;
@@ -40,7 +39,6 @@ export const OWNER_DTO_KEYS = [
   "title",
   "status",
   "plannedFor",
-  "teamId",
   "participant",
   "ownerNotes",
   "nextSteps",
@@ -57,7 +55,6 @@ export const PARTICIPANT_DTO_KEYS = [
   "title",
   "status",
   "plannedFor",
-  "teamName",
   "ownerDisplayName",
   "ownerNotes",
   "nextSteps",
@@ -84,7 +81,6 @@ export const PARTICIPANT_SUMMARY_KEYS = [
   "conversationId",
   "state",
   "title",
-  "teamName",
   "invitedAt",
 ] as const;
 

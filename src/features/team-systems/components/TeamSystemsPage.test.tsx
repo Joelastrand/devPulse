@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { TeamSystemView } from "../server/list-team-systems";
@@ -9,6 +9,9 @@ const fetchTeamSystemsMock = vi.fn();
 const fetchAssignableMembersMock = vi.fn();
 const createTeamSystemMock = vi.fn();
 
+// The view preferences are scoped by UID. A fixed test UID keeps them active, and the storage is cleared between tests.
+vi.mock("../../auth/client/use-account-uid", () => ({ useAccountUid: () => "test-uid" }));
+beforeEach(() => window.localStorage.clear());
 vi.mock("next/navigation", async () => (await import("./systems-navigation-test-helper")).navigationMock);
 
 vi.mock("../client/system-favorites-gateway", () => ({

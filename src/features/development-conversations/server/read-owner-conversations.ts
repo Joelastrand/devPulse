@@ -83,24 +83,24 @@ export async function readOwnerConversations(ownerUid: string, deps: ReadOwnerCo
     // One memo of the raw team and membership reads for this list (TASK-023). It is shared by the BR-21 resolver and the
     // roster, and it is never kept past this call. Each item's binding is still decided per conversation.
     const reads = requestScopedTeamReader(deps.teamReader);
-    const states = await Promise.all(
+    const bindings = await Promise.all(
       valid.map(({ id, record }) => participantStateOf(ownerUid, id, record, deps.resolveParticipantState, reads)),
     );
-    const requests = valid.flatMap(({ record }) => {
-      const request = rosterRequestFor(ownerUid, record);
+    const requests = valid.flatMap(({ record }, index) => {
+      const request = rosterRequestFor(ownerUid, record, bindings[index].sharedTeamId);
       return request === null ? [] : [request];
     });
     const names = await resolveRosterNames(requests, { teamReader: reads, getNames: deps.getNames });
     if (!names.ok) return FAILED;
 
     const conversations = valid.map(({ id, record }, index): OwnerConversationSummary => {
-      const request = rosterRequestFor(ownerUid, record);
+      const request = rosterRequestFor(ownerUid, record, bindings[index].sharedTeamId);
       return {
         conversationId: id,
         title: record.content.title,
         status: record.status,
         plannedFor: record.plannedFor,
-        participant: { state: states[index], displayName: request === null ? null : names.displayNameOf(request) },
+        participant: { state: bindings[index].state, displayName: request === null ? null : names.displayNameOf(request) },
         sharedGoalCount: record.content.sharedGoals.length,
         createdAt: record.createdAt,
         updatedAt: record.updatedAt,

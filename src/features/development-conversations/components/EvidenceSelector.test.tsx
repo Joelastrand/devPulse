@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SharedEvidenceWire } from "../client/conversations-gateway";
+import { conversationsCopy } from "../copy";
 
 /** Synthetic fixtures only (invariant 15). No real person, team or wellbeing data. */
 
@@ -10,6 +11,7 @@ const fetchEvidenceSourcesMock = vi.fn();
 const updateConversationMock = vi.fn();
 
 vi.mock("../client/conversations-gateway", () => ({
+  fetchInvitableColleagues: async () => ({ status: "ok", response: { colleagues: [], truncated: false } }),
   fetchEvidenceSources: fetchEvidenceSourcesMock,
   updateConversation: updateConversationMock,
 }));
@@ -54,6 +56,9 @@ function renderSelector(props: { completed?: boolean; sharedEvidence?: SharedEvi
       onChanged={onChanged}
     />,
   );
+  // The picker starts collapsed. Open it as a person would, so its controls are in the accessibility tree.
+  const toggle = screen.queryByRole("button", { name: conversationsCopy.evidenceSelectorHeading, expanded: false });
+  if (toggle) fireEvent.click(toggle);
   return { onChanged, onUnauthenticated };
 }
 

@@ -12,6 +12,7 @@ const fetchConversationMock = vi.fn();
 const updateConversationMock = vi.fn();
 
 vi.mock("../client/conversations-gateway", () => ({
+  fetchInvitableColleagues: async () => ({ status: "ok", response: { colleagues: [], truncated: false } }),
   saveParticipantNotes: saveParticipantNotesMock,
   fetchOwnGoals: fetchOwnGoalsMock,
   fetchSelectableMembers: fetchSelectableMembersMock,
@@ -31,7 +32,6 @@ function conversation(overrides: Partial<ParticipantConversationWire> = {}): Par
     title: "Kodegjennomgang (syntetisk)",
     status: "open",
     plannedFor: "2026-11-02",
-    teamName: "Plattform (syntetisk)",
     ownerDisplayName: "Kari Testperson",
     ownerNotes: "Eierens notat om gjennomgangen",
     nextSteps: ["Les kapittel to"],
@@ -95,7 +95,6 @@ describe("ParticipantConversation: shared content is read-only and labelled", ()
   it("renders every shared section with its heading: title, date, owner notes, next steps, goals, own notes", () => {
     renderView();
     for (const heading of [
-      conversationsCopy.titleSection,
       conversationsCopy.plannedForSection,
       conversationsCopy.ownerNotesSection,
       conversationsCopy.nextStepsSection,
@@ -104,6 +103,8 @@ describe("ParticipantConversation: shared content is read-only and labelled", ()
     ]) {
       expect(screen.getByRole("heading", { level: 2, name: heading })).toBeTruthy();
     }
+    // The conversation title is the single level-1 heading; it is not repeated as a section.
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     expect(screen.getByText("Kodegjennomgang (syntetisk)")).toBeTruthy();
     expect(screen.getByText("Eierens notat om gjennomgangen")).toBeTruthy();
     expect(screen.getByText("Les kapittel to")).toBeTruthy();

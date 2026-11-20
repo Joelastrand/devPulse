@@ -337,7 +337,7 @@ describe("setSharedGoals: preservation (BR-49, D2-SI-7, D2-SI-8)", () => {
   const PLAIN_KEYS = [
     "teamId",
     "participantUid",
-    "participantMemberRef",
+    "participantBindings",
     "participantState",
     "participantInvitedAt",
     "participantAcceptedAt",

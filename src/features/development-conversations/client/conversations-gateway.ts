@@ -70,7 +70,6 @@ export interface OwnerConversationWire {
   title: string;
   status: ConversationStatus;
   plannedFor: string | null;
-  teamId: string | null;
   participant: OwnerParticipantWire;
   ownerNotes: string;
   nextSteps: string[];
@@ -88,7 +87,6 @@ export interface ParticipantConversationWire {
   title: string;
   status: ConversationStatus;
   plannedFor: string | null;
-  teamName: string;
   ownerDisplayName: string | null;
   ownerNotes: string;
   nextSteps: string[];
@@ -104,7 +102,6 @@ export interface ParticipantConversationWire {
 export interface PendingInvitationWire {
   conversationId: string;
   state: "pending";
-  teamName: string;
   invitedAt: string;
   ownerDisplayName: string | null;
 }
@@ -114,7 +111,6 @@ export interface ParticipationSummaryWire {
   conversationId: string;
   state: "pending" | "accepted";
   title: string | null;
-  teamName: string;
   invitedAt: string;
 }
 
@@ -153,45 +149,12 @@ export interface OwnGoalsResponse {
   truncated: boolean;
 }
 
-/**
- * One teammate the owner may choose as a participant (TASK-029, SPEC BR-8, Amendment 2026-10-19). `memberRef` is an opaque,
- * team-scoped selection handle. It is never authorization and the server re-checks it on every write. No uid, e-mail or
- * membership id exists here.
- */
-export interface SelectableMemberWire {
-  memberRef: string;
-  displayName: string | null;
-  ordinal: number | null;
-  isSelf: boolean;
-}
-
-export interface SelectableMembersResponse {
-  members: SelectableMemberWire[];
-  /** Rows the server did not offer (malformed or ambiguous). Counted, never identified. */
-  unavailableCount: number;
-  /** Members beyond the server's read bound. They cannot be selected (BR-8). */
-  truncated: boolean;
-}
-
 /* ----------------------------------- request types ----------------------------------- */
 
-/** One team the caller may choose. Only the stable id and the display name. */
-export interface CreateTeamChoiceWire {
-  teamId: string;
-  name: string;
-}
-
-/** `GET /api/me/conversations/create-options`. `truncated` means teams beyond the server window may exist. */
-export interface CreateOptionsResponse {
-  items: CreateTeamChoiceWire[];
-  truncated: boolean;
-}
-
-/** `POST` body. `plannedFor` absent or `null` means no planned date. `teamId` is a choice, never authority. */
+/** `POST` body. `plannedFor` absent or `null` means no planned date. A conversation has no team (A2.1). */
 export interface CreateConversationInput {
   title: string;
   plannedFor?: string | null;
-  teamId?: string;
 }
 
 /**
@@ -226,7 +189,6 @@ type Known<K extends readonly string[]> = K[number] | "read_failed" | "unknown";
 
 /** Stable codes per method, from SPEC "Stable errors" for the routes each method calls. */
 const LIST_ERRORS = ["persistence_failed"] as const;
-const CREATE_OPTIONS_ERRORS = ["persistence_failed"] as const;
 const DETAIL_ERRORS = ["conversation_not_found", "persistence_failed"] as const;
 const CREATE_ERRORS = ["invalid_input", "payload_too_large", "conversation_limit", "persistence_failed"] as const;
 const UPDATE_ERRORS = [
@@ -252,12 +214,10 @@ const NOTES_ERRORS = [
 const PARTICIPATION_ERRORS = ["invalid_input", "payload_too_large", "conversation_not_found", "persistence_failed"] as const;
 const OWN_GOALS_ERRORS = ["persistence_failed"] as const;
 /** SPEC Amendment 2026-10-19 selector read: the stable codes it can return. Any other refusal is `unknown`. */
-const SELECTABLE_MEMBERS_ERRORS = ["conversation_not_found", "invalid_participant", "conversation_completed", "persistence_failed"] as const;
 
 export type ListConversationsSuccess = { status: "ok"; response: ConversationListResponse };
 export type FetchConversationSuccess = { status: "ok"; view: ConversationView };
 export type CreateConversationSuccess = { status: "created"; conversationId: string };
-export type CreateOptionsSuccess = { status: "ok"; response: CreateOptionsResponse };
 /** `saved` for a real change (`{ ok: true }`). `unchanged` for a removal with no participant set (SPEC Stable errors). */
 export type UpdateConversationSuccess = { status: "saved" } | { status: "unchanged"; conversation: OwnerConversationWire };
 export type DeleteConversationSuccess = { status: "deleted" };
@@ -266,10 +226,8 @@ export type AcceptInvitationSuccess = { status: "accepted" };
 /** Decline (pending) and leave (accepted) are one route; both succeed with `204` and no body. */
 export type EndParticipationSuccess = { status: "ended" };
 export type FetchOwnGoalsSuccess = { status: "ok"; response: OwnGoalsResponse };
-export type FetchSelectableMembersSuccess = { status: "ok"; response: SelectableMembersResponse };
 
 export type ListConversationsResult = GatewayResult<ListConversationsSuccess, Known<typeof LIST_ERRORS>>;
-export type FetchCreateOptionsResult = GatewayResult<CreateOptionsSuccess, Known<typeof CREATE_OPTIONS_ERRORS>>;
 export type FetchConversationResult = GatewayResult<FetchConversationSuccess, Known<typeof DETAIL_ERRORS>>;
 export type CreateConversationResult = GatewayResult<CreateConversationSuccess, Known<typeof CREATE_ERRORS>>;
 export type UpdateConversationResult = GatewayResult<UpdateConversationSuccess, Known<typeof UPDATE_ERRORS>>;
@@ -278,7 +236,6 @@ export type SaveParticipantNotesResult = GatewayResult<SaveParticipantNotesSucce
 export type AcceptInvitationResult = GatewayResult<AcceptInvitationSuccess, Known<typeof PARTICIPATION_ERRORS>>;
 export type EndParticipationResult = GatewayResult<EndParticipationSuccess, Known<typeof PARTICIPATION_ERRORS>>;
 export type FetchOwnGoalsResult = GatewayResult<FetchOwnGoalsSuccess, Known<typeof OWN_GOALS_ERRORS>>;
-export type FetchSelectableMembersResult = GatewayResult<FetchSelectableMembersSuccess, Known<typeof SELECTABLE_MEMBERS_ERRORS>>;
 
 /** One selectable source record for the owner's picker (owner-only; carries the source id). */
 export interface EvidenceSourceWire {
@@ -300,7 +257,6 @@ export type FetchEvidenceSourcesResult = GatewayResult<FetchEvidenceSourcesSucce
 const CONVERSATIONS_PATH = "/api/me/conversations";
 /** D1's own goal list. Read only, and used only to choose snapshot candidates (SPEC BR-24). */
 const OWN_GOALS_PATH = "/api/me/goals";
-const CREATE_OPTIONS_PATH = `${CONVERSATIONS_PATH}/create-options`;
 
 interface RequestSpec {
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -494,14 +450,14 @@ function parseOwnedItem(value: unknown): OwnedListItem | undefined {
 
 function parseParticipationSummary(value: unknown): ParticipationSummaryWire | undefined {
   if (!isPlainObject(value) || !hasExactKeys(value, PARTICIPANT_SUMMARY_KEYS)) return undefined;
-  const { conversationId, state, title, teamName, invitedAt } = value;
-  if (!isNonEmptyString(conversationId) || !isText(teamName) || !isText(invitedAt)) return undefined;
+  const { conversationId, state, title, invitedAt } = value;
+  if (!isNonEmptyString(conversationId) || !isText(invitedAt)) return undefined;
   // BR-44 and CL-19: a pending invitation carries no title. A title on a pending entry is refused, not shown.
   if (state === "pending") {
-    return title === null ? { conversationId, state, title: null, teamName, invitedAt } : undefined;
+    return title === null ? { conversationId, state, title: null, invitedAt } : undefined;
   }
   if (state !== "accepted" || !isText(title)) return undefined;
-  return { conversationId, state, title, teamName, invitedAt };
+  return { conversationId, state, title, invitedAt };
 }
 
 /** The `owned` and `participating` envelope: exact keys, a boolean `truncated`, and every item parsed. */
@@ -518,19 +474,6 @@ function parseEnvelope<T>(value: unknown, parseItem: (raw: unknown) => T | undef
   return { items: parsed, truncated };
 }
 
-/** Exact success shape `{ items, truncated }`. Each item is exactly `{ teamId, name }` with non-empty strings. */
-function toCreateOptions(body: unknown): CreateOptionsSuccess | undefined {
-  if (!isPlainObject(body) || !hasExactKeys(body, ["items", "truncated"])) return undefined;
-  if (!Array.isArray(body.items) || typeof body.truncated !== "boolean") return undefined;
-  const items: CreateTeamChoiceWire[] = [];
-  for (const raw of body.items) {
-    if (!isPlainObject(raw) || !hasExactKeys(raw, ["teamId", "name"])) return undefined;
-    if (!isNonEmptyString(raw.teamId) || !isNonEmptyString(raw.name)) return undefined;
-    items.push({ teamId: raw.teamId, name: raw.name });
-  }
-  return { status: "ok", response: { items, truncated: body.truncated } };
-}
-
 function toListResponse(body: unknown): ConversationListResponse | undefined {
   if (!isPlainObject(body) || !hasExactKeys(body, ["owned", "participating"])) return undefined;
   const owned = parseEnvelope(body.owned, parseOwnedItem);
@@ -540,13 +483,13 @@ function toListResponse(body: unknown): ConversationListResponse | undefined {
 
 function parseOwnerConversation(value: unknown): OwnerConversationWire | undefined {
   if (!isPlainObject(value) || !hasExactKeys(value, OWNER_DTO_KEYS)) return undefined;
-  const { conversationId, title, status, plannedFor, teamId, participant, ownerNotes, nextSteps } = value;
+  const { conversationId, title, status, plannedFor, participant, ownerNotes, nextSteps } = value;
   const { participantNotes, sharedGoals, sharedEvidence, createdAt, updatedAt, completedAt } = value;
   const parsedParticipant = parseOwnerParticipant(participant);
   const parsedGoals = parseSharedGoals(sharedGoals);
   const parsedEvidence = parseSharedEvidence(sharedEvidence);
   if (!isNonEmptyString(conversationId) || !isText(title) || !isConversationStatus(status)) return undefined;
-  if (!isNullableText(plannedFor) || !isNullableText(teamId) || !parsedParticipant) return undefined;
+  if (!isNullableText(plannedFor) || !parsedParticipant) return undefined;
   if (!isText(ownerNotes) || !isText(participantNotes) || !Array.isArray(nextSteps) || !nextSteps.every(isText)) return undefined;
   if (!parsedGoals || !parsedEvidence || !isText(createdAt) || !isText(updatedAt) || !isNullableText(completedAt)) return undefined;
   return {
@@ -554,7 +497,6 @@ function parseOwnerConversation(value: unknown): OwnerConversationWire | undefin
     title,
     status,
     plannedFor,
-    teamId,
     participant: parsedParticipant,
     ownerNotes,
     nextSteps,
@@ -569,12 +511,12 @@ function parseOwnerConversation(value: unknown): OwnerConversationWire | undefin
 
 function parseParticipantConversation(value: unknown): ParticipantConversationWire | undefined {
   if (!isPlainObject(value) || !hasExactKeys(value, PARTICIPANT_DTO_KEYS)) return undefined;
-  const { conversationId, title, status, plannedFor, teamName, ownerDisplayName, ownerNotes, nextSteps } = value;
+  const { conversationId, title, status, plannedFor, ownerDisplayName, ownerNotes, nextSteps } = value;
   const { participantNotes, sharedGoals, sharedEvidence, createdAt, updatedAt, completedAt } = value;
   const parsedGoals = parseSharedGoals(sharedGoals);
   const parsedEvidence = parseSharedEvidence(sharedEvidence);
   if (!isNonEmptyString(conversationId) || !isText(title) || !isConversationStatus(status)) return undefined;
-  if (!isNullableText(plannedFor) || !isText(teamName) || !isNullableText(ownerDisplayName)) return undefined;
+  if (!isNullableText(plannedFor) || !isNullableText(ownerDisplayName)) return undefined;
   if (!isText(ownerNotes) || !isText(participantNotes) || !Array.isArray(nextSteps) || !nextSteps.every(isText)) return undefined;
   if (!parsedGoals || !parsedEvidence || !isText(createdAt) || !isText(updatedAt) || !isNullableText(completedAt)) return undefined;
   return {
@@ -582,7 +524,6 @@ function parseParticipantConversation(value: unknown): ParticipantConversationWi
     title,
     status,
     plannedFor,
-    teamName,
     ownerDisplayName,
     ownerNotes,
     nextSteps,
@@ -597,10 +538,10 @@ function parseParticipantConversation(value: unknown): ParticipantConversationWi
 
 function parsePendingInvitation(value: unknown): PendingInvitationWire | undefined {
   if (!isPlainObject(value) || !hasExactKeys(value, PENDING_DTO_KEYS)) return undefined;
-  const { conversationId, state, teamName, invitedAt, ownerDisplayName } = value;
+  const { conversationId, state, invitedAt, ownerDisplayName } = value;
   if (!isNonEmptyString(conversationId) || state !== "pending") return undefined;
-  if (!isText(teamName) || !isText(invitedAt) || !isNullableText(ownerDisplayName)) return undefined;
-  return { conversationId, state, teamName, invitedAt, ownerDisplayName };
+  if (!isText(invitedAt) || !isNullableText(ownerDisplayName)) return undefined;
+  return { conversationId, state, invitedAt, ownerDisplayName };
 }
 
 /**
@@ -634,25 +575,28 @@ function toOwnGoals(body: unknown): FetchOwnGoalsSuccess | undefined {
   return { status: "ok", response: { goals, truncated: body.truncated } };
 }
 
-function parseSelectableMember(value: unknown): SelectableMemberWire | undefined {
-  if (!isPlainObject(value) || !hasExactKeys(value, ["memberRef", "displayName", "ordinal", "isSelf"])) return undefined;
-  const { memberRef, displayName, ordinal, isSelf } = value;
-  if (!isNonEmptyString(memberRef) || !isNullableText(displayName) || typeof isSelf !== "boolean") return undefined;
-  if (ordinal !== null && !(isCount(ordinal) && ordinal >= 1)) return undefined;
-  return { memberRef, displayName, ordinal, isSelf };
+/** One invitable colleague (A2.1 revised). An opaque reference and a display name or `null`. No uid, e-mail or team. */
+export interface ColleagueWire {
+  memberRef: string;
+  displayName: string | null;
 }
 
-/** Exact top-level keys and a strict member list. Any other shape is `read_failed`, and no raw body is kept. */
-function toSelectableMembers(body: unknown): FetchSelectableMembersSuccess | undefined {
-  if (!isPlainObject(body) || !hasExactKeys(body, ["members", "unavailableCount", "truncated"])) return undefined;
-  if (!Array.isArray(body.members) || !isCount(body.unavailableCount) || typeof body.truncated !== "boolean") return undefined;
-  const members: SelectableMemberWire[] = [];
-  for (const raw of body.members) {
-    const member = parseSelectableMember(raw);
-    if (!member) return undefined;
-    members.push(member);
+export interface ColleagueListWire {
+  colleagues: ColleagueWire[];
+  /** A bound was reached, so the list may be incomplete. */
+  truncated: boolean;
+}
+
+function toColleagueList(body: unknown): ColleagueListWire | undefined {
+  if (!isPlainObject(body) || !hasExactKeys(body, ["colleagues", "truncated"]) || typeof body.truncated !== "boolean") return undefined;
+  if (!Array.isArray(body.colleagues)) return undefined;
+  const colleagues: ColleagueWire[] = [];
+  for (const item of body.colleagues) {
+    if (!isPlainObject(item) || !hasExactKeys(item, ["memberRef", "displayName"])) return undefined;
+    if (!isText(item.memberRef) || !isNullableText(item.displayName)) return undefined;
+    colleagues.push({ memberRef: item.memberRef, displayName: item.displayName });
   }
-  return { status: "ok", response: { members, unavailableCount: body.unavailableCount, truncated: body.truncated } };
+  return { colleagues, truncated: body.truncated };
 }
 
 function toUpdated(body: unknown): UpdateConversationSuccess | undefined {
@@ -663,16 +607,23 @@ function toUpdated(body: unknown): UpdateConversationSuccess | undefined {
 
 /* ------------------------------------- operations ------------------------------------ */
 
-/**
- * Teams the caller may choose for a new conversation (`GET`, 200). Discovery only: it grants nothing, and `createConversation`
- * re-checks eligibility on every create. Read-only. No retry, no cache.
- */
-export function fetchCreateOptions(idToken: string): Promise<FetchCreateOptionsResult> {
+export type ListColleaguesSuccess = { status: "ok"; response: ColleagueListWire };
+export type ListColleaguesResult = GatewayResult<ListColleaguesSuccess, Known<typeof COLLEAGUE_LIST_ERRORS>>;
+const COLLEAGUE_LIST_ERRORS = ["persistence_failed"] as const;
+
+/** The colleagues the caller may invite (`GET`, 200). Owner-only on the server; the list is never filtered here. */
+export function fetchInvitableColleagues(idToken: string): Promise<ListColleaguesResult> {
   return exchange(
     idToken,
-    { method: "GET", path: CREATE_OPTIONS_PATH },
-    { status: 200, read: jsonBody(toCreateOptions) },
-    CREATE_OPTIONS_ERRORS,
+    { method: "GET", path: `${CONVERSATIONS_PATH}/colleagues` },
+    {
+      status: 200,
+      read: jsonBody((body): ListColleaguesSuccess | undefined => {
+        const response = toColleagueList(body);
+        return response ? { status: "ok", response } : undefined;
+      }),
+    },
+    COLLEAGUE_LIST_ERRORS,
     "read_failed",
   );
 }
@@ -694,11 +645,10 @@ export function fetchConversationList(idToken: string): Promise<ListConversation
   );
 }
 
-/** Creates an owner conversation (`POST`, 201). The body carries only the three public keys. */
+/** Creates an owner conversation (`POST`, 201). The body carries only title and plannedFor; no team is sent (A2.1). */
 export function createConversation(idToken: string, input: CreateConversationInput): Promise<CreateConversationResult> {
   const body: Record<string, unknown> = { title: input.title };
   if (input.plannedFor !== undefined) body.plannedFor = input.plannedFor;
-  if (input.teamId !== undefined) body.teamId = input.teamId;
   return exchange(idToken, { method: "POST", path: CONVERSATIONS_PATH, body }, { status: 201, read: jsonBody(toCreated) }, CREATE_ERRORS, "unknown");
 }
 
@@ -839,21 +789,4 @@ export function endParticipation(idToken: string, conversationId: string): Promi
  */
 export function fetchOwnGoals(idToken: string): Promise<FetchOwnGoalsResult> {
   return exchange(idToken, { method: "GET", path: OWN_GOALS_PATH }, { status: 200, read: jsonBody(toOwnGoals) }, OWN_GOALS_ERRORS, "read_failed");
-}
-
-/**
- * The teammates the owner may choose for a conversation (`GET .../selectable-members`, 200; SPEC Amendment 2026-10-19). The
- * path names only the conversation: the team is never sent, and the server decides owner eligibility. Read only, nothing is
- * cached. The list is discovery: the owner's `PATCH` re-resolves the chosen `memberRef`, so this grants nothing. Self is kept
- * in the answer and is filtered by the caller. A refusal keeps its stable code, and a bad body is `read_failed`. No other
- * route is ever used as a fallback.
- */
-export function fetchSelectableMembers(idToken: string, conversationId: string): Promise<FetchSelectableMembersResult> {
-  return exchange(
-    idToken,
-    { method: "GET", path: `${conversationPath(conversationId)}/selectable-members` },
-    { status: 200, read: jsonBody(toSelectableMembers) },
-    SELECTABLE_MEMBERS_ERRORS,
-    "read_failed",
-  );
 }

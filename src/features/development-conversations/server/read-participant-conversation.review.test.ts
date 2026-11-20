@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { SkillTreeNameReader } from "./area-names";
 import { createFakeContentCodec, type FakeContentCodec } from "./fake-content-codec";
 import { createFakeConversationStore, type FakeConversationStore } from "./fake-conversation-store";
-import { createFakeTeamEligibilityReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
-import { NOW, OWNER_UID, PARTICIPANT_MEMBER_REF, PARTICIPANT_UID, TEAM_ID, rosterTeam, seedOwnerConversation } from "./owner-read-test-support";
+import { createFakeSharedTeamReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
+import { NOW, OWNER_MEMBER_REF, OWNER_UID, PARTICIPANT_MEMBER_REF, PARTICIPANT_UID, TEAM_ID, rosterTeam, seedOwnerConversation } from "./owner-read-test-support";
 import { readParticipantConversation, type ReadParticipantConversationDeps } from "./read-participant-conversation";
 import { conversationContext } from "../domain/stored-owner-conversation";
 
@@ -22,11 +22,11 @@ interface Harness {
   deps: ReadParticipantConversationDeps;
 }
 
-function harness(options: { trees?: Record<string, string>; failTeamName?: boolean } = {}): Harness {
+function harness(options: { trees?: Record<string, string> } = {}): Harness {
   const store = createFakeConversationStore();
   const codec = createFakeContentCodec();
   const state = rosterTeam([OWNER_UID, PARTICIPANT_UID]);
-  const teamReader = createFakeTeamEligibilityReader(state);
+  const teamReader = createFakeSharedTeamReader(state);
   const trees = options.trees ?? { "tree-a": "Synthetic area" };
   const areaNameReader: SkillTreeNameReader = {
     getSkillTree: async (treeId) =>
@@ -46,12 +46,6 @@ function harness(options: { trees?: Record<string, string>; failTeamName?: boole
     store,
     codec,
     teamReader,
-    teamNameReader: {
-      getTeamName: async () => {
-        if (options.failTeamName) throw new Error("simulated team name failure with a secret path");
-        return "Synthetic team";
-      },
-    },
     areaNameReader,
     getNames: async (uids) => new Map(uids.filter((uid) => uid === OWNER_UID).map((uid) => [uid, "Synthetic owner"])),
   };
@@ -210,11 +204,11 @@ describe("readParticipantConversation: memberRef binding, each value on its own 
       expect(await readParticipantConversation(PARTICIPANT_UID, CONVERSATION_ID, h.deps)).toStrictEqual(NOT_FOUND);
     });
 
-    it(`denies a stored participantMemberRef that is ${label}`, async () => {
+    it(`denies a stored binding whose participant reference is ${label}`, async () => {
       const h = harness();
       await seedAccepted(h.store, h.codec);
       const record = { ...(await h.store.getOwner(OWNER_UID, CONVERSATION_ID)) };
-      h.store.seedRawOwner(OWNER_UID, CONVERSATION_ID, { ...record, participantMemberRef: value });
+      h.store.seedRawOwner(OWNER_UID, CONVERSATION_ID, { ...record, participantBindings: { [TEAM_ID]: { ownerMemberRef: OWNER_MEMBER_REF, participantMemberRef: value } } });
 
       expect(await readParticipantConversation(PARTICIPANT_UID, CONVERSATION_ID, h.deps)).toStrictEqual(NOT_FOUND);
     });
@@ -262,13 +256,6 @@ describe("readParticipantConversation: operational failures are never denials (B
     };
 
     expect(await readParticipantConversation(PARTICIPANT_UID, CONVERSATION_ID, { ...h.deps, store: failing })).toStrictEqual(PERSISTENCE_FAILED);
-  });
-
-  it("reports a team name read failure as persistence_failed", async () => {
-    const h = harness({ failTeamName: true });
-    await seedAccepted(h.store, h.codec);
-
-    expect(await readParticipantConversation(PARTICIPANT_UID, CONVERSATION_ID, h.deps)).toStrictEqual(PERSISTENCE_FAILED);
   });
 
   it("reports an owner-name presentation failure as persistence_failed", async () => {

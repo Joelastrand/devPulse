@@ -5,27 +5,32 @@ import { isConversationId } from "../domain/conversation-id";
 import { probeKey as probeKeyOnce, decryptForClassification as decryptForClassificationWithKey } from "./content-codec";
 import { getDefaultConversationStore } from "./conversation-store";
 import type { ConversationStore } from "./conversation-store-types";
-import { resolveParticipantRef, createFirestoreParticipantRefReader, type ParticipantRefReader } from "./member-ref-binding";
 import { classifyOwnerDocument, type OwnerReadCodec } from "./owner-read";
+import {
+  boundMemberships,
+  confirmBoundColleague,
+  createFirestoreSharedTeamReader,
+  resolveColleagueRef,
+  type SharedTeamReader,
+} from "./shared-team-binding";
 
 /**
- * Pending invitation (SPEC BR-7 to BR-11, BR-32, BR-37, BR-48, BR-50 (6), AD-11, CL-2, CL-25, D2-SI-4; TASK-014). The owner
- * sets one participant by `memberRef`. The owner document and the candidate's participation index are written in one
- * transaction. Every rejection is `invalid_participant`, except the stable codes for a missing conversation, a completed
- * conversation and an operational failure.
+ * Pending invitation (SPEC BR-7 to BR-11, BR-32, BR-37, BR-48, BR-50 (6), AD-11, CL-2, CL-25, D2-SI-4; TASK-014, A2.1). The
+ * owner binds one colleague by `memberRef`. A conversation has no team. The colleague is valid only when the owner and the
+ * colleague share an active team in which both are genuine members (`shared-team-binding.ts`).
  *
- * Order: the conversation is read and classified first, because the team id is needed to resolve the ref. The ref is
- * then resolved through TASK-007, which carries the owner and candidate eligibility checks (BR-9). The participation cap
- * is counted before the transaction (count-then-create, BR-37). The transaction re-reads the owner document and checks
- * completion, team and the absence of a participant (BR-10, BR-11). The owner uid is the first argument and is never
- * read from the input. The candidate uid is written to server-side fields only, and is never returned.
+ * The owner document and the candidate's participation index are written in one transaction. The transaction re-reads the
+ * owner document, checks completion and the absence of a participant (BR-10, BR-11), and revalidates the shared team
+ * through its own reads (BR-48). Every rejection is `invalid_participant`, except the stable codes for a missing
+ * conversation, a completed conversation and an operational failure. The owner uid is the first argument and is never read
+ * from the input. The candidate uid is written to server-side fields only, and is never returned.
  */
 
 export interface InviteParticipantDeps {
   store: ConversationStore;
   codec: OwnerReadCodec;
-  /** The TASK-007 reference seam: the TASK-006 point reads plus one bounded membership list. */
-  refReader: ParticipantRefReader;
+  /** The shared-team seam: point reads of teams and memberships, and the lookup of a membership by its `memberRef`. */
+  refReader: SharedTeamReader;
   /** Server time for `participantInvitedAt` and `updatedAt`. Injected so tests can fix it. */
   clock: () => Date;
 }
@@ -47,7 +52,7 @@ function defaultDeps(): InviteParticipantDeps {
   return {
     store: getDefaultConversationStore(),
     codec: { probeKey: probeKeyOnce, decryptForClassification: decryptForClassificationWithKey },
-    refReader: createFirestoreParticipantRefReader(),
+    refReader: createFirestoreSharedTeamReader(),
     clock: () => new Date(),
   };
 }
@@ -69,47 +74,48 @@ export async function inviteParticipant(
     const classification = classifyOwnerDocument(before, deps.codec, { ownerUid, conversationId });
     if (classification.kind !== "valid") return NOT_FOUND;
 
-    // BR-2: a conversation without a team can never have a participant, and there is no team to resolve against.
-    const teamId = classification.record.teamId;
-    if (teamId === null) return INVALID;
-
-    const resolved = await resolveParticipantRef(ownerUid, teamId, memberRef, deps.refReader);
-    if (!resolved.ok) return { ok: false, error: resolved.error };
+    // A2.1 (BR-9): the colleague must share an active team with the owner. The owner selects no team.
+    const resolved = await resolveColleagueRef(ownerUid, memberRef, deps.refReader);
+    if (!resolved.ok) return resolved.error === "read_failed" ? FAILED : INVALID;
+    const colleague = resolved.colleague;
 
     // BR-37: count-then-create. A small overshoot under concurrency is accepted, as in D1.
-    const count = await deps.store.countParticipation(resolved.candidateUid);
+    const count = await deps.store.countParticipation(colleague.uid);
     if (count >= PARTICIPATION_LIMIT) return INVALID;
 
     const now = deps.clock();
     return await deps.store.runOwnerTransaction(
       ownerUid,
       async (tx): Promise<InviteParticipantResult> => {
-      const raw = await tx.getOwner(ownerUid, conversationId);
-      if (raw === undefined) return NOT_FOUND;
-      const classified = classifyOwnerDocument(raw, deps.codec, { ownerUid, conversationId });
-      if (classified.kind !== "valid") return NOT_FOUND;
-      const record = classified.record;
+        const raw = await tx.getOwner(ownerUid, conversationId);
+        if (raw === undefined) return NOT_FOUND;
+        const classified = classifyOwnerDocument(raw, deps.codec, { ownerUid, conversationId });
+        if (classified.kind !== "valid") return NOT_FOUND;
+        const record = classified.record;
 
-      // BR-10: the invitation is allowed only while open. The status is read here, inside the transaction (BR-50 (6)).
-      if (record.status === "completed") return COMPLETED;
-      // The team is immutable (BR-2), so a mismatch with the resolved team is refused rather than repaired.
-      if (record.teamId !== teamId) return INVALID;
-      // BR-11 and BR-10: a participant, pending or accepted, is replaced only through TASK-018.
-      if (record.participant !== null) return INVALID;
+        // BR-10: the invitation is allowed only while open. The status is read here, inside the transaction (BR-50 (6)).
+        if (record.status === "completed") return COMPLETED;
+        // BR-11 and BR-10: a participant, pending or accepted, is replaced only through TASK-018.
+        if (record.participant !== null) return INVALID;
+        // BR-48: the shared team is revalidated from this transaction's own reads.
+        const confirmed = await confirmBoundColleague(ownerUid, colleague, tx.teamEligibility);
+        if (!confirmed.ok) return confirmed.error === "read_failed" ? FAILED : INVALID;
 
-      tx.updateOwner(ownerUid, conversationId, {
-        participantUid: resolved.candidateUid,
-        participantMemberRef: resolved.memberRef,
-        participantState: "pending",
-        participantInvitedAt: new Date(now.getTime()),
-        updatedAt: new Date(now.getTime()),
-      });
-      // Coordination with membership destruction (TASK-038, I-7): the invitee's membership is touched in this transaction.
-      tx.touchMembership(resolved.candidateUid, teamId, resolved.memberRef);
-      tx.setParticipation(resolved.candidateUid, conversationId, { ownerUid, invitedAt: new Date(now.getTime()) });
-      return { ok: true };
-    },
-      { secondFence: resolved.candidateUid },
+        tx.updateOwner(ownerUid, conversationId, {
+          participantUid: colleague.uid,
+          participantBindings: colleague.bindings,
+          participantState: "pending",
+          participantInvitedAt: new Date(now.getTime()),
+          updatedAt: new Date(now.getTime()),
+        });
+        // Coordination with membership destruction (TASK-038, I-7): the invitee's membership is touched in this transaction.
+        for (const membership of boundMemberships(ownerUid, colleague)) {
+          tx.touchMembership(membership.uid, membership.teamId, membership.memberRef);
+        }
+        tx.setParticipation(colleague.uid, conversationId, { ownerUid, invitedAt: new Date(now.getTime()) });
+        return { ok: true };
+      },
+      { secondFence: colleague.uid },
     );
   } catch (error) {
     // Any read, key or write failure is operational. The raw error is never surfaced (BR-47). A fence refusal is its own code.

@@ -1,7 +1,7 @@
 "use client";
 
+import { ActionsMenu } from "../../../components/ui/ActionsMenu";
 import { Badge } from "../../../components/ui/Badge";
-import { Button } from "../../../components/ui/Button";
 import { teamProjectsCopy } from "../copy";
 import type { ClientTeamProject } from "../client/team-projects-gateway";
 
@@ -37,23 +37,30 @@ export function ProjectStatusBadge({ project }: { project: ClientTeamProject }) 
   );
 }
 
-interface ProjectRowActionsProps {
+interface ProjectActionsMenuProps {
   project: ClientTeamProject;
   busy: boolean;
   onEdit: (project: ClientTeamProject) => void;
   onArchive: (project: ClientTeamProject) => void;
+  placement?: "overlay" | "inline";
 }
 
-/** Lead-only actions for one active project. Each button names its project for assistive technology. */
-export function ProjectRowActions({ project, busy, onEdit, onArchive }: ProjectRowActionsProps) {
+/**
+ * Lead-only actions for one active project, behind one compact `Flere handlinger` trigger. Edit and archive keep their
+ * handlers and semantics; archive is still a plain action with no delete option. The trigger's accessible name names the
+ * project, so repeated triggers stay distinguishable.
+ */
+export function ProjectActionsMenu({ project, busy, onEdit, onArchive, placement = "overlay" }: ProjectActionsMenuProps) {
   return (
-    <span className="flex flex-wrap gap-2">
-      <Button type="button" variant="secondary" size="sm" disabled={busy} onClick={() => onEdit(project)} aria-label={`${teamProjectsCopy.actions.edit}: ${project.title}`}>
-        {teamProjectsCopy.actions.edit}
-      </Button>
-      <Button type="button" variant="tertiary" size="sm" disabled={busy} onClick={() => onArchive(project)} aria-label={`${teamProjectsCopy.actions.archive}: ${project.title}`}>
-        {teamProjectsCopy.actions.archive}
-      </Button>
-    </span>
+    <ActionsMenu
+      label={`${teamProjectsCopy.actions.more}: ${project.title}`}
+      title={teamProjectsCopy.actions.more}
+      disabled={busy}
+      placement={placement}
+      items={[
+        { key: "edit", label: teamProjectsCopy.actions.editProject, onSelect: () => onEdit(project) },
+        { key: "archive", label: teamProjectsCopy.actions.archiveProject, onSelect: () => onArchive(project) },
+      ]}
+    />
   );
 }

@@ -44,6 +44,8 @@ export const resultsCopy = {
   },
   trendTable: {
     heading: "Siste undersøkelser",
+    /** Collapsed-header summary: how many closed surveys the history holds. */
+    summary: (count: number) => (count === 1 ? "1 undersøkelse" : `${count} undersøkelser`),
     caption: "Gjennomsnitt per dimensjon for teamets siste avsluttede undersøkelser",
     columns: {
       date: "Dato",
@@ -54,9 +56,20 @@ export const resultsCopy = {
     },
     empty: "Ingen avsluttede undersøkelser ennå.",
     insufficient: insufficientMessage,
+    /** Shown when the table is limited to the most recent rows. */
+    showingCount: (shown: number, total: number) => `Viser ${shown} av ${total} undersøkelser.`,
+    showAll: (total: number) => `Vis alle (${total})`,
+    showFewer: "Vis færre",
   },
   trendChart: {
-    heading: "Trendvisualisering",
+    heading: "Utvikling over tid",
+    /** Shown when fewer than two surveys have a visible result: a single point is not evidence of a trend. */
+    single: "Bare ett synlig resultat, så linjen viser ingen utvikling ennå.",
+    /** Text alternative to the chart: how many surveys are in the trend and how many have a visible result. */
+    textSummary: (total: number, visible: number) =>
+      `Utviklingen viser ${visible} av ${total} undersøkelser med synlige resultater.`,
+    showTable: "Vis alle verdier i tabellen",
+    noVisible: "Ingen synlige resultater ennå, så det finnes ingen utvikling å vise.",
     description:
       "Visuell fremstilling av de samme tallene som i tabellen under. Undersøkelser uten nok svar vises som et brudd i linjen, aldri som verdien null.",
     loading: "Laster trendvisualisering…",

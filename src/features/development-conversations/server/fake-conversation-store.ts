@@ -3,7 +3,7 @@ import { isErasureOwnerCleanupCapability } from "./erasure-owner-cleanup-capabil
 import "server-only";
 import { ErasureWriteRefused } from "../../auth/server/erasure-write-fence";
 import { READ_WINDOW } from "../domain/conversation-constants";
-import { createFakeTeamEligibilityReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
+import { createFakeMembershipRefReader, createFakeTeamEligibilityReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
 import {
   CONVERSATION_RAW_READ_LIMIT,
   OWNER_CONVERSATIONS_SUBCOLLECTION,
@@ -266,7 +266,7 @@ export function createFakeConversationStore(
       if (!reads.has(key)) reads.set(key, draft.get(key));
     };
     return {
-      teamEligibility: createFakeTeamEligibilityReader(teams),
+      teamEligibility: { ...createFakeTeamEligibilityReader(teams), ...createFakeMembershipRefReader(teams) },
       async getOwner(ownerUid, conversationId) {
         if (wrote) throw readAfterWrite();
         const key = keyOf(ownerDocumentPath(ownerUid, conversationId));

@@ -68,9 +68,8 @@ async function seedBound(store: FakeConversationStore): Promise<void> {
   if (!encoded.ok) throw new Error("fixture key unavailable");
   await store.runOwnerTransaction(OWNER_UID, async (tx) => {
     tx.createOwner(OWNER_UID, CONVERSATION, {
-      teamId: "synthetic-team",
       participantUid: PARTICIPANT_UID,
-      participantMemberRef: "synthetic-member-ref",
+      participantBindings: { "team-alpha": { ownerMemberRef: "2468ace7bdfhjkmnpqrstvwxyz", participantMemberRef: "0123456789abcdefghjkmnpqrs" } },
       participantState: "accepted",
       participantInvitedAt: NOW,
       participantAcceptedAt: NOW,

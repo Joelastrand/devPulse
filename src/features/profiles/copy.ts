@@ -35,5 +35,7 @@ export const profileCopy = {
   invalidName:
     "Visningsnavnet er ikke gyldig. Bruk 2–50 tegn med minst én bokstav eller ett tall, uten linjeskift eller skjulte tegn.",
   signInAgain: "Du må logge inn på nytt.",
+  signOutButton: "Logg ut",
+  signingOutButton: "Logger ut…",
   genericError: "Noe gikk galt. Prøv igjen.",
 } as const;

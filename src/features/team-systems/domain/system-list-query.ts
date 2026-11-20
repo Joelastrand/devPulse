@@ -15,9 +15,11 @@ import {
 import {
   DEFAULT_SYSTEM_FILTER,
   KNOWLEDGE_BAND_ORDER,
+  SYSTEM_SORTS,
   type CriticalityFilter,
   type KnowledgeFilter,
   type SystemFilter,
+  type SystemSort,
   type SystemTypeFilter,
 } from "./team-system-summary";
 
@@ -34,15 +36,22 @@ export const SYSTEM_QUERY_KEYS = {
   criticality: "kritikalitet",
   favoritesOnly: "favoritter",
   pageSize: "vis",
+  sort: "sortering",
 } as const;
 
 export interface SystemListState {
   filter: SystemFilter;
   /** Rows shown from the start of the filtered list. A multiple of `SYSTEM_PAGE_SIZE_STEP`, at most `SYSTEM_PAGE_SIZE_MAX`. */
   pageSize: number;
+  /** The order of the loaded, visible systems. `name` is the default and is not written to the URL. */
+  sort: SystemSort;
 }
 
-export const DEFAULT_SYSTEM_LIST_STATE: SystemListState = { filter: DEFAULT_SYSTEM_FILTER, pageSize: SYSTEM_PAGE_SIZE_STEP };
+export const DEFAULT_SYSTEM_LIST_STATE: SystemListState = {
+  filter: DEFAULT_SYSTEM_FILTER,
+  pageSize: SYSTEM_PAGE_SIZE_STEP,
+  sort: "name",
+};
 
 type ParamSource = { get(name: string): string | null };
 
@@ -77,6 +86,7 @@ export function parseSystemListQuery(params: ParamSource): SystemListState {
       favoritesOnly: params.get(SYSTEM_QUERY_KEYS.favoritesOnly) === "1",
     },
     pageSize: parsePageSize(params.get(SYSTEM_QUERY_KEYS.pageSize)),
+    sort: pick<SystemSort>(params.get(SYSTEM_QUERY_KEYS.sort), SYSTEM_SORTS) ?? "name",
   };
 }
 
@@ -91,6 +101,7 @@ export function serializeSystemListQuery(state: SystemListState): string {
   if (filter.criticality !== "all") params.set(SYSTEM_QUERY_KEYS.criticality, filter.criticality);
   if (filter.favoritesOnly) params.set(SYSTEM_QUERY_KEYS.favoritesOnly, "1");
   if (state.pageSize !== SYSTEM_PAGE_SIZE_STEP) params.set(SYSTEM_QUERY_KEYS.pageSize, String(state.pageSize));
+  if (state.sort !== "name") params.set(SYSTEM_QUERY_KEYS.sort, state.sort);
   return params.toString();
 }
 

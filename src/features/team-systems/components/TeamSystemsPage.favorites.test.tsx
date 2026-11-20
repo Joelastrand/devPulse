@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { TeamSystemView } from "../server/list-team-systems";
 import { systemsCopy } from "../copy";
@@ -13,6 +13,9 @@ const mocks = vi.hoisted(() => ({
   setSystemFavorite: vi.fn(),
 }));
 
+// The view preferences are scoped by UID. A fixed test UID keeps them active, and the storage is cleared between tests.
+vi.mock("../../auth/client/use-account-uid", () => ({ useAccountUid: () => "test-uid" }));
+beforeEach(() => window.localStorage.clear());
 vi.mock("next/navigation", async () => (await import("./systems-navigation-test-helper")).navigationMock);
 
 vi.mock("../../teams/client/teams-overview-gateway", () => ({
@@ -82,7 +85,12 @@ async function renderPage(favoriteIds: string[]) {
   render(<TeamSystemsPage teamId="team-1" />);
   await screen.findByRole("heading", { level: 1, name: "Team Alfa" });
   // Favorites are ready when at least one star is enabled. The table and the card list both render every visible star.
-  await waitFor(() => expect(screen.getAllByRole("button", { name: /favoritt/ }).some((button) => !(button as HTMLButtonElement).disabled)).toBe(true));
+  // Attribute query, not a role query: role queries compute the accessibility tree on every poll, which is slow on the
+  // list's larger DOM. The check is the same: some favorite toggle is enabled.
+  await waitFor(() => {
+    const toggles = Array.from(document.querySelectorAll<HTMLButtonElement>('button[aria-label*="favoritt"]'));
+    expect(toggles.some((button) => !button.disabled)).toBe(true);
+  });
 }
 
 /** The first star for a system: the table and the card list each render one, so a single match is taken from the table. */
@@ -91,10 +99,10 @@ function star(label: string): HTMLButtonElement {
 }
 
 function listedNames(): string[] {
-  const list = screen.getByRole("list", { name: "Systemer i teamet" });
-  return within(list)
-    .getAllByRole("heading", { level: 3 })
-    .map((heading) => heading.textContent ?? "");
+  const list = screen.getByRole("list", { name: /Systemer i teamet/ });
+  // The system names are the list's level-3 headings. A DOM query returns the same names as a role query, without
+  // computing the accessibility tree for every row on each call.
+  return Array.from(list.querySelectorAll("h3")).map((heading) => heading.textContent ?? "");
 }
 
 beforeEach(() => {

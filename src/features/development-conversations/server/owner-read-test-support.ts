@@ -19,11 +19,24 @@ export const OTHER_OWNER_UID = "owner-2";
 export const TEAM_ID = "team-alpha";
 export const PARTICIPANT_UID = "participant-1";
 export const PARTICIPANT_MEMBER_REF = "0123456789abcdefghjkmnpqrs";
+/** Distinct valid refs for the other fixture members. A reference names one membership, so no two members share one (A2.1). */
+export const OWNER_MEMBER_REF = "2468ace7bdfhjkmnpqrstvwxyz";
+export const OTHER_MEMBER_REF = "9876zyxwvtsrqpnmkjhgfedcba";
 export const NOW = new Date("2026-10-17T09:30:00.000Z");
+
+/** The member reference of a fixture uid. Each uid has its own reference, so a lookup by reference names one membership. */
+export function memberRefFor(uid: string): string {
+  return uid === PARTICIPANT_UID ? PARTICIPANT_MEMBER_REF : uid === OWNER_UID ? OWNER_MEMBER_REF : OTHER_MEMBER_REF;
+}
+
+/** The stored binding map a fixture invitation records for `uid`: one shared team, with both current references. */
+export function bindingsFor(uid: string): Record<string, { ownerMemberRef: string; participantMemberRef: string }> {
+  return { [TEAM_ID]: { ownerMemberRef: OWNER_MEMBER_REF, participantMemberRef: memberRefFor(uid) } };
+}
 
 /** A membership document that passes the TASK-006 check for `uid` in `teamId`. */
 function membershipDoc(uid: string, teamId: string): Record<string, unknown> {
-  return { uid, teamId, createdAt: new Date(0), memberRef: PARTICIPANT_MEMBER_REF };
+  return { uid, teamId, createdAt: new Date(0), memberRef: memberRefFor(uid) };
 }
 
 /** An active team with active memberships for the listed uids, and no others. */
@@ -40,7 +53,6 @@ export interface SeedOwnerConversationOptions {
   title?: string;
   createdAt?: Date;
   status?: ConversationStatus;
-  teamId?: string | null;
   plannedFor?: string | null;
   participant?: { uid: string; state: "pending" | "accepted" };
   sharedGoals?: SharedGoalSnapshot[];
@@ -78,9 +90,8 @@ export async function seedOwnerConversation(
   const invitedAt = options.participant ? new Date(createdAt.getTime() + 1000) : null;
   await store.runTransaction(async (tx) => {
     tx.createOwner(options.ownerUid ?? OWNER_UID, options.conversationId, {
-      teamId: options.teamId === undefined ? TEAM_ID : options.teamId,
       participantUid: options.participant?.uid ?? null,
-      participantMemberRef: options.participant ? PARTICIPANT_MEMBER_REF : null,
+      participantBindings: options.participant ? bindingsFor(options.participant.uid) : null,
       participantState: options.participant?.state ?? null,
       participantInvitedAt: invitedAt,
       participantAcceptedAt: options.participant?.state === "accepted" ? new Date(createdAt.getTime() + 2000) : null,

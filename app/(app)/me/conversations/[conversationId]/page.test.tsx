@@ -20,9 +20,11 @@ afterEach(() => {
 });
 
 describe("/me/conversations/[conversationId] page", () => {
-  it("renders the Samtale heading without a duplicate page-level nav, and passes only the route id to the client view", async () => {
+  it("renders the Samtale label as text, not as a heading, and passes only the route id to the client view", async () => {
     render(await MyConversationDetailPage({ params: Promise.resolve({ conversationId: "conv-1" }) }));
-    expect(screen.getByRole("heading", { level: 1, name: "Samtale" })).toBeTruthy();
+    // The conversation title is the page h1 in the client view, so the route shows only a small label.
+    expect(screen.getByText("Samtale")).toBeTruthy();
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
     expect(screen.queryByRole("navigation", { name: "Personlig utvikling" })).toBeNull();
     expect(screen.getByTestId("conversation-detail")).toBeTruthy();
     expect(detailProps).toEqual([{ conversationId: "conv-1" }]);
@@ -35,10 +37,10 @@ describe("route structure (visual-redesign TASK-019)", () => {
     cleanup();
   });
 
-  it("renders one main landmark and a valid heading structure with one level-1 title", async () => {
+  it("renders one main landmark, and the route itself adds no level-1 heading", async () => {
     render(await MyConversationDetailPage({ params: Promise.resolve({ conversationId: "conv-1" }) }));
     expectMainLandmark(document.body);
     expectNamedControls(document.body);
-    expectHeadingStructure(document.body, { ownsPageTitle: true });
+    expectHeadingStructure(document.body, { ownsPageTitle: false });
   });
 });

@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { ConversationStore } from "./conversation-store-types";
 import { createFakeContentCodec, type FakeContentCodec } from "./fake-content-codec";
 import { createFakeConversationStore } from "./fake-conversation-store";
-import { createFakeTeamEligibilityReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
+import { createFakeSharedTeamReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
 import { createProductionParticipantStateResolver } from "./owner-participant-state";
-import { NOW, OWNER_UID, PARTICIPANT_UID, TEAM_ID, rosterTeam, seedOwnerConversation } from "./owner-read-test-support";
+import { NOW, OWNER_MEMBER_REF, OWNER_UID, PARTICIPANT_UID, TEAM_ID, rosterTeam, seedOwnerConversation } from "./owner-read-test-support";
 import { readOwnerConversation } from "./read-owner-conversation";
 import { readOwnerConversations, type ReadOwnerConversationsDeps } from "./read-owner-conversations";
 import { issueErasureOwnerCleanupCapability } from "./erasure-owner-cleanup-capability";
@@ -16,7 +16,6 @@ import type { FakeConversationStore } from "./fake-conversation-store";
  * Synthetic fixtures only.
  */
 
-const TEAM_BETA = "team-beta";
 /** The seeded participant's stored memberRef is `PARTICIPANT_MEMBER_REF`. This is a different, well-formed ref. */
 const STALE_REF = "0123456789abcdefghjkmnpqrt";
 
@@ -37,7 +36,7 @@ function countedStore(base: ConversationStore) {
 }
 
 function countedTeamReader(state: FakeTeamEligibilityState) {
-  const base = createFakeTeamEligibilityReader(state);
+  const base = createFakeSharedTeamReader(state);
   const counts = { teamStatus: new Map<string, number>(), membership: new Map<string, number>() };
   const bump = (map: Map<string, number>, key: string) => map.set(key, (map.get(key) ?? 0) + 1);
   return {
@@ -50,6 +49,11 @@ function countedTeamReader(state: FakeTeamEligibilityState) {
       getMembership: (uid: string, teamId: string) => {
         bump(counts.membership, `${uid}|${teamId}`);
         return base.getMembership(uid, teamId);
+      },
+      listOwnMemberships: async () => [],
+      findMembershipsByRef: (memberRef: string, limit: number) => {
+        bump(counts.membership, `ref|${memberRef}`);
+        return base.findMembershipsByRef(memberRef, limit);
       },
     },
   };
@@ -75,11 +79,10 @@ async function seedBound(
   base: FakeConversationStore,
   codec: FakeContentCodec,
   conversationId: string,
-  options: { participantUid?: string; teamId?: string; participantNotes?: string } = {},
+  options: { participantUid?: string; participantNotes?: string } = {},
 ) {
   await seedOwnerConversation(base, codec, {
     conversationId,
-    teamId: options.teamId ?? TEAM_ID,
     participant: { uid: options.participantUid ?? PARTICIPANT_UID, state: "accepted" },
     participantNotes: options.participantNotes,
   });
@@ -90,7 +93,7 @@ async function seedBound(
 }
 
 async function setStoredRef(base: ConversationStore, conversationId: string, ref: string) {
-  await base.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.updateOwner(OWNER_UID, conversationId, { participantMemberRef: ref }));
+  await base.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.updateOwner(OWNER_UID, conversationId, { participantBindings: { [TEAM_ID]: { ownerMemberRef: OWNER_MEMBER_REF, participantMemberRef: ref } } }));
 }
 
 const participantStates = (items: Array<{ conversationId: string; participant: { state: string } }>) =>
@@ -138,29 +141,17 @@ describe("owner list request memo (TASK-023 I-2)", () => {
     expect(stale.ok && stale.conversation.participant.state).toBe("unavailable");
   });
 
-  it("does not collide keys for different participant or team pairs", async () => {
-    const teams: FakeTeamEligibilityState = {
-      teamStatus: { [TEAM_ID]: "active", [TEAM_BETA]: "active" },
-      memberships: {
-        ...rosterTeam([OWNER_UID, PARTICIPANT_UID]).memberships,
-        // The owner is a member of TEAM_BETA too; the participant is not, so the same uid differs by team.
-        [`${OWNER_UID}__${TEAM_BETA}`]: { uid: OWNER_UID, teamId: TEAM_BETA, createdAt: new Date(0), memberRef: "0123456789abcdefghjkmnpqrs" },
-      },
-    };
+  it("does not collide bindings for different participants: a participant with no membership never inherits another's result", async () => {
+    const teams: FakeTeamEligibilityState = rosterTeam([OWNER_UID, PARTICIPANT_UID]);
     const { base, codec, deps } = await setup(teams);
-    await seedBound(base, codec, "conv-in-team", { teamId: TEAM_ID });
-    await seedBound(base, codec, "conv-other-team", { teamId: TEAM_BETA });
-    // A second participant with no membership anywhere must not inherit the first participant's result.
-    await seedBound(base, codec, "conv-other-uid", { participantUid: "participant-2", teamId: TEAM_ID });
+    await seedBound(base, codec, "conv-in-team");
+    // A second participant has a binding but no membership anywhere, so the first participant's result must not apply.
+    await seedBound(base, codec, "conv-other-uid", { participantUid: "participant-2" });
 
     const result = await readOwnerConversations(OWNER_UID, deps);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(participantStates(result.conversations)).toEqual({
-      "conv-in-team": "accepted",
-      "conv-other-team": "unavailable",
-      "conv-other-uid": "unavailable",
-    });
+    expect(participantStates(result.conversations)).toEqual({ "conv-in-team": "accepted", "conv-other-uid": "unavailable" });
   });
 
   it("maps a cached operational team read failure to persistence_failed, never to unavailable", async () => {

@@ -120,6 +120,30 @@ export function createFirestoreTeamEligibilityReader(): TeamEligibilityReader {
 }
 
 /**
+ * The bounded lookup of the membership instance that carries one opaque `memberRef` (A2.1 shared-team binding). A
+ * `memberRef` is unique per membership, so the query names at most one document; the caller treats any other count as a
+ * failure. Single-field equality only, so no composite index is needed.
+ */
+export interface MembershipRefReader {
+  /** At most `limit` raw `teamMemberships` documents whose `memberRef` field equals `memberRef`. Unvalidated. */
+  findMembershipsByRef(memberRef: string, limit: number): Promise<RawOwnMembership[]>;
+}
+
+/** The production membership-by-reference reader (single-field equality on `memberRef`). */
+export function createFirestoreMembershipRefReader(): MembershipRefReader {
+  return {
+    async findMembershipsByRef(memberRef, limit) {
+      const snapshot = await getFirestoreDb()
+        .collection(MEMBERSHIPS_COLLECTION)
+        .where("memberRef", "==", memberRef)
+        .limit(limit)
+        .get();
+      return snapshot.docs.map((doc) => ({ id: doc.id, data: doc.data() }));
+    },
+  };
+}
+
+/**
  * The production create-options reader: one equality query on the caller's own `uid` with an explicit limit, and one
  * batch of team point reads for the ids the window produced. Both are bounded by the caller of this function.
  */
@@ -143,7 +167,7 @@ export function createFirestoreTeamChoiceReader(): TeamChoiceReader {
  * reads only, so the team and the membership are re-read on every transaction attempt. The decision stays in
  * `readGenuineActiveMembership`; this reader returns raw data and nothing else.
  */
-export function createTransactionTeamEligibilityReader(db: Firestore, tx: Transaction): TeamEligibilityReader {
+export function createTransactionTeamEligibilityReader(db: Firestore, tx: Transaction): TeamEligibilityReader & MembershipRefReader {
   return {
     async getTeamStatus(teamId) {
       const snapshot = await tx.get(teamDocument(db, teamId));
@@ -152,6 +176,11 @@ export function createTransactionTeamEligibilityReader(db: Firestore, tx: Transa
     async getMembership(uid, teamId) {
       const snapshot = await tx.get(membershipDocument(db, uid, teamId));
       return snapshot.exists ? snapshot.data() : undefined;
+    },
+    // A bounded query read inside the transaction (A2.1). Firestore requires transactional reads before writes, which holds.
+    async findMembershipsByRef(memberRef, limit) {
+      const snapshot = await tx.get(db.collection(MEMBERSHIPS_COLLECTION).where("memberRef", "==", memberRef).limit(limit));
+      return snapshot.docs.map((doc) => ({ id: doc.id, data: doc.data() }));
     },
   };
 }
@@ -162,4 +191,22 @@ function teamDocument(db: Firestore, teamId: string) {
 
 function membershipDocument(db: Firestore, uid: string, teamId: string) {
   return db.collection(MEMBERSHIPS_COLLECTION).doc(membershipDocId(uid, teamId));
+}
+
+/**
+ * The bounded list of one team's membership documents, for the eligible-colleague picker (A2.1 revised). A single equality on
+ * `teamId` with an explicit limit. The caller validates every row and never trusts the list as authorization.
+ */
+export interface TeamMemberListReader {
+  /** At most `limit` raw `teamMemberships` documents whose `teamId` is `teamId`. Unvalidated. */
+  listTeamMemberships(teamId: string, limit: number): Promise<RawOwnMembership[]>;
+}
+
+export function createFirestoreTeamMemberListReader(): TeamMemberListReader {
+  return {
+    async listTeamMemberships(teamId, limit) {
+      const snapshot = await getFirestoreDb().collection(MEMBERSHIPS_COLLECTION).where("teamId", "==", teamId).limit(limit).get();
+      return snapshot.docs.map((doc) => ({ id: doc.id, data: doc.data() }));
+    },
+  };
 }

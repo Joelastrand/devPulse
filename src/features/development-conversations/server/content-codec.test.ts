@@ -97,9 +97,8 @@ function encodeOrThrow(content: ConversationContent, context: string = CTX): Sto
 
 function ownerDocFor(envelope: StoredEnvelope): Record<string, unknown> {
   return {
-    teamId: "synthetic-team",
     participantUid: null,
-    participantMemberRef: null,
+    participantBindings: null,
     participantState: null,
     participantInvitedAt: null,
     participantAcceptedAt: null,

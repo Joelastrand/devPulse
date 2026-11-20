@@ -53,10 +53,10 @@ export function RecoveryRegion({ items, token, onUnauthenticated, onChanged }: R
 
   return (
     <section aria-labelledby="recovery-heading" className="flex flex-col gap-2">
-      <h2 id="recovery-heading" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+      <h2 id="recovery-heading" className="text-lg font-semibold text-text-primary">
         {conversationsCopy.recoveryHeading}
       </h2>
-      <p className="text-zinc-600 dark:text-zinc-400">{conversationsCopy.recoveryNotice(items.length)}</p>
+      <p className="text-text-muted">{conversationsCopy.recoveryNotice(items.length)}</p>
       {error && <Alert variant="error">{error}</Alert>}
       <ul className="flex flex-col gap-2">
         {items.map((item, index) => (
@@ -113,14 +113,14 @@ function RecoveryItem({
 
   return (
     <Card as="li" padding="sm" className="flex flex-col gap-2">
-      <span className="text-sm text-zinc-700 dark:text-zinc-300">{conversationsCopy.recoveryItemLabel(index, total)}</span>
+      <span className="text-sm text-text-secondary">{conversationsCopy.recoveryItemLabel(index, total)}</span>
       {confirming ? (
         <div role="group" aria-labelledby={`recovery-confirm-${index}`} className="flex flex-col gap-2">
           <p
             id={`recovery-confirm-${index}`}
             ref={message}
             tabIndex={-1}
-            className="text-sm font-medium text-zinc-900 outline-none dark:text-zinc-50"
+            className="text-sm font-medium text-text-primary outline-none"
           >
             {conversationsCopy.deleteConfirmRecovery}
           </p>

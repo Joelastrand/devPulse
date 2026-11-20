@@ -37,7 +37,7 @@ Built in `navGroupsFor()` in `AppShell.tsx`:
 | account ("Konto") | Min profil | `/me/profile` | Signed in |
 | account | Slett kontoen din | `/me/erasure` | Signed in |
 
-Signed-out navigation shows Hjem, Logg inn and Opprett konto (`PublicHeader`). Sign-out lives only in the account menu.
+Signed-out navigation shows Hjem, Logg inn and Opprett konto (`PublicHeader`). Signed-in navigation has no top bar: sign-out lives in the sidebar Konto group (and in the mobile drawer).
 
 ### Personal pages
 
@@ -106,7 +106,7 @@ feature server operation. Authorization lives in that operation.
 | Session | `GET /api/me` (`isAdmin` only), `GET/PUT /api/me/profile` | Signed in |
 | Personal tasks | `/api/me/tasks` (GET board, POST create), `/api/me/tasks/[taskId]` (PATCH, DELETE), `/api/me/tasks/history` (GET), `/api/me/tasks/preferences` (PUT) | Owner only (verified token uid). See [`PERSONAL-TASKS.md`](PERSONAL-TASKS.md) §4 |
 | Personal | `/api/me/skills`, `/api/me/skills/[treeId]`, `/api/me/goals`, `/api/me/goals/[goalId]`, `/api/me/responsibilities`, `/api/me/responsibilities/[recordId]`, `/api/me/achievements`, `/api/me/achievements/[recordId]`, `/api/me/role-assignment` | Owner only |
-| Conversations | `/api/me/conversations`, `/api/me/conversations/[conversationId]`, `.../participation`, `.../participation/accept`, `.../participant-notes`, `.../evidence-sources`, `.../selectable-members`, `/api/me/conversations/create-options` | Owner, or accepted participant where noted |
+| Conversations | `/api/me/conversations`, `/api/me/conversations/[conversationId]`, `.../participation`, `.../participation/accept`, `.../participant-notes`, `.../evidence-sources`, `/api/me/conversations/colleagues` (GET: the caller's invitable colleagues, opaque reference and display name only, A2.1 revised) | Owner, or accepted participant where noted. Creating a conversation takes no team (A2.1) |
 | Erasure | `POST /api/me/erasure` | Signed in, recent sign-in required |
 | Roles (reference) | `GET /api/roles` | Signed in |
 | Surveys (public) | `/api/surveys/[surveyId]`, `/api/surveys/[surveyId]/responses` | Anyone with the link, subject to mode |

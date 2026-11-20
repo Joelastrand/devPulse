@@ -37,7 +37,7 @@ const REFUSED: CompleteConversationResult = { ok: false, error: "erasure_in_prog
 /** The participant fields that a pending withdrawal clears. Written as `null`, never omitted (BR-16, BR-13). */
 const CLEARED_PARTICIPANT_FIELDS = {
   participantUid: null,
-  participantMemberRef: null,
+  participantBindings: null,
   participantState: null,
   participantInvitedAt: null,
   participantAcceptedAt: null,

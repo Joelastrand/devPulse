@@ -172,8 +172,23 @@ Source of truth: `src/features/team-skills/domain/skill-coverage-policy.ts` and 
   reader exists. Team roles and superadmin status do not widen access (invariants 37–54).
 - **Personal tasks** (`userDevelopment/{uid}/personalTasks`, `taskSettings`): owner-only through the verified uid on `/api/me/tasks`. Task content is sealed with the v2 envelope and a per-record AAD. No team role, membership or superadmin status grants access. Erasure rows I-21 and I-22. See [`PERSONAL-TASKS.md`](PERSONAL-TASKS.md) §3. Drag-and-drop adds no endpoint and no client-supplied owner: the move is the same authorised `PATCH`, and the server validates the destination and position inside the transaction.
 - **Erasure tripwire exception (dnd-kit):** `setNodeRef` and `setActivatorNodeRef` are DOM element reference setters returned by dnd-kit. They are approved by exact file and identifier only (`APPROVED_UI_REFERENCES` in `inventory-allow-list.ts`: the Kanban card and column components). They are not person identifiers. The same names anywhere else, and any UID-like name in those files, still fail the guard. An entry that no longer matches is reported as stale.
-- **Development conversations** (invariants 55–72): readable only by the owner, or by a participant after an explicit
-  accept. Access ends on the next request after decline, leave, removal or completion freeze.
+- **Development conversations** (invariants 55–72; A2.1, revised per-team bindings): private to the owner, who has no team. A
+  participant may read only after an explicit accept. At invitation the server records a binding for every active team in which
+  the owner and the colleague both hold a genuine membership at that moment: the team id and both people's current
+  `teamMemberships.memberRef` in that team (`participantBindings` on the owner document, `domain/team-bindings.ts`). Access is
+  authorized while at least one recorded team still holds: it is active, both people are genuine members, and each current
+  `memberRef` equals the recorded one (CL-23). Consequences, enforced on every request and in the write transactions:
+  - losing one recorded shared team does not revoke access while another recorded team holds;
+  - leaving and rejoining a team (a new `memberRef`) does not restore access through that team, for either person;
+  - a team that becomes shared after the invitation is never added to it;
+  - when no recorded team holds, access ends until a fresh invitation is accepted.
+  The map is server-managed. A client never supplies it, and no DTO carries it. A map is bounded to `MAX_TEAM_BINDINGS` (10), and an
+  owner with more than `MAX_OWNER_MEMBERSHIPS` (50) memberships is refused, never truncated. A malformed stored map denies access. An
+  invitation or replacement derives a fresh map from the current memberships, so a previously revoked binding is never reused.
+  Membership destruction removes only the destroyed team's entry for a conversation (I-7), keeps the participant while another entry
+  remains, and removes the participant only when no entry is left. Owner-side references stay in the owner's own document, and they
+  never grant access on their own. The Firestore rules deny all client access and never express the shared-team relationship; it is
+  checked only in the Admin SDK path (`shared-team-binding.ts`). A client-supplied team, uid or claim is never evidence.
 - **Personal role workspace** (PR-SI-1…5): owner-only responsibilities and achievements. A static import guard
   (`personal-role-workspace-repo-guard.test.ts`) keeps personal records out of team and aggregate code.
 - **Skill profile** (`skillProfiles/{uid}`) is owner-only. Team coverage reads it only through the consent-gated aggregate

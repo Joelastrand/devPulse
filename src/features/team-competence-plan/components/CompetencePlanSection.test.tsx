@@ -15,6 +15,10 @@ const hook = vi.hoisted(() => ({
   reload: vi.fn(),
 }));
 
+// The view preferences are scoped by UID. A fixed test UID keeps them active, and the storage is cleared between tests.
+vi.mock("../../auth/client/use-account-uid", () => ({ useAccountUid: () => "test-uid" }));
+beforeEach(() => window.localStorage.clear());
+
 vi.mock("../client/use-competence-plans", () => ({
   useCompetencePlans: () => ({
     data: hook.data,

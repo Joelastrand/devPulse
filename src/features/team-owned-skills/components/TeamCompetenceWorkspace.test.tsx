@@ -4,6 +4,31 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import userEvent from "@testing-library/user-event";
 import type { RadarAxisInput } from "../domain/radar-model";
 
+/** The page has loaded once the mode switch is rendered (it is not part of the loading skeleton). */
+async function waitForLoaded() {
+  return screen.findByRole("group", { name: "Visningsmodus" });
+}
+
+/**
+ * The complete level table. It lives in the Tabell view of the level section, so the view is switched first. The table is
+ * read inside that section, because the radar has its own table.
+ */
+function openLevelTable(): HTMLElement {
+  fireEvent.click(screen.getByRole("button", { name: "Tabell" }));
+  return within(screen.getByRole("region", { name: "Nivå per område" })).getByRole("table");
+}
+
+async function loadedLevelTable(): Promise<HTMLElement> {
+  await waitForLoaded();
+  return openLevelTable();
+}
+
+/** Waits until the page shows the named skill as a row of the complete level table. */
+async function loadedWithSkill(name: string): Promise<HTMLElement> {
+  await waitForLoaded();
+  return within(openLevelTable()).getByRole("rowheader", { name });
+}
+
 const fetchTeamSkills = vi.fn();
 const fetchTeamSkillAggregate = vi.fn();
 const fetchTeamManualAssessments = vi.fn();
@@ -102,6 +127,11 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+// View preferences persist in localStorage. Clearing it keeps each test's starting view (chart, levels open) independent.
+beforeEach(() => {
+  window.localStorage.clear();
+});
+
 function radarAxes(): Array<[string, number | null]> {
   return JSON.parse(screen.getByTestId("radar").getAttribute("data-axes") ?? "[]") as Array<[string, number | null]>;
 }
@@ -119,7 +149,7 @@ describe("TeamCompetenceWorkspace — one page, two modes", () => {
 
   it("never plots a suppressed skill as zero and lists it as not enough data", async () => {
     render(<TeamCompetenceWorkspace teamId={TEAM} />);
-    const table = await screen.findByRole("table");
+    const table = await loadedLevelTable();
 
     expect(radarAxes()).toEqual([
       ["Testing", 3],
@@ -131,7 +161,7 @@ describe("TeamCompetenceWorkspace — one page, two modes", () => {
 
   it("omits inactive skills from both the radar and the list", async () => {
     render(<TeamCompetenceWorkspace teamId={TEAM} />);
-    const table = await screen.findByRole("table");
+    const table = await loadedLevelTable();
 
     expect(within(table).queryByText("Utgått")).toBeNull();
     expect(radarAxes().some(([label]) => label === "Utgått")).toBe(false);
@@ -140,14 +170,14 @@ describe("TeamCompetenceWorkspace — one page, two modes", () => {
   it("switches to the collaborative profile, which uses the same skills and shows agreed levels with notes", async () => {
     const user = userEvent.setup();
     render(<TeamCompetenceWorkspace teamId={TEAM} />);
-    await screen.findByRole("table");
+    await waitForLoaded();
 
     await user.click(screen.getByRole("button", { name: "Felles vurdering" }));
 
     expect(screen.getByText("Viser: Felles vurdering")).toBeTruthy();
     expect(screen.getByText(/ikke en sammenstilling av individuelle vurderinger/)).toBeTruthy();
     expect(radarAxes()).toEqual([["Testing", 4]]);
-    const table = screen.getByRole("table");
+    const table = openLevelTable();
     expect(within(table).getByText("Nivå 4: Avansert")).toBeTruthy();
     expect(within(table).getByText("Enighet på workshop")).toBeTruthy();
     expect(within(table).getAllByText("Ikke vurdert")).toHaveLength(2);
@@ -156,7 +186,7 @@ describe("TeamCompetenceWorkspace — one page, two modes", () => {
   it("does not show the level editor or the catalog administration to ordinary members", async () => {
     const user = userEvent.setup();
     render(<TeamCompetenceWorkspace teamId={TEAM} />);
-    await screen.findByRole("table");
+    await waitForLoaded();
     await user.click(screen.getByRole("button", { name: "Felles vurdering" }));
 
     expect(screen.queryByRole("button", { name: "Lagre" })).toBeNull();
@@ -168,7 +198,7 @@ describe("TeamCompetenceWorkspace — one page, two modes", () => {
     fetchTeamManualAssessments.mockResolvedValue(MANUAL);
     const user = userEvent.setup();
     render(<TeamCompetenceWorkspace teamId={TEAM} />);
-    await screen.findByRole("table");
+    await waitForLoaded();
 
     expect(screen.getByTestId("skills-admin")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Felles vurdering" }));
@@ -181,7 +211,7 @@ describe("TeamCompetenceWorkspace — one page, two modes", () => {
     fetchTeamManualAssessments.mockResolvedValue(MANUAL);
     const user = userEvent.setup();
     render(<TeamCompetenceWorkspace teamId={TEAM} />);
-    await screen.findByRole("table");
+    await waitForLoaded();
     await user.click(screen.getByRole("button", { name: "Felles vurdering" }));
 
     const kubernetesForm = screen.getByRole("form", { name: "Kubernetes" });
@@ -199,7 +229,7 @@ describe("TeamCompetenceWorkspace — one page, two modes", () => {
     fetchTeamManualAssessments.mockResolvedValue(MANUAL);
     const user = userEvent.setup();
     render(<TeamCompetenceWorkspace teamId={TEAM} />);
-    await screen.findByRole("table");
+    await waitForLoaded();
     await user.click(screen.getByRole("button", { name: "Felles vurdering" }));
 
     const testingForm = screen.getByRole("form", { name: "Testing" });
@@ -233,7 +263,7 @@ describe("TeamCompetenceWorkspace — simulated demo data notice", () => {
   it("shows the Norwegian simulated-data notice when the aggregate includes simulated contributors", async () => {
     fetchTeamSkillAggregate.mockResolvedValue({ ...AUTOMATIC, includesSimulated: true });
     render(<TeamCompetenceWorkspace teamId={TEAM} />);
-    await screen.findByRole("table");
+    await waitForLoaded();
 
     expect(screen.getByText(NOTICE)).toBeTruthy();
     expect(screen.getByText(/ikke ekte samtykke fra ansatte/)).toBeTruthy();
@@ -242,7 +272,7 @@ describe("TeamCompetenceWorkspace — simulated demo data notice", () => {
   it("does not show the notice when the aggregate contains only genuine contributors", async () => {
     fetchTeamSkillAggregate.mockResolvedValue({ ...AUTOMATIC, includesSimulated: false });
     render(<TeamCompetenceWorkspace teamId={TEAM} />);
-    await screen.findByRole("table");
+    await waitForLoaded();
 
     expect(screen.queryByText(NOTICE)).toBeNull();
   });
@@ -275,7 +305,10 @@ function barRows(): Array<{ skillId: string; name: string; level: number }> {
   return JSON.parse(screen.getByTestId("bar-chart").getAttribute("data-rows") ?? "[]") as Array<{ skillId: string; name: string; level: number }>;
 }
 
-function areaSelector(): HTMLElement {
+/** The area selector is a collapsed section by default. Opens it (only if closed) and returns its option group. */
+function openAreaSelector(): HTMLElement {
+  const toggle = screen.getByRole("button", { name: "Velg kompetanseområder" });
+  if (toggle.getAttribute("aria-expanded") === "false") fireEvent.click(toggle);
   return screen.getByRole("group", { name: "Velg områder i radaren" });
 }
 
@@ -287,16 +320,16 @@ describe("TeamCompetenceWorkspace — more than eight eligible areas", () => {
 
   it("draws the radar with the first eight eligible areas by default and lists all nine eligible areas as choices", async () => {
     render(<TeamCompetenceWorkspace teamId={TEAM} />);
-    await screen.findByRole("table");
+    await waitForLoaded();
 
     const labels = radarAxes().map(([label]) => label);
     expect(labels).toEqual(["Område 01", "Område 02", "Område 03", "Område 04", "Område 05", "Område 06", "Område 07", "Område 08"]);
-    expect(within(areaSelector()).getAllByRole("checkbox")).toHaveLength(9);
+    expect(within(openAreaSelector()).getAllByRole("checkbox")).toHaveLength(9);
   });
 
-  it("gives the bar chart every eligible area, and never the suppressed one", async () => {
+  it("gives the bar chart the eight selected areas by default, and every eligible area after 'Vis alle områder'", async () => {
     render(<TeamCompetenceWorkspace teamId={TEAM} />);
-    await screen.findByRole("table");
+    await waitForLoaded();
 
     expect(barRows().map((row) => row.name)).toEqual([
       "Område 01",
@@ -307,15 +340,16 @@ describe("TeamCompetenceWorkspace — more than eight eligible areas", () => {
       "Område 06",
       "Område 07",
       "Område 08",
-      "Område 09",
     ]);
+    fireEvent.click(screen.getByRole("button", { name: "Vis alle områder (9)" }));
+    expect(barRows().map((row) => row.name)).toHaveLength(9);
     expect(barRows().find((row) => row.name === "Område 01")?.level).toBe(1);
     expect(barRows().some((row) => row.name === "Område 10")).toBe(false);
   });
 
   it("keeps the suppressed area out of the radar and shows it as not enough data in the complete table", async () => {
     render(<TeamCompetenceWorkspace teamId={TEAM} />);
-    const table = await screen.findByRole("table");
+    const table = await loadedLevelTable();
 
     expect(radarAxes().some(([label]) => label === "Område 10")).toBe(false);
     expect(within(table).getByRole("rowheader", { name: "Område 10" })).toBeTruthy();
@@ -323,39 +357,41 @@ describe("TeamCompetenceWorkspace — more than eight eligible areas", () => {
     expect(within(table).getAllByRole("rowheader")).toHaveLength(10);
   });
 
-  it("changes the radar when an area is unchecked and another is checked, without touching the bar chart or table", async () => {
+  it("changes the radar and the default bar chart with the selection, while the table keeps every area", async () => {
     const user = userEvent.setup();
     render(<TeamCompetenceWorkspace teamId={TEAM} />);
-    const table = await screen.findByRole("table");
+    await waitForLoaded();
 
-    await user.click(within(areaSelector()).getByRole("checkbox", { name: "Område 01" }));
+    await user.click(within(openAreaSelector()).getByRole("checkbox", { name: "Område 01" }));
     expect(radarAxes().map(([label]) => label)).not.toContain("Område 01");
     expect(radarAxes()).toHaveLength(7);
+    expect(barRows().map((row) => row.name)).not.toContain("Område 01");
 
-    await user.click(within(areaSelector()).getByRole("checkbox", { name: "Område 09" }));
+    await user.click(within(openAreaSelector()).getByRole("checkbox", { name: "Område 09" }));
     expect(radarAxes().map(([label]) => label)).toContain("Område 09");
     expect(radarAxes()).toHaveLength(8);
+    expect(barRows().map((row) => row.name)).toContain("Område 09");
 
-    expect(barRows()).toHaveLength(9);
+    const table = openLevelTable();
     expect(within(table).getAllByRole("rowheader")).toHaveLength(10);
   });
 
   it("disables the unchecked choices once the radar is full, and enables them again after one is removed", async () => {
     const user = userEvent.setup();
     render(<TeamCompetenceWorkspace teamId={TEAM} />);
-    await screen.findByRole("table");
+    await waitForLoaded();
 
-    expect(within(areaSelector()).getByRole("checkbox", { name: "Område 09" }).hasAttribute("disabled")).toBe(true);
+    expect(within(openAreaSelector()).getByRole("checkbox", { name: "Område 09" }).hasAttribute("disabled")).toBe(true);
     expect(screen.getByText("Radaren viser åtte områder. Fjern ett område for å velge et annet.")).toBeTruthy();
 
-    await user.click(within(areaSelector()).getByRole("checkbox", { name: "Område 08" }));
-    expect(within(areaSelector()).getByRole("checkbox", { name: "Område 09" }).hasAttribute("disabled")).toBe(false);
+    await user.click(within(openAreaSelector()).getByRole("checkbox", { name: "Område 08" }));
+    expect(within(openAreaSelector()).getByRole("checkbox", { name: "Område 09" }).hasAttribute("disabled")).toBe(false);
   });
 
   it("shows the simulated-data notice above the profile when the aggregate includes simulated contributors", async () => {
     fetchTeamSkillAggregate.mockResolvedValue({ ...MANY_AUTOMATIC, includesSimulated: true });
     render(<TeamCompetenceWorkspace teamId={TEAM} />);
-    await screen.findByRole("table");
+    await waitForLoaded();
 
     expect(screen.getByText(/simulerte demodata for fiktive teammedlemmer/)).toBeTruthy();
     expect(radarAxes()).toHaveLength(8);
@@ -377,12 +413,12 @@ describe("TeamCompetenceWorkspace — more than eight eligible areas", () => {
     });
     const user = userEvent.setup();
     render(<TeamCompetenceWorkspace teamId={TEAM} />);
-    await screen.findByRole("table");
+    await waitForLoaded();
     await user.click(screen.getByRole("button", { name: "Felles vurdering" }));
 
     expect(radarAxes()).toHaveLength(8);
-    expect(barRows()).toHaveLength(9);
-    expect(within(areaSelector()).getAllByRole("checkbox")).toHaveLength(9);
+    expect(barRows()).toHaveLength(8);
+    expect(within(openAreaSelector()).getAllByRole("checkbox")).toHaveLength(9);
   });
 });
 
@@ -394,29 +430,28 @@ describe("TeamCompetenceWorkspace — collapsible radar selector and full table"
 
   it("starts with the area selector collapsed, shows the count, and keeps the radar visible", async () => {
     render(<TeamCompetenceWorkspace teamId={TEAM} />);
-    await screen.findByRole("table");
+    await waitForLoaded();
 
-    const details = areaSelector().closest("details");
-    expect(details).not.toBeNull();
-    expect(details?.open).toBe(false);
+    expect(screen.getByRole("button", { name: "Velg kompetanseområder" }).getAttribute("aria-expanded")).toBe("false");
     expect(screen.getByText("Velg kompetanseområder")).toBeTruthy();
-    expect(screen.getByText("8 av 9 områder valgt")).toBeTruthy();
+    // The count is shown in the collapsed summary; the same count also sits in the mounted, hidden panel.
+    expect(within(screen.getByRole("button", { name: "Velg kompetanseområder" })).getByText("8 av 9 områder valgt")).toBeTruthy();
     expect(radarAxes()).toHaveLength(8);
   });
 
   it("expands the selector and keeps the selection behaviour: deselect one area, select another", async () => {
     const user = userEvent.setup();
     render(<TeamCompetenceWorkspace teamId={TEAM} />);
-    await screen.findByRole("table");
+    await waitForLoaded();
 
     await user.click(screen.getByText("Velg kompetanseområder"));
-    expect(areaSelector().closest("details")?.open).toBe(true);
+    expect(screen.getByRole("button", { name: "Velg kompetanseområder" }).getAttribute("aria-expanded")).toBe("true");
 
-    await user.click(within(areaSelector()).getByRole("checkbox", { name: "Område 01" }));
+    await user.click(within(openAreaSelector()).getByRole("checkbox", { name: "Område 01" }));
     expect(radarAxes().map(([label]) => label)).not.toContain("Område 01");
     expect(screen.getByText("7 av 9 områder valgt")).toBeTruthy();
 
-    await user.click(within(areaSelector()).getByRole("checkbox", { name: "Område 09" }));
+    await user.click(within(openAreaSelector()).getByRole("checkbox", { name: "Område 09" }));
     expect(radarAxes().map(([label]) => label)).toContain("Område 09");
     expect(radarAxes()).toHaveLength(8);
   });
@@ -424,21 +459,21 @@ describe("TeamCompetenceWorkspace — collapsible radar selector and full table"
   it("disables unselected areas and shows the limit message when eight areas are selected", async () => {
     const user = userEvent.setup();
     render(<TeamCompetenceWorkspace teamId={TEAM} />);
-    await screen.findByRole("table");
+    await waitForLoaded();
     await user.click(screen.getByText("Velg kompetanseområder"));
 
-    expect(within(areaSelector()).getByRole("checkbox", { name: "Område 09" }).hasAttribute("disabled")).toBe(true);
+    expect(within(openAreaSelector()).getByRole("checkbox", { name: "Område 09" }).hasAttribute("disabled")).toBe(true);
     expect(screen.getByText("Radaren viser åtte områder. Fjern ett område for å velge et annet.")).toBeTruthy();
   });
 
   it("restores the default eight areas with 'Tilbakestill utvalg'", async () => {
     const user = userEvent.setup();
     render(<TeamCompetenceWorkspace teamId={TEAM} />);
-    await screen.findByRole("table");
+    await waitForLoaded();
     await user.click(screen.getByText("Velg kompetanseområder"));
 
-    await user.click(within(areaSelector()).getByRole("checkbox", { name: "Område 01" }));
-    await user.click(within(areaSelector()).getByRole("checkbox", { name: "Område 09" }));
+    await user.click(within(openAreaSelector()).getByRole("checkbox", { name: "Område 01" }));
+    await user.click(within(openAreaSelector()).getByRole("checkbox", { name: "Område 09" }));
     await user.click(screen.getByRole("button", { name: "Tilbakestill utvalg" }));
 
     expect(radarAxes().map(([label]) => label)).toEqual([
@@ -454,28 +489,14 @@ describe("TeamCompetenceWorkspace — collapsible radar selector and full table"
     expect(screen.getByText("8 av 9 områder valgt")).toBeTruthy();
   });
 
-  it("keeps the full table collapsed by default and expands it, including the suppressed area", async () => {
-    const user = userEvent.setup();
+  it("shows the complete table in the Tabell view, including the suppressed area as not enough data", async () => {
     render(<TeamCompetenceWorkspace teamId={TEAM} />);
-    await screen.findByRole("table");
+    await waitForLoaded();
 
-    const toggle = screen.getByText("Vis alle kompetanser i tabell");
-    const details = toggle.closest("details");
-    expect(details?.open).toBe(false);
-
-    await user.click(toggle);
-    expect(details?.open).toBe(true);
-    const table = screen.getByRole("table");
+    const table = openLevelTable();
     expect(within(table).getByText("Ikke nok data ennå")).toBeTruthy();
     expect(within(table).getByText("Område 10")).toBeTruthy();
-  });
-
-  it("keeps the bar chart with every eligible area while the table is collapsed", async () => {
-    render(<TeamCompetenceWorkspace teamId={TEAM} />);
-    await screen.findByRole("table");
-
-    expect(screen.getByTestId("bar-chart")).toBeTruthy();
-    expect(barRows()).toHaveLength(9);
+    expect(screen.queryByTestId("bar-chart")).toBeNull();
   });
 });
 
@@ -525,7 +546,7 @@ describe("TeamCompetenceWorkspace — stale responses cannot restore protected d
     authStream.token = "token-a";
     render(<TeamCompetenceWorkspace teamId={TEAM} />);
     emitAuth("token-b");
-    expect(await screen.findByText("Testing")).toBeTruthy();
+    expect(await loadedWithSkill("Testing")).toBeTruthy();
 
     pendingA.catalog.resolve(foreignCatalog(FOREIGN_NAME));
     pendingA.automatic.resolve({ status: "ok", availability: "available", rows: [{ skillId: "skX", name: FOREIGN_NAME, state: "value", level: 5 }] });
@@ -533,7 +554,9 @@ describe("TeamCompetenceWorkspace — stale responses cannot restore protected d
     await flush();
 
     expect(screen.queryByText(FOREIGN_NAME)).toBeNull();
-    expect(screen.getByText("Testing")).toBeTruthy();
+    const table = openLevelTable();
+    expect(within(table).queryByText(FOREIGN_NAME)).toBeNull();
+    expect(within(table).getByRole("rowheader", { name: "Testing" })).toBeTruthy();
   });
 
   it("never shows a late response after sign-out, and shows the sign-out message instead", async () => {
@@ -561,13 +584,15 @@ describe("TeamCompetenceWorkspace — stale responses cannot restore protected d
     authStream.token = "token-a";
     const { rerender } = render(<TeamCompetenceWorkspace teamId="team-1" />);
     rerender(<TeamCompetenceWorkspace teamId="team-2" />);
-    expect(await screen.findByText("Testing")).toBeTruthy();
+    expect(await loadedWithSkill("Testing")).toBeTruthy();
 
     pendingTeamOne.resolve(foreignCatalog(FOREIGN_NAME));
     await flush();
 
     expect(screen.queryByText(FOREIGN_NAME)).toBeNull();
-    expect(screen.getByText("Testing")).toBeTruthy();
+    const table = openLevelTable();
+    expect(within(table).queryByText(FOREIGN_NAME)).toBeNull();
+    expect(within(table).getByRole("rowheader", { name: "Testing" })).toBeTruthy();
   });
 
   it("turns an unexpected rejected read into the read-failed message, not an indefinite skeleton", async () => {
@@ -587,13 +612,15 @@ describe("TeamCompetenceWorkspace — stale responses cannot restore protected d
     authStream.token = "token-a";
     render(<TeamCompetenceWorkspace teamId={TEAM} />);
     emitAuth("token-b");
-    expect(await screen.findByText("Testing")).toBeTruthy();
+    expect(await loadedWithSkill("Testing")).toBeTruthy();
 
     pendingA.reject(new Error("late failure"));
     await flush();
 
     expect(screen.queryByText("Teamkompetansen kan ikke lastes akkurat nå.")).toBeNull();
-    expect(screen.getByText("Testing")).toBeTruthy();
+    const table = openLevelTable();
+    expect(within(table).queryByText(FOREIGN_NAME)).toBeNull();
+    expect(within(table).getByRole("rowheader", { name: "Testing" })).toBeTruthy();
   });
 });
 
@@ -603,7 +630,7 @@ describe("TeamCompetenceWorkspace — manual assessment saves", () => {
     fetchTeamManualAssessments.mockResolvedValue(MANUAL);
     const user = userEvent.setup();
     const { rerender } = render(<TeamCompetenceWorkspace teamId={TEAM} />);
-    await screen.findByRole("table");
+    await waitForLoaded();
     await user.click(screen.getByRole("button", { name: "Felles vurdering" }));
     const form = screen.getByRole("form", { name });
     return { user, form, rerender };
@@ -635,7 +662,7 @@ describe("TeamCompetenceWorkspace — manual assessment saves", () => {
     expect(await screen.findByText("Lagret.")).toBeTruthy();
     // The reload finishes and the page is loaded again; the confirmation is still there.
     await waitFor(() => expect(fetchTeamManualAssessments.mock.calls.length).toBeGreaterThan(1));
-    expect(await screen.findByRole("table")).toBeTruthy();
+    expect(await waitForLoaded()).toBeTruthy();
     expect(screen.getByText("Lagret.")).toBeTruthy();
   });
 
@@ -688,7 +715,7 @@ describe("TeamCompetenceWorkspace — manual assessment saves", () => {
     await user.click(within(form).getByRole("button", { name: "Lagre" }));
 
     emitAuth("token-b");
-    expect(await screen.findByRole("table")).toBeTruthy();
+    expect(await waitForLoaded()).toBeTruthy();
     pending.resolve({ status: "ok" });
     await flush();
 
@@ -703,7 +730,7 @@ describe("TeamCompetenceWorkspace — manual assessment saves", () => {
     await user.click(within(form).getByRole("button", { name: "Lagre" }));
 
     rerender(<TeamCompetenceWorkspace teamId="team-2" />);
-    await screen.findByRole("table");
+    await waitForLoaded();
     pending.resolve({ status: "persistence_failed" });
     await flush();
 
@@ -720,7 +747,7 @@ describe("TeamCompetenceWorkspace — loaded protected data is cleared before th
     fetchTeamSkills.mockImplementation((token: string) => (token === "token-a" ? Promise.resolve(foreignCatalog(LOADED_NAME)) : new Promise(() => {})));
 
     render(<TeamCompetenceWorkspace teamId={TEAM} />);
-    expect(await screen.findByText(LOADED_NAME)).toBeTruthy();
+    expect(await loadedWithSkill(LOADED_NAME)).toBeTruthy();
 
     act(() => emitAuth("token-b"));
 
@@ -733,7 +760,7 @@ describe("TeamCompetenceWorkspace — loaded protected data is cleared before th
     fetchTeamSkills.mockImplementation((_token: string, teamId: string) => (teamId === "team-1" ? Promise.resolve(foreignCatalog(LOADED_NAME)) : new Promise(() => {})));
 
     const { rerender } = render(<TeamCompetenceWorkspace teamId="team-1" />);
-    expect(await screen.findByText(LOADED_NAME)).toBeTruthy();
+    expect(await loadedWithSkill(LOADED_NAME)).toBeTruthy();
 
     rerender(<TeamCompetenceWorkspace teamId="team-2" />);
 

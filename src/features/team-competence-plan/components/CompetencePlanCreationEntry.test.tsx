@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CompetencePlanPageData } from "../client/use-competence-plans";
 
 const hook = vi.hoisted(() => ({ data: { phase: "loading" } as unknown }));
+
+// The view preferences are scoped by UID. A fixed test UID keeps them active, and the storage is cleared between tests.
+vi.mock("../../auth/client/use-account-uid", () => ({ useAccountUid: () => "test-uid" }));
+beforeEach(() => window.localStorage.clear());
 
 vi.mock("../client/use-competence-plans", () => ({
   useCompetencePlans: () => ({

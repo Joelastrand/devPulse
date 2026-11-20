@@ -2,6 +2,7 @@
 import type { ErasureOwnerCleanupCapability } from "../../development-conversations/server/erasure-owner-cleanup-capability";
 import { isConversationId } from "../../development-conversations/domain/conversation-id";
 import type { ConversationContent } from "../../development-conversations/domain/content-payload";
+import type { TeamBindingMap } from "../../development-conversations/domain/team-bindings";
 import type { ConversationStore, ConversationTransaction, OwnerDocumentPatch } from "../../development-conversations/server/conversation-store-types";
 import type { EncodeContentResult } from "../../development-conversations/server/content-codec";
 import { classifyOwnerDocument, type OwnerReadCodec } from "../../development-conversations/server/owner-read";
@@ -64,7 +65,7 @@ export interface ParticipantBindingsDeps {
 /** The binding fields a removal clears. Written as null, never omitted, so no erased identity remains. */
 const CLEARED_BINDING_FIELDS = {
   participantUid: null,
-  participantMemberRef: null,
+  participantBindings: null,
   participantState: null,
   participantInvitedAt: null,
   participantAcceptedAt: null,
@@ -155,6 +156,59 @@ export async function runParticipantBindingsBatch(
   const result = await eraseParticipantBinding(deps, next, uid);
   if (!result.ok) throw new ErasureStepFailure(result.error);
   return "more";
+}
+
+/**
+ * I-7 cleanup of one destroyed membership instance (A2.1 revised). Only the binding entry for `teamId` is removed, and only when
+ * it names `memberRef` on either side. Another recorded team keeps the participant. When no entry remains, the participant is
+ * removed exactly as `eraseParticipantBinding` removes them. A conversation whose entry no longer names `memberRef` is `skipped`
+ * and writes nothing.
+ */
+export async function removeTeamBinding(
+  deps: ParticipantBindingsDeps,
+  binding: BoundConversation,
+  teamId: string,
+  memberRef: string,
+): Promise<EraseParticipantBindingResult> {
+  try {
+    return await deps.store.runErasureCleanupTransaction(deps.cleanupCapability, (tx) =>
+      removeTeamBindingInTransaction(tx, deps, binding, teamId, memberRef),
+    );
+  } catch {
+    return { ok: false, error: "store_unavailable" };
+  }
+}
+
+async function removeTeamBindingInTransaction(
+  tx: ConversationTransaction,
+  deps: ParticipantBindingsDeps,
+  binding: BoundConversation,
+  teamId: string,
+  memberRef: string,
+): Promise<EraseParticipantBindingResult> {
+  const { ownerUid, conversationId } = binding;
+
+  const raw = await tx.getOwner(ownerUid, conversationId);
+  if (raw === undefined) return { ok: true, outcome: "skipped" };
+  const classification = classifyOwnerDocument(raw, deps.codec, { ownerUid, conversationId });
+  if (classification.kind !== "valid") return { ok: false, error: "payload_unreadable" };
+
+  const participant = classification.record.participant;
+  if (participant === null) return { ok: true, outcome: "skipped" };
+  const entry = participant.bindings[teamId];
+  if (entry === undefined || (entry.ownerMemberRef !== memberRef && entry.participantMemberRef !== memberRef)) {
+    return { ok: true, outcome: "skipped" };
+  }
+
+  const remaining: TeamBindingMap = { ...participant.bindings };
+  delete remaining[teamId];
+  if (Object.keys(remaining).length === 0) return eraseInTransaction(tx, deps, binding, participant.uid);
+
+  tx.updateOwner(ownerUid, conversationId, {
+    participantBindings: remaining,
+    updatedAt: new Date(deps.clock().getTime()),
+  });
+  return { ok: true, outcome: "cleaned" };
 }
 
 export function createParticipantBindingsStepHandler(deps: ParticipantBindingsDeps): StepHandler {

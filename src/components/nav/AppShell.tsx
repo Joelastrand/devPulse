@@ -1,10 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { Building2, Columns3, GraduationCap, House, Menu, MessagesSquare, ShieldCheck, Target, UserCog, Users } from "lucide-react";
+import { Building2, Columns3, GraduationCap, House, Menu, MessagesSquare, ShieldCheck, Target, Trash2, UserCog, UserRound, Users } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { signOut } from "../../features/auth/client/auth-client";
 import { useAuthGatedResource } from "../../features/auth/client/use-auth-gated-resource";
 import { fetchOwnAdminStatus } from "../../features/teams/client/own-admin-status-gateway";
 import { Button } from "../ui/Button";
@@ -13,7 +12,6 @@ import { Icon } from "../ui/Icon";
 import { BrandMark } from "../ui/BrandMark";
 import { SidebarLandscape } from "./SidebarLandscape";
 import { MobileDrawer } from "./MobileDrawer";
-import { AccountMenu } from "./AccountMenu";
 import { useTeamName } from "./TeamContext";
 import { navCopy } from "./copy";
 import { activeNavHref, NavGroupList, type NavGroup } from "./NavGroupList";
@@ -48,15 +46,12 @@ export interface AppShellProps {
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const [state, setState] = useState<HeaderState>({ phase: "loading" });
-  const [signingOut, setSigningOut] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const restoreMenuFocusRef = useRef(false);
   const headingAfterNavigationRef = useRef(false);
 
-  const { isCurrentGeneration } = useAuthGatedResource((token, generation, isCurrentGenerationAtCall) => {
-    setSigningOut(false);
-
+  useAuthGatedResource((token, generation, isCurrentGenerationAtCall) => {
     if (!token) {
       setState({ phase: "signed_out" });
       return;
@@ -105,23 +100,8 @@ export function AppShell({ children }: AppShellProps) {
     }
   }, [pathname]);
 
-  async function handleSignOut(generation: number) {
-    setSigningOut(true);
-    await signOut();
-    // `observeIdToken` fires with `null` once Firebase completes sign-out,
-    // which drives the shell back to the signed-out set on its own. Only reset
-    // the pending indicator if this click's generation is still current.
-    if (isCurrentGeneration(generation)) {
-      setSigningOut(false);
-    }
-  }
-
   const teamName = useTeamName();
   const groups = navGroupsFor(state, teamName);
-  const signOutAction =
-    state.phase === "signed_in"
-      ? { pending: signingOut, onSignOut: () => handleSignOut(state.generation) }
-      : undefined;
   const activeHref = activeNavHref(groups, pathname);
   const currentLabel = groups.flatMap((group) => group.items).find((item) => item.href === activeHref)?.label;
 
@@ -164,11 +144,6 @@ export function AppShell({ children }: AppShellProps) {
             </div>
           </aside>
           <div className="flex min-w-0 flex-1 flex-col">
-            {state.phase === "signed_in" ? (
-              <div className="flex items-center justify-end border-b border-border-subtle bg-surface px-4 py-3 md:px-6">
-                <AccountMenu pathname={pathname} signOut={signOutAction} />
-              </div>
-            ) : null}
             <div id={SKIP_LINK_TARGET_ID} tabIndex={-1} className="min-w-0 flex-1">
               {children}
             </div>
@@ -230,8 +205,8 @@ function navGroupsFor(state: HeaderState, teamName: string | null): NavGroup[] {
       key: "account",
       heading: navCopy.account,
       items: [
-        { href: "/me/profile", label: navCopy.profile },
-        { href: "/me/erasure", label: navCopy.deleteAccount },
+        { href: "/me/profile", label: navCopy.profile, icon: UserRound },
+        { href: "/me/erasure", label: navCopy.deleteAccount, icon: Trash2 },
       ],
     });
     return groups;

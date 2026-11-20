@@ -7,6 +7,8 @@ export const teamProjectsCopy = {
     planDescription: "Teamets viktigste prosjekter og når vi jobber med dem.",
     participation: "Teammedlemmers prosjektdeltakelse",
     participationDescription: "Hvem jobber med hva i den valgte perioden.",
+    /** Collapsed-header summary of the participation section, from data already loaded on the page. */
+    participationSummary: (members: number, projects: number) => `${members} medlemmer · ${projects} prosjekter`,
     /** Accessible name of the horizontally scrollable timeline; distinct from the section heading. */
     planScrollRegion: "Tidslinje for prosjektplanen (kan rulles sideveis)",
     /** Accessible name of the horizontally scrollable participation grid; distinct from the section heading. */
@@ -18,6 +20,15 @@ export const teamProjectsCopy = {
   filter: {
     label: "Filtrer etter status",
     all: "Alle",
+  },
+  view: {
+    label: "Visning",
+    timeline: "Tidslinje",
+    list: "Liste",
+  },
+  list: {
+    duration: (days: number) => (days === 1 ? "1 dag" : `${days} dager`),
+    datesMissing: "Datoer mangler",
   },
   group: {
     expand: "Vis prosjekter",
@@ -41,6 +52,9 @@ export const teamProjectsCopy = {
     hideArchived: "Skjul arkiverte prosjekter",
     planParticipation: "Planlegg deltakelse",
     editParticipation: "Rediger deltakelse",
+    more: "Flere handlinger",
+    editProject: "Rediger prosjekt",
+    archiveProject: "Arkiver prosjekt",
   },
   form: {
     createHeading: "Nytt prosjekt",
@@ -134,6 +148,7 @@ export const teamProjectsCopy = {
     participation: "Ingen deltakelse registrert i valgt periode.",
     participationLead: "Planlegg deltakelse for å vise hvem som jobber med hva.",
     filtered: "Ingen prosjekter har denne statusen.",
+    period: "Ingen prosjekter i valgt periode. Velg et annet tidsvindu for å se prosjektene på tidslinjen.",
   },
   errors: {
     loadProjects: "Prosjektplanen kunne ikke lastes.",

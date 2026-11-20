@@ -62,6 +62,9 @@ const APPROVED_COLLECTION_REFERENCES = [
   // D1 goal access; the snapshot seam (TASK-008) is a separate, importer-and-module-exact amendment.
   "src/features/development-conversations/server/conversation-store-types.ts",
   "src/features/development-conversations/server/conversation-store.test.ts",
+  // A2.1 emulator rules test (file-exact, client-denial checks only): it writes one synthetic owner document through the Admin SDK
+  // and asserts that the client SDK is denied on the owner subtree. It grants no D1 goal access. Test code.
+  "src/lib/firebase/private-records-client-rules.emulator.test.ts",
   // Personal role workspace (first increment, SECURITY-REVIEW §11.4): the only file of that feature that builds `userDevelopment` paths for responsibilities and achievements. It grants no D1 goal access.
   "src/features/personal-role-workspace/server/personal-record-store.ts",
   // Personal role workspace (first increment): test-only pins. Each names the personal collection to assert a path or a rule; neither grants any production access.

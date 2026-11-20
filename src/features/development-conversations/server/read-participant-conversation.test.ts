@@ -6,7 +6,7 @@ import type { SharedGoalSnapshot } from "../domain/shared-goal-snapshot";
 import type { SkillTreeNameReader } from "./area-names";
 import { createFakeContentCodec, type FakeContentCodec } from "./fake-content-codec";
 import { createFakeConversationStore, type FakeConversationStore } from "./fake-conversation-store";
-import { createFakeTeamEligibilityReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
+import { createFakeSharedTeamReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
 import {
   NOW,
   OWNER_UID,
@@ -17,13 +17,11 @@ import {
   seedOwnerConversation,
 } from "./owner-read-test-support";
 import { readParticipantConversation, type ReadParticipantConversationDeps } from "./read-participant-conversation";
-import type { TeamNameReader } from "./read-pending-invitation";
 
 // Synthetic fixtures only (invariant 15). No real person, team or wellbeing data.
 const CONVERSATION_ID = "conv-1";
 const OTHER_PARTICIPANT_UID = "participant-2";
 const REJOINED_REF = "abcdefghjkmnpqrstvwxyz0123";
-const TEAM_NAME = "Synthetic team";
 const OWNER_NAME = "Synthetic owner";
 const CAPTURED_AT = new Date("2026-10-10T08:00:00.000Z");
 
@@ -35,18 +33,12 @@ interface Setup {
 }
 
 function setup(
-  options: { members?: string[]; failTeamNameRead?: boolean; teamName?: unknown; trees?: Record<string, string> } = {},
+  options: { members?: string[]; trees?: Record<string, string> } = {},
 ): Setup {
   const store = createFakeConversationStore();
   const codec = createFakeContentCodec();
   const state = rosterTeam(options.members ?? [OWNER_UID, PARTICIPANT_UID]);
-  const teamReader = createFakeTeamEligibilityReader(state);
-  const teamNameReader: TeamNameReader = {
-    getTeamName: async () => {
-      if (options.failTeamNameRead) throw new Error("simulated team name failure");
-      return "teamName" in options ? options.teamName : TEAM_NAME;
-    },
-  };
+  const teamReader = createFakeSharedTeamReader(state);
   const trees = options.trees ?? { "tree-a": "Synthetic area" };
   const areaNameReader: SkillTreeNameReader = {
     getSkillTree: async (treeId) =>
@@ -66,7 +58,6 @@ function setup(
     store,
     codec,
     teamReader,
-    teamNameReader,
     areaNameReader,
     getNames: async (uids) => new Map(uids.filter((uid) => uid === OWNER_UID).map((uid) => [uid, OWNER_NAME])),
   };
@@ -116,7 +107,6 @@ describe("readParticipantConversation: accepted participant detail (BR-22, BR-43
       title: "Synthetic title",
       status: "open",
       plannedFor: "2026-11-01",
-      teamName: TEAM_NAME,
       ownerDisplayName: OWNER_NAME,
       ownerNotes: "Synthetic owner note",
       nextSteps: ["Synthetic next step"],
@@ -138,13 +128,12 @@ describe("readParticipantConversation: accepted participant detail (BR-22, BR-43
     }
   });
 
-  it("shows a null owner name when the owner no longer holds an active membership (the roster rule)", async () => {
+  it("denies the participant when the owner no longer holds an active membership of the shared team (A2.1)", async () => {
     const { store, codec, state, deps } = setup();
     await seedAccepted(store, codec);
     delete state.memberships[`${OWNER_UID}__${TEAM_ID}`];
 
-    const result = await readParticipantConversation(PARTICIPANT_UID, CONVERSATION_ID, deps);
-    expect(result.ok && result.dto.ownerDisplayName).toBe(null);
+    expect(await readParticipantConversation(PARTICIPANT_UID, CONVERSATION_ID, deps)).toEqual(NOT_FOUND);
   });
 });
 
@@ -232,12 +221,14 @@ describe("readParticipantConversation: failures (BR-47, BR-53, BR-21)", () => {
   it("reports a membership read failure as persistence_failed, never as not found", async () => {
     const { store, codec, state, deps } = setup();
     await seedAccepted(store, codec);
-    const teamStatus = createFakeTeamEligibilityReader(state);
+    const teamStatus = createFakeSharedTeamReader(state);
     deps.teamReader = {
       getTeamStatus: teamStatus.getTeamStatus,
       getMembership: async () => {
         throw new Error("simulated membership read failure with a secret path");
       },
+      listOwnMemberships: async () => [],
+      findMembershipsByRef: teamStatus.findMembershipsByRef,
     };
 
     expect(await readParticipantConversation(PARTICIPANT_UID, CONVERSATION_ID, deps)).toEqual({
@@ -285,15 +276,6 @@ describe("readParticipantConversation: failures (BR-47, BR-53, BR-21)", () => {
     expect(await readParticipantConversation(PARTICIPANT_UID, CONVERSATION_ID, deps)).toEqual(NOT_FOUND);
   });
 
-  it("returns persistence_failed when the team name is missing (team data, not conversation data)", async () => {
-    const { store, codec, deps } = setup({ teamName: undefined });
-    await seedAccepted(store, codec);
-
-    expect(await readParticipantConversation(PARTICIPANT_UID, CONVERSATION_ID, deps)).toEqual({
-      ok: false,
-      error: "persistence_failed",
-    });
-  });
 });
 
 describe("readParticipantConversation: lifecycle (BR-30, BR-31, BR-32, D2-SI-10)", () => {
@@ -307,15 +289,13 @@ describe("readParticipantConversation: lifecycle (BR-30, BR-31, BR-32, D2-SI-10)
     expect((await readParticipantConversation(PARTICIPANT_UID, CONVERSATION_ID, deps)).ok).toBe(true);
   });
 
-  it("keeps participant access when the owner leaves the team (owner membership is not checked)", async () => {
+  it("denies participant access once the owner leaves the shared team: both members must hold it (A2.1)", async () => {
     const { store, codec, state, deps } = setup();
     await seedAccepted(store, codec);
     delete state.memberships[`${OWNER_UID}__${TEAM_ID}`];
 
-    const result = await readParticipantConversation(PARTICIPANT_UID, CONVERSATION_ID, deps);
-    expect(result.ok).toBe(true);
+    expect(await readParticipantConversation(PARTICIPANT_UID, CONVERSATION_ID, deps)).toEqual(NOT_FOUND);
   });
-
   it("reads a completed conversation while eligible, and denies it after removal from the team", async () => {
     const { store, codec, state, deps } = setup();
     await seedAccepted(store, codec, { status: "completed" });

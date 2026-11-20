@@ -60,7 +60,7 @@ describe("TeamSurveyResultsSection", () => {
   it("shows an empty state when the team has no closed configurable surveys", async () => {
     fetchTeamResultsSurveys.mockResolvedValue({ status: "ok", surveys: [] });
 
-    render(<TeamSurveyResultsSection teamId="team-1" />);
+    render(<TeamSurveyResultsSection open onOpenChange={() => undefined} teamId="team-1" />);
 
     expect(await screen.findByText("Ingen avsluttede undersøkelser med egne spørsmål ennå.")).toBeTruthy();
   });
@@ -68,7 +68,7 @@ describe("TeamSurveyResultsSection", () => {
   it("shows a generic error, not survey content, when the list cannot be loaded", async () => {
     fetchTeamResultsSurveys.mockResolvedValue({ status: "read_failed" });
 
-    render(<TeamSurveyResultsSection teamId="team-1" />);
+    render(<TeamSurveyResultsSection open onOpenChange={() => undefined} teamId="team-1" />);
 
     expect(await screen.findByText("Undersøkelsene kunne ikke lastes.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Vis resultater" })).toBeNull();
@@ -79,7 +79,7 @@ describe("TeamSurveyResultsSection", () => {
     fetchSurveyResults.mockResolvedValue(PUBLISHED);
     const user = userEvent.setup();
 
-    render(<TeamSurveyResultsSection teamId="team-1" />);
+    render(<TeamSurveyResultsSection open onOpenChange={() => undefined} teamId="team-1" />);
     await user.click(await screen.findByRole("button", { name: "Vis resultater" }));
 
     expect(await screen.findByText("Snitt:", { exact: false })).toBeTruthy();
@@ -97,7 +97,7 @@ describe("TeamSurveyResultsSection", () => {
     });
     const user = userEvent.setup();
 
-    render(<TeamSurveyResultsSection teamId="team-1" />);
+    render(<TeamSurveyResultsSection open onOpenChange={() => undefined} teamId="team-1" />);
     await user.click(await screen.findByRole("button", { name: "Vis resultater" }));
 
     expect(await screen.findByText("Resultatene vises først når minst 3 har svart.")).toBeTruthy();
@@ -109,7 +109,7 @@ describe("TeamSurveyResultsSection", () => {
     fetchSurveyResults.mockResolvedValue({ status: "read_failed" });
     const user = userEvent.setup();
 
-    render(<TeamSurveyResultsSection teamId="team-1" />);
+    render(<TeamSurveyResultsSection open onOpenChange={() => undefined} teamId="team-1" />);
     await user.click(await screen.findByRole("button", { name: "Vis resultater" }));
 
     expect(await screen.findByText("Resultatene kunne ikke lastes.")).toBeTruthy();

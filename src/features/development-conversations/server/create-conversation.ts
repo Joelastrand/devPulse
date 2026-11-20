@@ -10,12 +10,6 @@ import type { EncodeContentResult, ProbeKeyResult } from "./content-codec";
 import { writeRefusalFor } from "../../auth/server/erasure-write-fence";
 import { getDefaultConversationStore } from "./conversation-store";
 import type { ConversationStore } from "./conversation-store-types";
-import {
-  createFirestoreTeamEligibilityReader,
-  isTeamIdSegment,
-  ownerCanInvite,
-  type TeamEligibilityReader,
-} from "./team-eligibility";
 
 /**
  * Owner create (SPEC BR-1, BR-2, BR-3, BR-9, BR-37, BR-53; TASK-010). Creates an `open` conversation for the verified
@@ -55,9 +49,8 @@ export async function seedOwnerConversationCreateOnly(input: ConversationSeedInp
   const checked = parseConversationContent(content);
   if (!checked.ok) throw new ConversationSeedConflictError();
   const planned = {
-    teamId: null,
     participantUid: null,
-    participantMemberRef: null,
+    participantBindings: null,
     participantState: null,
     participantInvitedAt: null,
     participantAcceptedAt: null,
@@ -85,9 +78,8 @@ export async function seedOwnerConversationCreateOnly(input: ConversationSeedInp
 }
 
 const PLAIN_OWNER_KEYS = [
-  "teamId",
   "participantUid",
-  "participantMemberRef",
+  "participantBindings",
   "participantState",
   "participantInvitedAt",
   "participantAcceptedAt",
@@ -155,7 +147,6 @@ export interface CreateConversationCodec {
 export interface CreateConversationDeps {
   store: ConversationStore;
   codec: CreateConversationCodec;
-  teamReader: TeamEligibilityReader;
   /** Server time for `createdAt` and `updatedAt` (BR-2). Injected so tests can fix it. */
   clock: () => Date;
 }
@@ -163,28 +154,21 @@ export interface CreateConversationDeps {
 export interface CreateConversationInput {
   title: unknown;
   plannedFor?: unknown;
-  teamId?: unknown;
 }
 
 export type CreateConversationResult =
   | { ok: true; conversationId: string }
-  | { ok: false; error: "invalid_input"; field: "title" | "plannedFor" | "teamId" }
+  | { ok: false; error: "invalid_input"; field: "title" | "plannedFor" }
   | { ok: false; error: "conversation_limit" | "erasure_in_progress" | "persistence_failed" };
 
 function defaultDeps(): CreateConversationDeps {
   return {
     store: getDefaultConversationStore(),
     codec: { probeKey: probeKeyOnce, encodeContent: encodeContentWithKey },
-    teamReader: createFirestoreTeamEligibilityReader(),
     clock: () => new Date(),
   };
 }
 
-/** Returns the team id, `null` when absent, or `undefined` when the value is not a valid team id. */
-function parseTeamId(input: unknown): string | null | undefined {
-  if (input === undefined || input === null) return null;
-  return typeof input === "string" && isTeamIdSegment(input) ? input : undefined;
-}
 
 export async function createConversation(
   ownerUid: string,
@@ -197,19 +181,8 @@ export async function createConversation(
   const plannedFor = normalizePlannedFor(input.plannedFor);
   if (!plannedFor.ok) return { ok: false, error: "invalid_input", field: "plannedFor" };
 
-  const teamId = parseTeamId(input.teamId);
-  if (teamId === undefined) return { ok: false, error: "invalid_input", field: "teamId" };
-
-  // BR-2 and BR-9: the owner must hold an active genuine membership of the team. A non-member, a disabled team and an
-  // unknown team all read as `not_eligible`. Only a failed read is an operational failure.
-  if (teamId !== null) {
-    const access = await ownerCanInvite(ownerUid, teamId, deps.teamReader);
-    if (!access.ok) {
-      return access.error === "read_failed"
-        ? { ok: false, error: "persistence_failed" }
-        : { ok: false, error: "invalid_input", field: "teamId" };
-    }
-  }
+  // A2.1: a conversation is private to its owner and has no team. Creation needs no team and reads none; any `teamId`
+  // in the input is ignored by this operation and never stored.
 
   // BR-37: count-then-create. A count failure is operational, so nothing is written.
   let owned: number;
@@ -245,9 +218,8 @@ export async function createConversation(
   try {
     await deps.store.runOwnerTransaction(ownerUid, async (tx) => {
       tx.createOwner(ownerUid, conversationId, {
-        teamId,
         participantUid: null,
-        participantMemberRef: null,
+        participantBindings: null,
         participantState: null,
         participantInvitedAt: null,
         participantAcceptedAt: null,

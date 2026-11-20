@@ -26,6 +26,17 @@ function stringList(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
 }
 
+/**
+ * True when the stored bindings name `memberRef` as the participant's membership in `teamId` (A2.1 revised). The raw map is
+ * compared exactly and never repaired. Only the participant side is counted here, because the owner side lives in the owner's
+ * own document and is disabled by the per-request check.
+ */
+function bindingNamesParticipant(raw: unknown, teamId: string, memberRef: string): boolean {
+  if (typeof raw !== "object" || raw === null) return false;
+  const entry = (raw as Record<string, unknown>)[teamId];
+  return typeof entry === "object" && entry !== null && (entry as Record<string, unknown>).participantMemberRef === memberRef;
+}
+
 function membershipAdapterPort(): MembershipDestructionPort {
   const db = getFirestoreDb();
   return {
@@ -36,13 +47,9 @@ function membershipAdapterPort(): MembershipDestructionPort {
       const snapshot = await db.collection(MEMBERSHIPS).doc(membershipId).get();
       return snapshot.exists ? (snapshot.data() as Record<string, unknown>) : undefined;
     },
-    async boundConversations(memberRef, limit) {
-      const snapshot = await db
-        .collectionGroup(CONVERSATIONS)
-        .where("participantMemberRef", "==", memberRef)
-        .select()
-        .limit(limit)
-        .get();
+    async boundConversations(uid, limit) {
+      // A literal equality on the participant uid. Entries are matched by the step, so no dynamic field path is needed.
+      const snapshot = await db.collectionGroup(CONVERSATIONS).where("participantUid", "==", uid).select().limit(limit).get();
       return snapshot.docs.map((doc) => parseOwnedConversationPath(doc.ref.path));
     },
     async runFinalTransaction<T>(work: (tx: MembershipDestructionFinalTransaction) => Promise<T>): Promise<T> {
@@ -79,12 +86,12 @@ function membershipAdapterPort(): MembershipDestructionPort {
             if (detached === undefined) throw new Error("roadmap_item_unreadable");
             tx.set(db.collection(ROADMAP_ITEMS).doc(itemId), detached);
           },
-          async boundConversationCount(memberRef, limit) {
+          async boundConversationCount(uid, teamId, memberRef, limit) {
             // Transactional: the binding set is re-read in the final transaction, so a concurrent binding is seen or conflicts.
             const snapshot = await tx.get(
-              db.collectionGroup(CONVERSATIONS).where("participantMemberRef", "==", memberRef).select().limit(limit),
+              db.collectionGroup(CONVERSATIONS).where("participantUid", "==", uid).select("participantBindings").limit(limit),
             );
-            return snapshot.size;
+            return snapshot.docs.filter((doc) => bindingNamesParticipant(doc.get("participantBindings"), teamId, memberRef)).length;
           },
           async systemsKnowingMemberRef(teamId, memberRef, limit) {
             // A-14: transactional, so a system that gains this ref concurrently conflicts with the membership delete.

@@ -5,9 +5,7 @@ import {
   deleteConversation,
   endParticipation,
   fetchConversation,
-  fetchSelectableMembers,
   fetchConversationList,
-  fetchCreateOptions,
   fetchOwnGoals,
   saveParticipantNotes,
   updateConversation,
@@ -28,7 +26,7 @@ const ownerSummary = {
   createdAt: ISO,
   updatedAt: ISO,
 };
-const participation = { conversationId: "c2", state: "pending", title: null, teamName: "Team A", invitedAt: ISO };
+const participation = { conversationId: "c2", state: "pending", title: null, invitedAt: ISO };
 const envelope = {
   owned: { items: [ownerSummary, { conversationId: "r1" }], truncated: false },
   participating: { items: [participation], truncated: true },
@@ -38,7 +36,6 @@ const ownerDto = {
   title: "Plan",
   status: "open",
   plannedFor: "2026-02-01",
-  teamId: "t1",
   participant: ownerParticipant,
   ownerNotes: "owner text",
   nextSteps: ["step"],
@@ -54,7 +51,6 @@ const participantDto = {
   title: "Plan",
   status: "open",
   plannedFor: null,
-  teamName: "Team A",
   ownerDisplayName: "Ola",
   ownerNotes: "owner text",
   nextSteps: [],
@@ -65,7 +61,7 @@ const participantDto = {
   updatedAt: ISO,
   completedAt: null,
 };
-const pendingDto = { conversationId: "c1", state: "pending", teamName: "Team A", invitedAt: ISO, ownerDisplayName: null };
+const pendingDto = { conversationId: "c1", state: "pending", invitedAt: ISO, ownerDisplayName: null };
 
 /** Stubs `fetch` with one response. `json` rejects when `body` is `undefined`, which models a non-JSON body. */
 function respond(status: number, body?: unknown) {
@@ -105,59 +101,6 @@ describe("request construction", () => {
     await fetchConversation("tok", "a/b c?x=1#f%2e");
     // Each reserved character is encoded once, so the id stays one segment and `%` is not double-encoded.
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/me/conversations/a%2Fb%20c%3Fx%3D1%23f%252e");
-  });
-});
-
-describe("fetchCreateOptions", () => {
-  const options = { items: [{ teamId: "team-a", name: "Plattform" }], truncated: false };
-
-  it("sends a bodiless GET to the create-options route with only the bearer header", async () => {
-    const fetchMock = respond(200, options);
-    await fetchCreateOptions("tok");
-    expect(fetchMock).toHaveBeenCalledWith("/api/me/conversations/create-options", {
-      method: "GET",
-      headers: { Authorization: "Bearer tok" },
-    });
-  });
-
-  it("returns the exact { items, truncated } shape, with each item exactly teamId and name", async () => {
-    respond(200, options);
-    expect(await fetchCreateOptions("tok")).toEqual({ status: "ok", response: options });
-  });
-
-  it("accepts an empty, truncated list as a successful read, distinct from a failure", async () => {
-    respond(200, { items: [], truncated: true });
-    expect(await fetchCreateOptions("tok")).toEqual({ status: "ok", response: { items: [], truncated: true } });
-  });
-
-  it("treats any extra or missing key as a read failure, at the envelope and at the item", async () => {
-    respond(200, { ...options, status: "ok" });
-    expect(await fetchCreateOptions("tok")).toEqual({ status: "error", error: "read_failed" });
-    respond(200, { items: [{ teamId: "team-a", name: "P", role: "lead" }], truncated: false });
-    expect(await fetchCreateOptions("tok")).toEqual({ status: "error", error: "read_failed" });
-    respond(200, { items: [{ teamId: "team-a" }], truncated: false });
-    expect(await fetchCreateOptions("tok")).toEqual({ status: "error", error: "read_failed" });
-  });
-
-  it("treats a non-boolean truncated flag and a non-array items field as a read failure", async () => {
-    respond(200, { items: [], truncated: "no" });
-    expect(await fetchCreateOptions("tok")).toEqual({ status: "error", error: "read_failed" });
-    respond(200, { items: {}, truncated: false });
-    expect(await fetchCreateOptions("tok")).toEqual({ status: "error", error: "read_failed" });
-  });
-
-  it("maps 401 to unauthenticated and the listed 500 code to persistence_failed", async () => {
-    respond(401, { error: "unauthenticated" });
-    expect(await fetchCreateOptions("t")).toEqual({ status: "unauthenticated" });
-    respond(500, { error: "persistence_failed" });
-    expect(await fetchCreateOptions("t")).toEqual({ status: "error", error: "persistence_failed" });
-  });
-
-  it("maps an unlisted error code to unknown, and a network failure to read_failed", async () => {
-    respond(500, { error: "invalid_input" });
-    expect(await fetchCreateOptions("t")).toEqual({ status: "error", error: "unknown" });
-    failNetwork();
-    expect(await fetchCreateOptions("t")).toEqual({ status: "error", error: "read_failed" });
   });
 });
 
@@ -202,7 +145,7 @@ describe("fetchConversationList", () => {
   });
 
   it("accepts a participation summary with an accepted title", async () => {
-    const accepted = { conversationId: "c3", state: "accepted", title: "Plan", teamName: "Team A", invitedAt: ISO };
+    const accepted = { conversationId: "c3", state: "accepted", title: "Plan", invitedAt: ISO };
     respond(200, { ...envelope, participating: { items: [accepted], truncated: false } });
     const result = await fetchConversationList("t");
     expect(result.status === "ok" && result.response.participating.items).toEqual([accepted]);
@@ -237,12 +180,12 @@ describe("fetchConversationList", () => {
 describe("createConversation", () => {
   it("POSTs JSON with exactly the public keys and returns the new id", async () => {
     const fetchMock = respond(201, { conversationId: "c9" });
-    const input: CreateConversationInput = { title: "Plan", plannedFor: "2026-02-01", teamId: "t1" };
+    const input: CreateConversationInput = { title: "Plan", plannedFor: "2026-02-01" };
     expect(await createConversation("tok", input)).toEqual({ status: "created", conversationId: "c9" });
     expect(fetchMock).toHaveBeenCalledWith("/api/me/conversations", {
       method: "POST",
       headers: { Authorization: "Bearer tok", "Content-Type": "application/json" },
-      body: JSON.stringify({ title: "Plan", plannedFor: "2026-02-01", teamId: "t1" }),
+      body: JSON.stringify({ title: "Plan", plannedFor: "2026-02-01" }),
     });
   });
 
@@ -533,74 +476,3 @@ describe("fetchOwnGoals (D1 goal list for the snapshot selector, TASK-028)", () 
   });
 });
 
-describe("fetchSelectableMembers (owner selector, SPEC Amendment 2026-10-19, TASK-029 I-1)", () => {
-  const member = { memberRef: "ref-synthetic-1", displayName: "Kari Testperson", ordinal: null, isSelf: false };
-  const body = { members: [member], unavailableCount: 0, truncated: false };
-
-  it("sends a bodiless GET to the conversation's selectable-members route with only the bearer header, and no team id", async () => {
-    const fetchMock = respond(200, body);
-    await fetchSelectableMembers("tok", "conv-synthetic-1");
-    expect(fetchMock).toHaveBeenCalledWith("/api/me/conversations/conv-synthetic-1/selectable-members", {
-      method: "GET",
-      headers: { Authorization: "Bearer tok" },
-    });
-  });
-
-  it("encodes the conversation id in the path", async () => {
-    const fetchMock = respond(200, body);
-    await fetchSelectableMembers("tok", "conv/with space");
-    expect(fetchMock).toHaveBeenCalledWith("/api/me/conversations/conv%2Fwith%20space/selectable-members", expect.anything());
-  });
-
-  it("never calls the generic team assignable-members endpoint (no fallback, I-1)", async () => {
-    const fetchMock = respond(200, body);
-    await fetchSelectableMembers("tok", "conv-synthetic-1");
-    for (const [path] of fetchMock.mock.calls) {
-      expect(String(path)).not.toContain("/api/teams/");
-      expect(String(path)).not.toContain("assignable-members");
-    }
-  });
-
-  it("returns the members, the unavailable count and the truncation flag, keeping self so the caller can filter it", async () => {
-    const self = { memberRef: "ref-synthetic-2", displayName: null, ordinal: 2, isSelf: true };
-    respond(200, { members: [member, self], unavailableCount: 3, truncated: true });
-    expect(await fetchSelectableMembers("tok", "c")).toEqual({
-      status: "ok",
-      response: { members: [member, self], unavailableCount: 3, truncated: true },
-    });
-  });
-
-  it("maps 401 to unauthenticated, and each stable refusal to its own code", async () => {
-    respond(401, { error: "unauthenticated" });
-    expect(await fetchSelectableMembers("tok", "c")).toEqual({ status: "unauthenticated" });
-    for (const error of ["conversation_not_found", "invalid_participant", "conversation_completed", "persistence_failed"] as const) {
-      respond(error === "persistence_failed" ? 500 : 404, { error });
-      expect(await fetchSelectableMembers("tok", "c")).toEqual({ status: "error", error });
-    }
-  });
-
-  it("maps an unlisted or unreadable refusal to unknown, with no echoed body", async () => {
-    respond(403, { status: "forbidden", uid: "uid-synthetic" });
-    expect(await fetchSelectableMembers("tok", "c")).toEqual({ status: "error", error: "unknown" });
-    respond(500, "not json at all");
-    expect(await fetchSelectableMembers("tok", "c")).toEqual({ status: "error", error: "unknown" });
-  });
-
-  it.each([
-    ["a member with an extra uid key", { members: [{ ...member, uid: "uid-synthetic" }], unavailableCount: 0, truncated: false }],
-    ["a member with an empty memberRef", { members: [{ ...member, memberRef: "" }], unavailableCount: 0, truncated: false }],
-    ["a member with a zero ordinal", { members: [{ ...member, ordinal: 0 }], unavailableCount: 0, truncated: false }],
-    ["a member whose isSelf is not a boolean", { members: [{ ...member, isSelf: "no" }], unavailableCount: 0, truncated: false }],
-    ["a missing unavailableCount", { members: [member], truncated: false }],
-    ["an extra top-level key", { members: [member], unavailableCount: 0, truncated: false, teamId: "t" }],
-    ["a non-array members value", { members: "x", unavailableCount: 0, truncated: false }],
-  ])("treats %s as a read failure, never a partial list", async (_name, bad) => {
-    respond(200, bad);
-    expect(await fetchSelectableMembers("tok", "c")).toEqual({ status: "error", error: "read_failed" });
-  });
-
-  it("reports a network failure on the read as read_failed", async () => {
-    failNetwork();
-    expect(await fetchSelectableMembers("tok", "c")).toEqual({ status: "error", error: "read_failed" });
-  });
-});

@@ -73,7 +73,7 @@ function detailHref(teamId: string, systemId: string, returnQuery: string): stri
  * Opens the system's detail page. A plain link, not a button in a clickable row: the row itself stays non-interactive, so
  * there is no nested interaction. The accessible name names the system.
  */
-function DetailsLink({ teamId, system, returnQuery }: { teamId: string; system: TeamSystemView; returnQuery: string }) {
+export function DetailsLink({ teamId, system, returnQuery }: { teamId: string; system: TeamSystemView; returnQuery: string }) {
   return (
     <Link
       href={detailHref(teamId, system.systemId, returnQuery)}
@@ -91,7 +91,7 @@ function DetailsLink({ teamId, system, returnQuery }: { teamId: string; system: 
  * "Fjern favoritt: X"), and a filled star is the confirmed state. It is disabled while a write for this system is in flight
  * or while favorites are not ready, so a click can never be sent twice.
  */
-function FavoriteButton({
+export function FavoriteButton({
   system,
   isFavorite,
   disabled,

@@ -21,8 +21,13 @@ export const ALLOWED_UNREGISTERED_NAMES: Readonly<Record<string, string>> = {
     "Function parameter naming the verified caller. Stored only as a document-path segment (I-6 subtree), never as a field name.",
   viewerUid: "Read-model input parameter naming the viewer. Not a stored field name.",
   subjectUid: "Read-model input parameter naming the subject person. Not a stored field name.",
-  candidateUid: "Parameter naming an invitee candidate for validation. Not a stored field name.",
   hasMemberRef: "Dependency-object key naming a membership check function. Not stored.",
+  personRef:
+    "Local variable in the D2 shared-team check (A2.1 revised): the other party's current opaque membership reference in one team, compared with the recorded binding. Not a stored field name.",
+  participantMemberRef:
+    "Key of the registered I-7 `participantBindings` map (A2.1 revised): the participant membership reference of one team entry. The map is the stored field and is registered on I-7, so this key is not a separate field.",
+  ownerMemberRef:
+    "Key of the registered I-7 `participantBindings` map (A2.1 revised): the owner membership reference of one team entry. The map is the stored field and is registered on I-7, so this key is not a separate field.",
   clientEmail:
     "Firebase service-account client e-mail in the demo-team credential config. A service identity, not a person's e-mail.",
   regionRef: "UI DOM reference name in a dialog component. Not stored.",
@@ -31,6 +36,7 @@ export const ALLOWED_UNREGISTERED_NAMES: Readonly<Record<string, string>> = {
   actorUid: "Function parameter naming the verified superadmin caller in the superadmin registry operations. Stored only through the registered grantedByUid/revokedByUid fields (A-16), never as a field name of its own.",
   targetUid: "Function parameter naming the superadmin registry target. Stored only as the superadmins/{uid} document id (I-16).",
   lookupAuthUserByEmail: "Dependency function that resolves an Auth account by a typed email for a grant. The email is a lookup input only and is never stored (superadmin-operations.ts).",
+  findMembershipsByRef: "Dependency method of the D2 shared-team seam (A2.1, shared-team-binding.ts). It looks up the opaque memberRef of a membership with a bounded query. It stores nothing and returns no uid to a client.",
 };
 
 /**

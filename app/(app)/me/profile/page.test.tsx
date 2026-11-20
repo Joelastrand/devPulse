@@ -12,6 +12,9 @@ vi.mock("../../../../src/features/profiles/components/ProfileHeaderName", () => 
 vi.mock("../../../../src/features/profiles/components/ProfileHeaderTeams", () => ({
   ProfileHeaderTeams: () => <p>Team: Plattform</p>,
 }));
+vi.mock("../../../../src/features/profiles/components/ProfileSignOutButton", () => ({
+  ProfileSignOutButton: () => <button type="button">Logg ut</button>,
+}));
 vi.mock("../../../../src/features/account-erasure/components/ErasureEntryLink", () => ({
   ErasureEntryLink: () => <span>Slett konto</span>,
 }));

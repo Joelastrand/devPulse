@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { createFakeTeamEligibilityReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
+import { createFakeSharedTeamReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
 import { createFirestoreTeamEligibilityReader, ownerCanInvite, readGenuineActiveMembership } from "./team-eligibility";
 
 const TEAM_ID = "team-alpha";
@@ -23,7 +23,7 @@ function state(overrides: Partial<FakeTeamEligibilityState> = {}): FakeTeamEligi
 
 describe("readGenuineActiveMembership", () => {
   it("treats an active member of an active team as eligible and returns the member reference", async () => {
-    const result = await readGenuineActiveMembership(OWNER_UID, TEAM_ID, createFakeTeamEligibilityReader(state()));
+    const result = await readGenuineActiveMembership(OWNER_UID, TEAM_ID, createFakeSharedTeamReader(state()));
 
     expect(result).toEqual({ ok: true, memberRef: MEMBER_REF });
   });
@@ -33,7 +33,7 @@ describe("readGenuineActiveMembership", () => {
       memberships: { [`${OWNER_UID}__${TEAM_ID}`]: membershipDoc({ memberRef: undefined }) },
     });
 
-    const result = await readGenuineActiveMembership(OWNER_UID, TEAM_ID, createFakeTeamEligibilityReader(legacy));
+    const result = await readGenuineActiveMembership(OWNER_UID, TEAM_ID, createFakeSharedTeamReader(legacy));
 
     expect(result).toEqual({ ok: true, memberRef: null });
   });
@@ -43,7 +43,7 @@ describe("readGenuineActiveMembership", () => {
       memberships: { [`${OWNER_UID}__${TEAM_ID}`]: membershipDoc({ role: "lead" }) },
     });
 
-    const result = await readGenuineActiveMembership(OWNER_UID, TEAM_ID, createFakeTeamEligibilityReader(lead));
+    const result = await readGenuineActiveMembership(OWNER_UID, TEAM_ID, createFakeSharedTeamReader(lead));
 
     expect(result.ok).toBe(true);
   });
@@ -67,7 +67,7 @@ describe("readGenuineActiveMembership", () => {
       state({ memberships: { [`${OWNER_UID}__${OTHER_TEAM_ID}`]: membershipDoc({ teamId: OTHER_TEAM_ID }) } }),
     ],
   ])("is not eligible for %s", async (_label, fixture) => {
-    const result = await readGenuineActiveMembership(OWNER_UID, TEAM_ID, createFakeTeamEligibilityReader(fixture));
+    const result = await readGenuineActiveMembership(OWNER_UID, TEAM_ID, createFakeSharedTeamReader(fixture));
 
     expect(result).toEqual({ ok: false, error: "not_eligible" });
   });
@@ -78,14 +78,14 @@ describe("readGenuineActiveMembership", () => {
       memberships: { [`${OWNER_UID}__${OTHER_TEAM_ID}`]: membershipDoc({ teamId: OTHER_TEAM_ID }) },
     });
 
-    const result = await readGenuineActiveMembership(OWNER_UID, TEAM_ID, createFakeTeamEligibilityReader(fixture));
+    const result = await readGenuineActiveMembership(OWNER_UID, TEAM_ID, createFakeSharedTeamReader(fixture));
 
     expect(result).toEqual({ ok: false, error: "not_eligible" });
   });
 
   it("does not consult app-admin status: a user with no membership is not eligible even on an active team", async () => {
     // The reader has no identity or admin input, so admin status cannot influence the decision by construction.
-    const result = await readGenuineActiveMembership("app-admin-1", TEAM_ID, createFakeTeamEligibilityReader(state()));
+    const result = await readGenuineActiveMembership("app-admin-1", TEAM_ID, createFakeSharedTeamReader(state()));
 
     expect(result).toEqual({ ok: false, error: "not_eligible" });
   });
@@ -115,13 +115,13 @@ describe("readGenuineActiveMembership", () => {
       memberships: { [`${OWNER_UID}__${TEAM_ID}`]: membershipDoc({ memberRef: rawRef }) },
     });
 
-    const result = await readGenuineActiveMembership(OWNER_UID, TEAM_ID, createFakeTeamEligibilityReader(malformed));
+    const result = await readGenuineActiveMembership(OWNER_UID, TEAM_ID, createFakeSharedTeamReader(malformed));
 
     expect(result).toEqual({ ok: true, memberRef: null });
   });
 
   it("reports a team read failure as read_failed, never as not_eligible", async () => {
-    const reader = createFakeTeamEligibilityReader(state({ failTeamRead: true }));
+    const reader = createFakeSharedTeamReader(state({ failTeamRead: true }));
 
     const result = await readGenuineActiveMembership(OWNER_UID, TEAM_ID, reader);
 
@@ -129,7 +129,7 @@ describe("readGenuineActiveMembership", () => {
   });
 
   it("reports a membership read failure as read_failed, never as not_eligible", async () => {
-    const reader = createFakeTeamEligibilityReader(state({ failMembershipRead: true }));
+    const reader = createFakeSharedTeamReader(state({ failMembershipRead: true }));
 
     const result = await readGenuineActiveMembership(OWNER_UID, TEAM_ID, reader);
 
@@ -154,13 +154,13 @@ describe("readGenuineActiveMembership", () => {
 
 describe("ownerCanInvite", () => {
   it("allows an owner who holds an active genuine membership", async () => {
-    const result = await ownerCanInvite(OWNER_UID, TEAM_ID, createFakeTeamEligibilityReader(state()));
+    const result = await ownerCanInvite(OWNER_UID, TEAM_ID, createFakeSharedTeamReader(state()));
 
     expect(result).toEqual({ ok: true });
   });
 
   it("does not expose the member reference to the owner check", async () => {
-    const result = await ownerCanInvite(OWNER_UID, TEAM_ID, createFakeTeamEligibilityReader(state()));
+    const result = await ownerCanInvite(OWNER_UID, TEAM_ID, createFakeSharedTeamReader(state()));
 
     expect(JSON.stringify(result)).not.toContain(MEMBER_REF);
   });
@@ -169,7 +169,7 @@ describe("ownerCanInvite", () => {
     const result = await ownerCanInvite(
       OWNER_UID,
       TEAM_ID,
-      createFakeTeamEligibilityReader(state({ memberships: {} })),
+      createFakeSharedTeamReader(state({ memberships: {} })),
     );
 
     expect(result).toEqual({ ok: false, error: "not_eligible" });
@@ -179,7 +179,7 @@ describe("ownerCanInvite", () => {
     const result = await ownerCanInvite(
       OWNER_UID,
       TEAM_ID,
-      createFakeTeamEligibilityReader(state({ teamStatus: { [TEAM_ID]: "disabled" } })),
+      createFakeSharedTeamReader(state({ teamStatus: { [TEAM_ID]: "disabled" } })),
     );
 
     expect(result).toEqual({ ok: false, error: "not_eligible" });
@@ -189,7 +189,7 @@ describe("ownerCanInvite", () => {
     const result = await ownerCanInvite(
       OWNER_UID,
       TEAM_ID,
-      createFakeTeamEligibilityReader(state({ failMembershipRead: true })),
+      createFakeSharedTeamReader(state({ failMembershipRead: true })),
     );
 
     expect(result).toEqual({ ok: false, error: "read_failed" });

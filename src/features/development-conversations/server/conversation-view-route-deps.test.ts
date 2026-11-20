@@ -14,16 +14,16 @@ describe("production conversation view dependencies", () => {
     expect(typeof deps.owner.codec.probeKey).toBe("function");
   });
 
-  it("supplies the accepted participant seams, with the key probe and the team name reader", () => {
+  it("supplies the accepted participant seams, with the key probe and the shared-team reader", () => {
     const deps = productionConversationViewDeps();
     expect(typeof deps.participant.store.getParticipation).toBe("function");
     expect(typeof deps.participant.codec.probeKey).toBe("function");
     expect(typeof deps.participant.codec.decryptForClassification).toBe("function");
-    expect(typeof deps.participant.teamNameReader.getTeamName).toBe("function");
+    expect(typeof deps.participant.teamReader.findMembershipsByRef).toBe("function");
   });
 
   it("supplies the pending seams without any key codec, so a pending view can never reach the key", () => {
     const deps = productionConversationViewDeps();
-    expect(Object.keys(deps.pending).sort()).toEqual(["store", "teamNameReader", "teamReader"]);
+    expect(Object.keys(deps.pending).sort()).toEqual(["store", "teamReader"]);
   });
 });

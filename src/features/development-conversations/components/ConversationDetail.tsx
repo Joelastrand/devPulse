@@ -272,8 +272,8 @@ function DetailBody({ state, actions }: { state: ViewState; actions: DetailActio
       return <ConversationDetailSkeleton label={conversationsCopy.detailLoading} />;
     case "signed_out":
       return (
-        <p className="text-zinc-600 dark:text-zinc-400">
-          <Link href="/sign-in" className="font-medium text-zinc-900 underline dark:text-zinc-50">
+        <p className="text-text-secondary">
+          <Link href="/sign-in" className="font-medium text-text-primary underline underline-offset-2">
             {conversationsCopy.signInLink}
           </Link>{" "}
           {conversationsCopy.signInPrompt}

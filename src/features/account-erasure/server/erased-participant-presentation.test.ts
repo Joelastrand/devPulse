@@ -5,12 +5,13 @@ vi.mock("server-only", () => ({}));
 import { OWNER_PARTICIPANT_KEYS, OWNER_DTO_KEYS } from "../../development-conversations/domain/dto-keys";
 import { createFakeConversationStore, type FakeConversationStore } from "../../development-conversations/server/fake-conversation-store";
 import { createFakeContentCodec, type FakeContentCodec } from "../../development-conversations/server/fake-content-codec";
-import { createFakeTeamEligibilityReader } from "../../development-conversations/server/fake-team-eligibility";
+import { createFakeSharedTeamReader } from "../../development-conversations/server/fake-team-eligibility";
 import {
   NOW,
   OWNER_UID,
   PARTICIPANT_MEMBER_REF,
   PARTICIPANT_UID,
+  TEAM_ID,
   rosterTeam,
   seedOwnerConversation,
 } from "../../development-conversations/server/owner-read-test-support";
@@ -38,8 +39,8 @@ function readDeps(store: ConversationStore, codec: FakeContentCodec): ReadOwnerC
   return {
     store,
     codec,
-    teamReader: createFakeTeamEligibilityReader(rosterTeam([OWNER_UID, PARTICIPANT_UID])),
-    resolveParticipantState: async () => true,
+    teamReader: createFakeSharedTeamReader(rosterTeam([OWNER_UID, PARTICIPANT_UID])),
+    resolveParticipantState: async () => ({ holds: true, teamId: TEAM_ID }),
     getNames: async () => new Map([[PARTICIPANT_UID, "Synthetic Colleague"]]),
     areaNameReader: { async getSkillTree() { return undefined; } },
   };
@@ -177,7 +178,7 @@ describe("neutral presentation after account erasure (TASK-020)", () => {
     expect(Object.keys(erasedRaw).sort()).toEqual(Object.keys(genuineRaw).sort());
     expect(erasedRaw).toMatchObject({
       participantUid: null,
-      participantMemberRef: null,
+      participantBindings: null,
       participantState: null,
       participantInvitedAt: null,
       participantAcceptedAt: null,

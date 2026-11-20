@@ -1,56 +1,38 @@
 "use client";
 
-import dynamic from "next/dynamic";
-import { catchError } from "next/error";
 import Link from "next/link";
-import { ArrowRight, Layers, MessageSquare, Target, UserRound, Users, Zap } from "lucide-react";
+import { ArrowRight, CalendarClock, ChartColumn, ListChecks, MessageSquare, Target, TrendingUp, Users, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { Alert } from "../../../components/ui/Alert";
-import { Card } from "../../../components/ui/Card";
+import { Badge } from "../../../components/ui/Badge";
 import { Icon } from "../../../components/ui/Icon";
-import { LoadingRegion, Skeleton, SkeletonCard } from "../../../components/ui/Skeleton";
-import { ActionListItem, SummaryPanel } from "../../../components/ui/dashboard/DashboardPrimitives";
-import { Section } from "../../../components/ui/Section";
-import { StatusBadge } from "../../../components/ui/StatusBadge";
-import { TeamsOverview } from "../../teams/components/TeamsOverview";
-import { teamsCopy } from "../../teams/copy";
+import { cx } from "../../../components/ui/class-names";
+import { Skeleton } from "../../../components/ui/Skeleton";
+import { StatusBadge, type StatusTone } from "../../../components/ui/StatusBadge";
 import type { GoalDto } from "../../personal-goals/domain/goal";
 import type { OwnerSummaryWire } from "../../development-conversations/client/conversations-gateway";
 import type { SurveyResultSummary } from "../../results/client/team-results-gateway";
-import { resultsCopy } from "../../results/copy";
 import { formatSurveyDate } from "../../results/domain/format-survey-date";
 import type { TeamOverviewEntry } from "../../teams/client/teams-overview-gateway";
+import { teamsCopy } from "../../teams/copy";
+import type { TaskDto } from "../../personal-tasks/domain/task";
 import { authenticatedHomeCopy } from "../copy";
-import { ChartLoadError } from "../../../components/ui/LazyChart";
-import { TrendChartSkeleton } from "../../results/components/TrendChartSkeleton";
-
-/**
- * `TrendChart` is code-split out of the home route's client bundle: `recharts` loads only when a signed-in user has
- * survey results to show. Declared at module scope for webpack chunk matching (as in `TeamResultsView`).
- */
-const LazyTrendChart = dynamic<{ results: readonly SurveyResultSummary[] }>(
-  () => import("../../results/components/TrendChart").then((mod) => mod.TrendChart),
-  {
-    ssr: false,
-    loading: () => <TrendChartSkeleton />,
-  },
-);
-
-const TrendChartBoundary = catchError(ChartLoadError);
-
+import { buildAttentionItems, countOpenTasks, type AttentionItem, type TaskAttentionState } from "../domain/attention-items";
+import { TeamUpdateWave } from "./HomeBackdrop";
 
 const copy = authenticatedHomeCopy;
 
-/**
- * One section's read state. Each home panel owns its own state so a failed
- * read never hides another panel (SPEC BR-32).
- */
+/** One section's read state. Each home section owns its own state so a failed read never hides another section. */
 export type Read<T> = { phase: "loading" } | { phase: "ok"; value: T } | { phase: "error" };
 
-const LOADING_TEXT = "Laster…";
+/** Teams shown before the "Se alle team" link appears. Every member team is listed; the link is a shortcut only. */
+const TEAM_LIST_LINK_THRESHOLD = 3;
 
 function ReadErrorText() {
   return <p className="text-help text-text-muted">{copy.readError}</p>;
+}
+
+function LoadingText() {
+  return <span className="sr-only">{copy.loading}</span>;
 }
 
 function formatDate(value: string | null): string | null {
@@ -64,304 +46,9 @@ function formatDate(value: string | null): string | null {
   }).format(date);
 }
 
-/** Target dates sort ascending; undated goals sort last. */
-function byTargetDate(a: GoalDto, b: GoalDto): number {
-  if (a.targetDate === b.targetDate) return 0;
-  if (a.targetDate === null) return 1;
-  if (b.targetDate === null) return -1;
-  return a.targetDate.localeCompare(b.targetDate);
-}
-
-function CountTile({ label, read, count }: { label: string; read: Read<unknown>; count: number | null }) {
-  return (
-    <Card as="section" variant="bordered" padding="sm" aria-label={label} className="flex flex-col gap-2">
-      <p className="text-label font-medium text-text-secondary">{label}</p>
-      {read.phase === "error" ? <ReadErrorText /> : null}
-      {read.phase === "ok" && count !== null ? (
-        <p className="text-metric font-semibold tabular-nums text-text-primary">{count}</p>
-      ) : null}
-    </Card>
-  );
-}
-
-/** Placeholder with the same rows as the loaded team entry, so the tile keeps its height. The text is visually hidden. */
-function TeamEntryLoading() {
-  return (
-    <Card as="section" variant="bordered" padding="sm" aria-label={copy.tiles.team.label} className="flex flex-col gap-2">
-      <p className="text-label font-medium text-text-secondary">{copy.teamPanelTitle}</p>
-      <span className="sr-only">{LOADING_TEXT}</span>
-      <Skeleton aria-hidden="true" className="h-6 w-40" />
-      <Skeleton aria-hidden="true" className="h-4 w-28" />
-    </Card>
-  );
-}
-
-/** Team entry tile: the first team the viewer belongs to, linked to its overview. */
-export function TeamEntryTile({ read }: { read: Read<TeamOverviewEntry[]> }) {
-  if (read.phase === "loading") {
-    return <TeamEntryLoading />;
-  }
-  if (read.phase === "error") {
-    return <CountTile label={copy.tiles.team.label} read={read} count={null} />;
-  }
-  const team = read.value.find((entry) => entry.canOpen);
-  if (!team) {
-    return (
-      <Card as="section" variant="bordered" padding="sm" aria-label={copy.tiles.team.label} className="flex flex-col gap-2">
-        <p className="text-help text-text-secondary">{copy.tiles.team.emptyText}</p>
-        <Link href="/teams" className="inline-flex items-center gap-2 text-label font-medium text-primary">
-          {copy.tiles.team.emptyAction}
-          <Icon icon={ArrowRight} size="inline" />
-        </Link>
-      </Card>
-    );
-  }
-  return (
-    <Card as="section" variant="bordered" padding="sm" aria-label={copy.tiles.team.label} className="flex flex-col gap-2">
-      <p className="text-label font-medium text-text-secondary">{copy.teamPanelTitle}</p>
-      <p className="text-card-title font-semibold text-text-primary">{team.name}</p>
-      <Link href={`/teams/${encodeURIComponent(team.teamId)}`} className="inline-flex items-center gap-2 text-label font-medium text-primary">
-        {copy.teamPanelAction}
-        <Icon icon={ArrowRight} size="inline" />
-      </Link>
-    </Card>
-  );
-}
-
-const PULSE_DIMENSIONS = [
-  { key: "flow", label: resultsCopy.trendTable.columns.flow },
-  { key: "stress", label: resultsCopy.trendTable.columns.stress },
-  { key: "fun", label: resultsCopy.trendTable.columns.fun },
-] as const;
-
-/** The most recent survey result by date, published or not. */
-function latestSurvey(results: readonly SurveyResultSummary[]): SurveyResultSummary | null {
-  let latest: SurveyResultSummary | null = null;
-  for (const result of results) {
-    if (latest === null || Date.parse(result.date) > Date.parse(latest.date)) latest = result;
-  }
-  return latest;
-}
-
-/**
- * Team pulse card: the per-dimension means of the team's latest survey result,
- * from the same team results read the team development chart uses. The result
- * has no single overall average, so none is computed. A suppressed result shows
- * the insufficient-responses label, never a value.
- */
-export function TeamPulseTile({
-  teams,
-  teamId,
-  results,
-}: {
-  teams: Read<TeamOverviewEntry[]>;
-  teamId: string | null;
-  results: Read<SurveyResultSummary[]>;
-}) {
-  return (
-    <Card as="section" variant="bordered" padding="sm" aria-label={copy.pulse.label} className="flex flex-col gap-2">
-      <p className="text-label font-medium text-text-secondary">{copy.pulse.label}</p>
-      <PulseContent teams={teams} teamId={teamId} results={results} />
-    </Card>
-  );
-}
-
-function PulseContent({
-  teams,
-  teamId,
-  results,
-}: {
-  teams: Read<TeamOverviewEntry[]>;
-  teamId: string | null;
-  results: Read<SurveyResultSummary[]>;
-}) {
-  if (teams.phase === "loading" || (teamId !== null && results.phase === "loading")) {
-    return (
-      <div className="flex flex-col gap-2">
-        <span className="sr-only">{LOADING_TEXT}</span>
-        <Skeleton aria-hidden="true" className="h-4 w-32" />
-        <Skeleton aria-hidden="true" className="h-5 w-full" />
-        <Skeleton aria-hidden="true" className="h-5 w-full" />
-        <Skeleton aria-hidden="true" className="h-5 w-full" />
-      </div>
-    );
-  }
-  if (teams.phase === "error" || results.phase === "error") return <ReadErrorText />;
-  if (teamId === null) return <p className="text-help text-text-secondary">{copy.tiles.team.emptyText}</p>;
-  const latest = results.phase === "ok" ? latestSurvey(results.value) : null;
-  if (results.phase !== "ok" || latest === null) {
-    return <p className="text-help text-text-secondary">{copy.development.empty}</p>;
-  }
-  const dateLine = `${copy.pulse.latest} · ${formatSurveyDate(new Date(latest.date))}`;
-  if (latest.status !== "published") {
-    return (
-      <>
-        <p className="text-help text-text-muted">{dateLine}</p>
-        <p className="text-help text-text-secondary">{resultsCopy.summaryStrip.insufficient}</p>
-      </>
-    );
-  }
-  return (
-    <>
-      <p className="text-help text-text-muted">{dateLine}</p>
-      <dl className="flex flex-col gap-1">
-        {PULSE_DIMENSIONS.map(({ key, label }) => (
-          <div key={key} className="flex items-baseline justify-between gap-3">
-            <dt className="text-help text-text-secondary">{label}</dt>
-            <dd className="text-card-title font-semibold tabular-nums text-text-primary">{latest.mean[key].toFixed(1)}</dd>
-          </div>
-        ))}
-      </dl>
-    </>
-  );
-}
-
-export function GoalsPanel({ goals }: { goals: Read<GoalDto[]> }) {
-  return (
-    <SummaryPanel
-      title={copy.goals.title}
-      icon={Target}
-      action={
-        <Link href="/me/goals" className="inline-flex items-center gap-1 text-label font-medium text-primary">
-          {copy.goals.all}
-          <Icon icon={ArrowRight} size="inline" />
-        </Link>
-      }
-    >
-      {goals.phase === "loading" ? <GoalRowsLoading /> : null}
-      {goals.phase === "error" ? <ReadErrorText /> : null}
-      {goals.phase === "ok" ? (
-        <GoalRows goals={goals.value} />
-      ) : null}
-    </SummaryPanel>
-  );
-}
-
-/** Three goal-row placeholders (title, date, status badge) so the panel keeps its height. */
-function GoalRowsLoading() {
-  return (
-    <div className="flex flex-col gap-3">
-      <span className="sr-only">{LOADING_TEXT}</span>
-      {[0, 1, 2].map((index) => (
-        <Skeleton key={index} aria-hidden="true" className="h-10 w-full" />
-      ))}
-    </div>
-  );
-}
-
-function GoalRows({ goals }: { goals: readonly GoalDto[] }) {
-  const active = goals.filter((goal) => goal.status === "active").sort(byTargetDate).slice(0, 3);
-  if (active.length === 0) {
-    return <p className="text-help text-text-secondary">{copy.goals.empty}</p>;
-  }
-  return (
-    <ul className="flex flex-col divide-y divide-border-subtle">
-      {active.map((goal) => (
-        <li key={goal.id} className="flex items-center justify-between gap-3 py-3">
-          <span className="min-w-0">
-            <span className="block text-label font-medium text-text-primary">{goal.title}</span>
-            {formatDate(goal.targetDate) ? (
-              <span className="block text-help text-text-secondary">{formatDate(goal.targetDate)}</span>
-            ) : null}
-          </span>
-          <StatusBadge tone="success">{copy.goals.statusActive}</StatusBadge>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-export function NextConversationPanel({ conversations }: { conversations: Read<OwnerSummaryWire[]> }) {
-  const next = conversations.phase === "ok" ? pickNextConversation(conversations.value) : null;
-  const conversationId = next?.conversationId ?? "";
-  return (
-    <SummaryPanel title={copy.conversation.title} icon={MessageSquare}>
-      {conversations.phase === "loading" ? (
-        <div className="flex flex-col gap-3">
-          <span className="sr-only">{LOADING_TEXT}</span>
-          <Skeleton aria-hidden="true" className="h-5 w-3/4" />
-          <Skeleton aria-hidden="true" className="h-4 w-1/2" />
-          <Skeleton aria-hidden="true" className="h-9 w-32" />
-        </div>
-      ) : null}
-      {conversations.phase === "error" ? <ReadErrorText /> : null}
-      {conversations.phase === "ok" && next === null ? (
-        <p className="text-help text-text-secondary">{copy.conversation.empty}</p>
-      ) : null}
-      {next !== null ? (
-        <div className="flex flex-col gap-3">
-          <div className="min-w-0">
-            <p className="text-label font-medium text-text-primary">{next.title}</p>
-            <p className="text-help text-text-secondary">
-              {formatDate(next.plannedFor) ?? copy.conversation.noDate}
-              {next.participant.displayName ? ` · ${copy.conversation.withPrefix} ${next.participant.displayName}` : ""}
-            </p>
-          </div>
-          <Link
-            href={`/me/conversations/${conversationId}`}
-            className="inline-flex w-fit items-center gap-2 rounded-control bg-primary-subtle px-4 py-2 text-label font-medium text-primary"
-          >
-            {copy.conversation.open}
-            <Icon icon={ArrowRight} size="inline" />
-          </Link>
-        </div>
-      ) : null}
-    </SummaryPanel>
-  );
-}
-
-/** The earliest open conversation with a planned date; undated open conversations come after. */
-function pickNextConversation(items: readonly OwnerSummaryWire[]): OwnerSummaryWire | null {
-  const open = items.filter((item) => item.status === "open");
-  const sorted = [...open].sort((a, b) => {
-    if (a.plannedFor === b.plannedFor) return 0;
-    if (a.plannedFor === null) return 1;
-    if (b.plannedFor === null) return -1;
-    return a.plannedFor.localeCompare(b.plannedFor);
-  });
-  return sorted[0] ?? null;
-}
-
-/**
- * Team development chart for the viewer's first team. It uses the team results
- * read that `AuthenticatedHome` already makes (the same read the team overview
- * uses) and renders the existing `TrendChart`, which applies the suppression
- * rules and never draws a zero for a suppressed survey.
- */
-export function TeamDevelopmentPanel({
-  teams,
-  teamId,
-  results,
-}: {
-  teams: Read<TeamOverviewEntry[]>;
-  teamId: string | null;
-  results: Read<SurveyResultSummary[]>;
-}) {
-  // A teams read that is still loading or has failed is never an empty team state (SPEC BR-32).
-  // The chart card's own placeholder: a text line here would let the card jump in when the chart appears.
-  if (teams.phase === "loading") {
-    return <TrendChartSkeleton />;
-  }
-  if (teams.phase === "error") {
-    return <ReadErrorText />;
-  }
-  if (teamId === null) {
-    return <DevelopmentEmpty />;
-  }
-  if (results.phase === "loading") {
-    return <TrendChartSkeleton />;
-  }
-  if (results.phase === "error") {
-    return <ReadErrorText />;
-  }
-  if (results.value.length === 0) {
-    return <DevelopmentEmpty />;
-  }
-  return (
-    <TrendChartBoundary>
-      <LazyTrendChart results={results.value} />
-    </TrendChartBoundary>
-  );
+/** Today's calendar date in Norway, as YYYY-MM-DD. Due dates are compared as calendar dates. */
+export function todayIsoInOslo(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Oslo", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
 }
 
 /** The first team the viewer belongs to (admin or member). Requests and rejections are not used. */
@@ -369,88 +56,392 @@ export function firstMemberTeamId(teams: readonly TeamOverviewEntry[]): string |
   return teams.find((entry) => entry.canOpen)?.teamId ?? null;
 }
 
-function DevelopmentEmpty() {
+/* ---------- Shared section chrome ---------- */
+
+/** Icon, then a real heading. Used by every Home section so the headings share one treatment. */
+function SectionHeading({ id, title, icon }: { id: string; title: string; icon: LucideIcon }) {
   return (
-    <Card as="section" variant="bordered" padding="md" aria-label={copy.development.title}>
-      <p className="text-help text-text-secondary">{copy.development.empty}</p>
-    </Card>
+    <header className="flex items-center gap-3">
+      <Icon icon={icon} size="action" className="text-primary" />
+      <h2 id={id} className="text-panel-title font-semibold text-text-primary">
+        {title}
+      </h2>
+    </header>
   );
 }
 
-const SHORTCUTS: ReadonlyArray<{ label: string; description: string; href: string; icon: LucideIcon }> = [
-  { ...copy.links.teams, icon: Users },
-  { ...copy.links.skills, icon: Layers },
-  { ...copy.links.goals, icon: Target },
-  { ...copy.links.conversations, icon: MessageSquare },
-];
-
-/** Quick links to existing routes, restored from the baseline home. */
-export function QuickLinks() {
+/** Square icon tile in the soft green accent. Decorative: the adjacent text names the item. */
+function IconTile({ icon, className }: { icon: LucideIcon; className?: string }) {
   return (
-    <nav aria-label={copy.quickLinksLabel}>
-      <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {SHORTCUTS.map((link) => (
-          <Card key={link.href} as="li" variant="bordered" padding="md" className="transition-shadow hover:shadow-elevated">
-            <Link href={link.href} className="flex h-full flex-col gap-4 rounded-control">
-              <div className="flex items-center justify-between">
-                <span className="flex size-11 items-center justify-center rounded-control bg-primary-subtle text-primary">
-                  <Icon icon={link.icon} size="feature" />
-                </span>
-                <Icon icon={ArrowRight} size="inline" className="text-text-muted" />
-              </div>
-              <span className="flex flex-col gap-1">
-                <span className="font-semibold text-text-primary">{link.label}</span>
-                <span className="text-sm text-text-secondary">{link.description}</span>
-              </span>
-            </Link>
-          </Card>
-        ))}
-      </ul>
-    </nav>
+    <span className={cx("flex size-11 shrink-0 items-center justify-center rounded-control bg-primary-subtle text-primary", className)}>
+      <Icon icon={icon} size="inline" />
+    </span>
+  );
+}
+
+/* ---------- Dette er viktig nå ---------- */
+
+const TASK_STATE_LABEL: Record<TaskAttentionState, string> = {
+  overdue: copy.attention.taskOverdue,
+  due_soon: copy.attention.taskDueSoon,
+  high_priority: copy.attention.taskHighPriority,
+};
+
+const TASK_STATE_TONE: Record<TaskAttentionState, StatusTone> = {
+  overdue: "danger",
+  due_soon: "warning",
+  high_priority: "info",
+};
+
+/**
+ * A conversation has one action, so the row carries one link (no title link, so no nested or duplicate
+ * links). The action is a bordered pill on the tinted panel, not a filled button.
+ */
+function ConversationAttentionRow({ item }: { item: Extract<AttentionItem, { kind: "conversation" }> }) {
+  const dateText = formatDate(item.plannedFor) ?? copy.attention.conversationNoDate;
+  const withText = item.participantName ? ` · ${copy.attention.conversationWithPrefix} ${item.participantName}` : "";
+  return (
+    <li className="flex flex-col gap-4 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 items-center gap-4">
+        <IconTile icon={MessageSquare} className="size-12 bg-surface" />
+        <div className="min-w-0">
+          <p className="break-words text-label font-semibold text-text-primary md:text-body">{item.title}</p>
+          <p className="break-words text-help text-text-secondary">
+            {copy.attention.conversationTitle} · {dateText}
+            {withText}
+          </p>
+        </div>
+      </div>
+      <Link
+        href={`/me/conversations/${item.conversationId}`}
+        className="inline-flex w-fit shrink-0 items-center gap-2 rounded-control border border-primary/30 bg-surface px-4 py-2 text-label font-medium text-primary transition-colors duration-micro ease-standard hover:bg-surface-subtle"
+      >
+        {copy.attention.conversationAction}
+        <Icon icon={ArrowRight} size="inline" />
+      </Link>
+    </li>
+  );
+}
+
+/** A task row links once, through its title, to the task board. Nothing else in the row is interactive. */
+function TaskAttentionRow({ item }: { item: Extract<AttentionItem, { kind: "task" }> }) {
+  const dueText = item.dueDate ? formatDate(item.dueDate) : null;
+  return (
+    <li className="flex items-center gap-4 py-4 first:pt-0 last:pb-0">
+      <IconTile icon={ListChecks} className="size-12 bg-surface" />
+      <div className="min-w-0 flex-1">
+        <Link href="/tasks" className="break-words text-label font-semibold text-text-primary underline-offset-4 hover:underline md:text-body">
+          {item.title}
+        </Link>
+        <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-help text-text-secondary">
+          <StatusBadge tone={TASK_STATE_TONE[item.state]}>{TASK_STATE_LABEL[item.state]}</StatusBadge>
+          <span>{dueText ?? copy.attention.taskNoDate}</span>
+        </p>
+      </div>
+    </li>
+  );
+}
+
+function AttentionRowsLoading() {
+  return (
+    <div className="flex flex-col gap-4">
+      <LoadingText />
+      <Skeleton aria-hidden="true" className="h-14 w-full" />
+    </div>
   );
 }
 
 /**
- * The existing team list, restored from the baseline home. It renders the teams
- * list the home already read (no second read); request-access handling stays in `TeamsOverview`.
+ * The priority surface: a green-tinted panel. Items come from the conversation and task reads the home already
+ * holds. A failed source is named as an error and never counted as "nothing to do": the empty message appears
+ * only when both reads succeeded.
  */
-export function TeamsSection({
-  teams,
-  onTeamsChanged,
+export function AttentionPanel({
+  conversations,
+  tasks,
+  todayIso,
 }: {
-  teams: Read<TeamOverviewEntry[]>;
-  onTeamsChanged?: () => void;
+  conversations: Read<OwnerSummaryWire[]>;
+  tasks: Read<TaskDto[]>;
+  todayIso: string;
 }) {
+  const loading = conversations.phase === "loading" || tasks.phase === "loading";
+  const failed = conversations.phase === "error" || tasks.phase === "error";
+  const items = buildAttentionItems({
+    conversations: conversations.phase === "ok" ? conversations.value : [],
+    tasks: tasks.phase === "ok" ? tasks.value : [],
+    todayIso,
+  });
+
   return (
-    <Section title={copy.teamsSectionTitle} description={copy.teamsSectionDescription}>
-      {teams.phase === "loading" ? (
-        <LoadingRegion label={teamsCopy.overview.loading} className="flex flex-col gap-4">
-          <SkeletonCard className="h-20" />
-          <SkeletonCard className="h-20" />
-        </LoadingRegion>
+    <section aria-labelledby="home-attention-title" className="flex flex-col gap-4 rounded-surface border border-primary/25 bg-primary-subtle p-5 shadow-card md:p-6">
+      <SectionHeading id="home-attention-title" title={copy.attention.title} icon={Zap} />
+      {loading ? <AttentionRowsLoading /> : null}
+      {!loading && items.length > 0 ? (
+        <ul className="flex flex-col divide-y divide-primary/20">
+          {items.map((item) =>
+            item.kind === "conversation" ? (
+              <ConversationAttentionRow key={`c-${item.conversationId}`} item={item} />
+            ) : (
+              <TaskAttentionRow key={`t-${item.taskId}`} item={item} />
+            ),
+          )}
+        </ul>
       ) : null}
-      {teams.phase === "error" ? <Alert variant="error">{teamsCopy.overview.error}</Alert> : null}
-      {teams.phase === "ok" ? (
-        <TeamsOverview initialTeams={teams.value} onTeamsChanged={onTeamsChanged} />
-      ) : null}
-    </Section>
+      {!loading && items.length === 0 && !failed ? <p className="text-help text-text-secondary">{copy.attention.empty}</p> : null}
+      {!loading && failed ? <ReadErrorText /> : null}
+    </section>
   );
 }
 
-const NEXT_STEPS: ReadonlyArray<{ label: string; description: string; href: string; icon: LucideIcon }> = [
-  { ...copy.nextSteps.teamNeeds, icon: Users },
-  { ...copy.nextSteps.conversation, icon: MessageSquare },
-  { ...copy.nextSteps.roles, icon: UserRound },
-];
+/* ---------- Min utvikling ---------- */
 
-export function NextStepsPanel() {
+interface DevelopmentTile {
+  label: string;
+  action: string;
+  href: string;
+  icon: LucideIcon;
+  count: number | null;
+  failed: boolean;
+  loading: boolean;
+  /** The first metric carries the leading accent, as in the reference. The others stay neutral. */
+  accent: boolean;
+}
+
+function DevelopmentCountTile({ tile }: { tile: DevelopmentTile }) {
   return (
-    <SummaryPanel title={copy.nextStepsTitle} icon={Zap}>
-      <ul className="flex flex-col gap-2">
-        {NEXT_STEPS.map((step) => (
-          <ActionListItem key={step.href + step.label} href={step.href} title={step.label} description={step.description} icon={step.icon} />
+    <li
+      className={cx(
+        "flex flex-col gap-5 rounded-surface border border-border-subtle bg-surface p-5 shadow-card",
+        tile.accent && "border-l-4 border-l-primary",
+      )}
+    >
+      <div className="flex items-start gap-4">
+        <IconTile icon={tile.icon} />
+        <div className="min-w-0">
+          <p className="text-label font-medium text-text-secondary">{tile.label}</p>
+          {tile.loading ? (
+            <>
+              <LoadingText />
+              <Skeleton aria-hidden="true" className="mt-2 h-9 w-12" />
+            </>
+          ) : null}
+          {tile.failed ? <ReadErrorText /> : null}
+          {!tile.loading && !tile.failed && tile.count !== null ? (
+            <p className="mt-1 text-metric font-semibold tabular-nums text-text-primary">{tile.count}</p>
+          ) : null}
+        </div>
+      </div>
+      <Link href={tile.href} className="mt-auto inline-flex w-fit items-center gap-2 text-label font-medium text-primary hover:underline">
+        {tile.action}
+        <Icon icon={ArrowRight} size="inline" />
+      </Link>
+    </li>
+  );
+}
+
+/**
+ * Compact personal overview: three metric cards under a plain section heading, with no outer container. A failed
+ * or loading read shows no number, so no zero is ever invented.
+ */
+export function DevelopmentPanel({
+  goals,
+  conversations,
+  tasks,
+}: {
+  goals: Read<GoalDto[]>;
+  conversations: Read<OwnerSummaryWire[]>;
+  tasks: Read<TaskDto[]>;
+}) {
+  const tiles: DevelopmentTile[] = [
+    {
+      ...copy.development.goals,
+      icon: Target,
+      accent: true,
+      loading: goals.phase === "loading",
+      failed: goals.phase === "error",
+      count: goals.phase === "ok" ? goals.value.filter((goal) => goal.status === "active").length : null,
+    },
+    {
+      ...copy.development.conversations,
+      icon: MessageSquare,
+      accent: false,
+      loading: conversations.phase === "loading",
+      failed: conversations.phase === "error",
+      count: conversations.phase === "ok" ? conversations.value.filter((item) => item.status === "open").length : null,
+    },
+    {
+      ...copy.development.tasks,
+      icon: ListChecks,
+      accent: false,
+      loading: tasks.phase === "loading",
+      failed: tasks.phase === "error",
+      count: tasks.phase === "ok" ? countOpenTasks(tasks.value) : null,
+    },
+  ];
+
+  return (
+    <section aria-labelledby="home-development-title" className="flex flex-col gap-4">
+      <SectionHeading id="home-development-title" title={copy.development.title} icon={TrendingUp} />
+      <ul className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {tiles.map((tile) => (
+          <DevelopmentCountTile key={tile.href} tile={tile} />
         ))}
       </ul>
-    </SummaryPanel>
+    </section>
+  );
+}
+
+/* ---------- Mine team ---------- */
+
+/**
+ * Member teams as one compact list. Each row shows the name, the relationship the server already returned, and one
+ * link. Teams without access are not listed as links; they are requested on the Team page.
+ */
+export function TeamsPanel({ teams }: { teams: Read<TeamOverviewEntry[]> }) {
+  return (
+    <section aria-labelledby="home-teams-title" className="flex flex-col gap-4 rounded-surface border border-border-subtle bg-surface p-5 shadow-card md:p-6">
+      <SectionHeading id="home-teams-title" title={copy.teams.title} icon={Users} />
+      {teams.phase === "loading" ? (
+        <div className="flex flex-col gap-3">
+          <LoadingText />
+          <Skeleton aria-hidden="true" className="h-12 w-full" />
+        </div>
+      ) : null}
+      {teams.phase === "error" ? <ReadErrorText /> : null}
+      {teams.phase === "ok" ? <MemberTeamList teams={teams.value.filter((entry) => entry.canOpen)} /> : null}
+    </section>
+  );
+}
+
+function MemberTeamList({ teams }: { teams: readonly TeamOverviewEntry[] }) {
+  if (teams.length === 0) {
+    return (
+      <div className="flex flex-col items-start gap-2">
+        <p className="text-help text-text-secondary">{copy.teams.empty}</p>
+        <Link href="/teams" className="inline-flex items-center gap-1 text-label font-medium text-primary hover:underline">
+          {copy.teams.emptyAction}
+          <Icon icon={ArrowRight} size="inline" />
+        </Link>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      <ul aria-label={copy.teams.listLabel} className="flex flex-col divide-y divide-border-subtle">
+        {teams.map((team) => (
+          <li key={team.teamId} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3 first:pt-0 last:pb-0">
+            <span className="flex min-w-0 flex-wrap items-center gap-3">
+              <span className="break-words text-label font-semibold text-text-primary">{team.name}</span>
+              <Badge>{teamsCopy.relationshipLabels[team.relationship]}</Badge>
+            </span>
+            <Link
+              href={`/teams/${encodeURIComponent(team.teamId)}`}
+              className="inline-flex shrink-0 items-center gap-1 text-label font-medium text-primary hover:underline"
+            >
+              {copy.teams.openTeam}
+              <Icon icon={ArrowRight} size="inline" />
+            </Link>
+          </li>
+        ))}
+      </ul>
+      {teams.length > TEAM_LIST_LINK_THRESHOLD ? (
+        <Link href="/teams" className="inline-flex w-fit items-center gap-1 text-label font-medium text-primary hover:underline">
+          {copy.teams.allTeams}
+          <Icon icon={ArrowRight} size="inline" />
+        </Link>
+      ) : null}
+    </div>
+  );
+}
+
+/* ---------- Siste nytt fra teamet ---------- */
+
+/** The most recent published survey by date. Suppressed and unpublished results are never a candidate. */
+function latestPublished(results: readonly SurveyResultSummary[]): SurveyResultSummary | null {
+  let latest: SurveyResultSummary | null = null;
+  for (const result of results) {
+    if (result.status !== "published") continue;
+    if (latest === null || Date.parse(result.date) > Date.parse(latest.date)) latest = result;
+  }
+  return latest;
+}
+
+/**
+ * Compact team update for the first member team, with its name shown so the context is explicit. It shows only the
+ * date of the latest published survey, never its values, and it links to the full results page. A suppressed survey
+ * is described as too few answers, never as a score or zero. The lower-right wave and the bar icon are decorative.
+ */
+export function TeamUpdatePanel({
+  teams,
+  teamId,
+  results,
+}: {
+  teams: Read<TeamOverviewEntry[]>;
+  teamId: string | null;
+  results: Read<SurveyResultSummary[]>;
+}) {
+  const teamName = teams.phase === "ok" ? (teams.value.find((entry) => entry.teamId === teamId)?.name ?? null) : null;
+  return (
+    <section
+      aria-labelledby="home-team-update-title"
+      className="relative isolate flex flex-col gap-4 overflow-hidden rounded-surface border border-border-subtle bg-surface p-5 pb-16 shadow-card md:p-6 md:pb-20"
+    >
+      <TeamUpdateWave />
+      <SectionHeading id="home-team-update-title" title={copy.teamUpdate.title} icon={CalendarClock} />
+      <TeamUpdateBody teams={teams} teamId={teamId} teamName={teamName} results={results} />
+      <Icon icon={ChartColumn} size="feature" className="pointer-events-none absolute bottom-5 right-5 text-primary" />
+    </section>
+  );
+}
+
+function TeamUpdateBody({
+  teams,
+  teamId,
+  teamName,
+  results,
+}: {
+  teams: Read<TeamOverviewEntry[]>;
+  teamId: string | null;
+  teamName: string | null;
+  results: Read<SurveyResultSummary[]>;
+}) {
+  if (teams.phase === "loading" || (teamId !== null && results.phase === "loading")) {
+    return (
+      <div className="flex flex-col gap-3">
+        <LoadingText />
+        <Skeleton aria-hidden="true" className="h-4 w-40" />
+        <Skeleton aria-hidden="true" className="h-4 w-56" />
+      </div>
+    );
+  }
+  if (teams.phase === "error" || results.phase === "error") return <ReadErrorText />;
+  if (teamId === null || teamName === null) {
+    return <p className="text-help text-text-secondary">{copy.teamUpdate.noTeam}</p>;
+  }
+  if (results.phase !== "ok") return <ReadErrorText />;
+
+  const latest = latestPublished(results.value);
+  const resultsHref = `/teams/${encodeURIComponent(teamId)}/results`;
+  let message: string;
+  if (latest !== null) {
+    message = `${copy.teamUpdate.latestPublished} · ${formatSurveyDate(new Date(latest.date))}`;
+  } else if (results.value.length > 0) {
+    message = copy.teamUpdate.insufficient;
+  } else {
+    message = copy.teamUpdate.noSurveys;
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-help text-text-muted">
+        {copy.teamUpdate.teamPrefix}: <span className="font-medium text-text-primary">{teamName}</span>
+      </p>
+      <p className="text-label text-text-primary">{message}</p>
+      <Link href={resultsHref} className="inline-flex w-fit items-center gap-1 text-label font-medium text-primary hover:underline">
+        {copy.teamUpdate.action}
+        <Icon icon={ArrowRight} size="inline" />
+      </Link>
+    </div>
   );
 }

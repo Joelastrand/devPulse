@@ -8,6 +8,10 @@
 export const uiCopy = {
   loadingDefault: "Laster…",
   skipToContent: "Hopp til innhold",
+  collapsible: {
+    showAll: "Vis alle",
+    hideAll: "Skjul alle",
+  },
 } as const;
 
 /** Eyebrow that marks every admin page's scope (SPEC: Section hierarchy). */

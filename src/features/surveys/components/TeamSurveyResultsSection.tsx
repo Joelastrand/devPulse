@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
-import { Card } from "../../../components/ui/Card";
+import { CollapsibleSection } from "../../../components/ui/CollapsibleSection";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { LoadingRegion, Skeleton } from "../../../components/ui/Skeleton";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
@@ -29,7 +29,20 @@ type ListState =
  * happen in the results endpoints. The legacy Flow/Stress/Fun trend above is
  * unchanged.
  */
-export function TeamSurveyResultsSection({ teamId }: { teamId: string }) {
+/**
+ * Per-question results for closed surveys that have their own questions. Supplementary to the trend history: that shows
+ * means over time; this shows each survey's questions. Collapsed by default through the shared section. Its error state
+ * locks the section open, so a failed list is never hidden.
+ */
+export function TeamSurveyResultsSection({
+  teamId,
+  open,
+  onOpenChange,
+}: {
+  teamId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const [list, setList] = useState<ListState>({ status: "loading" });
   const [openId, setOpenId] = useState<string | null>(null);
   const [results, setResults] = useState<Record<string, SurveyResultsFetchResult>>({});
@@ -84,14 +97,16 @@ export function TeamSurveyResultsSection({ teamId }: { teamId: string }) {
   }
 
   return (
-    <Card as="section" variant="bordered" padding="md" aria-labelledby="team-survey-results-heading">
+    <CollapsibleSection
+      id="team-survey-results"
+      title={builderCopy.teamResults.heading}
+      description={builderCopy.teamResults.hint}
+      summary={list.status === "ready" && list.surveys.length > 0 ? builderCopy.teamResults.summary(list.surveys.length) : undefined}
+      open={open}
+      onOpenChange={onOpenChange}
+      lockOpen={list.status === "error"}
+    >
       <div className="flex flex-col gap-4">
-        <div>
-          <h2 id="team-survey-results-heading" className="text-lg font-semibold text-text-primary">
-            {builderCopy.teamResults.heading}
-          </h2>
-          <p className="text-help text-text-muted">{builderCopy.teamResults.hint}</p>
-        </div>
 
         {list.status === "loading" ? (
           // Rows mirror the loaded list: a survey title on the left and its show/hide button on the right. The region
@@ -162,6 +177,6 @@ export function TeamSurveyResultsSection({ teamId }: { teamId: string }) {
           </ul>
         ) : null}
       </div>
-    </Card>
+    </CollapsibleSection>
   );
 }

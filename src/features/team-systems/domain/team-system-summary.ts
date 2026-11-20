@@ -111,6 +111,10 @@ export function filterSystems<T extends SystemFilterFields>(
   });
 }
 
+/**
+ * Display and sort order, highest risk first. `none` (no known member) is a risk state, not an unknown or a low one,
+ * so it sorts first on purpose. Missing risk is never treated as low risk.
+ */
 export const KNOWLEDGE_BAND_ORDER: readonly KnowledgeRiskBand[] = ["none", "high", "elevated", "lower"];
 
 /** How many filter controls differ from the default: a non-blank search counts as one. Drives the "N aktive filtre" label. */
@@ -125,3 +129,35 @@ export function countActiveFilters(filter: SystemFilter): number {
 }
 
 export { KNOWLEDGE_RISK_LABELS };
+
+/**
+ * Sort orders for the system list. They order only the systems already loaded and visible. No numerical score is created.
+ * - `name`: Norwegian collation, ties by id.
+ * - `risk`: the existing knowledge-risk band order (`KNOWLEDGE_BAND_ORDER`, the same order the filter uses), then name.
+ * - `attention`: systems that need follow-up first, then name.
+ */
+export type SystemSort = "name" | "risk" | "attention";
+
+export const SYSTEM_SORTS: readonly SystemSort[] = ["name", "risk", "attention"];
+
+export interface SystemSortFields {
+  readonly systemId: string;
+  readonly name: string;
+  readonly knowledgeRisk: KnowledgeRiskBand;
+  readonly attention: boolean;
+}
+
+function bandRank(band: KnowledgeRiskBand): number {
+  const index = KNOWLEDGE_BAND_ORDER.indexOf(band);
+  return index === -1 ? KNOWLEDGE_BAND_ORDER.length : index;
+}
+
+/** Returns a new, stably ordered array. The input array is never mutated. */
+export function sortSystems<T extends SystemSortFields>(systems: readonly T[], sort: SystemSort): T[] {
+  const byName = (a: T, b: T) => a.name.localeCompare(b.name, "nb") || a.systemId.localeCompare(b.systemId);
+  return systems.slice().sort((a, b) => {
+    if (sort === "risk") return bandRank(a.knowledgeRisk) - bandRank(b.knowledgeRisk) || byName(a, b);
+    if (sort === "attention") return Number(b.attention) - Number(a.attention) || byName(a, b);
+    return byName(a, b);
+  });
+}

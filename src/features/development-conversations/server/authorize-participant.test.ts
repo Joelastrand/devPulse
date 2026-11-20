@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { createFakeTeamEligibilityReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
-import { readGenuineActiveMembership } from "./team-eligibility";
+import { createFakeSharedTeamReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
+import { authorizeBoundParticipant, type BoundParticipantResult } from "./shared-team-binding";
 import { authorizeParticipant, type ParticipantAccessMaterial } from "./authorize-participant";
-import { OWNER_UID, PARTICIPANT_MEMBER_REF, PARTICIPANT_UID, TEAM_ID, NOW, rosterTeam } from "./owner-read-test-support";
-import type { GenuineMembershipResult } from "./team-eligibility";
+import { OWNER_UID, PARTICIPANT_MEMBER_REF, PARTICIPANT_UID, TEAM_ID, NOW, bindingsFor, rosterTeam } from "./owner-read-test-support";
 
 // Synthetic fixtures only (invariant 15). No real person, team or wellbeing data.
 const CALLER = PARTICIPANT_UID;
@@ -17,9 +16,8 @@ function index(ownerUid: string = OWNER_UID): Record<string, unknown> {
 /** A valid owner document, plain fields only, with an accepted participant. */
 function owner(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    teamId: TEAM_ID,
     participantUid: CALLER,
-    participantMemberRef: PARTICIPANT_MEMBER_REF,
+    participantBindings: bindingsFor(CALLER),
     participantState: "accepted",
     participantInvitedAt: new Date(NOW.getTime() + 1000),
     participantAcceptedAt: new Date(NOW.getTime() + 2000),
@@ -38,8 +36,8 @@ function owner(overrides: Record<string, unknown> = {}): Record<string, unknown>
 }
 
 /** The TASK-006 result for the caller, read from the given team state, as the operation obtains it. */
-async function membershipOf(state: FakeTeamEligibilityState, uid: string = CALLER): Promise<GenuineMembershipResult> {
-  return readGenuineActiveMembership(uid, TEAM_ID, createFakeTeamEligibilityReader(state));
+async function membershipOf(state: FakeTeamEligibilityState, uid: string = CALLER): Promise<BoundParticipantResult> {
+  return authorizeBoundParticipant(OWNER_UID, uid, bindingsFor(uid), createFakeSharedTeamReader(state));
 }
 
 /** A complete, allowed material set. Each test changes one input to exercise one BR-21 condition. */
@@ -48,7 +46,7 @@ async function allowedMaterial(overrides: Partial<ParticipantAccessMaterial> = {
     callerUid: CALLER,
     index: index(),
     owner: owner(),
-    membership: await membershipOf(rosterTeam([OWNER_UID, CALLER])),
+    binding: await membershipOf(rosterTeam([OWNER_UID, CALLER])),
     ...overrides,
   };
 }
@@ -88,7 +86,7 @@ describe("authorizeParticipant: BR-21 access decision", () => {
 
   it("denies when no participant is bound (c)", async () => {
     const material = await allowedMaterial({
-      owner: owner({ participantUid: null, participantMemberRef: null, participantState: null, participantInvitedAt: null, participantAcceptedAt: null }),
+      owner: owner({ participantUid: null, participantBindings: null, participantState: null, participantInvitedAt: null, participantAcceptedAt: null }),
     });
     expect(authorizeParticipant(material)).toEqual({ allowed: false });
   });
@@ -96,16 +94,16 @@ describe("authorizeParticipant: BR-21 access decision", () => {
   it("denies when the team is disabled (d)", async () => {
     const state = rosterTeam([OWNER_UID, CALLER]);
     state.teamStatus[TEAM_ID] = "disabled";
-    expect(authorizeParticipant(await allowedMaterial({ membership: await membershipOf(state) }))).toEqual({ allowed: false });
+    expect(authorizeParticipant(await allowedMaterial({ binding: await membershipOf(state) }))).toEqual({ allowed: false });
   });
 
   it("denies when the caller's membership is missing (e)", async () => {
     const state = rosterTeam([OWNER_UID]);
-    expect(authorizeParticipant(await allowedMaterial({ membership: await membershipOf(state) }))).toEqual({ allowed: false });
+    expect(authorizeParticipant(await allowedMaterial({ binding: await membershipOf(state) }))).toEqual({ allowed: false });
   });
 
   it("allows a lead as an ordinary member: the role is never an input (e)", async () => {
-    const state = rosterTeam([OWNER_UID]);
+    const state = rosterTeam([OWNER_UID, CALLER]);
     state.memberships[`${CALLER}__${TEAM_ID}`] = {
       uid: CALLER,
       teamId: TEAM_ID,
@@ -113,7 +111,7 @@ describe("authorizeParticipant: BR-21 access decision", () => {
       memberRef: PARTICIPANT_MEMBER_REF,
       role: "lead",
     };
-    expect(authorizeParticipant(await allowedMaterial({ membership: await membershipOf(state) }))).toEqual({
+    expect(authorizeParticipant(await allowedMaterial({ binding: await membershipOf(state) }))).toEqual({
       allowed: true,
       ownerUid: OWNER_UID,
       teamId: TEAM_ID,
@@ -122,17 +120,17 @@ describe("authorizeParticipant: BR-21 access decision", () => {
 
   it("denies a non-member the same way whatever role or admin state exists elsewhere; no admin input exists (e)", async () => {
     const state = rosterTeam([OWNER_UID]);
-    expect(authorizeParticipant(await allowedMaterial({ membership: await membershipOf(state) }))).toEqual({ allowed: false });
+    expect(authorizeParticipant(await allowedMaterial({ binding: await membershipOf(state) }))).toEqual({ allowed: false });
   });
 
   it("denies a rejoined member whose membership carries a new memberRef (e, binding)", async () => {
     const state = rosterTeam([OWNER_UID, CALLER]);
     state.memberships[`${CALLER}__${TEAM_ID}`] = { uid: CALLER, teamId: TEAM_ID, createdAt: new Date(0), memberRef: OTHER_REF };
-    expect(authorizeParticipant(await allowedMaterial({ membership: await membershipOf(state) }))).toEqual({ allowed: false });
+    expect(authorizeParticipant(await allowedMaterial({ binding: await membershipOf(state) }))).toEqual({ allowed: false });
   });
 
   it("denies when the stored binding is absent, even with a current membership", async () => {
-    const material = await allowedMaterial({ owner: owner({ participantMemberRef: null }) });
+    const material = await allowedMaterial({ owner: owner({ participantBindings: null }) });
     expect(authorizeParticipant(material)).toEqual({ allowed: false });
   });
 

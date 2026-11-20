@@ -7,80 +7,43 @@
  */
 export const authenticatedHomeCopy = {
   title: "Hjem",
-  description: "Gå rett til teamene, målene og samtalene dine.",
-  greeting: {
-    context: "Her er en oversikt over din utvikling og teamet ditt.",
-    withName: (name: string) => `Hei, ${name}`,
-  },
-  quickLinksLabel: "Snarveier",
-  teamsSectionTitle: "Dine team",
-  teamsSectionDescription: "Teamene du er medlem av, med pulsmåling og utvikling.",
-  links: {
-    teams: {
-      label: "Team",
-      description: "Resultater, roadmap og kompetansebehov for teamene dine.",
-      href: "/teams",
-    },
-    skills: {
-      label: "Ferdigheter",
-      description: "Din egenvurdering, og hvordan den passer til rollen din.",
-      href: "/me/skills",
-    },
-    goals: {
-      label: "Mål",
-      description: "Aktive mål, fremdrift og fullførte mål.",
-      href: "/me/goals",
-    },
-    conversations: {
-      label: "Samtaler",
-      description: "Utviklingssamtalene du deltar i.",
-      href: "/me/conversations",
-    },
-  },
+  description: "Din oversikt over det som er viktig nå.",
   readError: "Kunne ikke laste dette nå. Prøv igjen senere.",
-  tiles: {
-    team: { label: "Teamoversikt", emptyText: "Du er ikke medlem av et team ennå.", emptyAction: "Se teamene" },
-  },
-  goals: {
-    title: "Mine mål",
-    all: "Alle mål",
-    empty: "Du har ingen aktive mål ennå.",
-    statusActive: "Aktivt",
-    statusCompleted: "Fullført",
-  },
-  conversation: {
-    title: "Neste samtale",
-    empty: "Ingen planlagte samtaler.",
-    open: "Gå til samtale",
-    noDate: "Ingen dato satt",
-    withPrefix: "Med",
+  loading: "Laster…",
+  attention: {
+    title: "Dette er viktig nå",
+    empty: "Ingen oppgaver som trenger oppmerksomhet akkurat nå.",
+    conversationTitle: "Neste utviklingssamtale",
+    conversationNoDate: "Ingen dato satt",
+    conversationWithPrefix: "Med",
+    conversationAction: "Åpne samtale",
+    taskOverdue: "Forfalt",
+    taskDueSoon: "Forfaller",
+    taskHighPriority: "Høy prioritet",
+    taskNoDate: "Ingen frist",
+    taskAction: "Se oppgaver",
   },
   development: {
-    title: "Teamets utvikling",
-    empty: "Det finnes ingen resultater for teamet ennå.",
+    title: "Min utvikling",
+    goals: { label: "Aktive mål", action: "Se alle mål", href: "/me/goals" },
+    conversations: { label: "Åpne samtaler", action: "Se samtaler", href: "/me/conversations" },
+    tasks: { label: "Åpne oppgaver", action: "Se oppgaver", href: "/tasks" },
   },
-  pulse: {
-    label: "Teamets puls",
-    latest: "Siste undersøkelse",
+  teams: {
+    title: "Mine team",
+    empty: "Du er ikke medlem av et team ennå.",
+    emptyAction: "Se teamene",
+    openTeam: "Åpne team",
+    allTeams: "Se alle team",
+    listLabel: "Mine team",
   },
-  teamPanelTitle: "Teamet ditt",
-  teamPanelAction: "Teamoversikt",
-  nextStepsTitle: "Neste steg",
-  nextSteps: {
-    teamNeeds: {
-      label: "Se teamets kompetansebehov",
-      description: "Vurder hvilke områder teamet bør styrke.",
-      href: "/teams",
-    },
-    conversation: {
-      label: "Planlegg neste utviklingssamtale",
-      description: "Sett agenda og felles fokus i samtalene dine.",
-      href: "/me/conversations",
-    },
-    roles: {
-      label: "Se din organisatoriske rolle",
-      description: "Se rollen du er tildelt, og dine ansvarsområder.",
-      href: "/me/skills?vy=rolle",
-    },
+  teamUpdate: {
+    title: "Siste nytt fra teamet",
+    teamPrefix: "Team",
+    latestPublished: "Siste publiserte måling",
+    insufficient: "Siste måling har for få svar til å vises.",
+    noSurveys: "Det finnes ingen målinger for teamet ennå.",
+    action: "Se resultater",
+    noTeam: "Du har ingen team å vise resultater for ennå.",
   },
 } as const;

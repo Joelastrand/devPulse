@@ -111,7 +111,7 @@ describe("participant binding cleanup on a conversation owned by someone else (T
     const raw = await ownerRaw(store);
     expect(raw).toMatchObject({
       participantUid: null,
-      participantMemberRef: null,
+      participantBindings: null,
       participantState: null,
       participantInvitedAt: null,
       participantAcceptedAt: null,
@@ -201,7 +201,7 @@ describe("participant binding cleanup on a conversation owned by someone else (T
     store.seedRawOwner(OWNER_UID, CONVERSATION, {
       teamId: "team-alpha",
       participantUid: PARTICIPANT_UID,
-      participantMemberRef: "0123456789abcdefghjkmnpqrs",
+      participantBindings: { "team-alpha": { ownerMemberRef: "2468ace7bdfhjkmnpqrstvwxyz", participantMemberRef: "0123456789abcdefghjkmnpqrs" } },
       participantState: "accepted",
       participantInvitedAt: NOW,
       participantAcceptedAt: NOW,

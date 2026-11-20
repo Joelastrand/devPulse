@@ -57,6 +57,21 @@ export const systemsCopy = {
     },
   },
 
+  view: {
+    label: "Visning",
+    overview: "Oversikt",
+    detail: "Detaljert tabell",
+  },
+  sort: {
+    label: "Sorter etter",
+    name: "Navn",
+    risk: "Kompetanserisiko",
+    attention: "Oppfølgingsbehov",
+  },
+  overview: {
+    label: "Systemer i teamet, oversikt",
+    qualityLabel: "Kvalitetsvurderinger",
+  },
   list: {
     showing: (shown: number, total: number) => `Viser ${shown} av ${total} systemer`,
     showMore: "Vis flere",
@@ -173,7 +188,14 @@ export const systemsCopy = {
   knowledgeRiskPanel: {
     title: "Kompetanserisiko",
     description:
-      "Vurdering basert på hvor mange teammedlemmer som har kjent systemet. Dette er en indikasjon for kunnskapsdeling, ikke en vurdering av enkeltpersoner.",
+      "Basert på hvor mange teammedlemmer som har kjent systemet. Gjelder kunnskapsdeling, ikke enkeltpersoner.",
+    /** Meaning of each band. Band order is the risk order: no known member is the highest risk. */
+    bands: {
+      none: "Ingen har kjent systemet. Høyest risiko.",
+      high: "Kun én person har kjent systemet. Sårbart ved fravær.",
+      elevated: "To personer har kjent systemet.",
+      lower: "Tre eller flere personer har kjent systemet.",
+    },
     singlePerson: (count: number) =>
       count === 1 ? "1 system har kun én kjent person" : `${count} systemer har kun én kjent person`,
     singlePersonHelp: "Kunnskapsdeling kan redusere sårbarhet ved fravær eller endring i teamet.",

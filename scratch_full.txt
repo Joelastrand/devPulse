@@ -1,0 +1,148 @@
+
+> devpulse@0.1.0 test:full C:\Projekt\devpulse
+> node scripts/test-tier.mjs full
+
+Tier: full. Entire Vitest suite, typecheck and lint.
+
+WARNING: FIRESTORE_EMULATOR_HOST is not set. The emulator suites will skip. Run pnpm test:emulator separately before a release.
+
+== vitest (full suite): node node_modules\vitest\vitest.mjs run
+
+ RUN  v5.0.0 C:/Projekt/devpulse
+
+Not implemented: navigation to another Document
+Not implemented: navigation to another Document
+Not implemented: navigation to another Document
+ ❯ src/lib/theme/raw-palette.test.ts (1 test | 1 failed) 20ms
+   ❯ raw colour allow-list (1)
+     × lists every file that still has raw colour values, with its exact count 17ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/lib/theme/raw-palette.test.ts > raw colour allow-list > lists every file that still has raw colour values, with its exact count
+AssertionError: expected [ …(44) ] to deeply equal [ …(55) ]
+
+- Expected
++ Received
+
+@@ -6,21 +6,10 @@
+    "src/features/account-erasure/components/ErasureConfirmation.tsx",
+    "src/features/account-erasure/components/ErasureEntryLink.tsx",
+    "src/features/auth/components/SignInForm.tsx",
+    "src/features/challenges/components/ChallengeList.tsx",
+    "src/features/challenges/components/ChallengeSubmissionPanel.tsx",
+-   "src/features/development-conversations/components/CompleteConversationDialog.tsx",
+-   "src/features/development-conversations/components/ConversationDetail.tsx",
+-   "src/features/development-conversations/components/ConversationList.tsx",
+-   "src/features/development-conversations/components/ConversationsPage.tsx",
+-   "src/features/development-conversations/components/CreateConversationForm.tsx",
+-   "src/features/development-conversations/components/DeleteConversationDialog.tsx",
+-   "src/features/development-conversations/components/GoalSnapshotSelector.tsx",
+-   "src/features/development-conversations/components/ParticipantConversation.tsx",
+-   "src/features/development-conversations/components/ParticipantPanel.tsx",
+-   "src/features/development-conversations/components/PendingInvitation.tsx",
+-   "src/features/development-conversations/components/RecoveryRegion.tsx",
+    "src/features/forum/components/CreateThreadForm.tsx",
+    "src/features/forum/components/DeleteConfirmation.tsx",
+    "src/features/forum/components/ReplyForm.tsx",
+    "src/features/forum/components/ThreadDetail.tsx",
+    "src/features/forum/components/ThreadList.tsx",
+
+ ❯ src/lib/theme/raw-palette.test.ts:58:25
+     56|     const actualFiles = Object.keys(counts).sort();
+     57|     const allowedFiles = Object.keys(allowed).sort();
+     58|     expect(actualFiles).toEqual(allowedFiles);
+       |                         ^
+     59|     for (const file of actualFiles) {
+     60|       expect(counts[file], file).toBe(allowed[file]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 698 passed | 16 skipped (715)
+      Tests  1 failed | 11159 passed | 4 expected fail | 89 skipped (11253)
+   Start at  12:23:36
+   Duration  242.45s (environment 34%, import 34%, tests 26%, transform 3%, setup 2%, worker 1%)
+
+     Import  1534 modules were evaluated 11537 times · 580.52s total, 34% of tracked time
+             ~47.70s faster with isolate: false — shared modules are evaluated once per worker instead of once per file
+             learn more: https://vitest.dev/guide/improving-performance#test-isolation
+
+
+== typecheck: node node_modules\typescript\bin\tsc --noEmit
+
+== lint: node node_modules\eslint\bin\eslint.js
+
+C:\Projekt\devpulse\src\features\account-erasure\server\erasure-adapters-sweep.test.ts
+  1:29  warning  'openedPlanFixture' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Projekt\devpulse\src\features\challenges\server\admin-stamp-fence.test.ts
+  52:7  warning  'isSuperadmin' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Projekt\devpulse\src\features\challenges\server\challenge-management-concurrency.test.ts
+  1:32  warning  'vi' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Projekt\devpulse\src\features\development-conversations\development-conversations-cross-cutting.test.ts
+  43:7  warning  'isAdminUid' is assigned a value but never used        @typescript-eslint/no-unused-vars
+  86:7  warning  'ADMIN_ALLOW_LIST' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Projekt\devpulse\src\features\forum\server\create-reply.transaction.test.ts
+  103:9  warning  'attempts' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Projekt\devpulse\src\features\skill-trees\server\team-skill-progress-br35-regression.test.ts
+  4:32  warning  'vi' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Projekt\devpulse\src\features\skill-trees\server\team-skill-tracking-lifecycle.test.ts
+  5:32  warning  'vi' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Projekt\devpulse\src\features\skill-trees\server\update-skill-tree.refusal.test.ts
+  58:7  warning  'isSuperadmin' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Projekt\devpulse\src\features\superadmins\components\AdminUsers.test.tsx
+  17:10  warning  React Hook React.useEffect has a missing dependency: 'callback'. Either include it or remove the dependency array. If 'callback' changes too often, find the parent component that defines it and wrap that definition in useCallback  react-hooks/exhaustive-deps
+
+C:\Projekt\devpulse\src\features\surveys\server\survey-content-codec.test.ts
+  52:20  warning  '_title' is assigned a value but never used        @typescript-eslint/no-unused-vars
+  52:41  warning  '_description' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Projekt\devpulse\src\features\team-competence-plan\client\use-competence-plans.test.tsx
+  17:10  warning  React Hook React.useEffect has a missing dependency: 'onAuthChange'. Either include it or remove the dependency array. If 'onAuthChange' changes too often, find the parent component that defines it and wrap that definition in useCallback  react-hooks/exhaustive-deps
+
+C:\Projekt\devpulse\src\features\team-skills\components\OwnCompetenceSharing.test.tsx
+  14:55  warning  React Hook useEffect has a missing dependency: 'onAuthChange'. Either include it or remove the dependency array. If 'onAuthChange' changes too often, find the parent component that defines it and wrap that definition in useCallback  react-hooks/exhaustive-deps
+
+C:\Projekt\devpulse\src\features\team-systems\components\SystemMatrix.test.tsx
+  32:7   warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+  35:10  warning  React Hook React.useEffect has a missing dependency: 'onAuthChange'. Either include it or remove the dependency array. If 'onAuthChange' changes too often, find the parent component that defines it and wrap that definition in useCallback  react-hooks/exhaustive-deps
+
+C:\Projekt\devpulse\src\features\team-systems\components\TeamSystemDetailPage.test.tsx
+  29:7   warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+  32:10  warning  React Hook React.useEffect has a missing dependency: 'onAuthChange'. Either include it or remove the dependency array. If 'onAuthChange' changes too often, find the parent component that defines it and wrap that definition in useCallback  react-hooks/exhaustive-deps
+
+C:\Projekt\devpulse\src\features\team-systems\components\TeamSystemsPage.favorites.test.tsx
+  29:7   warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+  32:10  warning  React Hook React.useEffect has a missing dependency: 'onAuthChange'. Either include it or remove the dependency array. If 'onAuthChange' changes too often, find the parent component that defines it and wrap that definition in useCallback  react-hooks/exhaustive-deps
+
+C:\Projekt\devpulse\src\features\team-systems\components\TeamSystemsPage.paging.test.tsx
+  31:7   warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+  34:10  warning  React Hook React.useEffect has a missing dependency: 'onAuthChange'. Either include it or remove the dependency array. If 'onAuthChange' changes too often, find the parent component that defines it and wrap that definition in useCallback  react-hooks/exhaustive-deps
+
+C:\Projekt\devpulse\src\features\team-systems\components\TeamSystemsPage.test.tsx
+  35:7   warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+  38:10  warning  React Hook React.useEffect has a missing dependency: 'onAuthChange'. Either include it or remove the dependency array. If 'onAuthChange' changes too often, find the parent component that defines it and wrap that definition in useCallback  react-hooks/exhaustive-deps
+
+C:\Projekt\devpulse\src\features\teams\components\TeamDetail.test.tsx
+  204:10  warning  'deferredPromise' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Projekt\devpulse\src\features\teams\components\TeamPageHeader.test.tsx
+  17:7   warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+  20:10  warning  React Hook useEffect has a missing dependency: 'onAuthChange'. Either include it or remove the dependency array. If 'onAuthChange' changes too often, find the parent component that defines it and wrap that definition in useCallback  react-hooks/exhaustive-deps
+
+C:\Projekt\devpulse\test\auth-fixtures.ts
+  82:67  warning  '_token' is defined but never used  @typescript-eslint/no-unused-vars
+
+✖ 28 problems (0 errors, 28 warnings)
+  0 errors and 6 warnings potentially fixable with the `--fix` option.
+
+ ELIFECYCLE  Command failed with exit code 1.
+full exit 1

@@ -4,9 +4,10 @@ import { changeParticipant } from "./change-participant";
 import type { ConversationTransaction, RawConversationData } from "./conversation-store-types";
 import { createFakeContentCodec, type FakeContentCodec } from "./fake-content-codec";
 import { createFakeConversationStore, type FakeConversationStore } from "./fake-conversation-store";
-import { createFakeTeamEligibilityReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
+import { createFakeSharedTeamReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
 import {
   NOW,
+  OWNER_MEMBER_REF,
   OWNER_UID,
   OTHER_OWNER_UID,
   PARTICIPANT_MEMBER_REF,
@@ -36,7 +37,7 @@ function setup(): Setup {
   const state: FakeTeamEligibilityState = {
     teamStatus: { [TEAM_ID]: "active" },
     memberships: {
-      [`${OWNER_UID}__${TEAM_ID}`]: { uid: OWNER_UID, teamId: TEAM_ID, createdAt: new Date(0), memberRef: "0123456789abcdefghjkmnpqrs" },
+      [`${OWNER_UID}__${TEAM_ID}`]: { uid: OWNER_UID, teamId: TEAM_ID, createdAt: new Date(0), memberRef: OWNER_MEMBER_REF },
       [`${PARTICIPANT_UID}__${TEAM_ID}`]: {
         uid: PARTICIPANT_UID,
         teamId: TEAM_ID,
@@ -136,13 +137,12 @@ describe("writeParticipantNotes: accepted eligible participant (BR-20, D2-SI-7)"
     const afterContent = decoded(codec, after);
     expect(afterContent).toEqual({ ...beforeContent, participantNotes: PARTICIPANT_NOTE });
     for (const key of [
-      "teamId",
       "plannedFor",
       "status",
       "completedAt",
       "createdAt",
       "participantUid",
-      "participantMemberRef",
+      "participantBindings",
       "participantState",
       "participantInvitedAt",
       "participantAcceptedAt",
@@ -272,7 +272,7 @@ describe("writeParticipantNotes: lifecycle and races (BR-28, BR-50 (1) and (2))"
     const removal = await changeParticipant(OWNER_UID, CONVERSATION_ID, { participantMemberRef: null }, {
       store,
       codec,
-      refReader: { ...createFakeTeamEligibilityReader(setupValue.state), listMemberships: async () => [] },
+      refReader: createFakeSharedTeamReader(setupValue.state),
       clock: () => new Date(LATER.getTime()),
     });
     expect(removal).toEqual({ ok: true });
@@ -521,6 +521,10 @@ function observe(store: FakeConversationStore): { store: FakeConversationStore; 
               counts.membership += 1;
               return tx.teamEligibility.getMembership(uid, teamId);
             },
+            findMembershipsByRef: (memberRef, limit) => {
+              counts.membership += 1;
+              return tx.teamEligibility.findMembershipsByRef(memberRef, limit);
+            },
           },
           getParticipation: (callerUid, conversationId) => {
             counts.index += 1;
@@ -591,7 +595,8 @@ describe("writeParticipantNotes: transaction-backed authorization (BR-48, TASK-0
       ok: true,
     });
 
-    expect(observed.counts).toEqual({ attempts: 1, index: 1, owner: 1, team: 1, membership: 1, mutations: ["updateOwner"] });
+    // A2.1: one membership lookup by reference, then the owner and participant memberships, each with its team status.
+    expect(observed.counts).toEqual({ attempts: 1, index: 1, owner: 1, team: 2, membership: 2, mutations: ["updateOwner"] });
     expect(await store.getParticipation(PARTICIPANT_UID, CONVERSATION_ID)).toEqual(indexBefore);
     expect(decoded(codec, await rawOwner(store)).participantNotes).toBe(PARTICIPANT_NOTE);
   });
@@ -682,7 +687,8 @@ describe("writeParticipantNotes: transaction-backed authorization (BR-48, TASK-0
       ok: false,
       error: "conversation_not_found",
     });
-    expect(observed.counts).toMatchObject({ attempts: 2, index: 2, owner: 2, team: 2, membership: 2 });
+    // A2.1: the second attempt finds the participant's membership removed, so no recorded team holds.
+    expect(observed.counts).toMatchObject({ attempts: 2, index: 2, owner: 2, team: 4, membership: 4 });
     expect(await rawOwner(store)).toEqual(before);
     expect(decoded(codec, await rawOwner(store)).participantNotes).toBe("");
   });
@@ -731,7 +737,7 @@ describe("writeParticipantNotes: transaction-backed authorization (BR-48, TASK-0
     expect(await writeParticipantNotes(PARTICIPANT_UID, CONVERSATION_ID, PARTICIPANT_NOTE, { ...deps, store: observed.store })).toEqual({
       ok: true,
     });
-    expect(observed.counts).toEqual({ attempts: 2, index: 2, owner: 2, team: 2, membership: 2, mutations: ["updateOwner", "updateOwner"] });
+    expect(observed.counts).toEqual({ attempts: 2, index: 2, owner: 2, team: 4, membership: 4, mutations: ["updateOwner", "updateOwner"] });
     expect(decoded(codec, await rawOwner(store)).participantNotes).toBe(PARTICIPANT_NOTE);
   });
 

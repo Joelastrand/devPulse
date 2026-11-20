@@ -6,6 +6,7 @@ import { conversationsCopy } from "../copy";
 const updateConversationMock = vi.fn();
 
 vi.mock("../client/conversations-gateway", () => ({
+  fetchInvitableColleagues: async () => ({ status: "ok", response: { colleagues: [], truncated: false } }),
   updateConversation: updateConversationMock,
 }));
 

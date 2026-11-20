@@ -123,29 +123,41 @@ function formatTooltipLabel(label: unknown, payload: unknown): string {
  * represented, so the information is never conveyed by the chart's
  * shape/color alone.
  */
-export function TrendChart({ results }: { results: readonly SurveyResultSummary[] }) {
+export function TrendChart({ results, onShowTable }: { results: readonly SurveyResultSummary[]; onShowTable?: () => void }) {
   if (results.length === 0) {
     return null;
   }
 
   const data = buildTrendSeries(results);
+  // A line needs two visible points. Fewer is stated in text, so one result is never read as a trend.
+  const visibleCount = results.filter((result) => result.status === "published").length;
+  const notice = visibleCount === 0 ? resultsCopy.trendChart.noVisible : visibleCount === 1 ? resultsCopy.trendChart.single : null;
 
   return (
     <Card as="section" variant="bordered" padding="md" aria-labelledby="trend-chart-heading">
       <h2
         id="trend-chart-heading"
-        className="text-lg font-semibold text-zinc-900 dark:text-zinc-50"
+        className="text-lg font-semibold text-text-primary"
       >
         {resultsCopy.trendChart.heading}
       </h2>
-      <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-        {resultsCopy.trendChart.description}
-      </p>
-      <div aria-hidden="true" className="mt-4 h-64 w-full">
+      <p className="mt-1 text-sm text-text-secondary">{resultsCopy.trendChart.description}</p>
+      {notice !== null ? <p className="mt-2 text-sm font-medium text-text-primary">{notice}</p> : null}
+      {/* Text alternative: the chart is hidden from assistive technology, so this states the essentials in text and gives a
+          route to every authorized value in the history table, without requiring that table to be open. */}
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-text-secondary">
+        <p>{resultsCopy.trendChart.textSummary(results.length, visibleCount)}</p>
+        {onShowTable ? (
+          <button type="button" onClick={onShowTable} className="font-medium text-text-primary underline underline-offset-2">
+            {resultsCopy.trendChart.showTable}
+          </button>
+        ) : null}
+      </div>
+      <div aria-hidden="true" className="mt-4 h-56 w-full sm:h-72">
         <ResponsiveContainer width="100%" height="100%">
           {/* The chart is aria-hidden (the table below carries the values); recharts' keyboard layer would make it focusable. */}
           <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 8 }} accessibilityLayer={false}>
-            <CartesianGrid strokeDasharray="3 3" className="stroke-zinc-200 dark:stroke-zinc-800" />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
             <XAxis dataKey="date" tick={AXIS_TICK} />
             <YAxis domain={VALUE_DOMAIN} allowDecimals={false} tick={AXIS_TICK} />
             <Tooltip formatter={formatTooltipValue} labelFormatter={formatTooltipLabel} />

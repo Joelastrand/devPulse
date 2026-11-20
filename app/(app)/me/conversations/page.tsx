@@ -1,15 +1,11 @@
-import { PageHeader } from "../../../../src/components/ui/PageHeader";
 import { PageShell } from "../../../../src/components/ui/PageShell";
 import { ConversationsPage } from "../../../../src/features/development-conversations/components/ConversationsPage";
-import { conversationsCopy } from "../../../../src/features/development-conversations/copy";
 
+/** The owner's conversation list. The page header and its one primary action belong to the client view. */
 export default function MyConversationsPage() {
   return (
     <PageShell width="3xl">
-      <PageHeader title={conversationsCopy.pageTitle} description={conversationsCopy.pageDescription} />
-      <div className="mt-6">
-        <ConversationsPage />
-      </div>
+      <ConversationsPage />
     </PageShell>
   );
 }

@@ -14,7 +14,7 @@ import {
 import { getDefaultConversationStore } from "./conversation-store";
 import type { ConversationStore, ConversationTransaction, RawConversationData } from "./conversation-store-types";
 import { classifyOwnerDocument, type OwnerReadCodec } from "./owner-read";
-import { readGenuineActiveMembership } from "./team-eligibility";
+import { authorizeBoundParticipant } from "./shared-team-binding";
 import { conversationContext } from "../domain/stored-owner-conversation";
 
 /**
@@ -77,15 +77,15 @@ async function writeInTransaction(
   const raw: RawConversationData | undefined = await tx.getOwner(ownerUid, conversationId);
   if (raw === undefined) return NOT_FOUND;
   const shape = classifyStoredShape(raw);
-  if (shape.kind !== "valid" || shape.record.teamId === null) return NOT_FOUND;
+  if (shape.kind !== "valid" || shape.record.participant === null) return NOT_FOUND;
 
-  // BR-48, BR-21 (d) and (e): the team and the caller's current genuine membership, read through this attempt's
-  // transaction. A retry repeats this read, so no eligibility is carried over from an earlier attempt. A failed read is operational.
-  const membership = await readGenuineActiveMembership(callerUid, shape.record.teamId, tx.teamEligibility);
-  if (!membership.ok && membership.error === "read_failed") return FAILED;
+  // BR-48, BR-21 (d) and (e): the shared active team and the caller's current membership instance, read through this
+  // attempt's transaction. A retry repeats this read, so no eligibility is carried over from an earlier attempt. A failed read is operational.
+  const binding = await authorizeBoundParticipant(ownerUid, callerUid, shape.record.participant.bindings, tx.teamEligibility);
+  if (!binding.ok && binding.error === "read_failed") return FAILED;
 
   // BR-21 (a) to (e): the single decision. Every denial is the same not-found result.
-  const decision = authorizeParticipant({ callerUid, index: rawIndex, owner: raw, membership });
+  const decision = authorizeParticipant({ callerUid, index: rawIndex, owner: raw, binding });
   if (!decision.allowed) return NOT_FOUND;
 
   // BR-28: `participantNotes` is frozen after completion. The status is plain, so it is checked before any decryption.

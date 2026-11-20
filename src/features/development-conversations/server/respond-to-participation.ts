@@ -18,9 +18,8 @@ import {
   type ConversationTransaction,
   type RawConversationData,
 } from "./conversation-store-types";
-import { bindingMatches } from "./member-ref-binding";
 import { classifyOwnerDocument, type OwnerReadCodec } from "./owner-read";
-import { readGenuineActiveMembership } from "./team-eligibility";
+import { authorizeBoundParticipant } from "./shared-team-binding";
 import { conversationContext } from "../domain/stored-owner-conversation";
 
 /**
@@ -57,7 +56,7 @@ const REFUSED: RespondToParticipationResult = { ok: false, error: "erasure_in_pr
 /** The participant fields that a leave clears. Written as `null`, never omitted (BR-16, BR-17). */
 const CLEARED_PARTICIPANT_FIELDS = {
   participantUid: null,
-  participantMemberRef: null,
+  participantBindings: null,
   participantState: null,
   participantInvitedAt: null,
   participantAcceptedAt: null,
@@ -109,14 +108,11 @@ export async function acceptInvitation(
       if (classification.kind !== "valid") return NOT_FOUND;
       const participant = classification.record.participant;
       if (participant === null || participant.uid !== callerUid || participant.state !== "pending") return NOT_FOUND;
-      const teamId = classification.record.teamId;
-      if (teamId === null) return NOT_FOUND;
 
-      // BR-48, BR-9 and BR-21 (d) and (e): an active team, a current genuine membership, and the bound memberRef still
-      // equal. Both reads go through this attempt's transaction, so a retry repeats them (no cache across attempts).
-      const membership = await readGenuineActiveMembership(callerUid, teamId, tx.teamEligibility);
-      if (!membership.ok) return membership.error === "read_failed" ? FAILED : NOT_FOUND;
-      if (!bindingMatches(participant.memberRef, membership)) return NOT_FOUND;
+      // BR-48, BR-9 and BR-21 (d) and (e): a shared active team, a current genuine membership of both parties, and the bound
+      // membership instance. The reads go through this attempt's transaction, so a retry repeats them (no cache across attempts).
+      const binding = await authorizeBoundParticipant(ownerUid, callerUid, participant.bindings, tx.teamEligibility);
+      if (!binding.ok) return binding.error === "read_failed" ? FAILED : NOT_FOUND;
 
       const now = deps.clock();
       tx.updateOwner(ownerUid, conversationId, {

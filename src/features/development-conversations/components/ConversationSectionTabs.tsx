@@ -54,8 +54,10 @@ export function ConversationSectionTabs({ tabs, label }: { tabs: readonly Conver
               tabIndex={selected ? 0 : -1}
               onClick={() => setActive(tab.id)}
               onKeyDown={(event) => onKeyDown(event, index)}
-              className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
-                selected ? "border-primary text-text-primary" : "border-transparent text-text-secondary hover:text-text-primary"
+              className={`-mb-px inline-flex min-h-11 items-center rounded-t-md border-b-2 px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
+                selected
+                  ? "border-primary bg-primary-subtle font-semibold text-text-primary"
+                  : "border-transparent font-medium text-text-secondary hover:bg-surface-muted hover:text-text-primary"
               }`}
             >
               {tab.label}

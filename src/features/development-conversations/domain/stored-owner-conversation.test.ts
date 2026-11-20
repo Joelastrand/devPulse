@@ -19,6 +19,11 @@ import {
   SHARED_GOAL_DTO_KEYS,
 } from "./dto-keys";
 
+/** A valid server-managed binding map: one shared team with both current references (synthetic). */
+const SYNTHETIC_BINDINGS = {
+  "team-alpha": { ownerMemberRef: "2468ace7bdfhjkmnpqrstvwxyz", participantMemberRef: "0123456789abcdefghjkmnpqrs" },
+};
+
 /** Synthetic test data only (invariant 15). Base64 values have the helper's lengths: 12-byte IV, 16-byte tag. */
 const SYNTHETIC_IV = "AAAAAAAAAAAAAAAA";
 const SYNTHETIC_TAG = "AAAAAAAAAAAAAAAAAAAAAA==";
@@ -44,9 +49,8 @@ function validPayload(): Record<string, unknown> {
 /** A canonical open conversation with no participant (BR-51 plain key set, nulls written explicitly). */
 function validOwnerDoc(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    teamId: "synthetic-team",
     participantUid: null,
-    participantMemberRef: null,
+    participantBindings: null,
     participantState: null,
     participantInvitedAt: null,
     participantAcceptedAt: null,
@@ -73,11 +77,10 @@ function classify(raw: unknown, outcome: DecryptOutcome = decryptedValid()) {
 }
 
 describe("stored owner conversation plain key set (BR-51)", () => {
-  it("is exactly the seventeen BR-51 plain fields and holds no content field", () => {
+  it("is exactly the sixteen BR-51 plain fields (A2.1: no teamId) and holds no content field", () => {
     expect([...STORED_OWNER_PLAIN_KEYS]).toEqual([
-      "teamId",
       "participantUid",
-      "participantMemberRef",
+      "participantBindings",
       "participantState",
       "participantInvitedAt",
       "participantAcceptedAt",
@@ -93,7 +96,8 @@ describe("stored owner conversation plain key set (BR-51)", () => {
       "keyId",
       "keyCheck",
     ]);
-    expect(STORED_OWNER_PLAIN_KEYS).toHaveLength(17);
+    expect(STORED_OWNER_PLAIN_KEYS).toHaveLength(16);
+    expect(STORED_OWNER_PLAIN_KEYS).not.toContain("teamId");
     for (const forbidden of ["title", "ownerNotes", "nextSteps", "participantNotes", "sharedGoals"]) {
       expect(STORED_OWNER_PLAIN_KEYS).not.toContain(forbidden);
     }
@@ -186,12 +190,11 @@ describe("classifyStoredConversation: keyCheck structural form (CL-27)", () => {
 });
 
 describe("classifyStoredConversation: valid documents", () => {
-  it("classifies an open conversation with no participant and no team", () => {
-    const result = classify(validOwnerDoc({ teamId: null }));
+  it("classifies an open conversation with no participant", () => {
+    const result = classify(validOwnerDoc());
     expect(result.kind).toBe("valid");
     if (result.kind === "valid") {
       expect(result.record).toMatchObject({
-        teamId: null,
         participant: null,
         plannedFor: null,
         status: "open",
@@ -210,7 +213,7 @@ describe("classifyStoredConversation: valid documents", () => {
         status: "completed",
         completedAt: COMPLETED,
         participantUid: "synthetic-participant",
-        participantMemberRef: "synthetic-ref",
+        participantBindings: SYNTHETIC_BINDINGS,
         participantState: "accepted",
         participantInvitedAt: INVITED,
         participantAcceptedAt: ACCEPTED,
@@ -223,7 +226,7 @@ describe("classifyStoredConversation: valid documents", () => {
       expect(result.record.plannedFor).toBe("2026-10-14");
       expect(result.record.participant).toEqual({
         uid: "synthetic-participant",
-        memberRef: "synthetic-ref",
+        bindings: SYNTHETIC_BINDINGS,
         state: "accepted",
         invitedAt: INVITED,
         acceptedAt: ACCEPTED,
@@ -235,7 +238,7 @@ describe("classifyStoredConversation: valid documents", () => {
     const result = classify(
       validOwnerDoc({
         participantUid: "synthetic-participant",
-        participantMemberRef: "synthetic-ref",
+        participantBindings: SYNTHETIC_BINDINGS,
         participantState: "pending",
         participantInvitedAt: INVITED,
       }),
@@ -271,16 +274,8 @@ describe("classifyStoredConversation: malformed plain shape never decrypts", () 
     ["createdAt as string", () => validOwnerDoc({ createdAt: "2026-10-01T08:00:00.000Z" })],
     ["createdAt missing as null", () => validOwnerDoc({ createdAt: null })],
     ["updatedAt invalid Date", () => validOwnerDoc({ updatedAt: new Date("nope") })],
-    ["teamId empty", () => validOwnerDoc({ teamId: "" })],
-    ["teamId numeric", () => validOwnerDoc({ teamId: 1 })],
-    ["participant without team", () => validOwnerDoc({
-      teamId: null,
-      participantUid: "synthetic-participant",
-      participantMemberRef: "synthetic-ref",
-      participantState: "pending",
-      participantInvitedAt: INVITED,
-    })],
-    ["partial binding: uid without memberRef", () => validOwnerDoc({
+    ["legacy teamId key is refused as an unknown key (A2.1)", () => ({ ...validOwnerDoc(), teamId: "synthetic-team" })],
+    ["partial binding: uid without bindings", () => validOwnerDoc({
       participantUid: "synthetic-participant",
       participantState: "pending",
       participantInvitedAt: INVITED,
@@ -288,36 +283,40 @@ describe("classifyStoredConversation: malformed plain shape never decrypts", () 
     ["partial binding: state without uid", () => validOwnerDoc({ participantState: "pending", participantInvitedAt: INVITED })],
     ["participant state declined", () => validOwnerDoc({
       participantUid: "synthetic-participant",
-      participantMemberRef: "synthetic-ref",
+      participantBindings: SYNTHETIC_BINDINGS,
       participantState: "declined",
       participantInvitedAt: INVITED,
     })],
     ["pending with acceptedAt set", () => validOwnerDoc({
       participantUid: "synthetic-participant",
-      participantMemberRef: "synthetic-ref",
+      participantBindings: SYNTHETIC_BINDINGS,
       participantState: "pending",
       participantInvitedAt: INVITED,
       participantAcceptedAt: ACCEPTED,
     })],
     ["accepted without acceptedAt", () => validOwnerDoc({
       participantUid: "synthetic-participant",
-      participantMemberRef: "synthetic-ref",
+      participantBindings: SYNTHETIC_BINDINGS,
       participantState: "accepted",
       participantInvitedAt: INVITED,
       participantAcceptedAt: null,
     })],
     ["participantInvitedAt as string", () => validOwnerDoc({
       participantUid: "synthetic-participant",
-      participantMemberRef: "synthetic-ref",
+      participantBindings: SYNTHETIC_BINDINGS,
       participantState: "pending",
       participantInvitedAt: "2026-10-03T08:00:00.000Z",
     })],
-    ["empty participantMemberRef", () => validOwnerDoc({
+    ["empty participantBindings map", () => validOwnerDoc({
       participantUid: "synthetic-participant",
-      participantMemberRef: "",
+      participantBindings: {},
       participantState: "pending",
       participantInvitedAt: INVITED,
     })],
+    ["bindings with an extra key", () => validOwnerDoc({ participantUid: "synthetic-participant", participantState: "pending", participantInvitedAt: INVITED, participantBindings: { "team-alpha": { ownerMemberRef: "2468ace7bdfhjkmnpqrstvwxyz", participantMemberRef: "0123456789abcdefghjkmnpqrs", extra: 1 } } })],
+    ["bindings with a malformed reference", () => validOwnerDoc({ participantUid: "synthetic-participant", participantState: "pending", participantInvitedAt: INVITED, participantBindings: { "team-alpha": { ownerMemberRef: "not-a-ref", participantMemberRef: "0123456789abcdefghjkmnpqrs" } } })],
+    ["bindings with a reserved team id", () => validOwnerDoc({ participantUid: "synthetic-participant", participantState: "pending", participantInvitedAt: INVITED, participantBindings: { "__reserved__": { ownerMemberRef: "2468ace7bdfhjkmnpqrstvwxyz", participantMemberRef: "0123456789abcdefghjkmnpqrs" } } })],
+    ["bindings over the team bound", () => validOwnerDoc({ participantUid: "synthetic-participant", participantState: "pending", participantInvitedAt: INVITED, participantBindings: Object.fromEntries(Array.from({ length: 11 }, (_, index) => [`team-${index}`, { ownerMemberRef: "2468ace7bdfhjkmnpqrstvwxyz", participantMemberRef: "0123456789abcdefghjkmnpqrs" }])) })],
     ["keyVersion other than v2", () => validOwnerDoc({ keyVersion: "v1" })],
     ["keyId other than k1", () => validOwnerDoc({ keyId: "k2" })],
     ["ciphertext not base64", () => validOwnerDoc({ ciphertext: "not base64!" })],
@@ -347,7 +346,7 @@ describe("classifyStoredConversation: malformed plain shape never decrypts", () 
 describe("classifyStoredConversation: canonical participant and status tuples (BR-2, BR-10, BR-13, BR-15)", () => {
   const pending = {
     participantUid: "synthetic-participant",
-    participantMemberRef: "synthetic-ref",
+    participantBindings: SYNTHETIC_BINDINGS,
     participantState: "pending",
     participantInvitedAt: INVITED,
     participantAcceptedAt: null,
@@ -355,7 +354,7 @@ describe("classifyStoredConversation: canonical participant and status tuples (B
   const accepted = { ...pending, participantState: "accepted", participantAcceptedAt: ACCEPTED };
   const none = {
     participantUid: null,
-    participantMemberRef: null,
+    participantBindings: null,
     participantState: null,
     participantInvitedAt: null,
     participantAcceptedAt: null,
@@ -364,20 +363,16 @@ describe("classifyStoredConversation: canonical participant and status tuples (B
   const completed = { status: "completed", completedAt: COMPLETED };
 
   it.each([
-    ["open, no participant, with team", { ...open, ...none }, true],
-    ["open, pending, with team", { ...open, ...pending }, true],
-    ["open, accepted, with team", { ...open, ...accepted }, true],
+    ["open, no participant", { ...open, ...none }, true],
+    ["open, pending", { ...open, ...pending }, true],
+    ["open, accepted", { ...open, ...accepted }, true],
     ["completed, no participant", { ...completed, ...none }, true],
     ["completed, accepted", { ...completed, ...accepted }, true],
     ["completed, pending (withdrawn at completion, BR-13)", { ...completed, ...pending }, false],
-    ["open, pending, no team (BR-2)", { ...open, ...pending, teamId: null }, false],
-    ["open, accepted, no team (BR-2)", { ...open, ...accepted, teamId: null }, false],
-    ["open, no participant, no team", { ...open, ...none, teamId: null }, true],
-    ["completed, no participant, no team", { ...completed, ...none, teamId: null }, true],
     ["open, pending, acceptedAt set", { ...open, ...pending, participantAcceptedAt: ACCEPTED }, false],
     ["open, accepted, acceptedAt missing", { ...open, ...accepted, participantAcceptedAt: null }, false],
     ["open, uid present, state null", { ...open, ...pending, participantState: null }, false],
-    ["open, uid null, memberRef present", { ...open, ...none, participantMemberRef: "synthetic-ref" }, false],
+    ["open, uid null, bindings present", { ...open, ...none, participantBindings: SYNTHETIC_BINDINGS }, false],
     ["open, uid null, invitedAt present", { ...open, ...none, participantInvitedAt: INVITED }, false],
   ])("%s → %s", (_name, fields, valid) => {
     const result = classify(validOwnerDoc(fields));

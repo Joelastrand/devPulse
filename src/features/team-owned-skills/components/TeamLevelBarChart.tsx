@@ -1,7 +1,7 @@
 "use client";
 
-import { useId } from "react";
 import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, XAxis, YAxis } from "recharts";
+import { sortLevelRows, type LevelOrder } from "../domain/level-order";
 import { teamCompetenceCopy } from "../workspace-copy";
 import { levelBarChartHeight } from "./team-level-bar-layout";
 
@@ -18,7 +18,7 @@ const LABEL_LINE_LENGTH = 28;
 
 /** Sorts by area name in Norwegian collation, so the order does not depend on the catalog or on the data arrival order. */
 export function sortBarRows(rows: readonly TeamLevelBarRow[]): TeamLevelBarRow[] {
-  return rows.slice().sort((a, b) => a.name.localeCompare(b.name, "nb") || a.skillId.localeCompare(b.skillId));
+  return sortLevelRows(rows, "name");
 }
 
 /** Splits a long area name into at most two lines at word boundaries, so the axis label is not clipped. */
@@ -65,18 +65,17 @@ function AreaTick({ x = 0, y = 0, payload }: AreaTickProps) {
  * the end of each bar, so the value does not depend on colour or bar length alone. The complete table, rendered by the
  * page, is the text alternative.
  */
-export function TeamLevelBarChart({ rows }: { readonly rows: readonly TeamLevelBarRow[] }) {
-  const headingId = useId();
+/**
+ * The heading and description are owned by the page's collapsible section, so this component renders only the chart. The
+ * `role="img"` box carries the accessible name; the complete values are in the table view of the same section.
+ */
+export function TeamLevelBarChart({ rows, order = "name" }: { readonly rows: readonly TeamLevelBarRow[]; readonly order?: LevelOrder }) {
   if (rows.length === 0) return null;
-  const data = sortBarRows(rows).map((row) => ({ key: row.skillId, name: row.name, level: row.level }));
+  const data = sortLevelRows(rows, order).map((row) => ({ key: row.skillId, name: row.name, level: row.level }));
   const height = levelBarChartHeight(data.length);
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h3 id={headingId} className="text-lg font-semibold text-text-primary">
-        {copy.title}
-      </h3>
-      <p className="text-sm text-text-secondary">{copy.description}</p>
+    <div className="flex flex-col gap-3">
       <div role="img" aria-label={copy.label} className="w-full" style={{ height }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} layout="vertical" margin={{ top: 8, right: 32, bottom: 8, left: 8 }} accessibilityLayer={false}>
@@ -89,6 +88,6 @@ export function TeamLevelBarChart({ rows }: { readonly rows: readonly TeamLevelB
           </BarChart>
         </ResponsiveContainer>
       </div>
-    </section>
+    </div>
   );
 }

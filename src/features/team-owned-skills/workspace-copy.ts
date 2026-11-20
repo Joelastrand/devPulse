@@ -27,19 +27,42 @@ export const teamCompetenceCopy = {
   radarTooFew: "Radaren vises når minst tre områder har nok data.",
   areaSelector: {
     legend: "Velg områder i radaren",
-    help: (max: number) => `Radaren viser opptil ${max} områder. Velg hvilke som vises. Søylediagrammet og tabellen viser alle områder.`,
+    help: (max: number) =>
+      `Radaren og søylediagrammet viser opptil ${max} valgte områder. Velg hvilke som vises. Tabellen viser alle områder.`,
     limitReached: "Radaren viser åtte områder. Fjern ett område for å velge et annet.",
     summaryAction: "Velg kompetanseområder",
     summaryCount: (selected: number, total: number) => `${selected} av ${total} områder valgt`,
     reset: "Tilbakestill utvalg",
   },
-  fullTable: {
-    open: "Vis alle kompetanser i tabell",
-  },
   levelChart: {
     title: "Nivå per område",
     description: "Søylene viser teamets nivå for hvert område der nivå er beregnet. Tallet ved hver søyle er nivået.",
-    label: "Teamets nivå per kompetanseområde, sortert etter navn",
+    label: "Teamets nivå per kompetanseområde",
+    sortLabel: "Sorter",
+    sort: {
+      name: "Navn",
+      levelDesc: "Høyest nivå",
+      levelAsc: "Lavest nivå",
+    },
+    /** Missing levels are listed last in every sort order and are never treated as zero. */
+    sortHint: "Områder uten beregnet nivå vises sist.",
+    viewLabel: "Visning",
+    view: {
+      chart: "Stolpediagram",
+      table: "Tabell",
+    },
+    showAll: (total: number) => `Vis alle områder (${total})`,
+    showSelected: "Vis valgte områder",
+    chartLimited: (shown: number, total: number) =>
+      `Søylediagrammet viser ${shown} av ${total} områder. Tabellen viser alle områder.`,
+  },
+  summary: {
+    label: "Oppsummering",
+    withData: (count: number, total: number) => `${count} av ${total} områder har nivå`,
+    highest: (name: string, level: number) => `Høyest: ${name} (nivå ${level})`,
+    lowest: (name: string, level: number) => `Lavest: ${name} (nivå ${level})`,
+    tied: (count: number) => (count === 2 ? "og ett annet område" : `og ${count - 1} andre områder`),
+    noData: "Ingen områder har beregnet nivå ennå.",
   },
   listCaption: "Kompetansenivåer i visningen",
   columns: {

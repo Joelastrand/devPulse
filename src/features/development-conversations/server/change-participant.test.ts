@@ -4,12 +4,13 @@ import { changeParticipant, type ChangeParticipantDeps } from "./change-particip
 import type { RawConversationData } from "./conversation-store-types";
 import { createFakeContentCodec, type FakeContentCodec } from "./fake-content-codec";
 import { createFakeConversationStore, type FakeConversationStore } from "./fake-conversation-store";
-import { createFakeTeamEligibilityReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
-import type { ParticipantRefReader } from "./member-ref-binding";
+import { createFakeSharedTeamReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
+import type { SharedTeamReader } from "./shared-team-binding";
 import { readParticipantConversation, type ReadParticipantConversationDeps } from "./read-participant-conversation";
 import {
   NOW,
   OTHER_OWNER_UID,
+  OWNER_MEMBER_REF,
   OWNER_UID,
   PARTICIPANT_MEMBER_REF,
   PARTICIPANT_UID,
@@ -22,7 +23,7 @@ import { conversationContext } from "../domain/stored-owner-conversation";
 const CONVERSATION_ID = "conv-1";
 const CTX = conversationContext(OWNER_UID, CONVERSATION_ID);
 const LATER = new Date(NOW.getTime() + 60_000);
-const OWNER_REF = "0123456789abcdefghjkmnpqrs";
+const OWNER_REF = OWNER_MEMBER_REF;
 const CANDIDATE_UID = "candidate-2";
 const CANDIDATE_REF = "zyxwvtsrqpnmkjhgfedcba9876";
 const UNKNOWN_REF = "mnpqrstvwxyz0123456789abcd";
@@ -42,7 +43,7 @@ function membership({ uid, memberRef }: SyntheticMember): Record<string, unknown
   return { uid, teamId: TEAM_ID, createdAt: new Date(0), memberRef };
 }
 
-type RefReader = ParticipantRefReader & { listCalls: number };
+type RefReader = SharedTeamReader & { listCalls: number };
 
 interface Setup {
   store: FakeConversationStore;
@@ -53,25 +54,17 @@ interface Setup {
 }
 
 function refReaderFor(state: FakeTeamEligibilityState): RefReader {
-  const point = createFakeTeamEligibilityReader(state);
-  const reader: RefReader = {
-    ...point,
-    listCalls: 0,
-    async listMemberships(_teamId: string, limit: number) {
-      reader.listCalls += 1;
-      return MEMBERS.slice(0, limit).map(membership);
-    },
-  };
-  return reader;
+  return { ...createFakeSharedTeamReader(state), listCalls: 0 };
 }
 
 function setup(): Setup {
-  const store = createFakeConversationStore();
   const codec = createFakeContentCodec();
   const state: FakeTeamEligibilityState = {
     teamStatus: { [TEAM_ID]: "active" },
     memberships: Object.fromEntries(MEMBERS.map((member) => [`${member.uid}__${TEAM_ID}`, membership(member)])),
   };
+  // The store's transaction and the operation share one team fixture, as production shares one database (BR-48).
+  const store = createFakeConversationStore({ teams: state });
   const reader = refReaderFor(state);
   const deps: ChangeParticipantDeps = { store, codec, refReader: reader, clock: () => new Date(NOW.getTime()) };
   return { store, codec, state, reader, deps };
@@ -101,8 +94,7 @@ function readDeps(store: FakeConversationStore, codec: FakeContentCodec, state: 
   return {
     store,
     codec,
-    teamReader: createFakeTeamEligibilityReader(state),
-    teamNameReader: { getTeamName: async () => "Synthetic team" },
+    teamReader: createFakeSharedTeamReader(state),
     areaNameReader: { getSkillTree: async () => undefined },
     getNames: async () => new Map(),
   };
@@ -146,7 +138,7 @@ describe("changeParticipant: removal (BR-16, CL-21)", () => {
 
     const after = await rawOwner(store);
     expect(after.participantUid).toBeNull();
-    expect(after.participantMemberRef).toBeNull();
+    expect(after.participantBindings).toBeNull();
     expect(after.participantState).toBeNull();
     expect(after.participantInvitedAt).toBeNull();
     expect(after.participantAcceptedAt).toBeNull();
@@ -355,7 +347,7 @@ describe("changeParticipant: replacement (BR-10, BR-16)", () => {
 
     const after = await rawOwner(store);
     expect(after.participantUid).toBe(CANDIDATE_UID);
-    expect(after.participantMemberRef).toBe(CANDIDATE_REF);
+    expect(Object.values(after?.participantBindings ?? {}).map((b) => b.participantMemberRef)).toEqual([CANDIDATE_REF]);
     expect(after.participantState).toBe("pending");
     expect(after.participantInvitedAt).toEqual(NOW);
     expect(after.participantAcceptedAt).toBeNull();

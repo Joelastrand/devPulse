@@ -7,6 +7,7 @@ const deleteConversationMock = vi.fn();
 const routerReplaceMock = vi.fn();
 
 vi.mock("../client/conversations-gateway", () => ({
+  fetchInvitableColleagues: async () => ({ status: "ok", response: { colleagues: [], truncated: false } }),
   deleteConversation: deleteConversationMock,
 }));
 vi.mock("next/navigation", () => ({

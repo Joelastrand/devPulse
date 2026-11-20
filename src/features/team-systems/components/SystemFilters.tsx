@@ -117,7 +117,7 @@ export function SystemFilters({
           size="sm"
           aria-pressed={filter.favoritesOnly}
           onClick={() => onChange({ ...filter, favoritesOnly: !filter.favoritesOnly })}
-          className={cx("gap-2", filter.favoritesOnly && "border-primary text-primary")}
+          className={cx("inline-flex items-center gap-2", filter.favoritesOnly && "border-primary text-primary")}
         >
           <Icon icon={Star} size="inline" className={filter.favoritesOnly ? "fill-current" : undefined} />
           {systemsCopy.filters.favoritesOnly}

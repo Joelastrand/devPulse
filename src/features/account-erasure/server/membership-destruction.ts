@@ -1,5 +1,6 @@
+import { PARTICIPATION_LIMIT } from "../../development-conversations/domain/conversation-constants";
 import type { BoundConversation, ParticipantBindingsDeps } from "./participant-bindings-erasure";
-import { eraseParticipantBinding } from "./participant-bindings-erasure";
+import { removeTeamBinding } from "./participant-bindings-erasure";
 import { withoutMemberRef, type KnowledgeSystem } from "./membership-erasure";
 
 /**
@@ -32,7 +33,11 @@ export interface MembershipRecordForDestruction {
 /** Plain discovery, used before the final transaction to clear bindings. Never the membership's delete decision. */
 export interface MembershipDestructionDiscovery {
   readMembership(membershipId: string): Promise<MembershipRecordForDestruction | undefined>;
-  boundConversations(memberRef: string, limit: number): Promise<BoundConversation[]>;
+  /**
+   * The conversations in which `uid` is the participant, at most `limit`. Literal equality on the participant uid: the step
+   * matches each entry against the destroyed membership, so no dynamic field path is queried (A2.1 revised).
+   */
+  boundConversations(uid: string, limit: number): Promise<BoundConversation[]>;
 }
 
 export interface MembershipDestructionFinalTransaction {
@@ -41,7 +46,8 @@ export interface MembershipDestructionFinalTransaction {
   getMembership(membershipId: string): Promise<unknown>;
   roadmapItemIdsOwnedBy(teamId: string, memberRef: string, limit: number): Promise<string[]>;
   clearRoadmapOwnerRef(itemId: string): void;
-  boundConversationCount(memberRef: string, limit: number): Promise<number>;
+  /** Conversations whose participant binding for `teamId` names `memberRef` (A2.1 revised), counted within `limit`. */
+  boundConversationCount(uid: string, teamId: string, memberRef: string, limit: number): Promise<number>;
   /** Systems in `teamId` whose `knowledgeMemberRefs` contains `memberRef` (A-14), with their current refs, at most `limit`. */
   systemsKnowingMemberRef(teamId: string, memberRef: string, limit: number): Promise<KnowledgeSystem[]>;
   /** Replaces one system's `knowledgeMemberRefs`. Only that field changes; the system record is kept (A-14). */
@@ -117,13 +123,12 @@ export async function destroyMembershipInstance(
 
     if (typeof memberRef === "string") {
       // Binding cleanup first, one owner transaction per conversation. Each uses the approved removal semantics.
-      const bound = await deps.port.boundConversations(memberRef, maxWrites);
+      // The window covers every participation a person can hold (BR-37), so no matching entry is left outside it.
+      const bound = await deps.port.boundConversations(target.uid, Math.max(maxWrites, PARTICIPATION_LIMIT + 1));
       for (const binding of bound) {
-        const cleaned = await eraseParticipantBinding(deps.bindings, binding, target.uid);
+        // A skipped entry names no membership of this memberRef and writes nothing. Only the final count decides the delete.
+        const cleaned = await removeTeamBinding(deps.bindings, binding, teamId as string, memberRef);
         if (!cleaned.ok) throw new MembershipDestructionFailure("binding_cleanup_failed");
-        // A binding that still names this memberRef but is not owned by this uid cannot be cleared by the binding cleanup, which
-        // only clears a binding of its own participant. Retrying would loop, so it fails at once with its own reason (TASK-038 I-2).
-        if (cleaned.outcome === "skipped") throw new MembershipDestructionFailure("binding_inconsistent");
       }
     }
 
@@ -137,7 +142,7 @@ export async function destroyMembershipInstance(
           for (const itemId of itemIds) tx.clearRoadmapOwnerRef(itemId);
           return "more" as const;
         }
-        if ((await tx.boundConversationCount(memberRef, maxWrites)) > 0) return "more" as const;
+        if ((await tx.boundConversationCount(target.uid, teamId as string, memberRef, PARTICIPATION_LIMIT + 1)) > 0) return "more" as const;
         // A-14: detach before the delete. No write has been queued in this transaction yet, so the read is still legal.
         const systems = await tx.systemsKnowingMemberRef(teamId as string, memberRef, maxWrites);
         if (systems.length > 0) {

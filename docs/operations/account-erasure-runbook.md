@@ -110,7 +110,7 @@ operator-run, reviewed, non-product script, under the same operator Admin SDK ac
 - Allowed actions: run the registry verification queries (counts only) and the approved step handlers for any non-zero row.
   When every row is zero, write `status: "completed"` with `completedAt` and `expireAt`, the BR-17 criteria.
 - BR-17(1) amendment, dated 2026-11-02 (SPEC decision log "Decision log: BR-17(1) membership-instance rows (approved 2026-11-02)"). For A-5 (`roadmapItems.ownerRef`),
-  I-7 `participantMemberRef` and I-9 `memberRef`, the membership-instance `memberRef` is destroyed by membership removal. These
+  I-7 `participantBindings` (A2.1 revised: the team entry of the destroyed membership is removed, and the participant only when no entry remains) and I-9 `memberRef`, the membership-instance `memberRef` is destroyed by membership removal. These
   rows are not re-queried after membership destruction. The step handlers clear them transactionally before the membership is
   deleted. The operator's zero check covers every other row.
 - Forbidden: recreating or restoring the Auth identity; any new product endpoint; any new privileged app role or admin

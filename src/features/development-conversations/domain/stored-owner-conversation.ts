@@ -1,13 +1,15 @@
 import { parseConversationContent, type ConversationContent } from "./content-payload";
 import { isConversationStatus, type ConversationStatus } from "./conversation-status";
 import { isValidPlanDate } from "./plan-date";
+import { parseTeamBindingMap, type TeamBindingMap } from "./team-bindings";
 import { hasExactKeys, isNonEmptyString, isPlainObject, isStoredDate } from "./stored-shape";
 
 /**
  * Stored owner document (SPEC BR-51, AD-2): a document in the D2 owner subtree, keyed by owner uid and conversation id.
  * This is an internal D2 persistence shape only. It grants no access to personal-goal storage.
  *
- * The document holds exactly the seventeen plain keys below. Content is never a plain key: it lives in the single
+ * The document holds exactly the sixteen plain keys below. A conversation has no team: it is private to its owner, and a
+ * participant binding is valid only while the owner and participant share an active team (see `shared-team-binding.ts`). Content is never a plain key: it lives in the single
  * encrypted payload (BR-51, BR-52). Every key is always written, so an optional value is `null`, never absent. A
  * missing or `undefined` key is malformed. The conversation id is the document path, so no id field is stored.
  *
@@ -19,9 +21,8 @@ import { hasExactKeys, isNonEmptyString, isPlainObject, isStoredDate } from "./s
  * (SPEC BR-51, BR-53, CL-27).
  */
 export const STORED_OWNER_PLAIN_KEYS = [
-  "teamId",
   "participantUid",
-  "participantMemberRef",
+  "participantBindings",
   "participantState",
   "participantInvitedAt",
   "participantAcceptedAt",
@@ -76,7 +77,8 @@ export type StoredEnvelope = {
 
 export type StoredParticipant = {
   uid: string;
-  memberRef: string;
+  /** Per-team membership-instance references recorded at invitation (A2.1 revised). Server-only, never a DTO field. */
+  bindings: TeamBindingMap;
   state: "pending" | "accepted";
   invitedAt: Date;
   /** Set exactly when `state` is `accepted` (BR-15). */
@@ -85,7 +87,6 @@ export type StoredParticipant = {
 
 /** Internal representation of a valid owner document. It is never a public DTO (SPEC BR-41…BR-44, BR-46). */
 export type StoredConversation = {
-  teamId: string | null;
   participant: StoredParticipant | null;
   plannedFor: string | null;
   status: ConversationStatus;
@@ -175,19 +176,20 @@ type ParticipantResult = { ok: true; participant: StoredParticipant | null } | {
 
 /**
  * The participant binding is all-null (no participant) or all-set (BR-7, BR-10). `acceptedAt` is set exactly when
- * the state is `accepted`. `memberRef` is stored for later equality checks only and grants nothing here (CL-23).
+ * the state is `accepted`. The bindings are stored for per-request checks only and grant nothing here (CL-23).
  */
 function parseParticipant(raw: Record<string, unknown>): ParticipantResult {
-  const { participantUid, participantMemberRef, participantState, participantInvitedAt, participantAcceptedAt } = raw;
+  const { participantUid, participantBindings, participantState, participantInvitedAt, participantAcceptedAt } = raw;
   if (participantUid === null) {
     const absent =
-      participantMemberRef === null &&
+      participantBindings === null &&
       participantState === null &&
       participantInvitedAt === null &&
       participantAcceptedAt === null;
     return absent ? { ok: true, participant: null } : { ok: false };
   }
-  if (!isNonEmptyString(participantUid) || !isNonEmptyString(participantMemberRef)) {
+  const bindings = parseTeamBindingMap(participantBindings);
+  if (!isNonEmptyString(participantUid) || bindings === null) {
     return { ok: false };
   }
   if (participantState !== "pending" && participantState !== "accepted") {
@@ -209,19 +211,12 @@ function parseParticipant(raw: Record<string, unknown>): ParticipantResult {
     ok: true,
     participant: {
       uid: participantUid,
-      memberRef: participantMemberRef,
+      bindings,
       state: participantState,
       invitedAt: participantInvitedAt,
       acceptedAt,
     },
   };
-}
-
-function optionalNonEmptyString(value: unknown): string | null | undefined {
-  if (value === null) {
-    return null;
-  }
-  return isNonEmptyString(value) ? value : undefined;
 }
 
 function optionalPlanDate(value: unknown): string | null | undefined {
@@ -243,12 +238,7 @@ function parseOwnerShape(raw: unknown): ShapeResult {
   if (!hasExactKeys(raw, STORED_OWNER_PLAIN_KEYS)) {
     return { ok: false, reason: "keys" };
   }
-  const { teamId, plannedFor, status, completedAt, createdAt, updatedAt } = raw;
-
-  const teamIdValue = optionalNonEmptyString(teamId);
-  if (teamIdValue === undefined) {
-    return { ok: false, reason: "team" };
-  }
+  const { plannedFor, status, completedAt, createdAt, updatedAt } = raw;
 
   if (!isConversationStatus(status)) {
     return { ok: false, reason: "status" };
@@ -256,10 +246,6 @@ function parseOwnerShape(raw: unknown): ShapeResult {
 
   const binding = parseParticipant(raw);
   if (!binding.ok) {
-    return { ok: false, reason: "participant" };
-  }
-  // A conversation without a team can never have a participant (BR-2).
-  if (binding.participant !== null && teamIdValue === null) {
     return { ok: false, reason: "participant" };
   }
   // Completion withdraws any pending invitation in the same transaction (BR-13, CL-25). No valid operation can
@@ -302,7 +288,6 @@ function parseOwnerShape(raw: unknown): ShapeResult {
     ok: true,
     envelope: { ...envelope, keyCheck },
     record: {
-      teamId: teamIdValue,
       participant: binding.participant,
       plannedFor: plannedForValue,
       status,

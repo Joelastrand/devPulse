@@ -174,13 +174,19 @@ describe("POST /api/me/conversations", () => {
     expect(createConversationMock).not.toHaveBeenCalled();
   });
 
-  it("creates for the verified caller with the three allowed keys and returns 201 with the conversation id", async () => {
+  it("creates for the verified caller with the two allowed keys and returns 201 with the conversation id (A2.1: no team)", async () => {
     createConversationMock.mockResolvedValue({ ok: true, conversationId: CONVERSATION_ID });
-    const response = await routeModule.POST(post({ title: "Tittel", plannedFor: "2026-11-01", teamId: "team-a" }));
+    const response = await routeModule.POST(post({ title: "Tittel", plannedFor: "2026-11-01" }));
     expect(response.status).toBe(201);
     expectNoStore(response);
     expect(await response.json()).toEqual({ conversationId: CONVERSATION_ID });
-    expect(createConversationMock).toHaveBeenCalledWith(OWNER_A, { title: "Tittel", plannedFor: "2026-11-01", teamId: "team-a" });
+    expect(createConversationMock).toHaveBeenCalledWith(OWNER_A, { title: "Tittel", plannedFor: "2026-11-01" });
+  });
+
+  it("refuses a teamId in the create body as an unknown key, since a conversation has no team (A2.1)", async () => {
+    const response = await routeModule.POST(post({ title: "Tittel", teamId: "team-a" }));
+    expect(response.status).toBe(400);
+    expect(createConversationMock).not.toHaveBeenCalled();
   });
 
   it("refuses an owner, uid or participant selector in the body as an unknown key, without calling the operation", async () => {

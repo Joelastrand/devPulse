@@ -1,3 +1,4 @@
+import { isValidPlanDate } from "../../roadmap/domain/roadmap-dates";
 import { PROJECT_EFFECTIVE_STATUSES, type ProjectEffectiveStatus } from "./team-project";
 import { barForRange, type TimelineBar, type TimelineWindow } from "./timeline-geometry";
 
@@ -181,4 +182,34 @@ export function formatPlanDateNb(isoDate: string): string {
 /** Month column header, e.g. `nov 2026`. */
 export function formatMonthLabelNb(month: number, year: number): string {
   return `${MONTH_ABBREVIATIONS[month - 1]} ${year}`;
+}
+
+const MONTH_NAMES = [
+  "januar",
+  "februar",
+  "mars",
+  "april",
+  "mai",
+  "juni",
+  "juli",
+  "august",
+  "september",
+  "oktober",
+  "november",
+  "desember",
+] as const;
+
+/** The visible period as text, e.g. `november 2026 – april 2027`, generated from the window's first and last month. */
+export function formatPeriodHeadingNb(window: TimelineWindow): string {
+  const first = window.columns[0];
+  const last = window.columns[window.columns.length - 1];
+  if (!first || !last) return "";
+  return `${MONTH_NAMES[first.month - 1]} ${first.year} – ${MONTH_NAMES[last.month - 1]} ${last.year}`;
+}
+
+/** Inclusive calendar days from `startDate` to `endDate`. Returns 0 for an invalid or reversed range. */
+export function inclusiveDayCount(startDate: string, endDate: string): number {
+  if (!isValidPlanDate(startDate) || !isValidPlanDate(endDate) || startDate > endDate) return 0;
+  const utcDay = (iso: string) => Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10)));
+  return Math.round((utcDay(endDate) - utcDay(startDate)) / 86_400_000) + 1;
 }

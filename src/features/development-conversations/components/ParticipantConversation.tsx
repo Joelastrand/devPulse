@@ -4,6 +4,7 @@ import { ConversationSectionTabs } from "./ConversationSectionTabs";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
+import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { TextArea } from "../../../components/ui/TextArea";
 import { saveParticipantNotes, type ParticipantConversationWire } from "../client/conversations-gateway";
 import { conversationsCopy } from "../copy";
@@ -60,17 +61,17 @@ export function ParticipantConversation({
       {refreshFailed && <Alert variant="error">{conversationsCopy.refreshFailed}</Alert>}
       {completed && <Alert variant="info">{conversationsCopy.participantCompleted}</Alert>}
 
-      <p className="text-sm text-zinc-700 dark:text-zinc-300">{conversationsCopy.participantPrivacy}</p>
-
-      <div className="flex flex-col gap-1 text-sm text-zinc-700 dark:text-zinc-300">
-        <p>
-          {conversationsCopy.ownerNameLabel}: <span className="text-zinc-900 dark:text-zinc-50">{conversation.ownerDisplayName ?? conversationsCopy.anonymousColleague}</span>
-        </p>
-        <p>
-          {conversationsCopy.teamLabel}: <span className="text-zinc-900 dark:text-zinc-50">{conversation.teamName}</span>
-        </p>
-        <p>{conversationsCopy.statusLabel[conversation.status]}</p>
-      </div>
+      {/* The conversation's own title is the primary heading, as in the owner view. */}
+      <header className="flex min-w-0 flex-col gap-2">
+        <h1 className="min-w-0 break-words text-page-title font-semibold text-text-primary">{conversation.title}</h1>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm text-text-muted">
+          <StatusBadge>{conversationsCopy.statusLabel[conversation.status]}</StatusBadge>
+          <span className="min-w-0 break-words">
+            {conversationsCopy.ownerNameLabel}: <span className="text-text-primary">{conversation.ownerDisplayName ?? conversationsCopy.anonymousColleague}</span>
+          </span>
+        </div>
+        <p className="max-w-prose text-sm text-text-secondary">{conversationsCopy.participantPrivacy}</p>
+      </header>
 
       <ConversationSectionTabs label={conversationsCopy.sectionTabs.label}
         tabs={[
@@ -79,12 +80,8 @@ export function ParticipantConversation({
             label: conversationsCopy.sectionTabs.overview,
             children: (
               <>
-        <Section id="participant-title-heading" heading={conversationsCopy.titleSection}>
-          <p className="break-words text-zinc-900 dark:text-zinc-50">{conversation.title}</p>
-        </Section>
-
         <Section id="participant-planned-for-heading" heading={conversationsCopy.plannedForSection}>
-          <p className="text-zinc-900 dark:text-zinc-50">{conversation.plannedFor ?? conversationsCopy.noPlannedFor}</p>
+          <p className="text-text-primary">{conversation.plannedFor ?? conversationsCopy.noPlannedFor}</p>
         </Section>
                 <LeaveSection flight={flight} onLeave={onLeave} />
               </>
@@ -96,8 +93,8 @@ export function ParticipantConversation({
             children: (
               <>
         <Section id="participant-owner-notes-heading" heading={conversationsCopy.ownerNotesSection}>
-          <p className="text-sm text-zinc-700 dark:text-zinc-300">{conversationsCopy.ownerContentNote}</p>
-          <p className="whitespace-pre-line break-words text-zinc-900 dark:text-zinc-50">{conversation.ownerNotes || conversationsCopy.noOwnerNotes}</p>
+          <p className="text-sm text-text-secondary">{conversationsCopy.ownerContentNote}</p>
+          <p className="whitespace-pre-line break-words text-text-primary">{conversation.ownerNotes || conversationsCopy.noOwnerNotes}</p>
         </Section>
         <Section id="participant-own-notes-heading" heading={conversationsCopy.participantOwnNotesSection}>
           <ParticipantNotesEditor
@@ -119,9 +116,9 @@ export function ParticipantConversation({
             children: <>
         <Section id="participant-next-steps-heading" heading={conversationsCopy.nextStepsSection}>
           {conversation.nextSteps.length === 0 ? (
-            <p className="text-zinc-600 dark:text-zinc-400">{conversationsCopy.noNextSteps}</p>
+            <p className="text-text-muted">{conversationsCopy.noNextSteps}</p>
           ) : (
-            <ul className="flex list-disc flex-col gap-1 pl-5 text-zinc-900 dark:text-zinc-50">
+            <ul className="flex list-disc flex-col gap-1 pl-5 text-text-primary">
               {conversation.nextSteps.map((step, index) => (
                 <li key={index} className="break-words">
                   {step}
@@ -137,21 +134,21 @@ export function ParticipantConversation({
         </Section>
 
         <Section id="participant-goals-heading" heading={conversationsCopy.sharedGoalsSection}>
-          <p className="text-sm text-zinc-700 dark:text-zinc-300">{conversationsCopy.participantSharedGoalsNote}</p>
+          <p className="text-sm text-text-secondary">{conversationsCopy.participantSharedGoalsNote}</p>
           {conversation.sharedGoals.length === 0 ? (
-            <p className="text-zinc-600 dark:text-zinc-400">{conversationsCopy.noSharedGoals}</p>
+            <p className="text-text-muted">{conversationsCopy.noSharedGoals}</p>
           ) : (
             <ul className="flex flex-col gap-3">
               {conversation.sharedGoals.map((goal, index) => (
-                <li key={index} className="flex flex-col gap-1 text-zinc-900 dark:text-zinc-50">
+                <li key={index} className="flex flex-col gap-1 text-text-primary">
                   <p className="break-words font-medium">{goal.goalTitle}</p>
-                  <p className="text-sm text-zinc-700 dark:text-zinc-300">{goal.areaName ?? conversationsCopy.areaUnavailable}</p>
+                  <p className="text-sm text-text-secondary">{goal.areaName ?? conversationsCopy.areaUnavailable}</p>
                   {goal.targetDate && (
-                    <p className="text-sm text-zinc-700 dark:text-zinc-300">
+                    <p className="text-sm text-text-secondary">
                       {conversationsCopy.goalDateLabel}: {goal.targetDate}
                     </p>
                   )}
-                  <p className="text-sm text-zinc-700 dark:text-zinc-300">{conversationsCopy.goalStatusLabel[goal.status]}</p>
+                  <p className="text-sm text-text-secondary">{conversationsCopy.goalStatusLabel[goal.status]}</p>
                 </li>
               ))}
             </ul>
@@ -169,7 +166,7 @@ export function ParticipantConversation({
 function Section({ id, heading, children }: { id: string; heading: string; children: ReactNode }) {
   return (
     <section aria-labelledby={id} className="flex flex-col gap-4">
-      <h2 id={id} className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+      <h2 id={id} className="text-lg font-semibold text-text-primary">
         {heading}
       </h2>
       {children}
@@ -198,7 +195,7 @@ function ParticipantNotesEditor({ conversationId, token, notes, completed, fligh
   const feedbackRef = useRef<HTMLDivElement>(null);
 
   if (completed) {
-    return <p className="whitespace-pre-line break-words text-zinc-900 dark:text-zinc-50">{notes || conversationsCopy.participantNotesEmpty}</p>;
+    return <p className="whitespace-pre-line break-words text-text-primary">{notes || conversationsCopy.participantNotesEmpty}</p>;
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -293,12 +290,12 @@ function LeaveSection({ flight, onLeave }: LeaveSectionProps) {
           role="group"
           aria-labelledby="leave-confirm-title"
           onSubmit={confirm}
-          className="flex flex-col gap-3 border-t border-zinc-200 pt-4 dark:border-zinc-800"
+          className="flex flex-col gap-3 border-t border-border-subtle pt-4"
         >
-          <p id="leave-confirm-title" ref={confirmRef} tabIndex={-1} className="font-medium text-zinc-900 outline-none dark:text-zinc-50">
+          <p id="leave-confirm-title" ref={confirmRef} tabIndex={-1} className="font-medium text-text-primary outline-none">
             {conversationsCopy.leaveConfirmHeading}
           </p>
-          <p className="text-sm text-zinc-900 dark:text-zinc-50">{conversationsCopy.leaveConfirmCopy}</p>
+          <p className="text-sm text-text-primary">{conversationsCopy.leaveConfirmCopy}</p>
           <div className="flex flex-wrap gap-2">
             <Button type="submit" variant="destructive" size="sm" pending={flight.pending}>
               {flight.pending ? conversationsCopy.saving : conversationsCopy.confirmLeave}

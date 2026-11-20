@@ -49,3 +49,6 @@ next-env.d.ts
 
 # browser verification output (screenshots, reports) - never commit
 /.verify-output/
+
+# local demo seed manifest (never commit)
+.local/

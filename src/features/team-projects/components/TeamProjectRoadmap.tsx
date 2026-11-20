@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
+import { CollapsibleSection } from "../../../components/ui/CollapsibleSection";
 import { EmptyState } from "../../../components/ui/EmptyState";
+import { useDisclosurePreferences } from "../../../components/ui/use-disclosure-preferences";
+import { useAccountUid } from "../../auth/client/use-account-uid";
 import { TeamRoadmapSkeleton } from "./TeamRoadmapSkeleton";
 import { Section } from "../../../components/ui/Section";
 import { TeamPageHeader } from "../../teams/components/TeamPageHeader";
@@ -22,15 +25,16 @@ import {
   type ProjectWriteResult,
 } from "../client/team-projects-gateway";
 import { teamProjectsCopy } from "../copy";
-import { filterProjectsByStatus, formatPlanDateNb, type ParticipationInput, type ProjectStatusFilter } from "../domain/project-roadmap-view";
+import { filterProjectsByStatus, formatPeriodHeadingNb, formatPlanDateNb, type ParticipationInput, type ProjectStatusFilter } from "../domain/project-roadmap-view";
 import { PROJECT_EFFECTIVE_STATUSES } from "../domain/team-project";
-import { buildTimelineWindow, TIMELINE_WINDOW_MONTHS, type TimelineWindowMonths } from "../domain/timeline-geometry";
+import { barForRange, buildTimelineWindow, TIMELINE_WINDOW_MONTHS, type TimelineWindowMonths } from "../domain/timeline-geometry";
 import { planningToday } from "../../roadmap/domain/roadmap-dates";
 import type { ProjectParticipationView } from "../server/write-project-participation";
 import { ParticipationForm, type ParticipationFormSubmit } from "./ParticipationForm";
 import { ParticipationPanel } from "./ParticipationPanel";
 import { ProjectForm } from "./ProjectForm";
 import { ProjectGantt } from "./ProjectGantt";
+import { ProjectList } from "./ProjectList";
 
 type EditState = { mode: "create" } | { mode: "edit"; project: ClientTeamProject } | null;
 
@@ -66,6 +70,16 @@ export function TeamProjectRoadmap({ teamId }: { teamId: string }) {
   }, [scopeKey]);
   const timelineWindow = buildTimelineWindow(today, months);
   const participations = data.phase === "loaded" ? toParticipationInputs(data.projects, data.participations) : [];
+  // Local view preference for the participation section only. Its default is collapsed: it is detail behind the timeline.
+  const uid = useAccountUid();
+  // `projectList` is a stored boolean for the Liste view (false = Tidslinje), scoped to this user and team like the
+  // section states. It is a view preference only: no project data is stored.
+  const disclosure = useDisclosurePreferences("roadmap", teamId, uid, { participation: false, projectList: false });
+  const listView = disclosure.isOpen("projectList");
+  const participationSummary =
+    data.phase === "loaded" && !data.membersFailed && !data.participationsFailed
+      ? teamProjectsCopy.section.participationSummary(data.members.length, new Set(participations.map((item) => item.projectId)).size)
+      : null;
 
   if (auth.phase === "loading") {
     return <TeamRoadmapSkeleton label={teamProjectsCopy.loading} />;
@@ -222,6 +236,42 @@ export function TeamProjectRoadmap({ teamId }: { teamId: string }) {
           </EmptyState>
         ) : (
           <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div role="group" aria-label={teamProjectsCopy.view.label} className="inline-flex rounded-control border border-border-strong p-0.5">
+                  {(["timeline", "list"] as const).map((value) => {
+                    const selected = value === "list" ? listView : !listView;
+                    return (
+                      <Button
+                        key={value}
+                        type="button"
+                        variant={selected ? "primary" : "tertiary"}
+                        size="sm"
+                        aria-pressed={selected}
+                        onClick={() => disclosure.setOpen("projectList", value === "list")}
+                      >
+                        {value === "list" ? teamProjectsCopy.view.list : teamProjectsCopy.view.timeline}
+                      </Button>
+                    );
+                  })}
+                </div>
+                <div role="group" aria-label={teamProjectsCopy.window.label} className="inline-flex rounded-control border border-border-strong p-0.5">
+                  {TIMELINE_WINDOW_MONTHS.map((value) => (
+                    <Button
+                      key={value}
+                      type="button"
+                      variant={months === value ? "primary" : "tertiary"}
+                      size="sm"
+                      aria-pressed={months === value}
+                      onClick={() => setMonths(value)}
+                    >
+                      {value === 3 ? teamProjectsCopy.window.threeMonths : teamProjectsCopy.window.sixMonths}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <p className="text-label font-medium text-text-primary">{formatPeriodHeadingNb(timelineWindow)}</p>
+            </div>
             <div role="group" aria-label={teamProjectsCopy.filter.label} className="flex flex-wrap gap-2">
               {(["all", ...PROJECT_EFFECTIVE_STATUSES] as const).map((value) => (
                 <Button
@@ -236,8 +286,23 @@ export function TeamProjectRoadmap({ teamId }: { teamId: string }) {
                 </Button>
               ))}
             </div>
+            {!listView && filteredProjects.length > 0 && filteredProjects.every((project) => barForRange(timelineWindow, project.startDate, project.endDate) === null) ? (
+              <EmptyState>{teamProjectsCopy.empty.period}</EmptyState>
+            ) : null}
             {filteredProjects.length === 0 ? (
               <EmptyState>{teamProjectsCopy.empty.filtered}</EmptyState>
+            ) : listView ? (
+              <ProjectList
+                window={timelineWindow}
+                projects={filteredProjects}
+                canEdit={data.canEdit}
+                busyProjectId={busyProjectId}
+                onEdit={(project) => {
+                  setFormError(null);
+                  setEditing({ mode: "edit", project });
+                }}
+                onArchive={(project) => void runWrite("archive", project.projectId, null)}
+              />
             ) : (
               <ProjectGantt
                 window={timelineWindow}
@@ -300,20 +365,6 @@ export function TeamProjectRoadmap({ teamId }: { teamId: string }) {
         description={teamProjectsCopy.section.planDescription}
         action={
           <div className="flex flex-wrap items-center gap-2">
-            <div role="group" aria-label={teamProjectsCopy.window.label} className="inline-flex rounded-control border border-border-strong p-0.5">
-              {TIMELINE_WINDOW_MONTHS.map((value) => (
-                <Button
-                  key={value}
-                  type="button"
-                  variant={months === value ? "primary" : "tertiary"}
-                  size="sm"
-                  aria-pressed={months === value}
-                  onClick={() => setMonths(value)}
-                >
-                  {value === 3 ? teamProjectsCopy.window.threeMonths : teamProjectsCopy.window.sixMonths}
-                </Button>
-              ))}
-            </div>
             {data.phase === "loaded" && data.canEdit && editing === null ? (
               <Button
                 type="button"
@@ -344,10 +395,15 @@ export function TeamProjectRoadmap({ teamId }: { teamId: string }) {
       </Section>
 
       {data.phase === "loaded" ? (
-        <Section
+        <CollapsibleSection
+          id="roadmap-participation"
           title={teamProjectsCopy.section.participation}
           description={teamProjectsCopy.section.participationDescription}
-          action={
+          summary={participationSummary}
+          open={disclosure.isOpen("participation")}
+          onOpenChange={(open) => disclosure.setOpen("participation", open)}
+          lockOpen={participationEdit !== null}
+          actions={
             data.canEdit && participationEdit === null ? (
               <Button
                 type="button"
@@ -363,7 +419,7 @@ export function TeamProjectRoadmap({ teamId }: { teamId: string }) {
             ) : null
           }
         >
-          <div className="flex flex-col gap-4 rounded-surface border border-border-subtle bg-surface p-4 shadow-card">
+          <div className="flex flex-col gap-4">
             {data.canEdit && participationEdit !== null ? (
               <ParticipationForm
                 key={participationEdit.mode === "edit" ? participationEdit.participation.participationId : "create"}
@@ -409,7 +465,7 @@ export function TeamProjectRoadmap({ teamId }: { teamId: string }) {
               />
             )}
           </div>
-        </Section>
+        </CollapsibleSection>
       ) : null}
     </div>
   );

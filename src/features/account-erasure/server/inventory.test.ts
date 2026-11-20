@@ -95,7 +95,7 @@ describe("erasure inventory registry", () => {
     const queriedFields = inventorySweeps().flatMap((sweep) =>
       sweep.query.kind === "fieldEquals" || sweep.query.kind === "collectionGroupFieldEquals" ? [sweep.query.field] : [],
     );
-    for (const memberRefField of ["ownerRef", "participantMemberRef", "memberRef"]) {
+    for (const memberRefField of ["ownerRef", "participantBindings", "memberRef"]) {
       expect(queriedFields).not.toContain(memberRefField);
     }
     expect(sweepsOf("A-5")).toEqual([{ kind: "perMembership", field: "ownerRef" }]);
@@ -140,7 +140,7 @@ describe("erasure inventory sweep query shapes", () => {
   it("sweeps I-7 through the owner-side collection group: participantUid by collection-group query, memberRef per membership", () => {
     expect(sweepsOf("I-7")).toEqual([
       { kind: "collectionGroupFieldEquals", field: "participantUid", value: "uid" },
-      { kind: "perMembership", field: "participantMemberRef" },
+      { kind: "perMembership", field: "participantBindings" },
     ]);
   });
 

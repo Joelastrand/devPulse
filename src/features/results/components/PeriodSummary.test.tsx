@@ -37,11 +37,12 @@ describe("PeriodSummary", () => {
     render(<PeriodSummary result={PUBLISHED} />);
 
     expect(screen.getByText(/q3-puls/i)).toBeTruthy();
-    expect(screen.getByText(/24\.\s*aug/i)).toBeTruthy();
-    expect(screen.getByText("3.2")).toBeTruthy();
-    expect(screen.getByText("2.8")).toBeTruthy();
-    expect(screen.getByText("4.1")).toBeTruthy();
     expect(screen.getByText("7 svar")).toBeTruthy();
+    // The dimension values and the date are shown once, in the results summary strip, not repeated here.
+    expect(screen.queryByText("3.2")).toBeNull();
+    expect(screen.queryByText("2.8")).toBeNull();
+    expect(screen.queryByText("4.1")).toBeNull();
+    expect(screen.queryByText(/24\.\s*aug/i)).toBeNull();
   });
 
   it("shows a threshold-safe suppressed message for an insufficient survey, never the actual response count", () => {

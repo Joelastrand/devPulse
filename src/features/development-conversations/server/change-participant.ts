@@ -12,7 +12,14 @@ import {
 } from "./content-codec";
 import { getDefaultConversationStore } from "./conversation-store";
 import type { ConversationStore, ConversationTransaction, OwnerDocumentPatch } from "./conversation-store-types";
-import { createFirestoreParticipantRefReader, resolveParticipantRef, type ParticipantRefReader } from "./member-ref-binding";
+import {
+  boundMemberships,
+  confirmBoundColleague,
+  createFirestoreSharedTeamReader,
+  resolveColleagueRef,
+  type BoundColleague,
+  type SharedTeamReader,
+} from "./shared-team-binding";
 import { classifyOwnerDocument, type OwnerReadCodec } from "./owner-read";
 import { conversationContext } from "../domain/stored-owner-conversation";
 
@@ -36,8 +43,8 @@ export interface ChangeParticipantDeps {
   store: ConversationStore;
   /** The codec operations this path needs: the probe, the classifier's decrypt seam and the encoder. */
   codec: OwnerReadCodec & { encodeContent(content: ConversationContent, context: string): EncodeContentResult };
-  /** The TASK-007 reference seam, used only to resolve a replacement candidate. */
-  refReader: ParticipantRefReader;
+  /** The shared-team seam, used only to resolve a replacement candidate by `memberRef`. */
+  refReader: SharedTeamReader;
   /** Server time for `participantInvitedAt` and `updatedAt`. Injected so tests can fix it. */
   clock: () => Date;
 }
@@ -71,7 +78,7 @@ const FAILED: ChangeParticipantResult = { ok: false, error: "persistence_failed"
 /** The participant fields that a removal or replacement clears first. Written as `null`, never omitted (BR-16). */
 const CLEARED_PARTICIPANT_FIELDS = {
   participantUid: null,
-  participantMemberRef: null,
+  participantBindings: null,
   participantState: null,
   participantInvitedAt: null,
   participantAcceptedAt: null,
@@ -81,7 +88,7 @@ function defaultDeps(): ChangeParticipantDeps {
   return {
     store: getDefaultConversationStore(),
     codec: { probeKey: probeKeyOnce, decryptForClassification: decryptForClassificationWithKey, encodeContent: encodeContentWithKey },
-    refReader: createFirestoreParticipantRefReader(),
+    refReader: createFirestoreSharedTeamReader(),
     clock: () => new Date(),
   };
 }
@@ -104,14 +111,13 @@ function encodeWithoutParticipantNotes(
 }
 
 interface PreparedReplacement {
-  teamId: string;
-  candidateUid: string;
-  memberRef: string;
+  colleague: BoundColleague;
 }
 
 /**
- * The checks that run before the transaction (TASK-014 order): the conversation is read and classified, the team id is
- * needed to resolve the ref, the candidate passes TASK-007, and the cap is counted (BR-37). A refusal carries its result.
+ * The checks that run before the transaction (TASK-014 order, A2.1): the conversation is read and classified, the colleague
+ * is resolved by `memberRef` and must share an active team with the owner, and the cap is counted (BR-37). A refusal carries
+ * its result.
  */
 async function prepareReplacement(
   ownerUid: string,
@@ -124,17 +130,16 @@ async function prepareReplacement(
   const classification = classifyOwnerDocument(before, deps.codec, { ownerUid, conversationId });
   if (classification.kind !== "valid") return { ok: false, result: NOT_FOUND };
 
-  const teamId = classification.record.teamId;
-  if (teamId === null) return { ok: false, result: INVALID };
-
-  const resolved = await resolveParticipantRef(ownerUid, teamId, memberRef, deps.refReader);
-  if (!resolved.ok) return { ok: false, result: { ok: false, error: resolved.error } };
+  const resolved = await resolveColleagueRef(ownerUid, memberRef, deps.refReader);
+  if (!resolved.ok) {
+    return { ok: false, result: { ok: false, error: resolved.error === "read_failed" ? "persistence_failed" : "invalid_participant" } };
+  }
 
   // BR-37: count-then-create, as in TASK-014.
-  const count = await deps.store.countParticipation(resolved.candidateUid);
+  const count = await deps.store.countParticipation(resolved.colleague.uid);
   if (count >= PARTICIPATION_LIMIT) return { ok: false, result: INVALID };
 
-  return { ok: true, replacement: { teamId, candidateUid: resolved.candidateUid, memberRef: resolved.memberRef } };
+  return { ok: true, replacement: { colleague: resolved.colleague } };
 }
 
 async function removeInTransaction(
@@ -183,8 +188,9 @@ async function replaceInTransaction(
 
   // BR-16: a replacement is allowed only while open. The status is read here, inside the transaction (BR-50 (6)).
   if (record.status === "completed") return COMPLETED;
-  // The team is immutable (BR-2), so a mismatch is refused rather than repaired.
-  if (record.teamId !== prepared.teamId) return INVALID;
+  // BR-48: the owner and the replacement colleague must still share the active team, read through this transaction.
+  const confirmed = await confirmBoundColleague(ownerUid, prepared.colleague, tx.teamEligibility);
+  if (!confirmed.ok) return confirmed.error === "read_failed" ? FAILED : INVALID;
 
   const current = record.participant;
   // The old participant's notes are deleted with the same re-encryption as a removal (BR-16, IMPL-1). With no current
@@ -199,8 +205,8 @@ async function replaceInTransaction(
   // Every participant field is set here, so the old binding and acceptance are replaced, not merged (BR-16).
   const invitedAt = new Date(now.getTime());
   tx.updateOwner(ownerUid, conversationId, {
-    participantUid: prepared.candidateUid,
-    participantMemberRef: prepared.memberRef,
+    participantUid: prepared.colleague.uid,
+    participantBindings: prepared.colleague.bindings,
     participantState: "pending",
     participantInvitedAt: invitedAt,
     participantAcceptedAt: null,
@@ -209,8 +215,10 @@ async function replaceInTransaction(
   });
   if (current !== null) tx.deleteParticipation(current.uid, conversationId);
   // Coordination with membership destruction (TASK-038, I-7): the new candidate's membership is touched in this transaction.
-  tx.touchMembership(prepared.candidateUid, prepared.teamId, prepared.memberRef);
-  tx.setParticipation(prepared.candidateUid, conversationId, { ownerUid, invitedAt: new Date(now.getTime()) });
+  for (const membership of boundMemberships(ownerUid, prepared.colleague)) {
+    tx.touchMembership(membership.uid, membership.teamId, membership.memberRef);
+  }
+  tx.setParticipation(prepared.colleague.uid, conversationId, { ownerUid, invitedAt: new Date(now.getTime()) });
   return OK;
 }
 
@@ -243,7 +251,7 @@ export async function changeParticipant(
     return await deps.store.runOwnerTransaction(
       ownerUid,
       (tx) => replaceInTransaction(tx, ownerUid, conversationId, replacement, deps, deps.clock()),
-      { secondFence: replacement.candidateUid },
+      { secondFence: replacement.colleague.uid },
     );
   } catch (error) {
     // Any read, key or write failure is operational. The raw error is never surfaced (BR-47). A fence refusal is its own code.

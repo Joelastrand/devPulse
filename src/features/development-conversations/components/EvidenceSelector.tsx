@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
+import { CollapsibleSection } from "../../../components/ui/CollapsibleSection";
 import { SelectorOptionsSkeleton } from "./ConversationSkeletons";
 import { fetchEvidenceSources, type EvidenceSourceWire, type SharedEvidenceWire } from "../client/conversations-gateway";
 import { conversationsCopy } from "../copy";
@@ -55,6 +57,8 @@ export function EvidenceSelector({
   const [options, setOptions] = useState<SourceOptions>({ phase: "loading" });
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [confirming, setConfirming] = useState<PendingReplace>(null);
+  /** The person opened the picker. A source-load failure also opens it, so the error is never hidden in a collapsed section. */
+  const [pickerOpen, setPickerOpen] = useState(false);
   const confirmHeadingRef = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
@@ -210,13 +214,30 @@ export function EvidenceSelector({
 
       <SharedEvidenceList items={sharedEvidence} headingId="shared-evidence-heading" />
 
+      <CollapsibleSection
+        id="evidence-picker"
+        title={conversationsCopy.evidenceSelectorHeading}
+        description={conversationsCopy.evidenceSource}
+        actions={
+          <Link href="/me/skills?vy=rolle" className="inline-flex min-h-11 items-center text-sm font-medium text-text-primary underline underline-offset-2">
+            {conversationsCopy.evidenceSourceLink}
+          </Link>
+        }
+        headingLevel={3}
+        open={pickerOpen || options.phase === "unavailable"}
+        onOpenChange={setPickerOpen}
+        lockOpen={selectedItems.length > 0}
+        summary={conversationsCopy.selectedCount(selectedItems.length)}
+      >
       <div className="flex flex-col gap-3">
-        <h3 className="font-medium text-text-primary">{conversationsCopy.evidenceSelectorHeading}</h3>
-        <p className="text-sm text-text-secondary">{conversationsCopy.evidenceSelectorCopy}</p>
 
         {options.phase === "loading" && <SelectorOptionsSkeleton label={conversationsCopy.evidenceLoading} />}
         {options.phase === "unavailable" && <Alert variant="error">{conversationsCopy.evidenceError}</Alert>}
-        {options.phase === "ready" && options.items.length === 0 && <p className="text-text-muted">{conversationsCopy.evidenceEmpty}</p>}
+        {options.phase === "ready" && options.items.length === 0 && (
+          <p className="text-text-muted">
+            {conversationsCopy.evidenceEmpty} <Link href="/me/skills?vy=rolle" className="underline underline-offset-2">{conversationsCopy.evidenceSourceLink}</Link>
+          </p>
+        )}
         {ready !== null && ready.items.length > 0 && (
           <fieldset className="flex flex-col gap-2">
             <legend className="sr-only">{conversationsCopy.evidenceSelectorHeading}</legend>
@@ -266,7 +287,6 @@ export function EvidenceSelector({
           </div>
         )}
 
-        {ready !== null && selectedItems.length === 0 && <p className="text-sm text-text-muted">{conversationsCopy.evidenceNeedsItem}</p>}
         <div className="flex flex-wrap gap-3">
           <Button type="button" pending={pending} disabled={ready === null || selectedItems.length === 0 || confirming !== null} onClick={requestSave}>
             {pending ? conversationsCopy.saving : conversationsCopy.saveEvidence}
@@ -281,6 +301,7 @@ export function EvidenceSelector({
         )}
         <WriteFeedbackRegion feedback={feedback} regionRef={feedbackRef} />
       </div>
+      </CollapsibleSection>
     </section>
   );
 }

@@ -32,9 +32,8 @@ const CALLER = "participant-1";
 /** Synthetic owner document. The envelope values are placeholders: the store never decrypts or checks them. */
 function ownerDoc(overrides: Partial<OwnerDocumentWrite> = {}): OwnerDocumentWrite {
   return {
-    teamId: "team-a",
     participantUid: null,
-    participantMemberRef: null,
+    participantBindings: null,
     participantState: null,
     participantInvitedAt: null,
     participantAcceptedAt: null,
@@ -62,13 +61,12 @@ const CANONICAL_OWNER_KEYS = [
   "keyId",
   "keyVersion",
   "participantAcceptedAt",
+  "participantBindings",
   "participantInvitedAt",
-  "participantMemberRef",
   "participantState",
   "participantUid",
   "plannedFor",
   "status",
-  "teamId",
   "updatedAt",
 ];
 
@@ -124,7 +122,7 @@ describe.each(implementations)("conversation store contract — $name", ({ creat
   });
 
   describe("owner documents", () => {
-    it("writes the seventeen canonical keys and reads them back as Dates, with no extra key", async () => {
+    it("writes the sixteen canonical keys (A2.1: no teamId) and reads them back as Dates, with no extra key", async () => {
       await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.createOwner(OWNER, "conv-1", ownerDoc()));
       const stored = await store.getOwner(OWNER, "conv-1");
       expect(Object.keys(stored ?? {}).sort()).toEqual(CANONICAL_OWNER_KEYS);
@@ -160,11 +158,11 @@ describe.each(implementations)("conversation store contract — $name", ({ creat
     it("setOwner replaces the whole document and leaves other documents untouched", async () => {
       await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => {
         tx.createOwner(OWNER, "conv-1", ownerDoc());
-        tx.createOwner(OWNER, "conv-2", ownerDoc({ teamId: "team-b" }));
+        tx.createOwner(OWNER, "conv-2", ownerDoc({ status: "completed", completedAt: T1 }));
       });
       await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.setOwner(OWNER, "conv-1", ownerDoc({ status: "completed", completedAt: T2 })));
       expect((await store.getOwner(OWNER, "conv-1"))?.status).toBe("completed");
-      expect((await store.getOwner(OWNER, "conv-2"))?.teamId).toBe("team-b");
+      expect((await store.getOwner(OWNER, "conv-2"))?.status).toBe("completed");
     });
 
     it("updateOwner changes only the given keys, clears with null, and never creates a document", async () => {
@@ -173,7 +171,7 @@ describe.each(implementations)("conversation store contract — $name", ({ creat
       const stored = await store.getOwner(OWNER, "conv-1");
       expect(stored?.plannedFor).toBeNull();
       expect(stored?.updatedAt).toEqual(T2);
-      expect(stored?.teamId).toBe("team-a");
+      expect(stored?.participantUid).toBeNull();
       await expect(store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.updateOwner(OWNER, "absent", { status: "completed" }))).rejects.toThrow();
       expect(await store.getOwner(OWNER, "absent")).toBeUndefined();
     });
@@ -329,8 +327,8 @@ describe.each(implementations)("conversation store contract — $name", ({ creat
 
     it("reads inside the transaction see the committed state", async () => {
       await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => tx.createOwner(OWNER, "conv-1", ownerDoc()));
-      const seen = await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => (await tx.getOwner(OWNER, "conv-1"))?.teamId);
-      expect(seen).toBe("team-a");
+      const seen = await store.runErasureCleanupTransaction(issueErasureOwnerCleanupCapability(), async (tx) => (await tx.getOwner(OWNER, "conv-1"))?.participantUid);
+      expect(seen).toBeNull();
     });
   });
 

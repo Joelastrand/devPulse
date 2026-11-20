@@ -93,7 +93,7 @@ describe("TeamSurveyResultsSection — late results after an identity change", (
       token === "token-a" ? pendingA.promise : Promise.resolve(ACCOUNT_B_INSUFFICIENT),
     );
     const user = userEvent.setup();
-    render(<TeamSurveyResultsSection teamId="team-1" />);
+    render(<TeamSurveyResultsSection open onOpenChange={() => undefined} teamId="team-1" />);
 
     await user.click(await screen.findByRole("button", { name: "Vis resultater" }));
     expect(fetchSurveyResults).toHaveBeenCalledWith("token-a", "team-1", "survey-1");
@@ -118,10 +118,10 @@ describe("TeamSurveyResultsSection — late results after an identity change", (
       teamId === "team-1" ? pendingTeamOne.promise : Promise.resolve(ACCOUNT_B_INSUFFICIENT),
     );
     const user = userEvent.setup();
-    const { rerender } = render(<TeamSurveyResultsSection teamId="team-1" />);
+    const { rerender } = render(<TeamSurveyResultsSection open onOpenChange={() => undefined} teamId="team-1" />);
     await user.click(await screen.findByRole("button", { name: "Vis resultater" }));
 
-    rerender(<TeamSurveyResultsSection teamId="team-2" />);
+    rerender(<TeamSurveyResultsSection open onOpenChange={() => undefined} teamId="team-2" />);
     await screen.findByRole("button", { name: "Vis resultater" });
     pendingTeamOne.resolve(ACCOUNT_A_PUBLISHED);
     await flush();

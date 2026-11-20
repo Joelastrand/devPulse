@@ -84,7 +84,7 @@ Feature list (directory → purpose). Details are in [`PRODUCT.md`](PRODUCT.md).
 | `role-profiles` | Organizational roles and assignments (reference data, no permissions) |
 | `personal-goals` | Owner-only development goals |
 | `personal-role-workspace` | Owner-only responsibilities and achievements |
-| `development-conversations` | Owner conversations with an optional, explicitly accepted participant |
+| `development-conversations` | Private owner conversations (no team) with an optional, explicitly accepted colleague who shares an active team with the owner |
 | `team-competence-plan` | Kompetanseplan: independent team development plans |
 | `roadmap` | Team roadmap items per competency area |
 | `team-projects` | Team delivery projects and planned participation |
@@ -156,8 +156,18 @@ that module's union type and documented in [`DATA-MODEL.md`](DATA-MODEL.md) §11
 
 - `src/components/ui/` holds presentation primitives (`Button`, `Card`, `Badge`, `Alert`, `Container`, `PageShell`,
   `ChartFrame`, dashboard primitives, `Icon`, `SkipLink`). They carry no business logic.
+- `CollapsibleSection` / `CollapsibleSectionGroup` (`src/components/ui/CollapsibleSection.tsx`) are the shared
+  disclosure for secondary team-page sections. The header is a heading containing one `button` with `aria-expanded` and
+  `aria-controls`; actions sit beside it, outside the button. Content stays mounted and is hidden with the `hidden`
+  attribute, so open forms keep their input. `lockOpen` blocks collapsing during an active editor. The group's
+  `Vis alle` / `Skjul alle` appear only with three or more sections.
+- Local view preferences (`src/components/ui/use-disclosure-preferences.ts`): one boolean per section in `localStorage`,
+  keyed by version, feature, team, Firebase account UID and section ID. The UID comes from `useAccountUid` and is never
+  an e-mail address. Nothing else is stored, no server call is made, and storage failures fall back to defaults. Values
+  apply only to the current scope, so an account switch never shows the previous account's state. Collapsing is never
+  authorization: hidden content is still server-protected.
 - `src/components/nav/` holds the shell: `AppShell` (sidebar from `md`, drawer below), `PublicHeader`, `PersonalNav`,
-  `TeamContext`, `AccountMenu`, and `copy.ts`.
+  `TeamContext`, `SignOutNavButton`, and `copy.ts`. There is no top bar on desktop: the account group in the sidebar (and in the drawer on mobile) carries the profile link and sign-out.
 - Navigation items are defined in code (`navGroupsFor` in `AppShell.tsx`, `TeamRouteNav`). Visibility of admin items
   follows `state.isAdmin` from `/api/me`.
 

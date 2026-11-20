@@ -23,9 +23,6 @@ export const navCopy = {
   superadmins: "Superadministratorer",
   administration: "Administrasjon",
   deleteAccount: "Slett kontoen din",
-  signOut: "Logg ut",
   menu: "Meny",
-  accountMenu: "Min konto",
-  signingOut: "Logger ut…",
   notifications: "Varsler",
 } as const;

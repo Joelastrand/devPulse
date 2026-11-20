@@ -129,7 +129,7 @@ export function KompetanseprofilRadar({
             role="img"
             aria-labelledby={headingId}
             aria-describedby={summaryId}
-            className="mx-auto h-[280px] w-full max-w-[420px] min-w-[260px]"
+            className="mx-auto h-[300px] w-full max-w-[520px] min-w-[260px] md:h-[400px]"
           >
             <ResponsiveContainer width="100%" height="100%">
               {/* Recharts' own accessibility layer adds an unnamed, focusable application svg. The table below is the text

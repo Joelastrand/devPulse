@@ -1,0 +1,9 @@
+
+ RUN  v5.0.0 C:/Projekt/devpulse
+
+
+ Test Files  1 passed (1)
+      Tests  19 passed (19)
+   Start at  12:15:58
+   Duration  4.84s (tests 42%, environment 40%, import 12%, transform 5%)
+

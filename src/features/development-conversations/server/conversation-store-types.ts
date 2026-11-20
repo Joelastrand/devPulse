@@ -4,8 +4,9 @@ import "server-only";
 import { READ_WINDOW } from "../domain/conversation-constants";
 import { isConversationId } from "../domain/conversation-id";
 import type { ConversationStatus } from "../domain/conversation-status";
+import type { TeamBindingMap } from "../domain/team-bindings";
 import { STORED_KEY_ID, STORED_KEY_VERSION } from "../domain/stored-owner-conversation";
-import type { TeamEligibilityReader } from "./team-eligibility";
+import type { MembershipRefReader, TeamEligibilityReader } from "./team-eligibility";
 
 /**
  * Persistence contract for D2 conversations (TASK-005; SPEC AD-2, BR-33, BR-34, BR-36, BR-37, BR-48). Pure types, path
@@ -64,11 +65,10 @@ export function participationDocumentPath(callerUid: string, conversationId: str
   return [USER_DEVELOPMENT_COLLECTION, callerUid, PARTICIPATION_INDEX_SUBCOLLECTION, conversationId];
 }
 
-/** Canonical owner document keys (BR-51, v2 envelope). Seventeen, `keyId` and `keyCheck` included, and no conversationId field. */
+/** Canonical owner document keys (BR-51, v2 envelope). Sixteen, `keyId` and `keyCheck` included, and no conversationId or teamId field. */
 export const OWNER_DOCUMENT_KEYS = [
-  "teamId",
   "participantUid",
-  "participantMemberRef",
+  "participantBindings",
   "participantState",
   "participantInvitedAt",
   "participantAcceptedAt",
@@ -93,9 +93,8 @@ export const PARTICIPATION_INDEX_KEYS = ["ownerUid", "invitedAt"] as const;
  * key check of the v2 envelope, BR-51, CL-27). The store never computes, compares or repairs `keyCheck`.
  */
 export interface OwnerDocumentWrite {
-  teamId: string | null;
   participantUid: string | null;
-  participantMemberRef: string | null;
+  participantBindings: TeamBindingMap | null;
   participantState: "pending" | "accepted" | null;
   participantInvitedAt: Date | null;
   participantAcceptedAt: Date | null;
@@ -156,7 +155,7 @@ export interface ConversationTransaction {
    * The TASK-006 team and membership point reads, performed inside this transaction (BR-48). A participant write decides
    * eligibility from these reads only, never from a read made outside the transaction. Raw data only; no decision here.
    */
-  readonly teamEligibility: TeamEligibilityReader;
+  readonly teamEligibility: TeamEligibilityReader & MembershipRefReader;
   getOwner(ownerUid: string, conversationId: string): Promise<RawConversationData | undefined>;
   /** Creates the owner document. Fails if it exists (no overwrite). */
   createOwner(ownerUid: string, conversationId: string, doc: OwnerDocumentWrite): void;
@@ -245,9 +244,8 @@ export interface ConversationStore {
 /** The canonical owner record, built field by field from the write shape. Unknown input keys are dropped. */
 export function toOwnerRecord(doc: OwnerDocumentWrite): Record<(typeof OWNER_DOCUMENT_KEYS)[number], unknown> {
   return {
-    teamId: requireKey(doc, "teamId"),
     participantUid: requireKey(doc, "participantUid"),
-    participantMemberRef: requireKey(doc, "participantMemberRef"),
+    participantBindings: requireKey(doc, "participantBindings"),
     participantState: requireKey(doc, "participantState"),
     participantInvitedAt: requireKey(doc, "participantInvitedAt"),
     participantAcceptedAt: requireKey(doc, "participantAcceptedAt"),

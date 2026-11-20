@@ -60,11 +60,12 @@ export function PlanMilestoneChecklist({
           const action = completed ? competencePlanCopy.milestoneReopen : competencePlanCopy.milestoneComplete;
           return (
             <li key={milestone.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-field border border-border-subtle px-3 py-2 text-sm">
-              <span className="flex min-w-0 items-center gap-2">
+              {/* items-start keeps the icon on the first line when a long title wraps. */}
+              <span className="flex min-w-0 items-start gap-2">
                 <Icon
                   icon={STATUS_ICON[milestone.status]}
                   size="inline"
-                  className={completed ? "shrink-0 text-success-text" : "shrink-0 text-text-secondary"}
+                  className={(completed ? "text-success-text" : "text-text-secondary") + " mt-0.5 shrink-0"}
                 />
                 <span className={"min-w-0 break-words " + (completed ? "text-text-secondary line-through" : "text-text-primary")}>
                   {milestone.title}

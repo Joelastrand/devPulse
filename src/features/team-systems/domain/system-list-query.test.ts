@@ -29,6 +29,7 @@ describe("Systemoversikt URL state: parsing (Phase 2F.1)", () => {
         favoritesOnly: true,
       },
       pageSize: 30,
+      sort: "name",
     });
   });
 
@@ -70,17 +71,28 @@ describe("Systemoversikt URL state: serialization (Phase 2F.1)", () => {
     const state: SystemListState = {
       filter: { ...DEFAULT_SYSTEM_FILTER, query: "Lønn & sak", systemType: "uavklart", favoritesOnly: true },
       pageSize: 20,
+      sort: "name",
     };
     expect(parse(serializeSystemListQuery(state))).toEqual(state);
   });
 
+  it("round-trips a non-default sort order", () => {
+    const state: SystemListState = { filter: DEFAULT_SYSTEM_FILTER, pageSize: 10, sort: "risk" };
+    expect(serializeSystemListQuery(state)).toBe("sortering=risk");
+    expect(parse(serializeSystemListQuery(state))).toEqual(state);
+  });
+
+  it("falls back to name order for an unknown sort value", () => {
+    expect(parse("sortering=bogus").sort).toBe("name");
+  });
+
   it("omits keys that hold their default value", () => {
-    const query = serializeSystemListQuery({ filter: { ...DEFAULT_SYSTEM_FILTER, systemType: "internt" }, pageSize: 10 });
+    const query = serializeSystemListQuery({ filter: { ...DEFAULT_SYSTEM_FILTER, systemType: "internt" }, pageSize: 10, sort: "name" });
     expect(query).toBe("plassering=internt");
   });
 
   it("does not write a whitespace-only search", () => {
-    const query = serializeSystemListQuery({ filter: { ...DEFAULT_SYSTEM_FILTER, query: "   " }, pageSize: 10 });
+    const query = serializeSystemListQuery({ filter: { ...DEFAULT_SYSTEM_FILTER, query: "   " }, pageSize: 10, sort: "name" });
     expect(query).toBe("");
   });
 });
@@ -91,7 +103,7 @@ describe("Systemoversikt return link (Phase 2F.1)", () => {
   });
 
   it("keeps the restored state in the list href", () => {
-    const state: SystemListState = { filter: { ...DEFAULT_SYSTEM_FILTER, favoritesOnly: true }, pageSize: 30 };
+    const state: SystemListState = { filter: { ...DEFAULT_SYSTEM_FILTER, favoritesOnly: true }, pageSize: 30, sort: "name" };
     expect(systemsListHref("team-1", state)).toBe("/teams/team-1/systems?favoritter=1&vis=30");
   });
 

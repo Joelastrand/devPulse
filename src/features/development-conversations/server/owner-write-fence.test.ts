@@ -7,9 +7,9 @@ import { issueErasureOwnerCleanupCapability } from "./erasure-owner-cleanup-capa
 import type { ConversationStore } from "./conversation-store-types";
 import { createFakeContentCodec, type FakeContentCodec } from "./fake-content-codec";
 import { createFakeConversationStore } from "./fake-conversation-store";
-import { createFakeTeamEligibilityReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
+import { createFakeSharedTeamReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
 import { inviteParticipant } from "./invite-participant";
-import type { ParticipantRefReader } from "./member-ref-binding";
+import type { SharedTeamReader } from "./shared-team-binding";
 import { setSharedGoals } from "./set-shared-goals";
 import { NOW, OWNER_UID, PARTICIPANT_UID, TEAM_ID, rosterTeam, seedOwnerConversation } from "./owner-read-test-support";
 import { updateOwnerSections } from "./update-owner-sections";
@@ -42,16 +42,10 @@ async function ownerDoc(store: ConversationStore) {
 }
 
 /** A ref reader over synthetic memberships, for the invite and replacement paths. */
-function refReader(state: FakeTeamEligibilityState): ParticipantRefReader {
-  const point = createFakeTeamEligibilityReader(state);
+function refReader(state: FakeTeamEligibilityState): SharedTeamReader {
+  const point = createFakeSharedTeamReader(state);
   return {
     ...point,
-    async listMemberships() {
-      return [
-        { uid: OWNER_UID, teamId: TEAM_ID, createdAt: new Date(0), memberRef: OWNER_REF },
-        { uid: CANDIDATE_UID, teamId: TEAM_ID, createdAt: new Date(0), memberRef: CANDIDATE_REF },
-      ];
-    },
   };
 }
 
@@ -59,8 +53,7 @@ describe("owner write routes are fenced by the erasure record (TASK-027, BR-4(b)
   it("create refuses and writes no conversation", async () => {
     const store = createFakeConversationStore({ erasingUids: [OWNER_UID] });
     const codec = createFakeContentCodec();
-    const teamReader = createFakeTeamEligibilityReader(rosterTeam([OWNER_UID]));
-    const result = await createConversation(OWNER_UID, { title: "Synthetic" }, { store, codec, teamReader, clock: CLOCK });
+    const result = await createConversation(OWNER_UID, { title: "Synthetic" }, { store, codec, clock: CLOCK });
     expect(result).toEqual(REFUSED);
     expect(await store.listOwnerWindow(OWNER_UID)).toMatchObject({ docs: [] });
   });

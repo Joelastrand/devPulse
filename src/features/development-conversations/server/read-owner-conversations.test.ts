@@ -5,7 +5,7 @@ import { FORBIDDEN_DTO_KEYS, OWNER_PARTICIPANT_KEYS, OWNER_SUMMARY_KEYS } from "
 import type { RawConversationData } from "./conversation-store-types";
 import { createFakeContentCodec, type FakeContentCodec } from "./fake-content-codec";
 import { createFakeConversationStore, type FakeConversationStore } from "./fake-conversation-store";
-import { createFakeTeamEligibilityReader } from "./fake-team-eligibility";
+import { createFakeSharedTeamReader } from "./fake-team-eligibility";
 import {
   NOW,
   OTHER_OWNER_UID,
@@ -15,6 +15,7 @@ import {
   rosterTeam,
   seedOwnerConversation,
 } from "./owner-read-test-support";
+import type { SharedBinding } from "./owner-read";
 import { readOwnerConversations, type ReadOwnerConversationsDeps } from "./read-owner-conversations";
 
 /** Test-local name lookup. It records each call so tests can prove the one-call-per-list bound. */
@@ -29,15 +30,15 @@ function nameLookup(names: Record<string, string> = {}) {
   };
 }
 
-function setup(options: { members?: string[]; names?: Record<string, string>; resolveParticipantState?: () => Promise<boolean> } = {}) {
+function setup(options: { members?: string[]; names?: Record<string, string>; resolveParticipantState?: () => Promise<SharedBinding> } = {}) {
   const store: FakeConversationStore = createFakeConversationStore({ generateId: () => "unused" });
   const codec: FakeContentCodec = createFakeContentCodec();
   const names = nameLookup(options.names);
   const deps: ReadOwnerConversationsDeps = {
     store,
     codec,
-    teamReader: createFakeTeamEligibilityReader(rosterTeam(options.members ?? [OWNER_UID, PARTICIPANT_UID])),
-    resolveParticipantState: options.resolveParticipantState ?? (async () => true),
+    teamReader: createFakeSharedTeamReader(rosterTeam(options.members ?? [OWNER_UID, PARTICIPANT_UID])),
+    resolveParticipantState: options.resolveParticipantState ?? (async () => ({ holds: true, teamId: TEAM_ID })),
     getNames: names.getNames,
   };
   return { store, codec, deps, names };
@@ -279,7 +280,7 @@ describe("readOwnerConversations: participant state (BR-42, BR-44)", () => {
   });
 
   it("reports unavailable when the injected BR-21 check says the bound participant no longer passes", async () => {
-    const { store, codec, deps } = setup({ resolveParticipantState: async () => false });
+    const { store, codec, deps } = setup({ resolveParticipantState: async () => ({ holds: false }) });
     await seedOwnerConversation(store, codec, { conversationId: "conv-1", participant: { uid: PARTICIPANT_UID, state: "accepted" } });
 
     const result = await readOwnerConversations(OWNER_UID, deps);
@@ -349,7 +350,7 @@ describe("readOwnerConversations: roster-rule names (AD-7, BR-42, CL-20)", () =>
     await seedOwnerConversation(store, codec, { conversationId: "conv-1", participant: { uid: PARTICIPANT_UID, state: "accepted" } });
     const disabledTeam = {
       ...deps,
-      teamReader: createFakeTeamEligibilityReader({ ...rosterTeam([OWNER_UID, PARTICIPANT_UID]), teamStatus: { [TEAM_ID]: "disabled" } }),
+      teamReader: createFakeSharedTeamReader({ ...rosterTeam([OWNER_UID, PARTICIPANT_UID]), teamStatus: { [TEAM_ID]: "disabled" } }),
     };
 
     const result = await readOwnerConversations(OWNER_UID, disabledTeam);
@@ -363,7 +364,7 @@ describe("readOwnerConversations: roster-rule names (AD-7, BR-42, CL-20)", () =>
     await seedOwnerConversation(store, codec, { conversationId: "conv-1", participant: { uid: PARTICIPANT_UID, state: "accepted" } });
     const failingRead = {
       ...deps,
-      teamReader: createFakeTeamEligibilityReader({ ...rosterTeam([OWNER_UID, PARTICIPANT_UID]), failMembershipRead: true }),
+      teamReader: createFakeSharedTeamReader({ ...rosterTeam([OWNER_UID, PARTICIPANT_UID]), failMembershipRead: true }),
     };
 
     expect(await readOwnerConversations(OWNER_UID, failingRead)).toEqual({ ok: false, error: "persistence_failed" });

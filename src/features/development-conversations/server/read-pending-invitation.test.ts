@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ConversationStore } from "./conversation-store-types";
 import { createFakeConversationStore, type FakeConversationStore } from "./fake-conversation-store";
-import { createFakeTeamEligibilityReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
+import { createFakeSharedTeamReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
 import { createFakeContentCodec } from "./fake-content-codec";
 import { readPendingInvitation, type PendingInvitationDeps } from "./read-pending-invitation";
 import {
@@ -13,21 +13,20 @@ import {
   TEAM_ID,
   seedOwnerConversation,
 } from "./owner-read-test-support";
+import { OWNER_MEMBER_REF } from "./owner-read-test-support";
 import { issueErasureOwnerCleanupCapability } from "./erasure-owner-cleanup-capability";
 
 // Synthetic fixtures only (invariant 15). No real person, team or wellbeing data.
 const CONVERSATION_ID = "conv-1";
 const OTHER_UID = "participant-2";
-const OWNER_REF = "zyxwvtsrqpnmkjhgfedcba9876";
+const OWNER_REF = OWNER_MEMBER_REF;
 const REJOINED_REF = "abcdefghjkmnpqrstvwxyz0123";
-const TEAM_NAME = "Synthetic team";
 const OWNER_NAME = "Synthetic owner";
 
 interface Setup {
   store: FakeConversationStore;
   state: FakeTeamEligibilityState;
   deps: PendingInvitationDeps;
-  nameReads: string[];
 }
 
 function membership(uid: string, memberRef: string, teamId = TEAM_ID): Record<string, unknown> {
@@ -35,7 +34,7 @@ function membership(uid: string, memberRef: string, teamId = TEAM_ID): Record<st
 }
 
 function setup(
-  options: { failTeamNameRead?: boolean; failTeamRead?: boolean; failNames?: boolean; teamName?: unknown; names?: boolean } = {},
+  options: { failTeamRead?: boolean; failNames?: boolean; names?: boolean } = {},
 ): Setup {
   const store = createFakeConversationStore();
   const state: FakeTeamEligibilityState = {
@@ -45,23 +44,17 @@ function setup(
       [`${PARTICIPANT_UID}__${TEAM_ID}`]: membership(PARTICIPANT_UID, PARTICIPANT_MEMBER_REF),
     },
   };
-  const point = createFakeTeamEligibilityReader(state);
-  const nameReads: string[] = [];
+  const shared = createFakeSharedTeamReader(state);
   const deps: PendingInvitationDeps = {
     store,
     teamReader: {
       getTeamStatus: async (teamId) => {
         if (options.failTeamRead) throw new Error("simulated team read failure");
-        return point.getTeamStatus(teamId);
+        return shared.getTeamStatus(teamId);
       },
-      getMembership: point.getMembership,
-    },
-    teamNameReader: {
-      getTeamName: async (teamId) => {
-        nameReads.push(teamId);
-        if (options.failTeamNameRead) throw new Error("simulated name read failure with a secret path");
-        return "teamName" in options ? options.teamName : TEAM_NAME;
-      },
+      getMembership: shared.getMembership,
+      listOwnMemberships: async () => [],
+      findMembershipsByRef: shared.findMembershipsByRef,
     },
     getNames: async (uids) => {
       if (options.failNames) throw new Error("simulated profile failure with a secret path");
@@ -69,7 +62,7 @@ function setup(
       return new Map(uids.filter((uid) => uid === OWNER_UID).map((uid) => [uid, OWNER_NAME]));
     },
   };
-  return { store, state, deps, nameReads };
+  return { store, state, deps };
 }
 
 /** Writes the caller's canonical participation index, as the invitation transaction does. */
@@ -104,7 +97,6 @@ describe("readPendingInvitation: pending DTO (BR-14, BR-41, CL-19)", () => {
       dto: {
         conversationId: CONVERSATION_ID,
         state: "pending",
-        teamName: TEAM_NAME,
         invitedAt: new Date(NOW.getTime() + 1000),
         ownerDisplayName: OWNER_NAME,
       },
@@ -129,13 +121,12 @@ describe("readPendingInvitation: pending DTO (BR-14, BR-41, CL-19)", () => {
     }
   });
 
-  it("returns a null owner name when the owner no longer holds an active membership (the roster rule)", async () => {
+  it("returns conversation_not_found when the owner has left the shared team, since the binding no longer holds (A2.1)", async () => {
     const { store, state, deps } = setup();
     await seedPendingInvitation(store);
     delete state.memberships[`${OWNER_UID}__${TEAM_ID}`];
 
-    const result = await readPendingInvitation(PARTICIPANT_UID, CONVERSATION_ID, deps);
-    expect(result.ok && result.dto.ownerDisplayName).toBeNull();
+    expect(await readPendingInvitation(PARTICIPANT_UID, CONVERSATION_ID, deps)).toEqual({ ok: false, error: "conversation_not_found" });
   });
 
   it("does not decrypt: the pending view works when the stored payload is unreadable", async () => {
@@ -152,9 +143,8 @@ describe("readPendingInvitation: pending DTO (BR-14, BR-41, CL-19)", () => {
 
 describe("readPendingInvitation: not-found family (BR-14, D2-SI-15)", () => {
   it("returns conversation_not_found for a malformed id before any read", async () => {
-    const { deps, nameReads } = setup();
+    const { deps } = setup();
     expect(await readPendingInvitation(PARTICIPANT_UID, "bad id!", deps)).toEqual({ ok: false, error: "conversation_not_found" });
-    expect(nameReads).toHaveLength(0);
   });
 
   it("returns conversation_not_found when the caller has no index entry", async () => {
@@ -245,31 +235,12 @@ describe("readPendingInvitation: operational failures are never not-found", () =
     expect(await readPendingInvitation(PARTICIPANT_UID, CONVERSATION_ID, deps)).toEqual({ ok: false, error: "persistence_failed" });
   });
 
-  it("returns persistence_failed when the team name read fails, without leaking the raw error", async () => {
-    const { store, deps } = setup({ failTeamNameRead: true });
-    await seedPendingInvitation(store);
-    const result = await readPendingInvitation(PARTICIPANT_UID, CONVERSATION_ID, deps);
-    expect(result).toEqual({ ok: false, error: "persistence_failed" });
-    expect(JSON.stringify(result)).not.toContain("secret path");
-  });
-
   it("returns persistence_failed when the owner-name lookup fails, without leaking the raw error", async () => {
     const { store, deps } = setup({ failNames: true });
     await seedPendingInvitation(store);
     const result = await readPendingInvitation(PARTICIPANT_UID, CONVERSATION_ID, deps);
     expect(result).toEqual({ ok: false, error: "persistence_failed" });
     expect(JSON.stringify(result)).not.toContain("secret path");
-  });
-
-  it.each([
-    ["missing", undefined],
-    ["null", null],
-    ["a number", 42],
-    ["an empty string", ""],
-  ])("returns persistence_failed when the team name is %s, without distinguishing the cause", async (_label, teamName) => {
-    const { store, deps } = setup({ teamName });
-    await seedPendingInvitation(store);
-    expect(await readPendingInvitation(PARTICIPANT_UID, CONVERSATION_ID, deps)).toEqual({ ok: false, error: "persistence_failed" });
   });
 });
 
@@ -300,7 +271,7 @@ describe("readPendingInvitation: presentation rules (BR-41, CL-20)", () => {
     await seedPendingInvitation(store);
 
     const result = await readPendingInvitation(PARTICIPANT_UID, CONVERSATION_ID, deps);
-    expect(result.ok && Object.keys(result.dto).sort()).toEqual(["conversationId", "invitedAt", "ownerDisplayName", "state", "teamName"]);
+    expect(result.ok && Object.keys(result.dto).sort()).toEqual(["conversationId", "invitedAt", "ownerDisplayName", "state"]);
   });
 });
 
@@ -316,13 +287,13 @@ describe("readPendingInvitation: stored-state binding and lifecycle", () => {
     expect(await readPendingInvitation(PARTICIPANT_UID, CONVERSATION_ID, deps)).toEqual({ ok: false, error: "conversation_not_found" });
   });
 
-  it("returns conversation_not_found when the stored memberRef is null or malformed", async () => {
-    for (const badRef of [null, "short"]) {
+  it("returns conversation_not_found when the stored bindings are null or malformed", async () => {
+    for (const badBindings of [null, "short"]) {
       const { store, deps } = setup();
       await seedPendingInvitation(store);
       const raw = await store.getOwner(OWNER_UID, CONVERSATION_ID);
       if (raw === undefined) throw new Error("fixture missing");
-      store.seedRawOwner(OWNER_UID, CONVERSATION_ID, { ...raw, participantMemberRef: badRef });
+      store.seedRawOwner(OWNER_UID, CONVERSATION_ID, { ...raw, participantBindings: badBindings });
       expect(await readPendingInvitation(PARTICIPANT_UID, CONVERSATION_ID, deps)).toEqual({ ok: false, error: "conversation_not_found" });
     }
   });

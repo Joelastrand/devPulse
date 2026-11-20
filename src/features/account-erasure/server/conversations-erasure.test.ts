@@ -15,7 +15,7 @@ const OTHER = "other-uid";
 const rawOwner = (participantUid: string | null, overrides: Record<string, unknown> = {}) => ({
   teamId: "team-1",
   participantUid,
-  participantMemberRef: null,
+  participantBindings: null,
   participantState: participantUid === null ? null : "accepted",
   participantInvitedAt: null,
   participantAcceptedAt: null,

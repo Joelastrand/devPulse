@@ -2,9 +2,8 @@ import "server-only";
 import { decryptForClassification, probeKey } from "./content-codec";
 import { getDefaultConversationStore } from "./conversation-store";
 import type { ReadConversationForCallerDeps } from "./read-conversation-for-caller";
-import { createFirestoreTeamNameReader } from "./read-pending-invitation";
 import { productionOwnerReadDeps } from "./owner-route-deps";
-import { createFirestoreTeamEligibilityReader } from "./team-eligibility";
+import { createFirestoreSharedTeamReader } from "./shared-team-binding";
 
 /**
  * Production dependencies for the caller's conversation detail (TASK-024). Owner, accepted participant and pending reads
@@ -12,12 +11,11 @@ import { createFirestoreTeamEligibilityReader } from "./team-eligibility";
  */
 export function productionConversationViewDeps(): ReadConversationForCallerDeps {
   const store = getDefaultConversationStore();
-  const teamReader = createFirestoreTeamEligibilityReader();
-  const teamNameReader = createFirestoreTeamNameReader();
+  const teamReader = createFirestoreSharedTeamReader();
   return {
     store,
     owner: productionOwnerReadDeps(),
-    participant: { store, codec: { probeKey, decryptForClassification }, teamReader, teamNameReader },
-    pending: { store, teamReader, teamNameReader },
+    participant: { store, codec: { probeKey, decryptForClassification }, teamReader },
+    pending: { store, teamReader },
   };
 }

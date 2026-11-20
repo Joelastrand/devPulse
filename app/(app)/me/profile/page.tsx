@@ -7,6 +7,7 @@ import { Section } from "../../../../src/components/ui/Section";
 import { ProfileForm } from "../../../../src/features/profiles/components/ProfileForm";
 import { ProfileHeaderName } from "../../../../src/features/profiles/components/ProfileHeaderName";
 import { ProfileHeaderTeams } from "../../../../src/features/profiles/components/ProfileHeaderTeams";
+import { ProfileSignOutButton } from "../../../../src/features/profiles/components/ProfileSignOutButton";
 import { profileCopy } from "../../../../src/features/profiles/copy";
 import { ErasureEntryLink } from "../../../../src/features/account-erasure/components/ErasureEntryLink";
 import { ChevronRight, IdCard, Pencil, Users, UserRound } from "lucide-react";
@@ -31,7 +32,7 @@ export default function ProfilePage() {
           <p className="text-body text-text-secondary">{profileCopy.pageDescription}</p>
           <ProfileHeaderName />
           <ProfileHeaderTeams />
-          <Link href="#profile-form" className={buttonClassName({ variant: "primary" }) + " w-fit"}>
+          <Link href="#profile-form" className={buttonClassName({ variant: "primary" }) + " inline-flex w-fit items-center gap-2"}>
             <Icon icon={Pencil} size="inline" />
             {profileCopy.editAction}
           </Link>
@@ -47,6 +48,7 @@ export default function ProfilePage() {
               description={profileCopy.accountDescription}
               icon={<Icon icon={UserRound} size="inline" />}
             >
+              <ProfileSignOutButton />
               <div className="flex items-center gap-2 rounded-control border border-border-subtle bg-surface-subtle px-3 py-3">
                 <Icon icon={UserRound} />
                 <ErasureEntryLink />

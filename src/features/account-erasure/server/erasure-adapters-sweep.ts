@@ -74,13 +74,23 @@ const COUNTERS: ReadonlyMap<string, Counter> = new Map<string, Counter>([
   // I-7, I-8: participant bindings in others' conversations (collection group).
   ["conversations|collectionGroupFieldEquals|participantUid", async (db, b) =>
     (await db.collectionGroup("conversations").where("participantUid", "==", b.uid).select().get()).size],
-  ["conversations|perMembership|participantMemberRef", async (db, b) => {
-    let total = 0;
+  // A2.1 revised: a binding names a membership through its team entry. The participant uid is a literal equality, and each
+  // entry is matched in code against the person's own memberships, so no dynamic field path is queried.
+  ["conversations|perMembership|participantBindings", async (db, b) => {
+    const refsByTeam = new Map<string, string>();
     for (const membership of await membershipsOf(db, b.uid)) {
-      if (typeof membership.memberRef !== "string") continue;
-      total += (await db.collectionGroup("conversations").where("participantMemberRef", "==", membership.memberRef).select().get()).size;
+      if (typeof membership.memberRef === "string" && typeof membership.teamId === "string") refsByTeam.set(membership.teamId, membership.memberRef);
     }
-    return total;
+    if (refsByTeam.size === 0) return 0;
+    const snapshot = await db.collectionGroup("conversations").where("participantUid", "==", b.uid).select("participantBindings").get();
+    return snapshot.docs.filter((doc) => {
+      const bindings = doc.get("participantBindings");
+      if (typeof bindings !== "object" || bindings === null) return false;
+      return Object.entries(bindings as Record<string, unknown>).some(([teamId, entry]) => {
+        const ref = refsByTeam.get(teamId);
+        return ref !== undefined && typeof entry === "object" && entry !== null && (entry as Record<string, unknown>).participantMemberRef === ref;
+      });
+    }).length;
   }],
   // I-9: memberships by id prefix and by uid field; memberRef-linked roadmap ownerRef (A-5).
   ["teamMemberships|docIdStartsWith|uid", async (db, b) =>

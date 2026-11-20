@@ -82,13 +82,13 @@ export function DeleteConversationDialog({ conversationId, token, onUnauthentica
       role="group"
       aria-labelledby="delete-confirm-title"
       onSubmit={sendConfirmed}
-      className="flex flex-col gap-3 border-t border-zinc-200 pt-4 dark:border-zinc-800"
+      className="flex flex-col gap-3 border-t border-border-subtle pt-4"
     >
-      <p id="delete-confirm-title" ref={titleRef} tabIndex={-1} className="font-medium text-zinc-900 outline-none dark:text-zinc-50">
+      <p id="delete-confirm-title" ref={titleRef} tabIndex={-1} className="font-medium text-text-primary outline-none">
         {conversationsCopy.deleteConfirmHeading}
       </p>
-      <p className="text-sm text-zinc-900 dark:text-zinc-50">{conversationsCopy.deleteConsequence}</p>
-      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">{conversationsCopy.deleteIrreversible}</p>
+      <p className="text-sm text-text-primary">{conversationsCopy.deleteConsequence}</p>
+      <p className="text-sm font-medium text-text-primary">{conversationsCopy.deleteIrreversible}</p>
       {uncertain && (
         <div ref={feedbackRef} tabIndex={-1} className="outline-none">
           <Alert variant="error">{conversationsCopy.deleteNotConfirmed}</Alert>

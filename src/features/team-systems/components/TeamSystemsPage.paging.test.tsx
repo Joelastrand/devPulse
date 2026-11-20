@@ -1,12 +1,15 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { TeamSystemView } from "../server/list-team-systems";
 import { systemsCopy } from "../copy";
 
 const fetchTeamSystemsMock = vi.fn();
 
+// The view preferences are scoped by UID. A fixed test UID keeps them active, and the storage is cleared between tests.
+vi.mock("../../auth/client/use-account-uid", () => ({ useAccountUid: () => "test-uid" }));
+beforeEach(() => window.localStorage.clear());
 vi.mock("next/navigation", async () => (await import("./systems-navigation-test-helper")).navigationMock);
 
 vi.mock("../client/system-favorites-gateway", () => ({
@@ -82,10 +85,10 @@ async function renderWith(systems: TeamSystemView[]) {
 }
 
 function listedNames(): string[] {
-  const list = screen.getByRole("list", { name: "Systemer i teamet" });
-  return within(list)
-    .getAllByRole("heading", { level: 3 })
-    .map((heading) => heading.textContent ?? "");
+  const list = screen.getByRole("list", { name: /Systemer i teamet/ });
+  // The system names are the list's level-3 headings. A DOM query returns the same names as a role query, without
+  // computing the accessibility tree for every row on each call.
+  return Array.from(list.querySelectorAll("h3")).map((heading) => heading.textContent ?? "");
 }
 
 afterEach(() => {

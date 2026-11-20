@@ -3,7 +3,7 @@ import { completeConversation, type CompleteConversationDeps } from "./complete-
 import type { ConversationTransaction, RawConversationData } from "./conversation-store-types";
 import { createFakeContentCodec, type FakeContentCodec } from "./fake-content-codec";
 import { createFakeConversationStore, type FakeConversationStore } from "./fake-conversation-store";
-import { type FakeTeamEligibilityState, createFakeTeamEligibilityReader } from "./fake-team-eligibility";
+import { type FakeTeamEligibilityState, createFakeSharedTeamReader } from "./fake-team-eligibility";
 import { OWNER_UID, OTHER_OWNER_UID, PARTICIPANT_UID, TEAM_ID, NOW, rosterTeam, seedOwnerConversation } from "./owner-read-test-support";
 import { changeParticipant } from "./change-participant";
 import { deleteConversation } from "./delete-conversation";
@@ -134,7 +134,7 @@ describe("completeConversation: lifecycle (BR-4, BR-28)", () => {
     const after = await ownerOf(store);
     expect(after.status).toBe("completed");
     expect(after.participantUid).toBeNull();
-    expect(after.participantMemberRef).toBeNull();
+    expect(after.participantBindings).toBeNull();
     expect(after.participantState).toBeNull();
     expect(after.participantInvitedAt).toBeNull();
     expect(after.participantAcceptedAt).toBeNull();
@@ -386,7 +386,7 @@ describe("completeConversation: completion freezes content, never access (D2-SI-
     const { store, codec, state, deps } = setupValue;
     await seed(setupValue, "accepted");
     expect(await completeConversation(OWNER_UID, CONVERSATION_ID, deps)).toEqual({ ok: true });
-    const refReader = { ...createFakeTeamEligibilityReader(state), listMemberships: async () => [] };
+    const refReader = createFakeSharedTeamReader(state);
 
     expect(await changeParticipant(OWNER_UID, CONVERSATION_ID, { participantMemberRef: null }, { store, codec, refReader, clock: deps.clock })).toEqual({
       ok: true,

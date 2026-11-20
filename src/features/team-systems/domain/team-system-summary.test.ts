@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { UNASSESSED_CLASSIFICATION } from "./team-system";
+import { UNASSESSED_CLASSIFICATION, type KnowledgeRiskBand } from "./team-system";
 import {
   DEFAULT_SYSTEM_FILTER,
+  KNOWLEDGE_BAND_ORDER,
   filterSystems,
+  sortSystems,
   summarizeSystems,
   type SystemSummaryInput,
 } from "./team-system-summary";
@@ -111,5 +113,31 @@ describe("filterSystems — system type and criticality (task 4)", () => {
 
   it("leaves the default filter unchanged", () => {
     expect(filterSystems(systems, DEFAULT_SYSTEM_FILTER)).toHaveLength(3);
+  });
+});
+
+describe("risk sort order (KNOWLEDGE_BAND_ORDER, sortSystems by risk)", () => {
+  const sortable = (name: string, knowledgeRisk: KnowledgeRiskBand) => ({
+    systemId: name.toLowerCase(),
+    name,
+    knowledgeRisk,
+    attention: false,
+  });
+
+  it("puts a system with no known member before one with a single known member", () => {
+    const sorted = sortSystems([sortable("Bravo", "high"), sortable("Alpha", "none")], "risk");
+    expect(sorted.map((system) => system.name)).toEqual(["Alpha", "Bravo"]);
+  });
+
+  it("orders the bands none, high, elevated, lower", () => {
+    const sorted = sortSystems(
+      [sortable("D", "lower"), sortable("C", "elevated"), sortable("B", "high"), sortable("A", "none")],
+      "risk",
+    );
+    expect(sorted.map((system) => system.knowledgeRisk)).toEqual(["none", "high", "elevated", "lower"]);
+  });
+
+  it("never places a system of unknown band among the low-risk systems", () => {
+    expect(KNOWLEDGE_BAND_ORDER.indexOf("none")).toBeLessThan(KNOWLEDGE_BAND_ORDER.indexOf("lower"));
   });
 });

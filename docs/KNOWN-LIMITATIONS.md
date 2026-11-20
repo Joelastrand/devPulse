@@ -170,6 +170,16 @@ the flag. The flag is not a security control.
   The plaintext-write risk they carried is recorded in `DATA-MODEL.md` §10; their code remains in git history.
   The 2026-11-16 demo rating-update tool is **not** retired: it is retained as a gated maintenance tool with a digest-confirmed
   write path and a read-only preflight (`docs/DEMO-DATA-MAINTENANCE.md`). Its approval for any write remains open.
+- **Conversations (A2.1, revised per-team bindings) are teamless and person-based, with these limits.** (1) The colleague picker lists
+  eligible colleagues from `GET /api/me/conversations/colleagues` (bounded: 50 own memberships, 100 members per team, 200 colleagues;
+  `truncated` says when a bound was reached). Duplicate names are shown as separate choices without a team label, and a colleague with no
+  readable name is shown as "Kollega uten navn". Replacing a bound participant is still remove-then-invite, not a single action.
+  (2) Owner documents written before A2.1 carry a `teamId` key and are now classified as malformed, so they are not shown. Production has
+  not been migrated or reseeded; that cleanup needs explicit approval. (3) Owner documents written before the per-team bindings carry
+  `participantMemberRef` instead of `participantBindings` and are malformed, so their participants are not shown. (4) Conversation views no
+  longer show a team name. (5) Each owner list item and each participant check reads the recorded teams (up to 10), with one or two
+  membership reads per team, so cost grows with the number of conversations and recorded teams. (6) Owner-side references to a destroyed
+  membership stay in the owner's own document until that owner's conversation is changed or erased; they never grant access.
 - **Demo conversation seeder has no CLI equivalent.** `scripts/seed-demoteam-conversations.ts` is still hardcoded to the legacy
   project id. Porting it into `src/features/demo-team` is an open task before it can target `devpulse-nve`.
 

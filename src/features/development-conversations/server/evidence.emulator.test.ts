@@ -68,9 +68,8 @@ describe.skipIf(!CONFIGURED)("evidence selection on the Firestore emulator (BR-4
     const now = new Date("2026-10-01T08:00:00.000Z");
     await getDefaultConversationStore().runOwnerTransaction(OWNER, async (tx) => {
       tx.createOwner(OWNER, CONVERSATION_ID, {
-        teamId: "emu-team",
         participantUid: null,
-        participantMemberRef: null,
+        participantBindings: null,
         participantState: null,
         participantInvitedAt: null,
         participantAcceptedAt: null,

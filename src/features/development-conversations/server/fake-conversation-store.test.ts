@@ -14,9 +14,8 @@ const FAKE_SOURCE = readFileSync(new URL("./fake-conversation-store.ts", import.
 
 function ownerDoc(): OwnerDocumentWrite {
   return {
-    teamId: "team-a",
     participantUid: null,
-    participantMemberRef: null,
+    participantBindings: null,
     participantState: null,
     participantInvitedAt: null,
     participantAcceptedAt: null,

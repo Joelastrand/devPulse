@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { TeamSystemView } from "../server/list-team-systems";
@@ -8,6 +8,9 @@ import { systemsCopy } from "../copy";
 const fetchTeamSystemsMock = vi.fn();
 const fetchAssignableMembersMock = vi.fn();
 
+// The view preferences are scoped by UID. A fixed test UID keeps them active, and the storage is cleared between tests.
+vi.mock("../../auth/client/use-account-uid", () => ({ useAccountUid: () => "test-uid" }));
+beforeEach(() => window.localStorage.clear());
 vi.mock("next/navigation", async () => (await import("./systems-navigation-test-helper")).navigationMock);
 
 vi.mock("../client/system-favorites-gateway", () => ({
@@ -86,6 +89,8 @@ async function renderWith(systems: TeamSystemView[], canEdit = true) {
   fetchAssignableMembersMock.mockResolvedValue({ status: "ok", members: [] });
   render(<TeamSystemsPage teamId="team-1" />);
   await screen.findByRole("heading", { level: 1, name: "Team Alfa" });
+  // The default view is the overview. These tests cover the detailed table, so they switch to it first.
+  fireEvent.click(screen.getByRole("button", { name: "Detaljert tabell" }));
 }
 
 function matrix(): HTMLElement {
@@ -150,6 +155,8 @@ describe("Quality explanations (Forklaring button removed)", () => {
 
   it("keeps the status meanings in the Kvalitetsegenskaper section", async () => {
     await renderWith([system({ name: "Kontroll" })]);
+    // The quality explanation is a collapsed section by default: open it as a user would.
+    fireEvent.click(screen.getByRole("button", { name: systemsCopy.qualityPanel.title }));
     const panel = screen.getByRole("region", { name: systemsCopy.qualityPanel.title });
     expect(within(panel).getByText(systemsCopy.explanation.statusTitle)).toBeTruthy();
     for (const status of ["God", "Trenger oppfølging", "Kritisk", "Ikke vurdert"]) {

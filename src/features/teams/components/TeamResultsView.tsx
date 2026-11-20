@@ -6,13 +6,14 @@ import { catchError } from "next/error";
 import { useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Card } from "../../../components/ui/Card";
-import { EmptyState } from "../../../components/ui/EmptyState";
 import { LoadingRegion, Skeleton, SkeletonCard } from "../../../components/ui/Skeleton";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import { TrendChartSkeleton } from "../../results/components/TrendChartSkeleton";
 import { PeriodSummary } from "../../results/components/PeriodSummary";
 import { ResultsSummaryStrip } from "../../results/components/ResultsSummaryStrip";
 import { TrendTable } from "../../results/components/TrendTable";
+import { useDisclosurePreferences } from "../../../components/ui/use-disclosure-preferences";
+import { useAccountUid } from "../../auth/client/use-account-uid";
 import { formatSurveyDate } from "../../results/domain/format-survey-date";
 import { resultsCopy } from "../../results/copy";
 import {
@@ -36,7 +37,7 @@ import { teamsCopy } from "../copy";
  * this route actually renders a chart. Declared at module scope for webpack
  * chunk matching.
  */
-const LazyTrendChart = dynamic<{ results: readonly SurveyResultSummary[] }>(
+const LazyTrendChart = dynamic<{ results: readonly SurveyResultSummary[]; onShowTable?: () => void }>(
   () => import("../../results/components/TrendChart").then((mod) => mod.TrendChart),
   {
     ssr: false,
@@ -111,6 +112,12 @@ async function loadResultsView(idToken: string, teamId: string): Promise<Results
  */
 export function TeamResultsView({ teamId }: { teamId: string }) {
   const [state, setState] = useState<ResultsViewState>({ phase: "loading" });
+  // The history table is open by default: the trend chart is aria-hidden and built from the same rows, so collapsing the
+  // table by default would hide the chart's only accessible data.
+  const uid = useAccountUid();
+  // `surveyHistory` is the trend-history table, collapsed by default now that the chart has a text alternative and a route to
+  // the values. A saved choice is kept as it was. `surveyDetails` is the per-question section (collapsed).
+  const disclosure = useDisclosurePreferences("resultater", teamId, uid, { surveyHistory: false, surveyDetails: false });
 
   useAuthGatedResource(
     (token, generation, isCurrentGeneration) => {
@@ -155,16 +162,25 @@ export function TeamResultsView({ teamId }: { teamId: string }) {
 
   return (
     <div className="flex flex-col gap-6" aria-label={teamsCopy.results.title}>
-      <ResultsSummaryStrip results={state.results} />
+      {/* Order: the ongoing survey (actionable), the latest result, the trend, the history, then per-question detail. */}
       <CurrentSurveySection state={state.currentSurvey} />
       <PeriodSummary result={latest} />
-      <TrendTable results={state.results} />
+      <ResultsSummaryStrip results={state.results} />
       {state.results.length > 0 && (
         <TrendChartBoundary>
-          <LazyTrendChart results={state.results} />
+          <LazyTrendChart results={state.results} onShowTable={() => disclosure.setOpen("surveyHistory", true)} />
         </TrendChartBoundary>
       )}
-      <TeamSurveyResultsSection teamId={teamId} />
+      <TrendTable
+        results={state.results}
+        open={disclosure.isOpen("surveyHistory")}
+        onOpenChange={(open) => disclosure.setOpen("surveyHistory", open)}
+      />
+      <TeamSurveyResultsSection
+        teamId={teamId}
+        open={disclosure.isOpen("surveyDetails")}
+        onOpenChange={(open) => disclosure.setOpen("surveyDetails", open)}
+      />
     </div>
   );
 }
@@ -177,20 +193,6 @@ function ResultsViewSkeleton({ label }: { label: string }) {
   return (
     <LoadingRegion label={label} className="flex flex-col gap-6">
       <div aria-hidden="true" className="flex flex-col gap-6">
-        {/* ResultsSummaryStrip: a bordered term list. A latest-date row, then three dimension cells (stacked on mobile). */}
-        <div className="grid gap-3 rounded-control border border-border-subtle bg-surface px-4 py-3 sm:grid-cols-3">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 sm:col-span-3">
-            <Skeleton className="h-4 w-20" />
-            <Skeleton className="h-4 w-32" />
-          </div>
-          {Array.from({ length: 3 }, (_, index) => (
-            <div key={index} className="flex flex-col gap-1">
-              <Skeleton className="h-4 w-16" />
-              <Skeleton className="h-7 w-14" />
-            </div>
-          ))}
-        </div>
-
         {/* CurrentSurveySection: heading, then title, type line, and the answer link. */}
         <SkeletonCard className="flex flex-col gap-3 p-6">
           <Skeleton className="h-5 w-44" />
@@ -214,27 +216,33 @@ function ResultsViewSkeleton({ label }: { label: string }) {
           <Skeleton className="h-4 w-28" />
         </SkeletonCard>
 
-        {/* TrendTable: a plain section (no card) with a header row and three body rows, as in the loaded table. */}
-        <section className="flex flex-col gap-3">
-          <Skeleton className="h-5 w-44" />
-          <div className="flex flex-col overflow-hidden">
-            <div className="grid grid-cols-5 gap-4 border-b border-border-subtle py-2">
-              {Array.from({ length: 5 }, (_, index) => (
-                <Skeleton key={index} className="h-4 w-full" />
-              ))}
-            </div>
-            {Array.from({ length: 3 }, (_, index) => (
-              <div key={index} className="grid grid-cols-5 gap-4 border-b border-border-subtle py-2 last:border-0">
-                {Array.from({ length: 5 }, (_, cell) => (
-                  <Skeleton key={cell} className="h-4 w-full" />
-                ))}
-              </div>
-            ))}
+        {/* ResultsSummaryStrip: a bordered term list. A latest-date row, then three dimension cells (stacked on mobile). */}
+        <div className="grid gap-3 rounded-control border border-border-subtle bg-surface px-4 py-3 sm:grid-cols-3">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 sm:col-span-3">
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-4 w-32" />
           </div>
-        </section>
+          {Array.from({ length: 3 }, (_, index) => (
+            <div key={index} className="flex flex-col gap-1">
+              <Skeleton className="h-4 w-16" />
+              <Skeleton className="h-7 w-14" />
+            </div>
+          ))}
+        </div>
+
+        {/* The chart card keeps the loaded heading and description as real text; only its plot box is decorative (aria-hidden). */}
+        <TrendChartSkeleton />
+
+        {/* TrendTable and the per-question section are collapsed by default, so the skeleton shows their header rows only. */}
+        <div aria-hidden="true" className="flex flex-col gap-3 rounded-control border border-border-subtle bg-surface px-4 py-3">
+          <Skeleton className="h-5 w-44" />
+          <Skeleton className="h-4 w-28" />
+        </div>
+        <div aria-hidden="true" className="flex flex-col gap-3 rounded-control border border-border-subtle bg-surface px-4 py-3">
+          <Skeleton className="h-5 w-56" />
+          <Skeleton className="h-4 w-36" />
+        </div>
       </div>
-      {/* The chart card keeps the loaded heading and description as real text; only its plot box is decorative (aria-hidden). */}
-      <TrendChartSkeleton />
     </LoadingRegion>
   );
 }
@@ -245,21 +253,23 @@ function ResultsViewSkeleton({ label }: { label: string }) {
  * returned; it never computes eligibility and never renders response content.
  */
 function CurrentSurveySection({ state }: { state: CurrentSurveySectionState }) {
+  // An active survey gets a bordered panel, because it may need action. "No survey" and "unavailable" are plain text, so
+  // an empty state never takes up a large empty card.
   return (
-    <Card as="section" variant="bordered" padding="md" aria-labelledby="current-survey-heading">
+    <section aria-labelledby="current-survey-heading" className="flex flex-col gap-2">
       <h2 id="current-survey-heading" className="text-lg font-semibold text-text-primary">
         {surveysCopy.teamCurrent.sectionTitle}
       </h2>
-      {state.status === "unavailable" && (
-        <Alert variant="error" className="mt-4">
-          {surveysCopy.teamCurrent.error}
-        </Alert>
-      )}
+      {state.status === "unavailable" && <Alert variant="error">{surveysCopy.teamCurrent.error}</Alert>}
       {state.status === "loaded" && state.survey === null && (
-        <EmptyState className="mt-4">{surveysCopy.teamCurrent.empty}</EmptyState>
+        <p className="text-sm text-text-secondary">{surveysCopy.teamCurrent.empty}</p>
       )}
-      {state.status === "loaded" && state.survey !== null && <CurrentSurveyCard survey={state.survey} />}
-    </Card>
+      {state.status === "loaded" && state.survey !== null && (
+        <Card as="div" variant="bordered" padding="md">
+          <CurrentSurveyCard survey={state.survey} />
+        </Card>
+      )}
+    </section>
   );
 }
 

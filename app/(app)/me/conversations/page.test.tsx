@@ -13,9 +13,10 @@ const { default: MyConversationsPage } = await import("./page");
 afterEach(cleanup);
 
 describe("/me/conversations page", () => {
-  it("renders the Samtaler heading and the conversations feature component, without a duplicate page-level nav", () => {
+  it("renders the conversations feature component, which owns the Samtaler heading, without a duplicate page-level nav", () => {
     render(<MyConversationsPage />);
-    expect(screen.getByRole("heading", { level: 1, name: "Samtaler" })).toBeTruthy();
+    // The route is a thin entry point: the page title and its primary action belong to the feature component.
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
     expect(screen.getByTestId("conversations-page")).toBeTruthy();
     expect(screen.queryByRole("navigation", { name: "Personlig utvikling" })).toBeNull();
   });
@@ -27,10 +28,10 @@ describe("route structure (visual-redesign TASK-019)", () => {
     cleanup();
   });
 
-  it("renders one main landmark and a valid heading structure with one level-1 title", async () => {
+  it("renders one main landmark, and the route itself adds no level-1 heading", async () => {
     render(<MyConversationsPage />);
     expectMainLandmark(document.body);
     expectNamedControls(document.body);
-    expectHeadingStructure(document.body, { ownsPageTitle: true });
+    expectHeadingStructure(document.body, { ownsPageTitle: false });
   });
 });

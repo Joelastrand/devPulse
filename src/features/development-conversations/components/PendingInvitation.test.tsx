@@ -14,7 +14,6 @@ function invitation(overrides: Partial<PendingInvitationWire> = {}): PendingInvi
   return {
     conversationId: CONVERSATION_ID,
     state: "pending",
-    teamName: "Plattform (syntetisk)",
     invitedAt: "2026-10-02T10:00:00.000Z",
     ownerDisplayName: "Kari Testperson",
     ...overrides,
@@ -27,10 +26,9 @@ afterEach(() => {
 });
 
 describe("PendingInvitation: approved pending data only", () => {
-  it("shows the team name, the invitation date and the owner's roster-level name", () => {
+  it("shows the invitation date and the owner's roster-level name, with no team line (A2.1)", () => {
     render(<PendingInvitation invitation={invitation()} onAccept={vi.fn()} onDecline={vi.fn()} />);
-    expect(screen.getByRole("heading", { level: 2, name: conversationsCopy.pendingHeading })).toBeTruthy();
-    expect(screen.getByText(`${conversationsCopy.teamLabel}: Plattform (syntetisk)`)).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1, name: conversationsCopy.pendingHeading })).toBeTruthy();
     expect(screen.getByText(conversationsCopy.pendingOwnerLine("Kari Testperson"))).toBeTruthy();
     expect(screen.getByText(/Invitert/)).toBeTruthy();
   });

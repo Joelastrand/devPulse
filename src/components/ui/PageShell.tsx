@@ -33,6 +33,11 @@ export interface PageShellProps {
   /** Vertically centers content — the existing treatment for short auth/survey-form pages. */
   center?: boolean;
   className?: string;
+  /**
+   * Decorative layer painted behind the whole page band, including its top padding, so it can reach the top edge
+   * without moving the content. Rendered `aria-hidden` by the caller and kept out of the content flow.
+   */
+  backdrop?: ReactNode;
 }
 
 /**
@@ -40,9 +45,16 @@ export interface PageShellProps {
  * `<main>` landmark every route renders. Route content, copy and guards are
  * unchanged; only the surrounding width and surface use the new tokens.
  */
-export function PageShell({ children, width = "3xl", center = false, className }: PageShellProps) {
+export function PageShell({ children, width = "3xl", center = false, className, backdrop }: PageShellProps) {
   return (
-    <div className={cx("flex flex-1 justify-center bg-canvas py-16", center && "items-center")}>
+    <div
+      className={cx(
+        "flex flex-1 justify-center bg-canvas py-16",
+        center && "items-center",
+        backdrop !== undefined && "relative isolate",
+      )}
+    >
+      {backdrop}
       <Container variant={CONTAINER_FOR_WIDTH[width]}>
         <main className={cx("w-full", className)}>{children}</main>
       </Container>

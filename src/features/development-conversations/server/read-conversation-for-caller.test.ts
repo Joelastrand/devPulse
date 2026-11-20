@@ -5,13 +5,12 @@ import type { SkillTreeNameReader } from "./area-names";
 import type { ConversationStore } from "./conversation-store-types";
 import { createFakeContentCodec, type FakeContentCodec } from "./fake-content-codec";
 import { createFakeConversationStore, type FakeConversationStore } from "./fake-conversation-store";
-import { createFakeTeamEligibilityReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
+import { createFakeSharedTeamReader, type FakeTeamEligibilityState } from "./fake-team-eligibility";
 import { readConversationForCaller, type ReadConversationForCallerDeps } from "./read-conversation-for-caller";
 import {
   NOW,
   OTHER_OWNER_UID,
   OWNER_UID,
-  PARTICIPANT_MEMBER_REF,
   PARTICIPANT_UID,
   TEAM_ID,
   rosterTeam,
@@ -23,7 +22,6 @@ import { issueErasureOwnerCleanupCapability } from "./erasure-owner-cleanup-capa
 // Synthetic fixtures only (invariant 15). No real person, team or wellbeing data.
 const CONVERSATION_ID = "conv-1";
 const REJOINED_REF = "abcdefghjkmnpqrstvwxyz0123";
-const TEAM_NAME = "Synthetic team";
 const OWNER_NAME = "Synthetic owner";
 const OUTSIDER_UID = "outsider-1";
 const CAPTURED_AT = new Date("2026-10-10T08:00:00.000Z");
@@ -33,16 +31,13 @@ interface Setup {
   codec: FakeContentCodec;
   state: FakeTeamEligibilityState;
   deps: ReadConversationForCallerDeps;
-  teamName: { value: unknown };
 }
 
 function setup(options: { members?: string[]; trees?: Record<string, string> } = {}): Setup {
   const store = createFakeConversationStore();
   const codec = createFakeContentCodec();
   const state = rosterTeam(options.members ?? [OWNER_UID, PARTICIPANT_UID]);
-  const teamReader = createFakeTeamEligibilityReader(state);
-  const teamName = { value: TEAM_NAME as unknown };
-  const teamNameReader = { getTeamName: async () => teamName.value };
+  const teamReader = createFakeSharedTeamReader(state);
   const trees = options.trees ?? { "tree-a": "Synthetic area" };
   const areaNameReader: SkillTreeNameReader = {
     getSkillTree: async (treeId) =>
@@ -66,10 +61,10 @@ function setup(options: { members?: string[]; trees?: Record<string, string> } =
       areaNameReader,
       getNames,
     },
-    participant: { store, codec, teamReader, teamNameReader, areaNameReader, getNames },
-    pending: { store, teamReader, teamNameReader, getNames },
+    participant: { store, codec, teamReader, areaNameReader, getNames },
+    pending: { store, teamReader, getNames },
   };
-  return { store, codec, state, deps, teamName };
+  return { store, codec, state, deps };
 }
 
 function goal(treeId: string | null, goalTitle = "Synthetic goal"): SharedGoalSnapshot {
@@ -135,7 +130,6 @@ describe("readConversationForCaller: the accepted participant view (SPEC BR-21, 
       title: "Synthetic title",
       ownerNotes: "Synthetic owner note",
       participantNotes: "Synthetic participant note",
-      teamName: TEAM_NAME,
       ownerDisplayName: OWNER_NAME,
     });
   });
@@ -146,14 +140,6 @@ describe("readConversationForCaller: the accepted participant view (SPEC BR-21, 
     state.memberships[`${PARTICIPANT_UID}__${TEAM_ID}`] = { uid: PARTICIPANT_UID, teamId: TEAM_ID, createdAt: new Date(0), memberRef: REJOINED_REF };
 
     expect(await readConversationForCaller(PARTICIPANT_UID, CONVERSATION_ID, deps)).toEqual({ ok: false, error: "conversation_not_found" });
-  });
-
-  it("reports an operational team-name failure as persistence_failed, not as the pending view", async () => {
-    const { store, codec, teamName, deps } = setup();
-    await seedWithParticipant(store, codec, "accepted");
-    teamName.value = undefined;
-
-    expect(await readConversationForCaller(PARTICIPANT_UID, CONVERSATION_ID, deps)).toEqual({ ok: false, error: "persistence_failed" });
   });
 
   it("reports a key outage for an accepted participant as persistence_failed, with no participant content", async () => {
@@ -206,14 +192,6 @@ describe("readConversationForCaller: the pending invitee view (SPEC BR-14, BR-41
     expect(await readConversationForCaller(PARTICIPANT_UID, CONVERSATION_ID, deps)).toEqual({ ok: false, error: "conversation_not_found" });
   });
 
-  it("reports an operational failure of the pending path as persistence_failed, never as an invitation that is gone", async () => {
-    const { store, codec, state, deps } = setup();
-    await seedWithParticipant(store, codec, "pending");
-    const failing = { ...deps, pending: { ...deps.pending, teamNameReader: { getTeamName: async () => undefined } } };
-    state.memberships[`${PARTICIPANT_UID}__${TEAM_ID}`] = { uid: PARTICIPANT_UID, teamId: TEAM_ID, createdAt: new Date(0), memberRef: PARTICIPANT_MEMBER_REF };
-
-    expect(await readConversationForCaller(PARTICIPANT_UID, CONVERSATION_ID, failing)).toEqual({ ok: false, error: "persistence_failed" });
-  });
 });
 
 describe("readConversationForCaller: denial is uniform (BR-14, BR-21, BR-35, D2-SI-15)", () => {

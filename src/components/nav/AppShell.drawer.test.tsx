@@ -65,7 +65,8 @@ describe("AppShell mobile drawer", () => {
 
     const dialog = screen.getByRole("dialog", { name: "Hovednavigasjon" });
     expect(within(dialog).getByRole("link", { name: "Ferdigheter" })).toBeTruthy();
-    expect(within(dialog).queryByRole("button", { name: /logg ut/i })).toBeNull();
+    // Sign-out is not in the navigation on any breakpoint; it lives on Min profil.
+    expect(within(dialog).queryByRole("button", { name: "Logg ut" })).toBeNull();
   });
 
   it("moves focus to the current link when it opens", async () => {

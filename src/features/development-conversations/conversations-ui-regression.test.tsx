@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
@@ -18,8 +19,6 @@ const observeIdTokenMock = vi.fn();
 const fetchConversationMock = vi.fn();
 const fetchConversationListMock = vi.fn();
 const fetchOwnGoalsMock = vi.fn();
-const fetchSelectableMembersMock = vi.fn();
-const fetchCreateOptionsMock = vi.fn();
 const createConversationMock = vi.fn();
 const updateConversationMock = vi.fn();
 const deleteConversationMock = vi.fn();
@@ -31,14 +30,13 @@ const routerReplaceMock = vi.fn();
 vi.mock("../auth/client/auth-client", () => ({ observeIdToken: observeIdTokenMock }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: routerReplaceMock }) }));
 vi.mock("./client/conversations-gateway", () => ({
+  fetchInvitableColleagues: async () => ({ status: "ok", response: { colleagues: [], truncated: false } }),
   fetchConversation: fetchConversationMock,
   fetchConversationList: fetchConversationListMock,
   updateConversation: updateConversationMock,
   deleteConversation: deleteConversationMock,
   fetchOwnGoals: fetchOwnGoalsMock,
   fetchEvidenceSources: async () => ({ status: "ok", response: { items: [], truncated: false } }),
-  fetchSelectableMembers: fetchSelectableMembersMock,
-  fetchCreateOptions: fetchCreateOptionsMock,
   createConversation: createConversationMock,
   acceptInvitation: acceptInvitationMock,
   endParticipation: endParticipationMock,
@@ -47,7 +45,7 @@ vi.mock("./client/conversations-gateway", () => ({
 
 const { CompleteConversationDialog } = await import("./components/CompleteConversationDialog");
 const { ConversationsPage } = await import("./components/ConversationsPage");
-const { CreateConversationForm } = await import("./components/CreateConversationForm");
+const { CreateConversationForm, CREATE_PANEL_ID, CREATE_TRIGGER_ID } = await import("./components/CreateConversationForm");
 const { DeleteConversationDialog } = await import("./components/DeleteConversationDialog");
 const { ConversationDetail } = await import("./components/ConversationDetail");
 const { GoalSnapshotSelector } = await import("./components/GoalSnapshotSelector");
@@ -97,7 +95,6 @@ function completedOwner(): OwnerConversationWire {
     title: "Kommunikasjon i prosjekter",
     status: "completed",
     plannedFor: null,
-    teamId: null,
     participant: { state: "none", displayName: null },
     ownerNotes: "",
     nextSteps: [],
@@ -117,9 +114,7 @@ beforeEach(() => {
   });
   fetchConversationMock.mockResolvedValue({ status: "ok", view: { kind: "owner", conversation: completedOwner() } });
   fetchOwnGoalsMock.mockResolvedValue({ status: "ok", response: { goals: [], truncated: false } });
-  fetchSelectableMembersMock.mockResolvedValue({ status: "ok", response: { members: [], truncated: false } });
   fetchConversationListMock.mockResolvedValue({ status: "ok", response: emptyList });
-  fetchCreateOptionsMock.mockResolvedValue({ status: "ok", response: { items: [], truncated: false } });
   createConversationMock.mockResolvedValue({ status: "created", conversationId: "conv-synthetic-new" });
   acceptInvitationMock.mockResolvedValue({ status: "accepted" });
   endParticipationMock.mockResolvedValue({ status: "ended" });
@@ -213,16 +208,6 @@ describe("completed owner view does not imply a participant or shared goals exis
  * mutations that happen or must not happen. Synthetic data only. */
 
 const sharedGoal: SharedGoalWire = { goalTitle: "Lær Rust", areaName: null, targetDate: null, status: "active", capturedAt: ISO };
-const ROSTER = {
-  status: "ok",
-  response: {
-    members: [
-      { memberRef: "ref-synthetic-kari", displayName: "Kari Testperson", ordinal: null, isSelf: false },
-      { memberRef: "ref-synthetic-ola", displayName: "Ola Testperson", ordinal: null, isSelf: false },
-    ],
-    truncated: false,
-  },
-};
 
 function renderGoalSelector(shared: SharedGoalWire[] = []) {
   fetchOwnGoalsMock.mockResolvedValue({ status: "ok", response: { goals: [{ id: "g1", title: "Lær Rust", status: "active" }], truncated: false } });
@@ -236,16 +221,17 @@ function renderGoalSelector(shared: SharedGoalWire[] = []) {
       onChanged={vi.fn().mockResolvedValue(undefined)}
     />,
   );
+  // The selector starts collapsed. Open it as a person would, so its controls are reachable.
+  const toggle = screen.queryByRole("button", { name: conversationsCopy.selectorHeading, expanded: false });
+  if (toggle) fireEvent.click(toggle);
 }
 
 function renderPanel(participant: OwnerParticipantWire = { state: "none", displayName: null }) {
-  fetchSelectableMembersMock.mockResolvedValue(ROSTER);
   const onChanged = vi.fn().mockResolvedValue(undefined);
   render(
     <ParticipantPanel
       conversationId={CONVERSATION_ID}
       token="a-token"
-      teamId="team-synthetic-1"
       completed={false}
       participant={participant}
       onUnauthenticated={vi.fn()}
@@ -270,8 +256,7 @@ describe("keyboard and labels: goal snapshot selector (TASK-033, SPEC BR-24, BR-
     renderGoalSelector();
     const checkbox = (await screen.findByRole("checkbox", { name: /Lær Rust/ })) as HTMLInputElement;
     const user = userEvent.setup();
-    await user.tab();
-    expect(document.activeElement).toBe(checkbox);
+    await tabTo(user, checkbox);
     await user.keyboard(" ");
     expect(checkbox.checked).toBe(true);
     await user.keyboard(" ");
@@ -283,7 +268,7 @@ describe("keyboard and labels: goal snapshot selector (TASK-033, SPEC BR-24, BR-
     renderGoalSelector();
     await screen.findByRole("checkbox", { name: /Lær Rust/ });
     const user = userEvent.setup();
-    await user.tab();
+    await tabTo(user, screen.getByRole("checkbox", { name: /Lær Rust/ }));
     await user.keyboard(" ");
     await user.tab();
     expect(document.activeElement).toBe(screen.getByRole("button", { name: conversationsCopy.saveGoals }));
@@ -298,9 +283,10 @@ describe("keyboard and labels: goal snapshot selector (TASK-033, SPEC BR-24, BR-
     const save = screen.getByRole("button", { name: conversationsCopy.saveGoals }) as HTMLButtonElement;
     expect(save.disabled).toBe(true);
     const user = userEvent.setup();
-    await user.tab();
-    await user.tab();
-    expect(document.activeElement).not.toBe(save);
+    for (let step = 0; step < 30; step += 1) {
+      await user.tab();
+      expect(document.activeElement).not.toBe(save);
+    }
     expect(updateConversationMock).not.toHaveBeenCalled();
   });
 
@@ -308,44 +294,10 @@ describe("keyboard and labels: goal snapshot selector (TASK-033, SPEC BR-24, BR-
     renderGoalSelector([sharedGoal]);
     await screen.findByRole("checkbox", { name: /Lær Rust/ });
     const user = userEvent.setup();
-    await user.tab();
-    await user.tab();
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: conversationsCopy.clearGoals }));
+    await tabTo(user, screen.getByRole("button", { name: conversationsCopy.clearGoals }));
     await user.keyboard("{Enter}");
     await waitFor(() => expect(updateConversationMock).toHaveBeenCalledWith("a-token", CONVERSATION_ID, { sharedGoalIds: [] }));
     expect(updateConversationMock).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("keyboard and labels: colleague selector and invitation (TASK-033, SPEC BR-8, BR-10, BR-38)", () => {
-  beforeEach(() => {
-    updateConversationMock.mockResolvedValue({ status: "saved" });
-  });
-
-  it("the colleague selector is named by its label, is reached by Tab, and choosing a colleague sends nothing", async () => {
-    renderPanel();
-    const select = (await screen.findByRole("combobox", { name: conversationsCopy.chooseColleague })) as HTMLSelectElement;
-    const user = userEvent.setup();
-    await user.tab();
-    expect(document.activeElement).toBe(select);
-    await user.selectOptions(select, "0");
-    expect(select.value).toBe("0");
-    expect(updateConversationMock).not.toHaveBeenCalled();
-  });
-
-  it("Enter on the invite action opens a confirmation that takes focus, and sends nothing before the owner confirms", async () => {
-    renderPanel();
-    const select = await screen.findByRole("combobox", { name: conversationsCopy.chooseColleague });
-    const user = userEvent.setup();
-    await user.tab();
-    await user.selectOptions(select, "0");
-    await user.tab();
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: conversationsCopy.inviteButton }));
-    await user.keyboard("{Enter}");
-    const group = screen.getByRole("group", { name: conversationsCopy.inviteConfirmHeading });
-    expect(document.activeElement?.textContent).toBe(conversationsCopy.inviteConfirmHeading);
-    expect(within(group).getByText(conversationsCopy.inviteTargetLine("Kari Testperson"))).toBeTruthy();
-    expect(updateConversationMock).not.toHaveBeenCalled();
   });
 });
 
@@ -358,9 +310,8 @@ describe("keyboard and labels: participant removal confirmation (TASK-033, SPEC 
 
   it("Enter on Remove opens a confirmation that states its consequence and takes focus", async () => {
     renderPanel(accepted);
-    await screen.findByRole("combobox", { name: conversationsCopy.chooseReplacement });
+    await screen.findByRole("button", { name: conversationsCopy.removeButton });
     const user = userEvent.setup();
-    await user.tab();
     await user.tab();
     expect(document.activeElement).toBe(screen.getByRole("button", { name: conversationsCopy.removeButton }));
     await user.keyboard("{Enter}");
@@ -371,9 +322,8 @@ describe("keyboard and labels: participant removal confirmation (TASK-033, SPEC 
 
   it("Avbryt dismisses by keyboard with no removal sent, and focus returns to the participant heading", async () => {
     renderPanel(accepted);
-    await screen.findByRole("combobox", { name: conversationsCopy.chooseReplacement });
+    await screen.findByRole("button", { name: conversationsCopy.removeButton });
     const user = userEvent.setup();
-    await user.tab();
     await user.tab();
     await user.keyboard("{Enter}");
     await user.tab();
@@ -388,9 +338,8 @@ describe("keyboard and labels: participant removal confirmation (TASK-033, SPEC 
 
   it("Enter on the confirmed removal sends exactly one removal and re-reads once", async () => {
     const { onChanged } = renderPanel(accepted);
-    await screen.findByRole("combobox", { name: conversationsCopy.chooseReplacement });
+    await screen.findByRole("button", { name: conversationsCopy.removeButton });
     const user = userEvent.setup();
-    await user.tab();
     await user.tab();
     await user.keyboard("{Enter}");
     await user.tab();
@@ -398,62 +347,6 @@ describe("keyboard and labels: participant removal confirmation (TASK-033, SPEC 
     await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
     expect(updateConversationMock).toHaveBeenCalledTimes(1);
     expect(updateConversationMock).toHaveBeenCalledWith("a-token", CONVERSATION_ID, { participantMemberRef: null });
-  });
-});
-
-describe("keyboard and labels: participant replacement confirmation (TASK-033, SPEC BR-16; Avbryt allowed here)", () => {
-  const accepted: OwnerParticipantWire = { state: "accepted", displayName: "Kari Testperson" };
-
-  beforeEach(() => {
-    updateConversationMock.mockResolvedValue({ status: "saved" });
-  });
-
-  it("a chosen replacement is reached by Tab, and Enter on Replace opens a confirmation that takes focus", async () => {
-    renderPanel(accepted);
-    const select = await screen.findByRole("combobox", { name: conversationsCopy.chooseReplacement });
-    const user = userEvent.setup();
-    await user.tab();
-    await user.selectOptions(select, "1");
-    await user.tab();
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: conversationsCopy.replaceButton }));
-    await user.keyboard("{Enter}");
-    const group = screen.getByRole("group", { name: conversationsCopy.inviteConfirmHeading });
-    expect(document.activeElement?.textContent).toBe(conversationsCopy.inviteConfirmHeading);
-    expect(within(group).getByText(conversationsCopy.replaceWarning)).toBeTruthy();
-    expect(within(group).getByText(conversationsCopy.inviteTargetLine("Ola Testperson"))).toBeTruthy();
-    expect(updateConversationMock).not.toHaveBeenCalled();
-  });
-
-  it("Avbryt dismisses by keyboard with no replacement sent, and focus returns to the participant heading", async () => {
-    renderPanel(accepted);
-    const select = await screen.findByRole("combobox", { name: conversationsCopy.chooseReplacement });
-    const user = userEvent.setup();
-    await user.tab();
-    await user.selectOptions(select, "1");
-    await user.tab();
-    await user.keyboard("{Enter}");
-    await user.tab();
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: conversationsCopy.confirmReplace }));
-    await user.tab();
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: conversationsCopy.cancelButton }));
-    await user.keyboard("{Enter}");
-    expect(updateConversationMock).not.toHaveBeenCalled();
-    expect(screen.queryByRole("group", { name: conversationsCopy.inviteConfirmHeading })).toBeNull();
-    expect(document.activeElement?.textContent).toBe(conversationsCopy.participantSection);
-  });
-
-  it("Enter on the confirmed replacement sends only the chosen colleague's ref", async () => {
-    renderPanel(accepted);
-    const select = await screen.findByRole("combobox", { name: conversationsCopy.chooseReplacement });
-    const user = userEvent.setup();
-    await user.tab();
-    await user.selectOptions(select, "1");
-    await user.tab();
-    await user.keyboard("{Enter}");
-    await user.tab();
-    await user.keyboard("{Enter}");
-    await waitFor(() => expect(updateConversationMock).toHaveBeenCalledTimes(1));
-    expect(updateConversationMock).toHaveBeenCalledWith("a-token", CONVERSATION_ID, { participantMemberRef: "ref-synthetic-ola" });
   });
 });
 
@@ -531,8 +424,8 @@ const listData: ConversationListResponse = {
   },
   participating: {
     items: [
-      { conversationId: "conv-synthetic-accepted", state: "accepted", title: "Synthetic accepted", teamName: "Team Synthetic A", invitedAt: ISO },
-      { conversationId: "conv-synthetic-pending", state: "pending", title: null, teamName: "Team Synthetic B", invitedAt: ISO },
+      { conversationId: "conv-synthetic-accepted", state: "accepted", title: "Synthetic accepted", invitedAt: ISO },
+      { conversationId: "conv-synthetic-pending", state: "pending", title: null, invitedAt: ISO },
     ],
     truncated: false,
   },
@@ -543,7 +436,6 @@ const openOwner: OwnerConversationWire = {
   title: "Synthetic title",
   status: "open",
   plannedFor: null,
-  teamId: null,
   participant: { state: "none", displayName: null },
   ownerNotes: "",
   nextSteps: [],
@@ -558,7 +450,6 @@ const openOwner: OwnerConversationWire = {
 const pendingWire: PendingInvitationWire = {
   conversationId: CONVERSATION_ID,
   state: "pending",
-  teamName: "Team Synthetic",
   invitedAt: ISO,
   ownerDisplayName: "Ola Testperson",
 };
@@ -568,7 +459,6 @@ const participantWire: ParticipantConversationWire = {
   title: "Synthetic title",
   status: "open",
   plannedFor: null,
-  teamName: "Team Synthetic",
   ownerDisplayName: "Ola Testperson",
   ownerNotes: "",
   nextSteps: [],
@@ -580,10 +470,6 @@ const participantWire: ParticipantConversationWire = {
   completedAt: null,
 };
 
-const teamChoices = [
-  { teamId: "team-synthetic-a", name: "Team Synthetic A" },
-  { teamId: "team-synthetic-b", name: "Team Synthetic B" },
-];
 
 /** Tabs until `target` has focus. Fails when the control cannot be reached by keyboard in the page's own order. */
 async function tabTo(user: UserEvent, target: HTMLElement, limit = 60) {
@@ -628,56 +514,6 @@ describe("keyboard and labels: goal snapshot clear-all after completion (TASK-03
     await waitFor(() => expect(updateConversationMock).toHaveBeenCalledWith("a-token", CONVERSATION_ID, { sharedGoalIds: [] }));
     expect(updateConversationMock).toHaveBeenCalledTimes(1);
     expect(fetchOwnGoalsMock).not.toHaveBeenCalled();
-  });
-});
-
-describe("keyboard and labels: invitation confirmation and colleague retry (TASK-033, SPEC BR-8, BR-10, BR-38)", () => {
-  beforeEach(() => {
-    updateConversationMock.mockResolvedValue({ status: "saved" });
-  });
-
-  async function openInviteConfirmation(user: UserEvent) {
-    const select = await screen.findByRole("combobox", { name: conversationsCopy.chooseColleague });
-    await tabTo(user, select);
-    await user.selectOptions(select, "0");
-    await tabTo(user, screen.getByRole("button", { name: conversationsCopy.inviteButton }));
-    await user.keyboard("{Enter}");
-    return screen.getByRole("group", { name: conversationsCopy.inviteConfirmHeading });
-  }
-
-  it("Invite confirmation is reached by Tab, and Enter sends exactly one invitation for the chosen colleague, then re-reads once", async () => {
-    const { onChanged } = renderPanel();
-    const user = userEvent.setup();
-    const group = await openInviteConfirmation(user);
-    await tabTo(user, within(group).getByRole("button", { name: conversationsCopy.confirmInvite }));
-    await user.keyboard("{Enter}");
-    await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
-    expect(updateConversationMock).toHaveBeenCalledTimes(1);
-    expect(updateConversationMock).toHaveBeenCalledWith("a-token", CONVERSATION_ID, { participantMemberRef: "ref-synthetic-kari" });
-  });
-
-  it("Invite cancel is reached by Tab, sends nothing, and returns focus to the participant heading", async () => {
-    renderPanel();
-    const user = userEvent.setup();
-    const group = await openInviteConfirmation(user);
-    await tabTo(user, within(group).getByRole("button", { name: conversationsCopy.cancelButton }));
-    await user.keyboard("{Enter}");
-    expect(updateConversationMock).not.toHaveBeenCalled();
-    expect(screen.queryByRole("group", { name: conversationsCopy.inviteConfirmHeading })).toBeNull();
-    expect(document.activeElement?.textContent).toBe(conversationsCopy.participantSection);
-  });
-
-  it("Retry in the unavailable colleague state is reached by Tab, and Enter re-reads the colleague list only", async () => {
-    fetchSelectableMembersMock.mockResolvedValueOnce({ status: "error", error: "persistence_failed" });
-    renderPanel();
-    await screen.findByText(conversationsCopy.colleagueOptionsError);
-    expect(fetchSelectableMembersMock).toHaveBeenCalledTimes(1);
-    const user = userEvent.setup();
-    await tabTo(user, screen.getByRole("button", { name: conversationsCopy.retryButton }));
-    await user.keyboard("{Enter}");
-    await screen.findByRole("combobox", { name: conversationsCopy.chooseColleague });
-    expect(fetchSelectableMembersMock).toHaveBeenCalledTimes(2);
-    expect(updateConversationMock).not.toHaveBeenCalled();
   });
 });
 
@@ -881,13 +717,28 @@ describe("keyboard and labels: pending invitation (TASK-033, SPEC BR-14, BR-15, 
 });
 
 describe("keyboard and labels: create conversation form (TASK-033, SPEC BR-1, BR-2, BR-6, BR-38)", () => {
-  beforeEach(() => {
-    fetchCreateOptionsMock.mockResolvedValue({ status: "ok", response: { items: teamChoices, truncated: false } });
-  });
+  /** The list page's header holds the trigger and the controlled form; this harness wires the same two parts together. */
+  function CreateHarness({ onChanged }: { onChanged: () => Promise<void> }) {
+    const [open, setOpen] = useState(false);
+    return (
+      <>
+        <button
+          id={CREATE_TRIGGER_ID}
+          type="button"
+          aria-expanded={open}
+          aria-controls={open ? CREATE_PANEL_ID : undefined}
+          onClick={() => setOpen((value) => !value)}
+        >
+          {conversationsCopy.createToggle}
+        </button>
+        <CreateConversationForm open={open} onOpenChange={setOpen} token="a-token" onUnauthenticated={vi.fn()} onChanged={onChanged} />
+      </>
+    );
+  }
 
   function renderCreate() {
     const onChanged = vi.fn().mockResolvedValue(undefined);
-    render(<CreateConversationForm token="a-token" onUnauthenticated={vi.fn()} onChanged={onChanged} />);
+    render(<CreateHarness onChanged={onChanged} />);
     return { onChanged, user: userEvent.setup() };
   }
 
@@ -895,42 +746,11 @@ describe("keyboard and labels: create conversation form (TASK-033, SPEC BR-1, BR
     const toggle = screen.getByRole("button", { name: conversationsCopy.createToggle });
     await tabTo(user, toggle);
     await user.keyboard("{Enter}");
-    await screen.findByRole("combobox", { name: conversationsCopy.teamLabel });
+    await screen.findByRole("form", { name: conversationsCopy.createHeading });
     return toggle;
   }
 
-  it("'Ny samtale' is reached by Tab, Enter opens the form, and the team choice loads", async () => {
-    const { user } = renderCreate();
-    const toggle = screen.getByRole("button", { name: conversationsCopy.createToggle });
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    await openCreate(user);
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByRole("form", { name: conversationsCopy.createHeading })).toBeTruthy();
-    expect(fetchCreateOptionsMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("title, planned date and team are reached by Tab and filled by keyboard, and Enter on submit creates exactly one conversation", async () => {
-    const { onChanged, user } = renderCreate();
-    await openCreate(user);
-    await tabTo(user, screen.getByRole("textbox", { name: conversationsCopy.createTitleLabel }));
-    await user.keyboard("Synthetic title");
-    await tabTo(user, screen.getByLabelText(conversationsCopy.plannedForLabel, { selector: "input" }));
-    await user.keyboard("2026-11-01");
-    const team = screen.getByRole("combobox", { name: conversationsCopy.teamLabel });
-    await tabTo(user, team);
-    await user.selectOptions(team, "team-synthetic-b");
-    await tabTo(user, screen.getByRole("button", { name: conversationsCopy.createSubmit }));
-    await user.keyboard("{Enter}");
-    await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
-    expect(createConversationMock).toHaveBeenCalledTimes(1);
-    expect(createConversationMock).toHaveBeenCalledWith("a-token", {
-      title: "Synthetic title",
-      plannedFor: "2026-11-01",
-      teamId: "team-synthetic-b",
-    });
-  });
-
-  it("'Avbryt' is reached by Tab, Enter closes the form with no create, and focus returns to 'Ny samtale'", async () => {
+      it("'Avbryt' is reached by Tab, Enter closes the form with no create, and focus returns to 'Ny samtale'", async () => {
     const { user } = renderCreate();
     const toggle = await openCreate(user);
     await tabTo(user, screen.getByRole("button", { name: conversationsCopy.cancelCreate }));
@@ -1107,10 +927,10 @@ describe("keyboard and labels: conversation list page (TASK-033, SPEC BR-33, BR-
     expect(clicks).toHaveBeenCalledTimes(1);
   });
 
-  it("the pending invitation link is reached by Tab, is named by its team, and carries its own detail address", async () => {
+  it("the pending invitation link is reached by Tab, is named by its visible text, and carries its own detail address", async () => {
     fetchConversationListMock.mockResolvedValue({ status: "ok", response: listData });
     render(<ConversationsPage />);
-    const link = await screen.findByRole("link", { name: conversationsCopy.openPendingName("Team Synthetic B") });
+    const link = await screen.findByRole("link", { name: conversationsCopy.pendingRowTitle });
     expect(link.getAttribute("href")).toBe("/me/conversations/conv-synthetic-pending");
     const clicks = countClicks(link);
     const user = userEvent.setup();

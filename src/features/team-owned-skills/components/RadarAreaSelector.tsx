@@ -3,6 +3,8 @@
 import { RADAR_MAX_AXES } from "../domain/radar-model";
 import { teamCompetenceCopy } from "../workspace-copy";
 import { buttonClassName } from "../../../components/ui/Button";
+import { CollapsibleSection } from "../../../components/ui/CollapsibleSection";
+import { cx } from "../../../components/ui/class-names";
 
 const copy = teamCompetenceCopy.areaSelector;
 
@@ -12,9 +14,10 @@ export interface RadarAreaOption {
 }
 
 /**
- * Chooses which eligible areas the radar draws, up to the radar's maximum. The selector is a native disclosure, so it
- * starts collapsed and the radar stays visible; the summary states how many areas are drawn. Each option is a labelled
- * checkbox, so the choice is not conveyed by colour. Unchecked options are disabled once the radar is full.
+ * Chooses which eligible areas the radar and the level bar chart draw, up to the radar's maximum. It uses the shared
+ * collapsible section: collapsed, its summary states how many areas are selected, so the choice is visible without
+ * opening it. Each option is a labelled checkbox shown as a chip, so the selected state is text and a check mark, not
+ * colour alone. Unchecked options are disabled once the limit is reached.
  */
 export function RadarAreaSelector({
   options,
@@ -29,24 +32,35 @@ export function RadarAreaSelector({
 }) {
   const full = selected.length >= RADAR_MAX_AXES;
   return (
-    <details className="group rounded-md border border-border">
-      <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
-        <span className="font-semibold text-text-primary">{copy.summaryAction}</span>
-        <span className="text-text-secondary">{copy.summaryCount(selected.length, options.length)}</span>
-      </summary>
-      <fieldset className="flex flex-col gap-2 border-t border-border-subtle px-3 py-3">
-        <legend className="text-sm font-semibold text-text-primary">{copy.legend}</legend>
-        <p className="text-sm text-text-secondary">{copy.help(RADAR_MAX_AXES)}</p>
-        <div className="grid gap-2 sm:grid-cols-2">
+    <CollapsibleSection
+      id="teamkompetanse-area-selector"
+      headingLevel={3}
+      title={copy.summaryAction}
+      description={copy.help(RADAR_MAX_AXES)}
+      summary={copy.summaryCount(selected.length, options.length)}
+      defaultOpen={false}
+    >
+      <fieldset className="flex flex-col gap-3">
+        <legend className="sr-only">{copy.legend}</legend>
+        <p className="text-sm font-medium text-text-primary">{copy.summaryCount(selected.length, options.length)}</p>
+        <div className="flex flex-wrap gap-2">
           {options.map((option) => {
             const checked = selected.includes(option.skillId);
+            const disabled = !checked && full;
             return (
-              <label key={option.skillId} className="flex items-start gap-2 text-sm text-text-primary">
+              <label
+                key={option.skillId}
+                className={cx(
+                  "inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-control border px-3 py-2 text-sm",
+                  checked ? "border-primary bg-surface-subtle font-medium text-text-primary" : "border-border-subtle text-text-secondary",
+                  disabled && "cursor-not-allowed opacity-60",
+                )}
+              >
                 <input
                   type="checkbox"
-                  className="mt-0.5 h-4 w-4 shrink-0"
+                  className="h-4 w-4 shrink-0"
                   checked={checked}
-                  disabled={!checked && full}
+                  disabled={disabled}
                   onChange={() => onToggle(option.skillId)}
                 />
                 <span>{option.name}</span>
@@ -61,6 +75,6 @@ export function RadarAreaSelector({
           </button>
         </div>
       </fieldset>
-    </details>
+    </CollapsibleSection>
   );
 }
