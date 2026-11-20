@@ -57,7 +57,7 @@ describe("OwnCompetenceSharing on /me/skills (TASK-009, C2 participation composi
 
     render(<OwnCompetenceSharing />);
 
-    expect(await screen.findByRole("heading", { name: "Deling med team" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Dine delingsvalg" })).toBeTruthy();
     const alfa = await screen.findByRole("region", { name: /Team Alfa/ });
     expect(await within(alfa).findByText("Du deler kompetanse med teamet")).toBeTruthy();
     expect(screen.queryByRole("region", { name: /Team Beta/ })).toBeNull();

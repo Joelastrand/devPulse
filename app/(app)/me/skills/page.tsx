@@ -1,18 +1,19 @@
 import Link from "next/link";
-import { BriefcaseBusiness, LayoutDashboard, Radar, Users, type LucideIcon } from "lucide-react";
+import { BriefcaseBusiness, Layers, LayoutDashboard, Radar, Users, type LucideIcon } from "lucide-react";
 import { PageHeader } from "../../../../src/components/ui/PageHeader";
 import { PageShell } from "../../../../src/components/ui/PageShell";
 import { SkillOverview } from "../../../../src/features/skill-profiles/components/SkillOverview";
 import { SkillProfilePage } from "../../../../src/features/skill-profiles/components/SkillProfilePage";
-import { skillProfileCopy, skillViewCopy } from "../../../../src/features/skill-profiles/copy";
+import { SkillCatalogIntro } from "../../../../src/features/skill-profiles/components/SkillCatalogIntro";
+import { skillCatalogCopy, skillProfileCopy, skillViewCopy } from "../../../../src/features/skill-profiles/copy";
 import { RoleWorkspace } from "../../../../src/features/personal-role-workspace/components/RoleWorkspace";
 import { OwnCompetenceSharing } from "../../../../src/features/team-skills/components/OwnCompetenceSharing";
 import { OwnTeamSkillsSection } from "../../../../src/features/team-owned-skills/components/OwnTeamSkillsSection";
 
 /**
- * The four route-backed views of `/me/skills`, selected by `?vy=`. Only the selected view is rendered, so switching never
- * keeps two views mounted. Each view reads its own data through its client components; the editing form is not part of
- * the overview. An unknown or missing `vy` falls back to the overview.
+ * The route-backed views of `/me/skills`, selected by `?vy=`. Only the selected view is rendered, so switching never keeps
+ * two views mounted. `rediger` is the personal skill assessment (its route value predates the label); `teamkompetanser` is
+ * the separate team competency view. An unknown or missing `vy` falls back to the overview.
  */
 type SkillView = (typeof skillViewCopy.tabs)[number]["view"];
 const VIEWS: readonly SkillView[] = skillViewCopy.tabs.map((tab) => tab.view);
@@ -21,6 +22,7 @@ const VIEWS: readonly SkillView[] = skillViewCopy.tabs.map((tab) => tab.view);
 const TAB_ICONS: Readonly<Record<SkillView, LucideIcon>> = {
   oversikt: LayoutDashboard,
   rediger: Radar,
+  teamkompetanser: Layers,
   rolle: BriefcaseBusiness,
   deling: Users,
 };
@@ -41,7 +43,7 @@ export default async function MySkillsPage({
     <PageShell width="wide">
       <PageHeader title={skillProfileCopy.pageTitle} description={skillProfileCopy.pageDescription} />
       <nav aria-label={skillViewCopy.navLabel} className="mt-4 border-b border-border-subtle">
-        <ul className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+        <ul className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
           {skillViewCopy.tabs.map((tab) => {
             const current = tab.view === view;
             const Icon = TAB_ICONS[tab.view];
@@ -50,7 +52,7 @@ export default async function MySkillsPage({
                 <Link
                   href={`/me/skills?vy=${tab.view}`}
                   aria-current={current ? "page" : undefined}
-                  className={`-mb-px inline-flex items-center gap-2 border-b-2 px-1 pb-2 font-medium focus-visible:outline-2 focus-visible:outline-offset-2 ${
+                  className={`-mb-px inline-flex min-h-11 items-center gap-2 border-b-2 px-1 pb-2 font-medium focus-visible:outline-2 focus-visible:outline-offset-2 ${
                     current
                       ? "border-text-primary text-text-primary"
                       : "border-transparent text-text-secondary hover:text-text-primary"
@@ -67,9 +69,31 @@ export default async function MySkillsPage({
       <div className="mt-6">
         {view === "oversikt" ? <SkillOverview /> : null}
         {view === "rediger" ? (
-          <div className="flex flex-col gap-10">
+          <div className="flex flex-col gap-6">
+            <SkillCatalogIntro
+              id="what-is-personal-skills"
+              intro={skillCatalogCopy.personal.intro}
+              whatIsTitle={skillCatalogCopy.personal.whatIsTitle}
+              whatIsBody={skillCatalogCopy.personal.whatIsBody}
+            />
             <SkillProfilePage />
-            {/* Team-owned skills (docs/archive/features/team-owned-skills): one block per team the person belongs to. */}
+          </div>
+        ) : null}
+        {view === "teamkompetanser" ? (
+          <div className="flex flex-col gap-6">
+            <SkillCatalogIntro
+              id="what-is-team-competences"
+              intro={skillCatalogCopy.team.intro}
+              whatIsTitle={skillCatalogCopy.team.whatIsTitle}
+              whatIsBody={skillCatalogCopy.team.whatIsBody}
+            >
+              <p>
+                <Link href={viewHref("deling")} className="font-medium text-text-primary underline underline-offset-2">
+                  {skillCatalogCopy.team.delingLinkLabel}
+                </Link>
+              </p>
+            </SkillCatalogIntro>
+            {/* One block per team the person belongs to; each team's catalog is defined by that team's administrators. */}
             <OwnTeamSkillsSection />
           </div>
         ) : null}
@@ -84,4 +108,8 @@ export default async function MySkillsPage({
       </div>
     </PageShell>
   );
+}
+
+function viewHref(view: SkillView): string {
+  return `/me/skills?vy=${view}`;
 }

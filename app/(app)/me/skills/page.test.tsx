@@ -51,10 +51,17 @@ describe("/me/skills page (route-backed views, ref 07)", () => {
     await renderView("rolle");
     const tabs = screen.getByRole("navigation", { name: "Visninger for ferdigheter" });
     const links = Array.from(tabs.querySelectorAll("a"));
-    expect(links.map((link) => link.textContent)).toEqual(["Oversikt", "Kompetansekart", "Min rolle og mine bidrag", "Deling med team"]);
+    expect(links.map((link) => link.textContent)).toEqual([
+      "Oversikt",
+      "Mine ferdigheter",
+      "Teamkompetanser",
+      "Min rolle og mine bidrag",
+      "Deling med team",
+    ]);
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
       "/me/skills?vy=oversikt",
       "/me/skills?vy=rediger",
+      "/me/skills?vy=teamkompetanser",
       "/me/skills?vy=rolle",
       "/me/skills?vy=deling",
     ]);
@@ -63,12 +70,23 @@ describe("/me/skills page (route-backed views, ref 07)", () => {
     ]);
   });
 
-  it("renders only the Kompetansekart editing view for vy=rediger", async () => {
+  it("renders only the personal skill assessment for vy=rediger, without team competencies", async () => {
     await renderView("rediger");
     expect(screen.getByTestId("skill-profile-page")).toBeTruthy();
+    expect(screen.queryByTestId("own-team-skills")).toBeNull();
     expect(screen.queryByTestId("skill-overview")).toBeNull();
     expect(screen.queryByTestId("role-workspace")).toBeNull();
     expect(screen.queryByTestId("own-competence-sharing")).toBeNull();
+  });
+
+  it("renders only the team competency view for vy=teamkompetanser, with its ownership explanation", async () => {
+    await renderView("teamkompetanser");
+    expect(screen.getByTestId("own-team-skills")).toBeTruthy();
+    expect(screen.getByText("Hva er teamkompetanser?")).toBeTruthy();
+    // The link lives inside the collapsed explanation, so it is queried with hidden content included.
+    expect(screen.getByRole("link", { name: "Administrer deling med team", hidden: true }).getAttribute("href")).toBe("/me/skills?vy=deling");
+    expect(screen.queryByTestId("skill-profile-page")).toBeNull();
+    expect(screen.queryByTestId("skill-overview")).toBeNull();
   });
 
   it("renders only the private role workspace for vy=rolle", async () => {

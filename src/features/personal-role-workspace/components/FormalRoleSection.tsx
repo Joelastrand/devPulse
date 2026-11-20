@@ -34,7 +34,7 @@ export function FormalRoleSection() {
   });
 
   return (
-    <section aria-labelledby="formal-role-heading" className="space-y-2 rounded-lg border border-border-subtle bg-surface p-4">
+    <section aria-labelledby="formal-role-heading" className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-4">
       <h2 id="formal-role-heading" className="text-base font-semibold text-text-primary">
         {workspaceCopy.formalRole.heading}
       </h2>
@@ -63,8 +63,9 @@ function FormalRoleBody({ state }: { state: ViewState }) {
   }
   return (
     <>
-      <h3 className="text-sm font-semibold text-text-primary">{state.role.title}</h3>
-      <p className="whitespace-pre-line text-sm text-text-secondary">{state.role.description}</p>
+      {/* The description is shown as written: qualifications and requirements may be part of the free text. */}
+      <h3 className="break-words text-lg font-semibold text-text-primary">{state.role.title}</h3>
+      <p className="max-w-prose whitespace-pre-line break-words text-sm leading-relaxed text-text-secondary">{state.role.description}</p>
     </>
   );
 }

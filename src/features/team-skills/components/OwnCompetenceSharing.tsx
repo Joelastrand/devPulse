@@ -53,7 +53,7 @@ export function OwnCompetenceSharing() {
     return (
       <section aria-labelledby="own-sharing-heading" className="flex flex-col gap-2">
         <h2 id="own-sharing-heading" className="text-lg font-semibold text-text-primary">
-          Deling med team
+          Dine delingsvalg
         </h2>
         <p className="text-text-secondary">Logg inn for å se delingsvalgene dine.</p>
       </section>
@@ -64,7 +64,7 @@ export function OwnCompetenceSharing() {
     return (
       <section aria-labelledby="own-sharing-heading" className="flex flex-col gap-4">
         <h2 id="own-sharing-heading" className="text-lg font-semibold text-text-primary">
-          Deling med team
+          Dine delingsvalg
         </h2>
         {/* Reserves the team block (open-explanation button and the sharing control) so the list does not jump on load. */}
         <LoadingRegion label="Laster delingsvalgene dine…" className="flex flex-col gap-2">
@@ -82,7 +82,7 @@ export function OwnCompetenceSharing() {
     return (
       <section aria-labelledby="own-sharing-heading" className="flex flex-col gap-2">
         <h2 id="own-sharing-heading" className="text-lg font-semibold text-text-primary">
-          Deling med team
+          Dine delingsvalg
         </h2>
         <Alert variant="error">Delingsvalgene dine kunne ikke lastes akkurat nå.</Alert>
       </section>
@@ -97,11 +97,10 @@ export function OwnCompetenceSharing() {
     <section aria-labelledby="own-sharing-heading" className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
         <h2 id="own-sharing-heading" className="text-lg font-semibold text-text-primary">
-          Deling med team
+          Dine delingsvalg
         </h2>
         <p className="text-sm text-text-secondary">
-          Deling er av som standard. Du velger selv per team, og du kan slutte når som helst. Status for hvert team vises under,
-          sammen med vilkårene for deling.
+          Deling er av som standard. Du velger per team, og du kan slutte når som helst. Under hvert team står hva deling betyr.
         </p>
       </div>
       {memberTeams.length === 0 ? (

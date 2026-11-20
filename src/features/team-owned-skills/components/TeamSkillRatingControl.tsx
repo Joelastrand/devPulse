@@ -65,7 +65,7 @@ export function TeamSkillRatingControl({
             className={
               "flex min-h-11 min-w-11 items-center justify-center rounded-md border px-3 text-sm font-semibold transition-colors duration-micro focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-60 sm:min-h-9 " +
               (checked
-                ? "border-primary bg-primary text-text-inverse"
+                ? "border-primary bg-primary text-primary-text"
                 : "border-border-strong bg-surface text-text-primary hover:bg-surface-muted")
             }
           >

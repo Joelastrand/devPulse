@@ -71,7 +71,7 @@ describe("Oversikt summary row (C1 BR-26: counts, no mean, no percentage)", () =
 
     expect(text).toContain("Ferdigheter på nivå 3–4");
     expect(text).toMatch(/3 av 4/);
-    expect(text).toContain("Ferdigheter å utvikle");
+    expect(text).toContain("Ferdigheter på nivå 1–2");
   });
 
   it("never renders a percentage, average or score", async () => {

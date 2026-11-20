@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { skillProfileCopy } from "../copy";
+import { skillCatalogCopy, skillProfileCopy } from "../copy";
 import { expectHeadingStructure } from "../../../components/ui/heading-structure";
 
 const observeIdTokenMock = vi.fn();
@@ -50,6 +50,15 @@ async function renderWith(result: unknown) {
 const assessedCard = () => screen.getByRole("region", { name: "Vurderte ferdigheter" });
 const assessedCardText = () => assessedCard().textContent ?? "";
 
+/** The whole personal list is one disclosure; its panel stays mounted while collapsed, so structure can be read from it. */
+const personalPanel = () => document.getElementById("personal-skills-panel")!;
+const personalToggle = () => document.getElementById("personal-skills-toggle")!;
+
+/** Opens the personal list when it starts collapsed (a fully assessed list), as a person would before using its controls. */
+async function expandPersonalList() {
+  if (personalToggle().getAttribute("aria-expanded") === "false") await userEvent.click(personalToggle());
+}
+
 describe("SkillProfilePage", () => {
   it("signed out: shows the sign-in prompt and makes no request", async () => {
     observeIdTokenMock.mockImplementation(subscribingWith(null));
@@ -85,7 +94,7 @@ describe("SkillProfilePage", () => {
     expect(terms).toEqual(["Grunnleggende kjennskap", "Kan med støtte", "Kan selvstendig", "Avansert"]);
     expect(document.querySelectorAll("dd")).toHaveLength(4);
 
-    const list = screen.getByRole("heading", { name: "Ferdigheter" }).closest("section")!.querySelector("ul")!;
+    const list = personalPanel().querySelector("ul")!;
     const rows = within(list).getAllByRole("listitem");
     expect(rows[0].textContent).toContain("Testing");
     expect(rows[1].textContent).toContain("Arkitektur");
@@ -94,6 +103,7 @@ describe("SkillProfilePage", () => {
 
   it("assessed row: one level line names the level, and the matching rating option is the checked one", async () => {
     await renderWith(ok([{ treeId: "t-1", name: "Sikkerhet", level: 4 }]));
+    await expandPersonalList();
 
     const row = screen.getByText("Sikkerhet").closest("li")!;
     expect(within(row).getByText("Nivå 4 · Avansert")).toBeTruthy();
@@ -166,14 +176,14 @@ describe("SkillProfilePage", () => {
     const skills = Array.from({ length: 60 }, (_, i) => ({ treeId: `t-${i}`, name: `Område ${i}`, level: null }));
     await renderWith(ok(skills));
 
-    expect(screen.getByRole("heading", { name: "Ferdigheter" }).closest("section")!.querySelectorAll("li")).toHaveLength(60);
+    expect(personalPanel().querySelectorAll("li")).toHaveLength(60);
   });
 
   it("no skill areas defined: shows the empty state and no list", async () => {
     await renderWith(ok([]));
 
     expect(screen.getByText("Ingen ferdigheter er definert ennå.")).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: "Ferdigheter" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Mine ferdigheter" })).toBeNull();
   });
 
   it("unreadable profile: shows only a notice and names, never 'Ikke vurdert' or counts, and only the reset-all recovery control", async () => {
@@ -183,7 +193,10 @@ describe("SkillProfilePage", () => {
     expect(screen.getByText("Sikkerhet")).toBeTruthy();
     expect(screen.queryByText("Ikke vurdert")).toBeNull();
     expect(screen.queryByText(/du har vurdert/i)).toBeNull();
-    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(["Nullstill alle ferdigheter"]);
+    // The personal-list disclosure toggle is the only other button; no rating or clear control may appear.
+    expect(screen.getAllByRole("button").filter((b) => b.id !== "personal-skills-toggle").map((b) => b.textContent)).toEqual([
+      "Nullstill alle ferdigheter",
+    ]);
     expect(screen.queryByRole("combobox")).toBeNull();
     expect(screen.queryByRole("radio")).toBeNull();
   });
@@ -296,5 +309,71 @@ describe("SkillProfilePage — same-name skills stay distinct (presentation only
   it("does not add a same-name hint to a unique skill", async () => {
     await renderWith(ok([{ treeId: "other", name: "Arkitektur", level: null }]));
     expect(screen.queryByText(/med dette navnet/)).toBeNull();
+  });
+});
+
+describe("SkillProfilePage: the personal list as one disclosure", () => {
+  it("starts collapsed when every skill is assessed, and its header states the progress", async () => {
+    await renderWith(
+      ok([
+        { treeId: "1", name: "A", level: 1 },
+        { treeId: "2", name: "B", level: 4 },
+      ]),
+    );
+
+    expect(personalToggle().getAttribute("aria-expanded")).toBe("false");
+    expect(personalPanel().hidden).toBe(true);
+    expect(personalToggle().textContent).toContain("2 av 2 vurdert · Vis og endre vurderinger");
+  });
+
+  it("starts expanded while assessments are incomplete, so the next action is visible", async () => {
+    await renderWith(
+      ok([
+        { treeId: "1", name: "A", level: 1 },
+        { treeId: "2", name: "B", level: null },
+      ]),
+    );
+
+    expect(personalToggle().getAttribute("aria-expanded")).toBe("true");
+    expect(personalPanel().hidden).toBe(false);
+    expect(personalToggle().textContent).toContain("1 av 2 vurdert · Fortsett vurderingen");
+  });
+
+  it("toggles open and closed on a click, keeping aria-expanded in step with the panel", async () => {
+    await renderWith(ok([{ treeId: "1", name: "A", level: 2 }]));
+
+    await userEvent.click(personalToggle());
+    expect(personalToggle().getAttribute("aria-expanded")).toBe("true");
+    expect(personalPanel().hidden).toBe(false);
+
+    await userEvent.click(personalToggle());
+    expect(personalToggle().getAttribute("aria-expanded")).toBe("false");
+    expect(personalPanel().hidden).toBe(true);
+  });
+});
+
+describe("SkillProfilePage: disclosure state across saves", () => {
+  it("keeps a list the person opened open after a rating is saved", async () => {
+    await renderWith(ok([{ treeId: "1", name: "A", level: 2 }]));
+    setOwnSkillLevelMock.mockResolvedValue({ ok: true, level: 3 });
+    await userEvent.click(personalToggle());
+
+    await userEvent.click(within(personalPanel()).getByRole("radio", { name: "A: 3. Kan selvstendig" }));
+
+    await screen.findByText("Nivå 3 · Kan selvstendig");
+    expect(personalToggle().getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("announces a failed save outside the list when the person collapses it while the save is pending", async () => {
+    await renderWith(ok([{ treeId: "1", name: "A", level: null }]));
+    let fail: (value: unknown) => void = () => {};
+    setOwnSkillLevelMock.mockReturnValue(new Promise((resolve) => (fail = resolve)));
+    await userEvent.click(within(personalPanel()).getByRole("radio", { name: "A: 2. Kan med støtte" }));
+
+    await userEvent.click(personalToggle());
+    expect(personalPanel().hidden).toBe(true);
+    fail({ ok: false, error: "write_failed" });
+
+    expect(await screen.findByText(skillCatalogCopy.personal.listFailedWhileCollapsed)).toBeTruthy();
   });
 });

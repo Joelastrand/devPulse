@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { skillProfileCopy } from "../copy";
 
 const observeIdTokenMock = vi.fn();
@@ -63,6 +64,8 @@ describe("SkillProfilePage assessment status and filter chips (TASK-009, ref 22)
     signedInWithOneSkill();
     render(<SkillProfilePage />);
     await screen.findByText("API-design");
+    // The only skill is assessed, so the list starts collapsed; its controls are opened the way a person would open them.
+    await userEvent.click(document.getElementById("personal-skills-toggle")!);
 
     const all = screen.getByRole("radio", { name: skillProfileCopy.filterAll });
     const unassessed = screen.getByRole("radio", { name: skillProfileCopy.filterUnassessed });
@@ -78,9 +81,9 @@ describe("SkillProfilePage editing view layout (ref 07 redesign: editing is its 
     render(<SkillProfilePage />);
     await screen.findByText("API-design");
 
-    const list = screen.getByRole("heading", { name: skillProfileCopy.skillsHeading });
-    const section = list.closest("section");
-    expect(section?.id).toBe("rediger");
+    const panel = document.getElementById("personal-skills-panel");
+    const section = panel?.closest("section");
+    expect(section).toBeTruthy();
     expect(section?.parentElement?.className).not.toContain("grid-cols");
     expect(document.querySelector("#rolle")).toBeNull();
   });

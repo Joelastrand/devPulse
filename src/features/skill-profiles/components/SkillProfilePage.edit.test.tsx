@@ -155,6 +155,11 @@ describe("SkillProfilePage — level select (TASK-008)", () => {
   it("is keyboard reachable: Tab moves from the filter into each rating group in order", async () => {
     await renderWith(ok(skills));
 
+    // The list's own disclosure toggle comes first, then the search box, the status filter, the collapsed legend and the rating groups.
+    await userEvent.tab();
+    expect(document.activeElement).toBe(document.getElementById("personal-skills-toggle"));
+    await userEvent.tab();
+    expect(document.activeElement).toBe(screen.getByRole("searchbox", { name: "Søk etter ferdighet" }));
     await userEvent.tab();
     expect(document.activeElement).toBe(screen.getByRole("radio", { name: "Alle" }));
     await userEvent.tab();
@@ -317,7 +322,7 @@ describe("SkillProfilePage — filter (TASK-008)", () => {
   it("is a labelled radio group defaulting to 'Alle' and makes no request on change", async () => {
     await renderWith(ok(skills));
 
-    const group = screen.getByRole("group", { name: "Vis" });
+    const group = screen.getByRole("group", { name: "Filtrer ferdigheter" });
     expect(within(group).getAllByRole("radio").map((r) => (r as HTMLInputElement).labels![0].textContent)).toEqual([
       "Alle",
       "Vurdert",

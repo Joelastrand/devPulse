@@ -6,12 +6,13 @@ import { catchError } from "next/error";
 import { useId, useState, type ComponentProps, type ReactNode } from "react";
 import { ChartColumn, Sprout, Target } from "lucide-react";
 import { Alert } from "../../../components/ui/Alert";
-import { Button } from "../../../components/ui/Button";
+import { Button, buttonClassName } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { SkillOverviewSkeleton } from "./SkillSkeletons";
 import { useAuthGatedResource } from "../../auth/client/use-auth-gated-resource";
 import { fetchOwnSkills } from "../client/skill-profile-gateway";
-import { SELF_ASSESSED_LEVEL_COPY, skillProfileCopy, skillViewCopy } from "../copy";
+import { OwnTeamCompetenceSummary } from "../../team-owned-skills/components/OwnTeamCompetenceSummary";
+import { SELF_ASSESSED_LEVEL_COPY, skillCatalogCopy, skillProfileCopy, skillViewCopy } from "../copy";
 import { SELF_ASSESSED_LEVELS, type SelfAssessedLevel } from "../domain/self-assessed-level";
 import { buildOverviewModel, type OverviewAreaRow, type OverviewModel } from "../domain/overview-model";
 import { buildPersonalRadarModel } from "../domain/personal-radar";
@@ -57,6 +58,8 @@ function viewHref(view: string): string {
 export function SkillOverview() {
   const [state, setState] = useState<ViewState>({ phase: "loading" });
   const [reloadKey, setReloadKey] = useState(0);
+  /** null until the team summary has loaded; then whether any team still has unassessed competencies. */
+  const [teamsIncomplete, setTeamsIncomplete] = useState<boolean | null>(null);
 
   useAuthGatedResource(
     (token, generation, isCurrentGeneration) => {
@@ -110,30 +113,54 @@ export function SkillOverview() {
     );
   }
 
-  return <OverviewReady state={state} />;
+  return <OverviewReady state={state} teamsIncomplete={teamsIncomplete} onTeamsReady={setTeamsIncomplete} />;
 }
 
-function OverviewReady({ state }: { readonly state: LoadedOverview }) {
+/**
+ * Top: the personal skill summary. Middle: the team competency summary, kept separate because each team has its own catalog.
+ * Bottom: one primary next step (which depends on both domains) beside the compact competence profile.
+ */
+function OverviewReady({
+  state,
+  teamsIncomplete,
+  onTeamsReady,
+}: {
+  readonly state: LoadedOverview;
+  readonly teamsIncomplete: boolean | null;
+  readonly onTeamsReady: (anyTeamIncomplete: boolean) => void;
+}) {
   // An unreadable profile is never interpreted: its stored levels are hidden, so every row is treated as unassessed here.
   const skills: readonly SkillRowDto[] = state.unreadable ? state.skills.map((row) => ({ ...row, level: null })) : state.skills;
   const model = buildOverviewModel(skills);
+  const copy = skillCatalogCopy.personal;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       {state.unreadable ? <Alert variant="error">{skillProfileCopy.unreadableNotice}</Alert> : null}
       {state.truncated ? <Alert variant="info">{skillProfileCopy.truncatedNotice}</Alert> : null}
 
       {skills.length === 0 ? (
         <p className="text-text-secondary">{skillProfileCopy.noSkillsDefined}</p>
       ) : (
-        <>
-          <SummaryRow model={model} />
-          <div className="grid items-start gap-4 lg:grid-cols-2">
-            <NextStepsPanel model={model} />
-            <ProfilePanel model={model} />
+        <section aria-labelledby="overview-personal-heading" className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <h2 id="overview-personal-heading" className="text-lg font-semibold text-text-primary">
+              {copy.progressHeading}
+            </h2>
+            <p className="text-sm text-text-secondary">{copy.listProgress(model.summary.assessedCount, model.summary.totalCount)}</p>
           </div>
-        </>
+          <SummaryRow model={model} />
+        </section>
       )}
+
+      <OwnTeamCompetenceSummary onReady={onTeamsReady} />
+
+      {skills.length > 0 ? (
+        <div className="grid items-start gap-4 lg:grid-cols-2">
+          <NextStepsPanel model={model} teamsIncomplete={teamsIncomplete} />
+          <ProfilePanel model={model} />
+        </div>
+      ) : null}
 
       <p className="text-xs text-text-secondary">{skillProfileCopy.privacyNotice}</p>
     </div>
@@ -188,39 +215,70 @@ function SummaryCard({
   );
 }
 
-/** Next steps use only existing actions: assess skills, review them, and open goals. No priority is inferred. */
-function NextStepsPanel({ model }: { readonly model: OverviewModel }) {
+/**
+ * One primary next step that follows the person's own assessment state, plus a short list of the other existing pages.
+ * Only counts from the overview model are used: no goals, team needs or other data are fetched for this panel.
+ *   - nothing assessed   -> start assessing
+ *   - some unassessed    -> assess the remaining skills (nothing else is urged)
+ *   - all assessed       -> review what has been assessed, without nudging towards assessment
+ */
+function NextStepsPanel({
+  model,
+  teamsIncomplete,
+}: {
+  readonly model: OverviewModel;
+  /** null while the team summary is still loading; then no team action is suggested. */
+  readonly teamsIncomplete: boolean | null;
+}) {
   const headingId = useId();
   const copy = skillProfileCopy.overview;
+  const teamCopy = skillCatalogCopy.team;
+  const nothingAssessed = model.summary.assessedCount === 0;
+  const someUnassessed = !nothingAssessed && model.unassessedCount > 0;
+  const personalComplete = !nothingAssessed && !someUnassessed;
+  const teamAction = personalComplete && teamsIncomplete === true;
+
+  // Exactly one primary action, chosen from the person's real state: personal assessment first, then the team competencies.
+  const primary = nothingAssessed
+    ? { href: viewHref(skillViewCopy.tabs[1].view), label: copy.startAction }
+    : someUnassessed
+      ? { href: viewHref(skillViewCopy.tabs[1].view), label: copy.continueAction }
+      : teamAction
+        ? { href: viewHref(skillViewCopy.tabs[2].view), label: teamCopy.summaryAction }
+        : { href: viewHref(skillViewCopy.tabs[1].view), label: copy.reviewAction };
+
+  const hint = nothingAssessed
+    ? copy.startHint
+    : someUnassessed
+      ? copy.unassessedHint(model.unassessedCount)
+      : teamAction
+        ? teamCopy.nextStepHint
+        : copy.allAssessedHint;
+
+  const secondary = [
+    { href: "/me/goals", label: copy.goalsAction },
+    { href: viewHref(skillViewCopy.tabs[3].view), label: copy.roleWorkspaceAction },
+  ];
+
   return (
     <Card as="section" padding="sm" aria-labelledby={headingId} className="flex flex-col gap-3">
       <h2 id={headingId} className="text-base font-semibold text-text-primary">
         {copy.nextStepsHeading}
       </h2>
-      {model.unassessedCount > 0 ? (
-        <p className="rounded-md bg-surface-subtle px-3 py-2 text-sm text-text-primary">
-          {copy.unassessedHint(model.unassessedCount)}{" "}
-          <Link href={viewHref(skillViewCopy.tabs[1].view)} className="font-medium underline">
-            {copy.assessAction}
-          </Link>
-        </p>
-      ) : null}
-      <ul className="flex flex-col gap-2 text-sm">
-        <li>
-          <Link href={viewHref(skillViewCopy.tabs[1].view)} className="font-medium text-text-primary underline">
-            {copy.reviewAction}
-          </Link>
-        </li>
-        <li>
-          <Link href="/me/goals" className="font-medium text-text-primary underline">
-            {copy.goalsAction}
-          </Link>
-        </li>
-        <li>
-          <Link href={viewHref(skillViewCopy.tabs[2].view)} className="font-medium text-text-primary underline">
-            {copy.roleWorkspaceAction}
-          </Link>
-        </li>
+      <p className="text-sm text-text-primary">{hint}</p>
+      <div>
+        <Link href={primary.href} className={buttonClassName({ variant: "primary", size: "md" })}>
+          {primary.label}
+        </Link>
+      </div>
+      <ul className="flex flex-col gap-1 border-t border-border-subtle pt-3 text-sm">
+        {secondary.map((item) => (
+          <li key={item.href + item.label}>
+            <Link href={item.href} className="inline-flex min-h-11 items-center text-text-secondary underline-offset-2 hover:text-text-primary hover:underline">
+              {item.label}
+            </Link>
+          </li>
+        ))}
       </ul>
     </Card>
   );

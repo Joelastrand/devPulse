@@ -25,6 +25,7 @@ import {
 import { RELATION_TO_ROLE_VALUES, type RelationToRole } from "../domain/constants";
 import { LinkPicker } from "./LinkPicker";
 import { RecordListSkeleton } from "./RoleSkeletons";
+import { RecordRow } from "./RecordRow";
 
 type Notice = { variant: "success" | "error"; text: string };
 type Editing = { mode: "create" } | { mode: "edit"; record: AchievementDto } | null;
@@ -83,6 +84,14 @@ function matchesPeriod(record: AchievementDto, from: string, to: string): boolea
   if (from !== "" && end < from) return false;
   if (to !== "" && start > to) return false;
   return true;
+}
+
+/** Short summary line for a collapsed achievement: relation and period. */
+function achievementMeta(record: AchievementDto): string {
+  const period = [record.periodStart ? `fra ${record.periodStart}` : null, record.periodEnd ? `til ${record.periodEnd}` : null]
+    .filter((part): part is string => part !== null)
+    .join(" ");
+  return [workspaceCopy.relationOptions[record.relationToRole], period].filter((part) => part !== "").join(" · ");
 }
 
 /**
@@ -380,35 +389,28 @@ function AchievementList({ state, relationFilter, fromFilter, toFilter, goalChoi
       {data.truncated ? <Alert variant="info">{copy.truncated}</Alert> : null}
       {data.records.length === 0 ? <EmptyState>{copy.empty}</EmptyState> : null}
       {data.records.length > 0 && visible.length === 0 ? <EmptyState>{copy.filter.empty}</EmptyState> : null}
-      <ul className="space-y-3">
+      <ul className="flex flex-col gap-2">
         {visible.map((record) => {
           const responsibilityNames = record.responsibilityIds.flatMap((id) => responsibilityChoices.filter((choice) => choice.id === id).map((choice) => choice.title));
           const goalNames = record.goalIds.flatMap((id) => goalChoices.filter((choice) => choice.id === id).map((choice) => choice.title));
           const missing = (record.missingLinks?.goalIds.length ?? 0) + (record.missingLinks?.responsibilityIds.length ?? 0);
+          // Achievements have no completion state, so the summary shows only the period; the outcome stays in the detail panel.
           return (
-            <li key={record.id}>
-              <Card as="div" variant="bordered" padding="sm" className="space-y-2">
-                <h3 className="break-words text-base font-semibold text-text-primary">{record.title}</h3>
-                <p className="whitespace-pre-line break-words text-sm text-text-secondary">{record.description}</p>
-                {record.outcome ? <p className="whitespace-pre-line break-words text-sm text-text-primary">{record.outcome}</p> : null}
-                {responsibilityNames.length > 0 ? <p className="text-xs text-text-secondary">{copy.linkedResponsibility}: {responsibilityNames.join(", ")}</p> : null}
-                {goalNames.length > 0 ? <p className="text-xs text-text-secondary">{copy.linkedGoal}: {goalNames.join(", ")}</p> : null}
-                <p className="text-xs text-text-secondary">
-                  {workspaceCopy.relationOptions[record.relationToRole]}
-                  {record.periodStart ? ` · fra ${record.periodStart}` : ""}
-                  {record.periodEnd ? ` · til ${record.periodEnd}` : ""}
-                </p>
-                {missing > 0 ? <p className="text-xs text-text-secondary">{workspaceCopy.missingLink}</p> : null}
-                <div className="flex flex-wrap gap-2">
-                  <Button type="button" size="sm" variant="secondary" disabled={busyIds.has(record.id)} onClick={() => onEdit(record)}>{copy.edit}</Button>
-                  {confirmId === record.id ? (
-                    <ConfirmDelete pending={busyIds.has(record.id)} onConfirm={() => onDelete(record.id)} onCancel={() => onAskDelete(null)} />
-                  ) : (
-                    <Button type="button" size="sm" variant="destructive" disabled={busyIds.has(record.id)} onClick={() => onAskDelete(record.id)}>{copy.delete}</Button>
-                  )}
-                </div>
-              </Card>
-            </li>
+            <RecordRow key={record.id} title={record.title} meta={achievementMeta(record)}>
+              <p className="whitespace-pre-line break-words text-sm text-text-secondary">{record.description}</p>
+              {record.outcome ? <p className="whitespace-pre-line break-words text-sm text-text-primary">{record.outcome}</p> : null}
+              {responsibilityNames.length > 0 ? <p className="text-xs text-text-secondary">{copy.linkedResponsibility}: {responsibilityNames.join(", ")}</p> : null}
+              {goalNames.length > 0 ? <p className="text-xs text-text-secondary">{copy.linkedGoal}: {goalNames.join(", ")}</p> : null}
+              {missing > 0 ? <p className="text-xs text-text-secondary">{workspaceCopy.missingLink}</p> : null}
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" size="sm" variant="secondary" disabled={busyIds.has(record.id)} onClick={() => onEdit(record)}>{copy.edit}</Button>
+                {confirmId === record.id ? (
+                  <ConfirmDelete pending={busyIds.has(record.id)} onConfirm={() => onDelete(record.id)} onCancel={() => onAskDelete(null)} />
+                ) : (
+                  <Button type="button" size="sm" variant="destructive" disabled={busyIds.has(record.id)} onClick={() => onAskDelete(record.id)}>{copy.delete}</Button>
+                )}
+              </div>
+            </RecordRow>
           );
         })}
       </ul>

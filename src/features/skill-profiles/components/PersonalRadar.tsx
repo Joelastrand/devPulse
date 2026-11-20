@@ -103,7 +103,7 @@ export function PersonalRadar({
           <caption>{copy.radarTableCaption}</caption>
           <thead>
             <tr>
-              <th scope="col">{skillProfileCopy.skillsHeading}</th>
+              <th scope="col">{skillProfileCopy.skillColumnHeading}</th>
               <th scope="col">{copy.radarLegend}</th>
             </tr>
           </thead>

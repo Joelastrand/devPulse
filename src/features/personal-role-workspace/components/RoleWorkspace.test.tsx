@@ -225,6 +225,7 @@ describe("responsibilities: owner-only create, edit, complete, reopen and delete
     backend.responsibilities = [responsibility({ id: "r1", title: "Onboarding", status: "completed" })];
     const user = userEvent.setup();
     render(<ResponsibilitiesSection />);
+    await user.click(await screen.findByRole("button", { name: "Onboarding" }));
     await user.click(await screen.findByRole("button", { name: "Rediger" }));
     const title = screen.getByLabelText(/Tittel/);
     await user.clear(title);
@@ -239,6 +240,7 @@ describe("responsibilities: owner-only create, edit, complete, reopen and delete
     backend.responsibilities = [responsibility({ id: "r1", title: "Onboarding" })];
     const user = userEvent.setup();
     render(<ResponsibilitiesSection />);
+    await user.click(await screen.findByRole("button", { name: "Onboarding" }));
     await user.click(await screen.findByRole("button", { name: "Slett" }));
     expect(callsTo("DELETE", "/api/me/responsibilities/r1")).toHaveLength(0);
 
@@ -296,8 +298,10 @@ describe("achievements: owner-only create, edit, delete, links and missing-link 
     await screen.findByRole("heading", { name: "Onboarding" });
     expect(screen.queryByText("Koblet element er ikke lenger tilgjengelig")).toBeNull();
 
+    await user.click(screen.getByRole("button", { name: "Onboarding" }));
     await user.click(screen.getAllByRole("button", { name: "Slett" })[0]);
     await user.click(screen.getByRole("button", { name: "Ja, slett" }));
+    await user.click(screen.getByRole("button", { name: "Lanserte ny rapport" }));
     expect(await screen.findByText("Koblet element er ikke lenger tilgjengelig")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Lanserte ny rapport" })).toBeTruthy();
   });
@@ -326,6 +330,7 @@ describe("achievements: owner-only create, edit, delete, links and missing-link 
     backend.achievements = [achievement({ goalIds: ["gone"], responsibilityIds: ["also-gone"] })];
     render(<AchievementsSection />);
     expect(await screen.findByRole("heading", { name: "Lanserte ny rapport" })).toBeTruthy();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Lanserte ny rapport" }));
     expect(screen.getByText("Koblet element er ikke lenger tilgjengelig")).toBeTruthy();
   });
 
@@ -368,6 +373,7 @@ describe("achievements: owner-only create, edit, delete, links and missing-link 
     const user = userEvent.setup();
     render(<AchievementsSection />);
     const card = (await screen.findByRole("heading", { name: "Lanserte ny rapport" })).closest("li") as HTMLElement;
+    await user.click(within(card).getByRole("button", { name: "Lanserte ny rapport" }));
     await user.click(within(card).getByRole("button", { name: "Slett" }));
     expect(callsTo("DELETE", "/api/me/achievements/a1")).toHaveLength(0);
     await user.click(screen.getByRole("button", { name: "Ja, slett" }));
@@ -387,11 +393,11 @@ describe("workspace filters, ordering and linked names (BR-16, BR-23, BR-24, BR-
     const headings = (await screen.findAllByRole("heading", { level: 3 })).map((heading) => heading.textContent);
     expect(headings).toEqual(["Pågående arbeid", "Avsluttet arbeid"]);
 
-    await user.selectOptions(screen.getByLabelText("Vis"), "completed");
+    await user.selectOptions(screen.getByLabelText("Status"), "completed");
     expect(screen.queryByRole("heading", { name: "Pågående arbeid" })).toBeNull();
     expect(screen.getByRole("heading", { name: "Avsluttet arbeid" })).toBeTruthy();
 
-    await user.selectOptions(screen.getByLabelText("Vis"), "active");
+    await user.selectOptions(screen.getByLabelText("Status"), "active");
     expect(screen.queryByRole("heading", { name: "Avsluttet arbeid" })).toBeNull();
     expect(screen.getByRole("heading", { name: "Pågående arbeid" })).toBeTruthy();
   });
@@ -401,7 +407,7 @@ describe("workspace filters, ordering and linked names (BR-16, BR-23, BR-24, BR-
     const user = userEvent.setup();
     render(<ResponsibilitiesSection />);
     await screen.findByRole("heading", { name: "Pågående arbeid" });
-    await user.selectOptions(screen.getByLabelText("Vis"), "completed");
+    await user.selectOptions(screen.getByLabelText("Status"), "completed");
     expect(screen.getByText("Ingen ansvarsområder matcher valget.")).toBeTruthy();
   });
 
@@ -431,6 +437,7 @@ describe("workspace filters, ordering and linked names (BR-16, BR-23, BR-24, BR-
     backend.responsibilities = [responsibility({ id: "r1", title: "Driftsansvar" })];
     backend.achievements = [achievement({ goalIds: ["goal-1"], responsibilityIds: ["r1"] })];
     render(<AchievementsSection />);
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Lanserte ny rapport" }));
     expect(await screen.findByText("Ansvarsområde: Driftsansvar")).toBeTruthy();
     expect(screen.getByText("Mål: Lær Rust")).toBeTruthy();
   });

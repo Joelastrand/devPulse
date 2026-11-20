@@ -48,7 +48,7 @@ export const workspaceCopy = {
     cancel: "Avbryt",
     save: "Lagre",
     filter: {
-      label: "Vis",
+      label: "Status",
       all: "Alle",
       active: "Aktive",
       completed: "Fullførte",

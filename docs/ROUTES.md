@@ -43,7 +43,7 @@ Signed-out navigation shows Hjem, Logg inn and Opprett konto (`PublicHeader`). S
 
 | Route | File | Purpose |
 | --- | --- | --- |
-| `/me/skills` | `app/(app)/me/skills/page.tsx` | Own skill self-assessment and personal radar |
+| `/me/skills` | `app/(app)/me/skills/page.tsx` | Own skills, selected by `?vy=`: `oversikt` (default, overview), `rediger` (Mine ferdigheter: personal skill self-assessment), `teamkompetanser` (Teamkompetanser: per-team self-assessment), `rolle` (Min rolle og mine bidrag; kept for old links), `deling` (Deling med team) |
 | `/me/goals` | `app/(app)/me/goals/page.tsx` | Personal development goals (owner-only) |
 | `/me/conversations` | `app/(app)/me/conversations/page.tsx` | Development conversations list |
 | `/me/conversations/[conversationId]` | `app/(app)/me/conversations/[conversationId]/page.tsx` | One conversation (owner or accepted participant) |

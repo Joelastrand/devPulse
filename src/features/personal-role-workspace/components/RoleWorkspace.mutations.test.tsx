@@ -106,6 +106,12 @@ function listBody(records: unknown[]) {
 }
 
 /** The `li` that holds one record's card, found by its title. */
+/** Records are collapsed until opened; expands the row so its own edit and delete controls are reachable. */
+async function openRow(user: ReturnType<typeof userEvent.setup>, title: string): Promise<void> {
+  const toggle = within(rowFor(title)).getByRole("button", { name: title });
+  if (toggle.getAttribute("aria-expanded") === "false") await user.click(toggle);
+}
+
 function rowFor(title: string): HTMLElement {
   const row = screen.getByRole("heading", { name: title }).closest("li");
   if (!row) throw new Error(`no row for ${title}`);
@@ -184,6 +190,7 @@ describe("responsibilities: pending deletion", () => {
     (await takeRequest("GET", "/api/me/responsibilities")).respond(200, listBody([responsibility("r1", "Driftsansvar A"), responsibility("r2", "Driftsansvar B")]));
     await screen.findByRole("heading", { name: "Driftsansvar A" });
 
+    await openRow(user, "Driftsansvar A");
     await user.click(within(rowFor("Driftsansvar A")).getByRole("button", { name: copy.delete }));
     await user.click(within(rowFor("Driftsansvar A")).getByRole("button", { name: copy.confirmDelete }));
     const busyConfirm = within(rowFor("Driftsansvar A")).getByRole("button", { name: copy.deleting });
@@ -209,12 +216,14 @@ describe("responsibilities: pending deletion", () => {
     (await takeRequest("GET", "/api/me/responsibilities")).respond(200, listBody([responsibility("r1", "Driftsansvar A")]));
     await screen.findByRole("heading", { name: "Driftsansvar A" });
 
+    await openRow(user, "Driftsansvar A");
     await user.click(within(rowFor("Driftsansvar A")).getByRole("button", { name: copy.delete }));
     await user.click(within(rowFor("Driftsansvar A")).getByRole("button", { name: copy.confirmDelete }));
     (await takeRequest("DELETE", "/api/me/responsibilities/r1")).respond(500, { error: "persistence_failed" });
 
     expect(await screen.findByText(workspaceCopy.errors.persistence_failed)).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Driftsansvar A" })).toBeTruthy();
+    await openRow(user, "Driftsansvar A");
     expect(within(rowFor("Driftsansvar A")).getByRole("button", { name: copy.delete })).toBeTruthy();
     expect(screen.queryByText(copy.success.deleted)).toBeNull();
   });
@@ -246,6 +255,7 @@ describe("responsibilities: identity changes during a write", () => {
     (await takeRequest("GET", "/api/me/responsibilities")).respond(200, listBody([responsibility("r1", "Driftsansvar A")]));
     await screen.findByRole("heading", { name: "Driftsansvar A" });
 
+    await openRow(user, "Driftsansvar A");
     await user.click(within(rowFor("Driftsansvar A")).getByRole("button", { name: copy.delete }));
     await user.click(within(rowFor("Driftsansvar A")).getByRole("button", { name: copy.confirmDelete }));
     const late = await takeRequest("DELETE", "/api/me/responsibilities/r1");
@@ -268,10 +278,12 @@ describe("achievements: pending deletion and identity safety", () => {
     (await takeRequest("GET", "/api/me/achievements")).respond(200, listBody([achievement("a1", "Rapport A"), achievement("a2", "Rapport B")]));
     await screen.findByRole("heading", { name: "Rapport A" });
 
+    await openRow(user, "Rapport A");
     await user.click(within(rowFor("Rapport A")).getByRole("button", { name: achievementCopy.delete }));
     await user.click(within(rowFor("Rapport A")).getByRole("button", { name: achievementCopy.confirmDelete }));
     const busyConfirm = within(rowFor("Rapport A")).getByRole("button", { name: achievementCopy.deleting });
     expect((busyConfirm as HTMLButtonElement).disabled).toBe(true);
+    await openRow(user, "Rapport B");
     expect((within(rowFor("Rapport B")).getByRole("button", { name: achievementCopy.edit }) as HTMLButtonElement).disabled).toBe(false);
 
     await user.click(busyConfirm);
@@ -291,11 +303,13 @@ describe("achievements: pending deletion and identity safety", () => {
     (await takeRequest("GET", "/api/me/achievements")).respond(200, listBody([achievement("a1", "Rapport A")]));
     await screen.findByRole("heading", { name: "Rapport A" });
 
+    await openRow(user, "Rapport A");
     await user.click(within(rowFor("Rapport A")).getByRole("button", { name: achievementCopy.delete }));
     await user.click(within(rowFor("Rapport A")).getByRole("button", { name: achievementCopy.confirmDelete }));
     (await takeRequest("DELETE", "/api/me/achievements/a1")).respond(500, { error: "persistence_failed" });
 
     expect(await screen.findByText(workspaceCopy.errors.persistence_failed)).toBeTruthy();
+    await openRow(user, "Rapport A");
     expect(within(rowFor("Rapport A")).getByRole("button", { name: achievementCopy.delete })).toBeTruthy();
     expect(screen.queryByText(achievementCopy.success.deleted)).toBeNull();
   });
@@ -306,6 +320,7 @@ describe("achievements: pending deletion and identity safety", () => {
     (await takeRequest("GET", "/api/me/achievements")).respond(200, listBody([achievement("a1", "Rapport A")]));
     await screen.findByRole("heading", { name: "Rapport A" });
 
+    await openRow(user, "Rapport A");
     await user.click(within(rowFor("Rapport A")).getByRole("button", { name: achievementCopy.delete }));
     await user.click(within(rowFor("Rapport A")).getByRole("button", { name: achievementCopy.confirmDelete }));
     const late = await takeRequest("DELETE", "/api/me/achievements/a1");

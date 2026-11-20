@@ -29,6 +29,18 @@ vi.mock("../client/team-skills-gateway", () => ({
 const { OwnTeamSkillsSection } = await import("./OwnTeamSkillsSection");
 const { teamSkillsCopy } = await import("../copy");
 
+/**
+ * Skills without a category sit in a collapsed group by default (compact, progressive disclosure). Opens every collapsed
+ * category so the rows are reachable, as a user would before rating.
+ */
+async function revealSkills() {
+  const user = userEvent.setup();
+  for (const button of await screen.findAllByRole("button", { expanded: false, name: /Uten kategori/ })) {
+    await user.click(button);
+  }
+  return screen.findByText("Testing");
+}
+
 /** A deferred answer the test resolves by hand. */
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -80,9 +92,9 @@ describe("team-owned skills: loading and empty states", () => {
     fetchTeamSkillsMock.mockResolvedValue(skillsOk());
     render(<OwnTeamSkillsSection />);
 
-    expect(await screen.findByRole("heading", { name: teamSkillsCopy.own.heading })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: teamSkillsCopy.own.teamHeading(TEAM.name) })).toBeTruthy();
     expect(screen.queryByRole("status")).toBeNull();
-    expect(screen.getByText("Testing")).toBeTruthy();
+    expect(await revealSkills()).toBeTruthy();
   });
 
   it("shows the empty state only after a successful read with no member teams", async () => {
@@ -109,7 +121,7 @@ describe("team-owned skills: rating writes", () => {
     const write = deferred<{ status: "ok" }>();
     setRatingMock.mockReturnValue(write.promise);
     render(<OwnTeamSkillsSection />);
-    await screen.findByText("Testing");
+    await revealSkills();
 
     const radio = screen.getByRole("radio", { name: /Testing: 2\./ });
     await user.click(radio);
@@ -130,7 +142,7 @@ describe("team-owned skills: rating writes", () => {
     fetchTeamSkillsMock.mockResolvedValue(skillsOk());
     setRatingMock.mockResolvedValue({ status: "forbidden" });
     render(<OwnTeamSkillsSection />);
-    await screen.findByText("Testing");
+    await revealSkills();
 
     await user.click(screen.getByRole("radio", { name: /Testing: 2\./ }));
 
@@ -149,13 +161,13 @@ describe("team-owned skills: identity changes", () => {
     render(<OwnTeamSkillsSection />);
 
     setIdentity("token-b");
-    expect(await screen.findByText(/Konto B-team/)).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: /Konto B-team/ })).toBeTruthy();
 
     lateOverview.resolve({ status: "ok", teams: [{ ...TEAM, name: "Konto A-team" }] });
     await act(async () => {});
 
     expect(screen.queryByText(/Konto A-team/)).toBeNull();
-    expect(screen.getByText(/Konto B-team/)).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /Konto B-team/ })).toBeTruthy();
   });
 
   it("drops a rating outcome from the previous account and does not show it as saved", async () => {
@@ -165,7 +177,7 @@ describe("team-owned skills: identity changes", () => {
     const write = deferred<{ status: "forbidden" }>();
     setRatingMock.mockReturnValue(write.promise);
     render(<OwnTeamSkillsSection />);
-    await screen.findByText("Testing");
+    await revealSkills();
 
     await user.click(screen.getByRole("radio", { name: /Testing: 2\./ }));
     setIdentity(null);
@@ -186,7 +198,7 @@ describe("team-owned skills: direct account switch (A -> B, no sign-out in betwe
     );
     fetchTeamSkillsMock.mockResolvedValue(skillsOk());
     render(<OwnTeamSkillsSection />);
-    expect(await screen.findByText("Testing")).toBeTruthy();
+    expect(await revealSkills()).toBeTruthy();
 
     setIdentity("token-b");
 
@@ -206,11 +218,11 @@ describe("team-owned skills: direct account switch (A -> B, no sign-out in betwe
     setRatingMock.mockReturnValue(write.promise);
     const user = (await import("@testing-library/user-event")).default.setup();
     render(<OwnTeamSkillsSection />);
-    await screen.findByText("Testing");
+    await revealSkills();
     await user.click(screen.getByRole("radio", { name: /Testing: 2\./ }));
 
     setIdentity("token-b");
-    expect(await screen.findByText(/Konto B-team/)).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: /Konto B-team/ })).toBeTruthy();
 
     write.resolve({ status: "ok" });
     await act(async () => {});

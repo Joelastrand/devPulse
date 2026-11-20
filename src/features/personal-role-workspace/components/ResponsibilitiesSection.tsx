@@ -25,6 +25,7 @@ import {
 import { RELATION_TO_ROLE_VALUES, type RelationToRole, type ResponsibilityStatus } from "../domain/constants";
 import { LinkPicker } from "./LinkPicker";
 import { RecordListSkeleton } from "./RoleSkeletons";
+import { RecordRow } from "./RecordRow";
 
 type Notice = { variant: "success" | "error"; text: string };
 type StatusFilter = "all" | ResponsibilityStatus;
@@ -297,6 +298,14 @@ export function ResponsibilitiesSection({ onChanged }: { onChanged?: () => void 
   );
 }
 
+/** Short summary line for a collapsed row: relation and period. The description is shown only when the row is expanded. */
+function responsibilityMeta(record: ResponsibilityDto): string {
+  const period = [record.startDate ? `fra ${record.startDate}` : null, record.endDate ? `til ${record.endDate}` : null]
+    .filter((part): part is string => part !== null)
+    .join(" ");
+  return [workspaceCopy.relationOptions[record.relationToRole], period].filter((part) => part !== "").join(" · ");
+}
+
 /** Active records come first, then completed; the server order is kept within each group. */
 function activeFirst(records: readonly ResponsibilityDto[]): ResponsibilityDto[] {
   return [...records].sort((a, b) => Number(b.status === "active") - Number(a.status === "active"));
@@ -334,44 +343,40 @@ function ResponsibilityList({ state, statusFilter, onRetry, onEdit, onToggle, bu
       {data.truncated ? <Alert variant="info">{copy.truncated}</Alert> : null}
       {data.records.length === 0 ? <EmptyState>{copy.empty}</EmptyState> : null}
       {data.records.length > 0 && visible.length === 0 ? <EmptyState>{copy.filter.empty}</EmptyState> : null}
-      <ul className="space-y-3">
-        {visible.map((record) => (
-          <li key={record.id}>
-            <Card as="div" variant="bordered" padding="sm" className="space-y-2">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <h3 className="break-words text-base font-semibold text-text-primary">{record.title}</h3>
+      <ul className="flex flex-col gap-2">
+        {visible.map((record) => {
+          // Only this row's controls are disabled while its own write is pending.
+          const busy = busyIds.has(record.id);
+          return (
+            <RecordRow
+              key={record.id}
+              title={record.title}
+              meta={responsibilityMeta(record)}
+              badge={
                 <span className="rounded-control border border-border-subtle px-2 py-0.5 text-xs text-text-secondary">
                   {workspaceCopy.statusLabels[record.status]}
                 </span>
-              </div>
-              {record.description ? <p className="whitespace-pre-line break-words text-sm text-text-secondary">{record.description}</p> : null}
-              <p className="text-xs text-text-secondary">
-                {workspaceCopy.relationOptions[record.relationToRole]}
-                {record.startDate ? ` · fra ${record.startDate}` : ""}
-                {record.endDate ? ` · til ${record.endDate}` : ""}
-              </p>
+              }
+              quickAction={
+                <Button type="button" size="sm" variant="secondary" pending={busy} onClick={() => onToggle(record)}>
+                  {busy ? copy.updating : record.status === "active" ? copy.complete : copy.reopen}
+                </Button>
+              }
+            >
+              {record.description ? (
+                <p className="whitespace-pre-line break-words text-sm text-text-secondary">{record.description}</p>
+              ) : null}
               <div className="flex flex-wrap gap-2">
-                {/* Only this row's controls are disabled while its own write is pending. */}
-                {(() => {
-                  const busy = busyIds.has(record.id);
-                  return (
-                    <>
-                      <Button type="button" size="sm" variant="secondary" disabled={busy} onClick={() => onEdit(record)}>{copy.edit}</Button>
-                      <Button type="button" size="sm" variant="secondary" pending={busy} onClick={() => onToggle(record)}>
-                        {busy ? copy.updating : record.status === "active" ? copy.complete : copy.reopen}
-                      </Button>
-                      {confirmId === record.id ? (
-                        <ConfirmDelete pending={busy} onConfirm={() => onDelete(record.id)} onCancel={() => onAskDelete(null)} />
-                      ) : (
-                        <Button type="button" size="sm" variant="destructive" disabled={busy} onClick={() => onAskDelete(record.id)}>{copy.delete}</Button>
-                      )}
-                    </>
-                  );
-                })()}
+                <Button type="button" size="sm" variant="secondary" disabled={busy} onClick={() => onEdit(record)}>{copy.edit}</Button>
+                {confirmId === record.id ? (
+                  <ConfirmDelete pending={busy} onConfirm={() => onDelete(record.id)} onCancel={() => onAskDelete(null)} />
+                ) : (
+                  <Button type="button" size="sm" variant="destructive" disabled={busy} onClick={() => onAskDelete(record.id)}>{copy.delete}</Button>
+                )}
               </div>
-            </Card>
-          </li>
-        ))}
+            </RecordRow>
+          );
+        })}
       </ul>
       {data.unavailableCount > 0 ? <p className="text-sm text-text-secondary">{copy.unavailable}</p> : null}
       {data.recoveryItems.length > 0 ? (

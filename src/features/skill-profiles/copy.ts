@@ -25,24 +25,59 @@ export const skillDashboardCopy = {
  */
 export const skillViewCopy = {
   navLabel: "Visninger for ferdigheter",
+  /**
+   * `rediger` keeps its route value for backward compatibility (links from Samtaler, Hjem and Mål); its label is now the
+   * personal skill assessment. `teamkompetanser` is the separate team competency view.
+   */
   tabs: [
     { view: "oversikt", label: "Oversikt" },
-    { view: "rediger", label: "Kompetansekart" },
+    { view: "rediger", label: "Mine ferdigheter" },
+    { view: "teamkompetanser", label: "Teamkompetanser" },
     { view: "rolle", label: "Min rolle og mine bidrag" },
     { view: "deling", label: "Deling med team" },
   ],
 } as const;
 
-export const skillProfileCopy = {
-  /** Up to three links to existing pages (visual-redesign BR-18). */
-  nextSteps: {
-    heading: "Neste steg",
-    items: [
-      { title: "Se kompetansebehovet i teamet", description: "Vurder hvilke områder teamet bør styrke.", href: "/teams" },
-      { title: "Planlegg neste utviklingssamtale", description: "Sett agenda og felles fokus i samtalene dine.", href: "/me/conversations" },
-      { title: "Gå til profilen din", description: "Profilen din og kontoinnstillinger.", href: "/me/profile" },
+/** Explanations of the two catalogs. Both are progressive disclosures; the privacy facts are repeated here, not invented. */
+export const skillCatalogCopy = {
+  personal: {
+    intro: "Vurder ditt eget nivå på ferdighetene i DevPulse sin felles katalog. Vurderingene er private.",
+    whatIsTitle: "Hva er mine ferdigheter?",
+    whatIsBody: [
+      "Ferdighetene kommer fra DevPulse sin felles kompetansekatalog. Katalogen vedlikeholdes av superadministratorer. Du kan ikke opprette nye ferdigheter selv; en ferdighet som mangler må legges til av en superadministrator.",
+      "Du vurderer ditt eget nivå, fra 1 til 4. Vurderingen brukes til din egen utvikling, og et lavt nivå er ikke et krav eller et gap.",
+      "Mine ferdigheter er din egen vurdering av felles ferdigheter. Kompetanser som teamet har definert, vurderer du under Teamkompetanser.",
+      "Bare du kan se nivåene dine. Hvis du velger det under Deling med team, kan teamet se en grov status, aldri dine enkeltnivåer.",
     ],
+    progressHeading: "Din ferdighetsprofil",
+    listTitle: "Dine ferdigheter",
+    listProgress: (assessed: number, total: number) => `${assessed} av ${total} vurdert`,
+    listActionAll: "Vis og endre vurderinger",
+    listActionPartial: "Fortsett vurderingen",
+    listFailedWhileCollapsed: "En vurdering ble ikke lagret. Åpne «Dine ferdigheter» for å prøve igjen.",
   },
+  team: {
+    intro: "Kompetansene teamene dine har definert. Du vurderer ditt eget nivå, og vurderingene dine er private.",
+    whatIsTitle: "Hva er teamkompetanser?",
+    whatIsBody: [
+      "Hvert team har sin egen kompetansekatalog. Den defineres og vedlikeholdes av teamets administratorer og er ikke en del av den felles katalogen for mine ferdigheter.",
+      "Du vurderer ditt eget nivå på hver aktive kompetanse i teamet. Veiledningen for hvert nivå vises under kompetansen der teamet har skrevet den.",
+      "Dine vurderinger er private. Teamadministratorer kan ikke se nivåene dine gjennom denne visningen.",
+      "Å bidra til teamets samlede oversikt er et eget, frivillig valg. Det gjør du under Deling med team, og teamet ser da bare en grov status, aldri individuelle nivåer.",
+    ],
+    delingLinkLabel: "Administrer deling med team",
+    summaryHeading: "Teamkompetanser",
+    summaryCounts: (assessed: number, active: number) => `${assessed} av ${active} vurdert`,
+    summaryNone: "Du er ikke medlem av noe team med kompetanser ennå.",
+    summaryLoading: "Laster teamkompetansene dine …",
+    summaryAction: "Vurder teamkompetanser",
+    summaryLink: "Gå til teamkompetanser",
+    nextStepHint: "Din egenvurdering er fullført. Du har teamkompetanser som ikke er vurdert ennå.",
+    summaryUnavailable: "Teamkompetansene kunne ikke lastes akkurat nå.",
+  },
+} as const;
+
+export const skillProfileCopy = {
   pageTitle: "Mine ferdigheter",
   pageDescription: "Din egen vurdering av hva du kan, som støtte for din egen utvikling.",
   privacyNotice:
@@ -56,7 +91,14 @@ export const skillProfileCopy = {
   noAssessmentsYet: "Du har ikke vurdert noen ferdigheter ennå. Du kan begynne når det passer for deg.",
   unreadableNotice: "Lagrede vurderinger kan ikke leses akkurat nå.",
   legendHeading: "Nivåer",
-  skillsHeading: "Ferdigheter",
+  personalHeading: "Mine ferdigheter",
+  skillColumnHeading: "Ferdighet",
+  personalDescription: "Din personlige vurdering av ferdigheter i den felles kompetansekatalogen.",
+  searchLabel: "Søk etter ferdighet",
+  searchPlaceholder: "Søk etter ferdighet",
+  searchClear: "Tøm søk",
+  resultCount: (shown: number, total: number) => `Viser ${shown} av ${total} ferdigheter`,
+  noSearchMatches: "Ingen ferdigheter samsvarer med søket.",
   unassessed: "Ikke vurdert",
   clearRating: "Fjern vurdering",
   levelSummary: (level: number, levelName: string) => `Nivå ${level} · ${levelName}`,
@@ -64,7 +106,7 @@ export const skillProfileCopy = {
   saving: "Lagrer…",
   saveFailed: "Vurderingen ble ikke lagret. Prøv igjen.",
   skillUnavailable: "Denne ferdigheten er ikke lenger tilgjengelig.",
-  filterLegend: "Vis",
+  filterLegend: "Filtrer ferdigheter",
   filterAll: "Alle",
   filterAssessed: "Vurdert",
   filterUnassessed: "Ikke vurdert",
@@ -83,17 +125,22 @@ export const skillProfileCopy = {
     profileHeading: "Kompetanseprofil",
     profileIntro: "Ett nivå per ferdighet. Ferdigheter uten vurdering vises som ikke vurdert.",
     seeAll: "Se alle ferdigheter",
-    moreAreas: (count: number) => `${count} flere ferdigheter`,
+    /** The profile list is a preview of at most seven rows; the rest are in the Kompetansekart. */
+    moreAreas: (count: number) => `Forhåndsvisning: ${count} flere ferdigheter vises i Kompetansekart.`,
     summaryAdvancedTitle: "Ferdigheter på nivå 3–4",
     summaryAdvancedDetail: "Ferdigheter du har vurdert til nivå 3 eller 4.",
     summaryAssessedTitle: "Vurderte ferdigheter",
     summaryAssessedValue: (assessed: number, total: number) => `${assessed} av ${total}`,
     summaryAssessedDetail: "Ferdigheter du har vurdert av de tilgjengelige.",
-    summaryDevelopTitle: "Ferdigheter å utvikle",
-    summaryDevelopDetail: "Ferdigheter vurdert til nivå 1 eller 2. Dette er en beskrivelse, ikke et krav.",
+    summaryDevelopTitle: "Ferdigheter på nivå 1–2",
+    summaryDevelopDetail: "Din egenvurdering på de to laveste nivåene. Dette er ikke et krav eller et gap.",
     nextStepsHeading: "Neste steg",
+    startHint: "Du har ikke vurdert noen ferdigheter ennå. Begynn når det passer for deg.",
+    startAction: "Vurder din første ferdighet",
+    allAssessedHint: "Alle ferdighetene dine er vurdert. Du kan gjennomgå og endre dem når som helst.",
     unassessedHint: (count: number) => (count === 1 ? "1 ferdighet er ikke vurdert ennå." : `${count} ferdigheter er ikke vurdert ennå.`),
-    assessAction: "Vurder i Kompetansekart",
+    assessAction: "Vurder de gjenværende i Kompetansekart",
+    continueAction: "Fortsett vurderingen",
     reviewAction: "Gjennomgå og endre ferdighetene dine",
     goalsAction: "Åpne mine utviklingsmål",
     roleWorkspaceAction: "Min rolle og mine bidrag",

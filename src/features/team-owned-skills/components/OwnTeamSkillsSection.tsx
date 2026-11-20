@@ -20,6 +20,10 @@ import {
   type TeamSkillView,
 } from "../client/team-skills-gateway";
 import { TeamSkillRatingControl } from "./TeamSkillRatingControl";
+import { assessmentPercent, groupTeamSkillsByCategory } from "./team-skill-groups";
+import { matchesSearchQuery } from "../../../components/ui/search-match";
+import { SearchField } from "../../../components/ui/SearchField";
+import { LevelLegend } from "../../skill-profiles/components/LevelLegend";
 
 type Filter = "all" | "assessed" | "notAssessed";
 
@@ -43,7 +47,6 @@ function ratingFor(list: Extract<TeamSkillsListResult, { status: "ok" }>, skillI
 export function OwnTeamSkillsSection() {
   const [blocks, setBlocks] = useState<TeamBlock[] | null>(null);
   const [overviewFailed, setOverviewFailed] = useState(false);
-  const [filter, setFilter] = useState<Filter>("all");
   /** Rating keys (`teamId:skillId`) with a write in flight. Mirrored in a ref so a repeat click is blocked before re-render. */
   const [pendingKeys, setPendingKeys] = useState<ReadonlySet<string>>(() => new Set());
   const pendingRef = useRef(new Set<string>());
@@ -128,36 +131,33 @@ export function OwnTeamSkillsSection() {
   if (overviewFailed) return <Alert variant="error">{teamSkillsCopy.errors.read_failed}</Alert>;
   if (blocks.length === 0) return <EmptyState>{teamSkillsCopy.own.emptyTeam}</EmptyState>;
 
+  // Every team block owns its search, filter and category state, so one team's controls never change another team.
   return (
-    <section aria-labelledby="own-team-skills-heading" className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2">
-        <h2 id="own-team-skills-heading" className="text-lg font-semibold text-text-primary">
-          {teamSkillsCopy.own.heading}
-        </h2>
-        <p className="text-sm text-text-secondary">{teamSkillsCopy.own.description}</p>
-        <FilterButtons value={filter} onChange={setFilter} />
-      </div>
+    <div className="flex flex-col gap-6">
       {blocks.map((block) => (
         <TeamBlockView
           key={block.teamId}
           block={block}
-          filter={filter}
           pendingKeys={pendingKeys}
           onRate={(skillId, level) => void rate(block.teamId, skillId, level)}
         />
       ))}
-    </section>
+    </div>
   );
 }
 
-function FilterButtons({ value, onChange }: { value: Filter; onChange: (next: Filter) => void }) {
+/**
+ * Assessment-status filter of one team block. Its name names the team, so a screen reader hears which team it changes.
+ * `aria-pressed` on each option carries the selected state, not colour alone.
+ */
+function StatusFilter({ label, value, onChange }: { label: string; value: Filter; onChange: (next: Filter) => void }) {
   const options: Array<{ key: Filter; label: string }> = [
     { key: "all", label: teamSkillsCopy.own.filterAll },
     { key: "assessed", label: teamSkillsCopy.own.filterAssessed },
     { key: "notAssessed", label: teamSkillsCopy.own.filterNotAssessed },
   ];
   return (
-    <div role="group" aria-label="Filter" className="flex flex-wrap gap-2">
+    <div role="group" aria-label={label} className="flex flex-wrap gap-2">
       {options.map((option) => (
         <button
           key={option.key}
@@ -166,7 +166,7 @@ function FilterButtons({ value, onChange }: { value: Filter; onChange: (next: Fi
           onClick={() => onChange(option.key)}
           className={
             "min-h-9 rounded-full border px-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-primary " +
-            (value === option.key ? "border-primary bg-primary text-text-inverse" : "border-border-strong bg-surface text-text-primary")
+            (value === option.key ? "border-primary bg-primary text-primary-text" : "border-border-strong bg-surface text-text-primary")
           }
         >
           {option.label}
@@ -206,12 +206,10 @@ function OwnTeamSkillsSkeleton({ label }: { label: string }) {
 
 function TeamBlockView({
   block,
-  filter,
   pendingKeys,
   onRate,
 }: {
   block: TeamBlock;
-  filter: Filter;
   pendingKeys: ReadonlySet<string>;
   onRate: (skillId: string, level: TeamSkillLevel | null) => void;
 }) {
@@ -224,37 +222,154 @@ function TeamBlockView({
       </Card>
     );
   }
-  const list = block.list;
+  return <LoadedTeamBlock block={block} list={block.list} pendingKeys={pendingKeys} onRate={onRate} heading={heading} />;
+}
+
+/**
+ * One team's workspace: its progress, search, status filter, level explanation and category groups. Every one of these is
+ * local to the team, so the controls visibly apply to the team they sit in. Search and the category disclosures follow the
+ * same rule as before: while a query is active, every category with a match is open, and clearing the query restores the
+ * person's own open/closed choices, which searching never overwrites.
+ */
+function LoadedTeamBlock({
+  block,
+  list,
+  pendingKeys,
+  onRate,
+  heading,
+}: {
+  block: TeamBlock;
+  list: Extract<TeamSkillsListResult, { status: "ok" }>;
+  pendingKeys: ReadonlySet<string>;
+  onRate: (skillId: string, level: TeamSkillLevel | null) => void;
+  heading: string;
+}) {
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
+  const [openCategories, setOpenCategories] = useState<ReadonlySet<string>>(() => new Set());
   const active = list.skills.filter((skill) => skill.active);
   const inactive = list.skills.filter((skill) => !skill.active);
   const assessed = active.filter((skill) => ratingFor(list, skill.skillId) !== undefined).length;
-  const visible = active.filter((skill) => {
-    const rated = ratingFor(list, skill.skillId) !== undefined;
-    return filter === "all" || (filter === "assessed" ? rated : !rated);
+  const searching = query.trim().length > 0;
+  const categoryKeys = groupTeamSkillsByCategory(active).map((group) => group.category ?? "");
+  const percent = assessmentPercent(assessed, active.length);
+  const controlsId = `team-${block.teamId}-category-controls-note`;
+
+  const groups = groupTeamSkillsByCategory(active).flatMap((group) => {
+    const items = group.items.filter((skill) => {
+      const rated = ratingFor(list, skill.skillId) !== undefined;
+      const statusOk = filter === "all" || (filter === "assessed" ? rated : !rated);
+      return statusOk && matchesSearchQuery(query, [skill.name]);
+    });
+    // "" is the state key of the uncategorized group; no real category can be empty (see team-skill-groups.ts).
+    const key = group.category ?? "";
+    const label = group.category ?? teamSkillsCopy.own.uncategorized;
+    return items.length === 0 ? [] : [{ key, label, items }];
   });
+  const shownCount = groups.reduce((sum, group) => sum + group.items.length, 0);
+  const categoryIsOpen = (key: string) => (searching ? true : openCategories.has(key));
+
+  function toggleCategory(key: string) {
+    setOpenCategories((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  /** Opens or closes every category of this team. Only the team's own categories are touched. */
+  function setAllCategories(open: boolean) {
+    setOpenCategories(open ? new Set(categoryKeys) : new Set());
+  }
 
   return (
-    <Card as="section" padding="sm" variant="bordered" aria-label={heading} className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1">
+    <Card as="section" padding="sm" variant="bordered" aria-label={heading} className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2">
         <h3 className="text-base font-semibold text-text-primary">{heading}</h3>
-        <p className="text-sm text-text-secondary">
-          {teamSkillsCopy.own.counts(active.length, assessed, active.length - assessed)}
-        </p>
+        <p className="text-sm text-text-secondary">{teamSkillsCopy.own.teamCounts(active.length, assessed)}</p>
+        {active.length > 0 ? (
+          <div aria-hidden="true" className="h-1.5 w-full overflow-hidden rounded-full bg-border-subtle">
+            <div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
+          </div>
+        ) : null}
       </div>
       {block.error ? <Alert variant="error">{block.error}</Alert> : null}
       {active.length === 0 ? <EmptyState>{teamSkillsCopy.own.emptyTeam}</EmptyState> : null}
-      {active.length > 0 && visible.length === 0 ? <p className="text-sm text-text-secondary">{teamSkillsCopy.own.emptyTeam}</p> : null}
-      <ul className="flex flex-col divide-y divide-border-subtle">
-        {visible.map((skill) => (
-          <SkillRatingRow
-            key={skill.skillId}
-            skill={skill}
-            rating={ratingFor(list, skill.skillId)}
-            pending={pendingKeys.has(`${block.teamId}:${skill.skillId}`)}
-            onRate={(level) => onRate(skill.skillId, level)}
-          />
-        ))}
-      </ul>
+      {active.length > 0 ? (
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <SearchField
+              id={`team-skill-search-${block.teamId}`}
+              label={teamSkillsCopy.own.searchLabel(block.name)}
+              placeholder={teamSkillsCopy.own.searchPlaceholder}
+              value={query}
+              onChange={setQuery}
+              clearLabel={teamSkillsCopy.own.searchClear}
+            />
+            <p className="text-xs text-text-secondary">
+              {teamSkillsCopy.own.resultCount(shownCount, active.length)}
+            </p>
+          </div>
+          <StatusFilter label={teamSkillsCopy.own.filterLegendForTeam(block.name)} value={filter} onChange={setFilter} />
+          <LevelLegend />
+          <div role="group" aria-label={teamSkillsCopy.own.categoryGroupLabel(block.name)} className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="tertiary" size="sm" disabled={searching} aria-describedby={searching ? controlsId : undefined} onClick={() => setAllCategories(true)}>
+              {teamSkillsCopy.own.showAllCategories}
+            </Button>
+            <Button type="button" variant="tertiary" size="sm" disabled={searching} aria-describedby={searching ? controlsId : undefined} onClick={() => setAllCategories(false)}>
+              {teamSkillsCopy.own.hideAllCategories}
+            </Button>
+            {searching ? (
+              <p id={controlsId} className="text-xs text-text-secondary">
+                {teamSkillsCopy.own.categoryControlsSearchNote}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+      {active.length > 0 && groups.length === 0 ? (
+        <p className="text-sm text-text-secondary">{teamSkillsCopy.own.noSearchMatches}</p>
+      ) : null}
+      <div className="flex flex-col gap-2">
+        {groups.map((group, index) => {
+          const groupAssessed = group.items.filter((skill) => ratingFor(list, skill.skillId) !== undefined).length;
+          const open = categoryIsOpen(group.key);
+          // Index-based DOM id: category names can contain spaces or characters that are not valid in an id.
+          const panelId = `team-${block.teamId}-category-${index}`;
+          return (
+            <div key={group.key} className="rounded-md border border-border-subtle">
+              <h4 className="m-0">
+                <button
+                  type="button"
+                  aria-expanded={open}
+                  aria-controls={panelId}
+                  onClick={() => toggleCategory(group.key)}
+                  className="flex min-h-11 w-full flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-md px-3 py-2 text-left focus-visible:outline-2 focus-visible:outline-primary"
+                >
+                  <span className="text-sm font-semibold text-text-primary">{group.label}</span>
+                  <span className="text-xs text-text-secondary">
+                    {teamSkillsCopy.own.categoryCounts(group.items.length, groupAssessed)}
+                  </span>
+                </button>
+              </h4>
+              {open ? (
+                <ul id={panelId} className="flex flex-col divide-y divide-border-subtle border-t border-border-subtle px-3">
+                  {group.items.map((skill) => (
+                    <SkillRatingRow
+                      key={skill.skillId}
+                      skill={skill}
+                      rating={ratingFor(list, skill.skillId)}
+                      pending={pendingKeys.has(`${block.teamId}:${skill.skillId}`)}
+                      onRate={(level) => onRate(skill.skillId, level)}
+                    />
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
       {inactive.length > 0 ? (
         <details className="rounded-md border border-border-subtle p-3">
           <summary className="cursor-pointer text-sm font-medium text-text-primary">{teamSkillsCopy.own.inactiveHeading}</summary>
@@ -287,33 +402,40 @@ function SkillRatingRow({
   pending: boolean;
   onRate: (level: TeamSkillLevel | null) => void;
 }) {
+  const guidanceLevels = ([1, 2, 3, 4] as const).flatMap((level) => {
+    const text = skill.guidance[String(level) as "1" | "2" | "3" | "4"];
+    return text === undefined ? [] : [{ level, text }];
+  });
   return (
     <li className="flex flex-col gap-2 py-3 md:flex-row md:items-center md:justify-between">
       <div className="min-w-0 flex-1">
-        <p className="break-words font-medium text-text-primary">{skill.name}</p>
-        {skill.category ? <p className="text-xs text-text-secondary">{skill.category}</p> : null}
-        {rating?.outdated ? <p className="text-xs font-medium text-text-primary">{teamSkillsCopy.own.outdated}</p> : null}
-        <details className="mt-1">
-          <summary className="cursor-pointer text-xs font-medium text-text-secondary">{teamSkillsCopy.own.criteriaGuidance}</summary>
-          {/* Only the team's own guidance is shown here; the level names are the personal scale's wording. */}
-          {Object.keys(skill.guidance).length === 0 ? (
-            <p className="mt-1 text-xs text-text-secondary">{teamSkillsCopy.own.criteriaGuidanceNone}</p>
+        <p className="break-words font-medium text-text-primary">
+          {skill.name}
+          {rating ? (
+            <span className="ml-2 text-sm font-normal text-text-secondary">
+              {teamSkillsCopy.own.levelShort(rating.level, SELF_ASSESSED_LEVEL_COPY[rating.level].name)}
+            </span>
           ) : (
-            <ul className="mt-1 flex flex-col gap-1 text-xs text-text-secondary">
-              {([1, 2, 3, 4] as const).flatMap((level) => {
-                const text = skill.guidance[String(level) as "1" | "2" | "3" | "4"];
-                return text === undefined ? [] : [
-                  <li key={level}>
-                    <span className="font-medium">
-                      {level}. {SELF_ASSESSED_LEVEL_COPY[level].name}:
-                    </span>{" "}
-                    {text}
-                  </li>,
-                ];
-              })}
-            </ul>
+            <span className="ml-2 text-sm font-normal text-text-secondary">{teamSkillsCopy.own.notSet}</span>
           )}
-        </details>
+        </p>
+        {rating?.outdated ? <p className="text-xs font-medium text-text-primary">{teamSkillsCopy.own.outdated}</p> : null}
+        {/* Shown only when the team wrote guidance for this competency; the shared level legend explains the scale. */}
+        {guidanceLevels.length > 0 ? (
+          <details className="mt-1">
+            <summary className="cursor-pointer text-xs font-medium text-text-secondary">{teamSkillsCopy.own.guidanceLabel}</summary>
+            <ul className="mt-1 flex flex-col gap-1 text-xs text-text-secondary">
+              {guidanceLevels.map(({ level, text }) => (
+                <li key={level}>
+                  <span className="font-medium">
+                    {level}. {SELF_ASSESSED_LEVEL_COPY[level].name}:
+                  </span>{" "}
+                  {text}
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-2">
         <TeamSkillRatingControl skillName={skill.name} value={rating?.level ?? null} disabled={pending} onSelect={(level) => onRate(level)} />

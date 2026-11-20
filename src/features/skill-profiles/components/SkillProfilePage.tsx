@@ -18,9 +18,13 @@ import {
   fetchOwnSkills,
   setOwnSkillLevel,
 } from "../client/skill-profile-gateway";
-import { SELF_ASSESSED_LEVELS, type SelfAssessedLevel } from "../domain/self-assessed-level";
+import { type SelfAssessedLevel } from "../domain/self-assessed-level";
 import { deriveOverview, type OwnSkillsDto } from "../domain/skill-profile-view";
-import { SELF_ASSESSED_LEVEL_COPY, skillDashboardCopy, skillProfileCopy } from "../copy";
+import { SELF_ASSESSED_LEVEL_COPY, skillCatalogCopy, skillDashboardCopy, skillProfileCopy } from "../copy";
+import { CollapsibleSection } from "../../../components/ui/CollapsibleSection";
+import { LevelLegend } from "./LevelLegend";
+import { SearchField } from "../../../components/ui/SearchField";
+import { matchesSearchQuery } from "../../../components/ui/search-match";
 
 type ViewState =
   | { phase: "loading" }
@@ -291,6 +295,7 @@ function ReadyView({
   const rowSavePending = Object.values(rowStatus).some((status) => status?.kind === "pending");
   const showReset = !readable || dto.truncated || dto.skills.some((skill) => skill.level !== null);
   const [filter, setFilter] = useState<SkillFilter>("all");
+  const [query, setQuery] = useState("");
   const resetStatus = useRef<HTMLParagraphElement>(null);
   const resetStatusActive = resetState.status === "pending" || resetDone;
 
@@ -299,10 +304,22 @@ function ReadyView({
     if (resetStatusActive) resetStatus.current?.focus();
   }, [resetStatusActive]);
 
+  const progress = deriveOverview(dto.skills);
+  const allAssessed = dto.skills.length > 0 && progress.assessedCount === progress.totalCount;
+  /**
+   * Owned here, not by the disclosure, so the open state is known: a save failure or a pending save is then announced outside
+   * the list when the list is collapsed. The initial state follows the data only on mount; later saves never change it.
+   */
+  const [listOpen, setListOpen] = useState(!allAssessed);
+  const failedRows = Object.values(rowStatus).filter((status) => status?.kind === "failed").length;
+  const pendingRows = Object.values(rowStatus).filter((status) => status?.kind === "pending").length;
   const sameNamePosition = sameNamePositions(dto.skills);
   const visibleSkills = dto.skills.filter(
-    (skill) => filter === "all" || (filter === "assessed" ? skill.level !== null : skill.level === null),
+    (skill) =>
+      (filter === "all" || (filter === "assessed" ? skill.level !== null : skill.level === null)) &&
+      matchesSearchQuery(query, [skill.name]),
   );
+  const searching = query.trim() !== "";
 
   return (
     <div className="flex flex-col gap-6">
@@ -316,19 +333,54 @@ function ReadyView({
       ) : (
         /* One canonical list (BR-29): level bars, text level and the level control per skill. */
         <div className="flex flex-col gap-6">
-          <Card as="section" padding="sm" id="rediger" aria-labelledby="skill-list-heading" className="flex flex-col gap-3">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <h2 id="skill-list-heading" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-                {skillProfileCopy.skillsHeading}
-              </h2>
-              {readable && <FilterControl value={filter} onChange={setFilter} />}
-            </div>
-                  <LevelLegend />
+          {/*
+            The whole list is one disclosure. It starts open while assessments are incomplete (the next action is the list)
+            and collapsed once everything is assessed. The default is read only on mount, so a save never reopens or closes it.
+          */}
+          {!listOpen && failedRows > 0 ? (
+            <Alert variant="error">{skillCatalogCopy.personal.listFailedWhileCollapsed}</Alert>
+          ) : null}
+          {!listOpen && pendingRows > 0 ? (
+            <p role="status" className="text-sm text-text-secondary">
+              {skillProfileCopy.saving}
+            </p>
+          ) : null}
+          <CollapsibleSection
+            id="personal-skills"
+            title={skillCatalogCopy.personal.listTitle}
+            description={`${skillCatalogCopy.personal.listProgress(progress.assessedCount, progress.totalCount)} · ${
+              allAssessed ? skillCatalogCopy.personal.listActionAll : skillCatalogCopy.personal.listActionPartial
+            }`}
+            open={listOpen}
+            onOpenChange={setListOpen}
+          >
+            <div className="flex flex-col gap-3">
+            {readable ? (
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <SearchField
+                    id="skill-search"
+                    label={skillProfileCopy.searchLabel}
+                    placeholder={skillProfileCopy.searchPlaceholder}
+                    value={query}
+                    onChange={setQuery}
+                    clearLabel={skillProfileCopy.searchClear}
+                  />
+                  <FilterControl value={filter} onChange={setFilter} />
+                </div>
+                <p role="status" className="text-xs text-text-secondary">
+                  {skillProfileCopy.resultCount(visibleSkills.length, dto.skills.length)}
+                </p>
+              </div>
+            ) : null}
+            <LevelLegend />
             {readable && dto.skills.every((skill) => skill.level === null) ? (
               <p className="text-sm text-text-secondary">{skillProfileCopy.noAssessmentsYet}</p>
             ) : null}
             {visibleSkills.length === 0 ? (
-              <p className="text-zinc-600 dark:text-zinc-400">{skillProfileCopy.noFilterMatches}</p>
+              <p className="text-text-secondary">
+                {searching ? skillProfileCopy.noSearchMatches : skillProfileCopy.noFilterMatches}
+              </p>
             ) : (
               <ul className="flex flex-col divide-y divide-border-subtle">
                 {visibleSkills.map((skill) => (
@@ -348,7 +400,8 @@ function ReadyView({
                 ))}
               </ul>
             )}
-          </Card>
+            </div>
+          </CollapsibleSection>
         </div>
       )}
 
@@ -562,23 +615,4 @@ function SummaryCards({ dto }: { dto: OwnSkillsDto }) {
   );
 }
 
-/**
- * The four canonical levels with their full wording (BR-30 "level descriptions"). Collapsed by default to keep the list
- * compact; the rating buttons carry the same names in their accessible labels, so nothing depends on opening it.
- */
-function LevelLegend() {
-  return (
-    <details className="rounded-md border border-border-subtle p-3">
-      <summary className="cursor-pointer text-sm font-medium text-text-primary">{skillProfileCopy.legendHeading}</summary>
-      <dl className="mt-2 grid gap-x-4 gap-y-2 text-xs sm:grid-cols-2">
-        {SELF_ASSESSED_LEVELS.map((level) => (
-          <div key={level}>
-            <dt className="font-medium text-zinc-900 dark:text-zinc-50">{SELF_ASSESSED_LEVEL_COPY[level].name}</dt>
-            <dd className="text-zinc-600 dark:text-zinc-400">{SELF_ASSESSED_LEVEL_COPY[level].description}</dd>
-          </div>
-        ))}
-      </dl>
-    </details>
-  );
-}
 
